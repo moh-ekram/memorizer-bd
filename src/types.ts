@@ -147,6 +147,7 @@ export interface AccessRequest {
   createdAt: string;
   requestedBy?: string;
   expiryDate?: string;
+  verificationMethod?: 'auto' | 'manual' | 'wallet_balance';
 }
 
 export interface VerifiedPayment {
@@ -156,6 +157,9 @@ export interface VerifiedPayment {
   amount?: number;
   createdAt?: string;
   note?: string;
+  claimed?: boolean;
+  claimedBy?: string;
+  claimedAt?: string;
 }
 
 export interface UserWallet {

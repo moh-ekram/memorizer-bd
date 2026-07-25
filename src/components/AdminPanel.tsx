@@ -1172,24 +1172,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     try {
       const cleanPhone = (p: string) => p.replace(/\D/g, '').slice(-10);
 
-      let vpsToUse = currentVpsList || globalVerifiedPayments;
-      if (vpsToUse.length === 0) {
-        const snap = await getDoc(doc(db, 'system_settings', 'global_verified_payments'));
-        if (snap.exists()) {
-          vpsToUse = snap.data().verifiedPayments || [];
-        }
-      }
-
-      let combinedVps = [...vpsToUse];
-      for (const c of customCourses) {
-        if (c.verifiedPayments) {
-          for (const vp of c.verifiedPayments) {
-            if (!combinedVps.some(cvp => cvp.bkashNumber === vp.bkashNumber && cvp.trxId.toLowerCase() === vp.trxId.toLowerCase())) {
-              combinedVps.push(vp);
-            }
-          }
-        }
-      }
+      const globalDocRef = doc(db, 'system_settings', 'global_verified_payments');
+      const snap = await getDoc(globalDocRef);
+      let vpsToUse: VerifiedPayment[] = snap.exists() ? (snap.data().verifiedPayments || []) : [];
 
       const requestsSnap = await getDocs(query(collection(db, 'access_requests'), where('status', '==', 'pending')));
       const pendingReqs = requestsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) } as unknown as AccessRequest));
@@ -1208,17 +1193,22 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
       let autoApprovedRequestsCount = 0;
       let totalCoursesGranted = 0;
+      let updatedVpList = [...vpsToUse];
 
       for (const req of pendingReqs) {
         const reqPhone = cleanPhone(req.bkashNumber);
         const reqTrx = req.trxId.toLowerCase().trim();
         const reqEmail = req.email.toLowerCase().trim();
 
-        const matchedVp = combinedVps.find(vp => {
+        // Match against unclaimed verified payment
+        const matchedVpIdx = updatedVpList.findIndex(vp => {
+          if (vp.claimed) return false;
           const vpPhone = cleanPhone(vp.bkashNumber);
           const vpTrx = vp.trxId.toLowerCase().trim();
           return (vpPhone === reqPhone || vp.bkashNumber.trim() === req.bkashNumber.trim()) && vpTrx === reqTrx;
         });
+
+        const matchedVp = matchedVpIdx !== -1 ? updatedVpList[matchedVpIdx] : null;
 
         let walletRef = doc(db, 'user_wallets', reqEmail);
         let walletSnap = await getDoc(walletRef);
@@ -1228,6 +1218,15 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           if (matchedVp) {
             const rechargeAmt = matchedVp.amount || req.totalPrice || req.price || 50;
             const newBal = existingWalletBalance + rechargeAmt;
+            
+            // Mark payment as claimed
+            updatedVpList[matchedVpIdx] = {
+              ...matchedVp,
+              claimed: true,
+              claimedBy: reqEmail,
+              claimedAt: new Date().toISOString()
+            };
+
             await setDoc(walletRef, {
               email: reqEmail,
               bkashNumber: req.bkashNumber,
@@ -1237,6 +1236,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
             await setDoc(doc(db, 'access_requests', req.id), {
               status: 'approved',
+              verificationMethod: 'auto',
+              price: rechargeAmt,
+              totalPrice: rechargeAmt,
               remainingWalletBalance: newBal,
               updatedAt: new Date().toISOString()
             }, { merge: true });
@@ -1281,6 +1283,15 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           if (approvedTargetIds.length > 0) {
             autoApprovedRequestsCount++;
 
+            if (matchedVp) {
+              updatedVpList[matchedVpIdx] = {
+                ...matchedVp,
+                claimed: true,
+                claimedBy: reqEmail,
+                claimedAt: new Date().toISOString()
+              };
+            }
+
             await setDoc(walletRef, {
               email: reqEmail,
               bkashNumber: req.bkashNumber,
@@ -1290,6 +1301,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
             await setDoc(doc(db, 'access_requests', req.id), {
               status: 'approved',
+              verificationMethod: matchedVp ? 'auto' : 'wallet_balance',
               approvedCoursesCount: approvedTargetIds.length,
               remainingWalletBalance: remainingBalance,
               updatedAt: new Date().toISOString()
@@ -1297,6 +1309,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           }
         }
       }
+
+      // Save updated VP claim status list back to Firestore
+      await setDoc(globalDocRef, { verifiedPayments: updatedVpList }, { merge: true });
+      setGlobalVerifiedPayments(updatedVpList);
 
       fetchAccessRequests();
       setAutoVerifyResultMessage(`Auto-verification complete! Approved ${autoApprovedRequestsCount} requests and granted access to ${totalCoursesGranted} courses.`);
@@ -2256,8 +2272,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h3 className="font-extrabold text-slate-800 text-base">Course Access Requests</h3>
-              <p className="text-xs text-slate-400 font-medium">Verify bKash transactions and approve access to restricted/paid courses.</p>
+              <h3 className="font-extrabold text-slate-800 text-base">Course Access & Balance Requests</h3>
+              <p className="text-xs text-slate-400 font-medium">Verify bKash transactions, approve course access, and manage wallet balance recharges.</p>
             </div>
             <button
               onClick={fetchAccessRequests}
@@ -2416,9 +2432,20 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       </td>
                       <td className="px-4 py-3">
                         {req.status === 'approved' ? (
-                          <span className="inline-block px-2 py-0.5 bg-emerald-50 text-emerald-700 font-black rounded-full text-[10px] uppercase font-mono tracking-wider border border-emerald-200/50">
-                            Approved
-                          </span>
+                          <div className="space-y-0.5">
+                            <span className="inline-block px-2 py-0.5 bg-emerald-50 text-emerald-700 font-black rounded-full text-[10px] uppercase font-mono tracking-wider border border-emerald-200/50">
+                              Approved
+                            </span>
+                            <div className="text-[9px] font-bold font-mono">
+                              {req.verificationMethod === 'auto' ? (
+                                <span className="text-amber-600">⚡ Auto Verified</span>
+                              ) : req.verificationMethod === 'wallet_balance' ? (
+                                <span className="text-indigo-600">💳 Wallet Balance</span>
+                              ) : (
+                                <span className="text-slate-400">👤 Manual Admin</span>
+                              )}
+                            </div>
+                          </div>
                         ) : req.status === 'rejected' ? (
                           <span className="inline-block px-2 py-0.5 bg-rose-50 text-rose-700 font-black rounded-full text-[10px] uppercase font-mono tracking-wider border border-rose-200/50">
                             Rejected
@@ -2667,6 +2694,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       <th className="px-4 py-2">bKash Mobile</th>
                       <th className="px-4 py-2">TrxID</th>
                       <th className="px-4 py-2">Paid Amount</th>
+                      <th className="px-4 py-2">Status</th>
                       <th className="px-4 py-2">Added Date</th>
                       <th className="px-4 py-2 text-right">Action</th>
                     </tr>
@@ -2676,7 +2704,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       .filter(vp => {
                         if (!globalVpSearch) return true;
                         const q = globalVpSearch.toLowerCase();
-                        return vp.bkashNumber.includes(q) || vp.trxId.toLowerCase().includes(q);
+                        return vp.bkashNumber.includes(q) || vp.trxId.toLowerCase().includes(q) || (vp.claimedBy || '').toLowerCase().includes(q);
                       })
                       .map((vp, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/50 transition">
@@ -2686,6 +2714,18 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                             <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 font-black rounded-full text-[10px] border border-emerald-200">
                               ৳{vp.amount || 30} BDT
                             </span>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {vp.claimed ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 font-bold rounded-md text-[10px] border border-purple-200" title={`Claimed by ${vp.claimedBy || 'User'}`}>
+                                <span>Used</span>
+                                {vp.claimedBy && <span className="text-[9px] text-purple-500 max-w-[100px] truncate">({vp.claimedBy})</span>}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-600 font-bold rounded-md text-[10px] border border-emerald-200">
+                                Unclaimed
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-2.5 text-[10px] text-slate-400">
                             {vp.createdAt ? new Date(vp.createdAt).toLocaleDateString() : 'Active'}

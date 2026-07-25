@@ -226,7 +226,6 @@ export default function MyCoursesView({
     const cleanEmail = (rechargeEmail || user?.email || accessEmail || '').trim().toLowerCase();
     const cleanSender = rechargeSender.trim();
     const cleanTrx = rechargeTrx.trim().toLowerCase();
-    const numericAmount = Number(rechargeAmount) || 0;
 
     if (!cleanEmail || !cleanEmail.includes('@')) {
       setRechargeMessage({ type: 'error', text: 'অনুগ্রহ করে একটি সঠিক ইমেইল ঠিকানা প্রদান করুন।' });
@@ -234,10 +233,6 @@ export default function MyCoursesView({
     }
     if (!cleanSender || cleanSender.length < 10) {
       setRechargeMessage({ type: 'error', text: 'অনুগ্রহ করে সঠিক বিকাশ সেন্ডার নম্বর প্রদান করুন।' });
-      return;
-    }
-    if (numericAmount <= 0) {
-      setRechargeMessage({ type: 'error', text: 'অনুগ্রহ করে সঠিক রিচার্জের পরিমাণ (টাকা) লিখুন।' });
       return;
     }
     if (!cleanTrx || cleanTrx.length < 4) {
@@ -252,36 +247,76 @@ export default function MyCoursesView({
       const matchTrx = cleanTrx;
       const matchPhone = cleanPhone(cleanSender);
 
-      // 1. Fetch system_settings/global_verified_payments to check for Auto-Verification
+      // 1. STRICT DUPLICATE CHECK: Verify if TrxID was already claimed or used in ANY request
+      const existingReqsSnap = await getDocs(query(collection(db, 'access_requests')));
+      const isAlreadyUsedReq = existingReqsSnap.docs.some(docSnap => {
+        const d = docSnap.data();
+        return d.trxId && String(d.trxId).trim().toLowerCase() === matchTrx;
+      });
+
+      if (isAlreadyUsedReq) {
+        setRechargeMessage({
+          type: 'error',
+          text: `এই ট্রাঞ্জেকশন আইডিটি (${rechargeTrx}) ইতোমধ্যে একবার সিস্টেমে ব্যবহার করা হয়েছে। একই ট্রাঞ্জেকশন আইডি দিয়ে একাধিকবার রিচার্জ পাওয়া সম্ভব নয়।`
+        });
+        setIsSubmittingRecharge(false);
+        return;
+      }
+
+      // 2. Fetch system_settings/global_verified_payments to check for Auto-Verification and Claim Status
       const globalVpSnap = await getDoc(doc(db, 'system_settings', 'global_verified_payments'));
-      let matchedVp: { bkashNumber: string; trxId: string; amount?: number } | null = null;
+      let allVps: any[] = [];
+      let matchedVpIndex = -1;
+      let matchedVp: { bkashNumber: string; trxId: string; amount?: number; claimed?: boolean; claimedBy?: string } | null = null;
 
       if (globalVpSnap.exists()) {
-        const vps = globalVpSnap.data().verifiedPayments || [];
-        if (Array.isArray(vps)) {
-          const found = vps.find((vp: any) => {
+        allVps = globalVpSnap.data().verifiedPayments || [];
+        if (Array.isArray(allVps)) {
+          matchedVpIndex = allVps.findIndex((vp: any) => {
             const vpPhone = cleanPhone(vp.bkashNumber || '');
             const vpTrx = (vp.trxId || '').toLowerCase().trim();
             return (vpPhone === matchPhone || (vp.bkashNumber || '').trim() === cleanSender) && vpTrx === matchTrx;
           });
-          if (found) matchedVp = found;
+          if (matchedVpIndex !== -1) {
+            matchedVp = allVps[matchedVpIndex];
+          }
         }
       }
 
+      // Check if matched transaction in system_settings was already claimed
+      if (matchedVp && matchedVp.claimed) {
+        setRechargeMessage({
+          type: 'error',
+          text: `এই ট্রাঞ্জেকশন আইডিটি (${rechargeTrx}) ইতোমধ্যে ${matchedVp.claimedBy || 'অন্য একজন ইউজার'} ক্লেইম করে রিচার্জ নিয়ে নিয়েছেন।`
+        });
+        setIsSubmittingRecharge(false);
+        return;
+      }
+
       if (matchedVp) {
-        // AUTO-VERIFIED MATCH FOUND!
-        const addAmount = matchedVp.amount && matchedVp.amount > 0 ? matchedVp.amount : numericAmount;
+        // AUTO-VERIFIED MATCH FOUND! Read amount from admin's data!
+        const addAmount = matchedVp.amount && matchedVp.amount > 0 ? matchedVp.amount : 50;
         const walletRef = doc(db, 'user_wallets', cleanEmail);
         const walletSnap = await getDoc(walletRef);
         const currentBalance = walletSnap.exists() ? (walletSnap.data().balance || 0) : 0;
         const newBalance = currentBalance + addAmount;
 
+        // Update Wallet Balance
         await setDoc(walletRef, {
           email: cleanEmail,
           bkashNumber: cleanSender,
           balance: newBalance,
           updatedAt: new Date().toISOString()
         }, { merge: true });
+
+        // Mark transaction as claimed in system_settings/global_verified_payments
+        allVps[matchedVpIndex] = {
+          ...matchedVp,
+          claimed: true,
+          claimedBy: cleanEmail,
+          claimedAt: new Date().toISOString()
+        };
+        await setDoc(doc(db, 'system_settings', 'global_verified_payments'), { verifiedPayments: allVps }, { merge: true });
 
         setUserWalletBalance(newBalance);
 
@@ -295,6 +330,7 @@ export default function MyCoursesView({
           email: cleanEmail,
           trxId: cleanTrx,
           status: 'approved',
+          verificationMethod: 'auto',
           price: addAmount,
           totalPrice: addAmount,
           createdAt: new Date().toISOString(),
@@ -303,7 +339,7 @@ export default function MyCoursesView({
 
         setRechargeMessage({
           type: 'success',
-          text: `অটো-ভেরিফিকেশন সফল! আপনার ওয়ালেটে ৳${addAmount} BDT রিচার্জ জমা হয়েছে। বর্তমান ওয়ালেট ব্যালেন্স: ৳${newBalance} BDT।`
+          text: `অটো-ভেরিফিকেশন সফল! এডমিনের ভেরিফাইড পেমেন্ট থেকে ৳${addAmount} BDT সরাসরি আপনার ওয়ালেটে জমা হয়েছে। বর্তমান ওয়ালেট ব্যালেন্স: ৳${newBalance} BDT।`
         });
         setRechargeTrx('');
       } else {
@@ -312,20 +348,21 @@ export default function MyCoursesView({
         await setDoc(doc(db, 'access_requests', reqId), {
           id: reqId,
           courseId: 'wallet_recharge',
-          courseTitle: `Wallet Recharge (৳${numericAmount} BDT)`,
+          courseTitle: `Wallet Recharge Claim`,
           bkashNumber: cleanSender,
           email: cleanEmail,
           trxId: cleanTrx,
           status: 'pending',
-          price: numericAmount,
-          totalPrice: numericAmount,
+          verificationMethod: 'manual',
+          price: 0,
+          totalPrice: 0,
           createdAt: new Date().toISOString(),
           requestedBy: user?.email || cleanEmail
         });
 
         setRechargeMessage({
           type: 'info',
-          text: `আপনার ওয়ালেট রিচার্জ ক্লেইম রিকুয়েস্ট সফলভাবে জমা হয়েছে। এডমিন প্যানেল থেকে ভেরিফাই করে দ্রুত আপনার ওয়ালেটে ৳${numericAmount} টাকা যোগ করা হবে, অনুগ্রহ করে কিছুক্ষণ সময় দিয়ে অপেক্ষা করুন।`
+          text: `আপনার ওয়ালেট রিচার্জ রিকুয়েস্ট সফলভাবে জমা হয়েছে। এডমিন প্যানেল থেকে ভেরিফাই করে দ্রুত আপনার ওয়ালেটে ব্যালেন্স যোগ করা হবে, অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন।`
         });
         setRechargeTrx('');
       }
@@ -1268,7 +1305,7 @@ export default function MyCoursesView({
         )}
       </AnimatePresence>
 
-      {/* 5. Course Access Request Modal (Single or Multi-Course Cart Checkout) */}
+      {/* 5. Course Purchase Modal (Wallet Balance Required) */}
       <AnimatePresence>
         {(selectedBuyCourse || (isCartCheckoutMode && cart.length > 0)) && (
           <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center z-50 p-4" id="course-hub-bkash-modal">
@@ -1284,7 +1321,7 @@ export default function MyCoursesView({
               <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
                 <div>
                   <h3 className="font-light text-slate-900 text-sm tracking-tight flex items-center gap-1.5">
-                    <span className="font-extrabold text-pink-600 text-xs">bKash</span> Payment
+                    <span className="font-extrabold text-emerald-600 text-xs">Wallet</span> Purchase
                   </h3>
                   <p className="text-[11px] text-slate-400 font-light truncate max-w-[220px]">
                     {isCartCheckoutMode && cart.length > 0
@@ -1304,12 +1341,12 @@ export default function MyCoursesView({
               </div>
 
               {/* Form Content */}
-              <form onSubmit={handleRequestAccess} className="p-5 overflow-y-auto space-y-3.5 flex-1 text-slate-700">
-                {/* Cart Courses Summary */}
-                {isCartCheckoutMode && cart.length > 0 && (
+              <div className="p-5 overflow-y-auto space-y-4 flex-1 text-slate-700">
+                {/* Cart / Single Course Summary */}
+                {isCartCheckoutMode && cart.length > 0 ? (
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1 text-xs font-light">
                     <div className="flex justify-between font-normal text-slate-800 pb-1 border-b border-slate-200/60 text-[11px]">
-                      <span>Items:</span>
+                      <span>Selected Items:</span>
                       <span className="font-mono">৳{cartTotalPrice} BDT</span>
                     </div>
                     <div className="space-y-0.5 max-h-24 overflow-y-auto pt-0.5 text-[11px] text-slate-500">
@@ -1321,66 +1358,14 @@ export default function MyCoursesView({
                       ))}
                     </div>
                   </div>
-                )}
-
-                {/* Direct Wallet Balance Claim Option */}
-                {userWalletBalance > 0 && (
-                  <div className="p-3 bg-emerald-50/70 border border-emerald-200/70 rounded-xl space-y-2 text-xs font-light">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-800 text-[11px]">
-                        ওয়ালেট ব্যালেন্স: <strong className="font-mono font-normal text-emerald-700">৳{userWalletBalance} BDT</strong>
-                      </span>
-                      {userWalletBalance >= (isCartCheckoutMode && cart.length > 0 ? cartTotalPrice : ((selectedBuyCourse?.price && selectedBuyCourse.price > 0) ? selectedBuyCourse.price : 30)) ? (
-                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-light">
-                          পর্যাপ্ত ব্যালেন্স
-                        </span>
-                      ) : (
-                        <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-light">
-                          আংশিক ব্যালেন্স
-                        </span>
-                      )}
-                    </div>
-
-                    {userWalletBalance >= (isCartCheckoutMode && cart.length > 0 ? cartTotalPrice : ((selectedBuyCourse?.price && selectedBuyCourse.price > 0) ? selectedBuyCourse.price : 30)) ? (
-                      <button
-                        type="button"
-                        onClick={handleDirectWalletClaim}
-                        disabled={isSubmittingRequest}
-                        className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-light text-xs rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>ওয়ালেট দিয়ে ডিরেক্ট ক্লেইম করুন (৳{isCartCheckoutMode && cart.length > 0 ? cartTotalPrice : ((selectedBuyCourse?.price && selectedBuyCourse.price > 0) ? selectedBuyCourse.price : 30)})</span>
-                      </button>
-                    ) : (
-                      <p className="text-[10px] text-slate-500 font-light leading-tight">
-                        আপনার ওয়ালেটে ৳{userWalletBalance} ব্যালেন্স রয়েছে। নিচে bKash দিয়ে বাকি টাকা পাঠালে রিকুয়েস্ট অটো-ভেরিফাই হবে।
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Minimal Instruction & Copyable Number */}
-                <div className="p-3 bg-pink-50/50 border border-pink-100/80 rounded-xl space-y-2 text-xs font-light">
-                  <p className="text-slate-600 text-[11px] leading-snug">
-                    Send Money <strong className="font-normal text-pink-600">৳{isCartCheckoutMode && cart.length > 0 ? cartTotalPrice : ((selectedBuyCourse?.price && selectedBuyCourse.price > 0) ? selectedBuyCourse.price : 30)} BDT</strong> to bKash Personal:
-                  </p>
-                  <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-pink-100">
-                    <span className="font-mono font-normal text-slate-800 text-xs tracking-wider">
-                      {(selectedBuyCourse?.bkashNumber && selectedBuyCourse.bkashNumber !== '01700000000' && selectedBuyCourse.bkashNumber.trim() !== '') ? selectedBuyCourse.bkashNumber : '01581624202'}
+                ) : (
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center text-xs font-light">
+                    <span className="font-normal text-slate-800 truncate pr-2">{selectedBuyCourse?.title}</span>
+                    <span className="font-mono font-normal text-emerald-700 shrink-0">
+                      ৳{(selectedBuyCourse?.price && selectedBuyCourse.price > 0) ? selectedBuyCourse.price : 30} BDT
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const num = (selectedBuyCourse?.bkashNumber && selectedBuyCourse.bkashNumber !== '01700000000' && selectedBuyCourse.bkashNumber.trim() !== '') ? selectedBuyCourse.bkashNumber : '01581624202';
-                        navigator.clipboard.writeText(num);
-                        alert('bKash number copied!');
-                      }}
-                      className="px-2 py-0.5 bg-slate-50 hover:bg-slate-100 text-slate-600 font-light text-[10px] rounded border border-slate-200 transition cursor-pointer flex items-center gap-1"
-                    >
-                      <Copy className="w-3 h-3" /> Copy
-                    </button>
                   </div>
-                </div>
+                )}
 
                 {checkoutMessage && (
                   <div className={`p-3 rounded-xl text-xs font-light leading-snug flex items-start gap-2 ${
@@ -1399,21 +1384,7 @@ export default function MyCoursesView({
 
                 <div className="space-y-1">
                   <label className="text-[10px] font-light text-slate-500 block">
-                    bKash Number <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={bkashSender}
-                    onChange={(e) => setBkashSender(e.target.value)}
-                    placeholder="017XXXXXXXX"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:border-pink-400 outline-none text-xs font-light transition text-slate-800"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-light text-slate-500 block">
-                    Email Address <span className="text-rose-400">*</span>
+                    ইমেইল অ্যাড্রেস <span className="text-rose-400">*</span>
                   </label>
                   <input
                     type="email"
@@ -1421,36 +1392,72 @@ export default function MyCoursesView({
                     value={accessEmail}
                     onChange={(e) => setAccessEmail(e.target.value)}
                     placeholder="student@gmail.com"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:border-pink-400 outline-none text-xs font-light transition text-slate-800"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:border-emerald-400 outline-none text-xs font-light transition text-slate-800"
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-light text-slate-500 block">
-                    Transaction ID (TrxID) <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={trxId}
-                    onChange={(e) => setTrxId(e.target.value)}
-                    placeholder="K8L9O0P1Q2"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:border-pink-400 outline-none text-xs font-light transition text-slate-800 font-mono"
-                  />
-                </div>
+                {/* Wallet Balance Check */}
+                {(() => {
+                  const requiredPrice = isCartCheckoutMode && cart.length > 0 
+                    ? cartTotalPrice 
+                    : ((selectedBuyCourse?.price && selectedBuyCourse.price > 0) ? selectedBuyCourse.price : 30);
+                  const hasEnoughBalance = userWalletBalance >= requiredPrice;
 
-                <button
-                  type="submit"
-                  disabled={isSubmittingRequest}
-                  className="w-full py-2.5 bg-pink-600 hover:bg-pink-700 disabled:bg-slate-300 text-white font-light text-xs rounded-xl transition cursor-pointer shadow-xs mt-1"
-                >
-                  {isSubmittingRequest 
-                    ? 'Submitting...' 
-                    : isCartCheckoutMode && cart.length > 0 
-                    ? `Submit Request (৳${cartTotalPrice})` 
-                    : 'Submit Request'}
-                </button>
-              </form>
+                  return (
+                    <div className="space-y-3 pt-1">
+                      <div className={`p-3.5 rounded-xl border space-y-1.5 ${
+                        hasEnoughBalance 
+                          ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900' 
+                          : 'bg-amber-50/80 border-amber-200 text-amber-900'
+                      }`}>
+                        <div className="flex items-center justify-between text-xs font-light">
+                          <span>বর্তমান ওয়ালেট ব্যালেন্স:</span>
+                          <span className="font-mono font-normal text-sm text-emerald-700">৳{userWalletBalance} BDT</span>
+                        </div>
+                        
+                        {!hasEnoughBalance ? (
+                          <p className="text-[11px] text-amber-800 font-light leading-relaxed border-t border-amber-200/60 pt-1.5">
+                            ⚠️ ওয়ালেটে পর্যাপ্ত ব্যালেন্স নাই! কোর্স কিনতে ৳{requiredPrice} BDT প্রয়োজন। অনুগ্রহ করে বিকাশ দিয়ে ওয়ালেট রিচার্জ করুন।
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-emerald-800 font-light leading-relaxed border-t border-emerald-200/60 pt-1.5">
+                            ✅ আপনার ওয়ালেটে পর্যাপ্ত ব্যালেন্স আছে। নিচের বাটনে ক্লিক করে সরাসরি কোর্সটি আনলক করে নিন।
+                          </p>
+                        )}
+                      </div>
+
+                      {hasEnoughBalance ? (
+                        <button
+                          type="button"
+                          onClick={handleDirectWalletClaim}
+                          disabled={isSubmittingRequest}
+                          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-light text-xs rounded-xl transition cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+                        >
+                          <Sparkles className="w-4 h-4" />
+                          <span>
+                            {isSubmittingRequest 
+                              ? 'প্রসেস করা হচ্ছে...' 
+                              : `ওয়ালেট ব্যালেন্স থেকে কোর্স কিনুন (৳${requiredPrice} BDT)`}
+                          </span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedBuyCourse(null);
+                            setIsCartCheckoutMode(false);
+                            setIsRechargeModalOpen(true);
+                          }}
+                          className="w-full py-3 bg-pink-600 hover:bg-pink-700 text-white font-light text-xs rounded-xl transition cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+                        >
+                          <PlusCircle className="w-4 h-4" />
+                          <span>ওয়ালেট রিচার্জ করুন (Recharge Wallet)</span>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
             </motion.div>
           </div>
         )}
@@ -1508,6 +1515,9 @@ export default function MyCoursesView({
                       <Copy className="w-3 h-3" /> Copy
                     </button>
                   </div>
+                  <p className="text-[10px] text-slate-500 font-light italic">
+                    💡 টাকা দেওয়ার পর ট্রাঞ্জেকশন আইডি জমা দিন। টাকা কত পাঠিয়েছেন তা ইনপুট দিতে হবে না, এডমিনের আপলোড করা ডেটা থেকে সিস্টেম স্বয়ংক্রিয়ভাবে শনাক্ত করে আপনার ওয়ালেটে ব্যালেন্স জমা করবে।
+                  </p>
                 </div>
 
                 {rechargeMessage && (
@@ -1559,21 +1569,6 @@ export default function MyCoursesView({
 
                 <div className="space-y-1">
                   <label className="text-[10px] font-light text-slate-500 block">
-                    টাকার পরিমাণ (BDT) <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    value={rechargeAmount}
-                    onChange={(e) => setRechargeAmount(e.target.value)}
-                    placeholder="50"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:border-emerald-400 outline-none text-xs font-light transition text-slate-800 font-mono"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-light text-slate-500 block">
                     ট্রাঞ্জেকশন আইডি (TrxID) <span className="text-rose-400">*</span>
                   </label>
                   <input
@@ -1582,7 +1577,7 @@ export default function MyCoursesView({
                     value={rechargeTrx}
                     onChange={(e) => setRechargeTrx(e.target.value)}
                     placeholder="K8L9O0P1Q2"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:border-emerald-400 outline-none text-xs font-light transition text-slate-800 font-mono"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:border-emerald-400 outline-none text-xs font-light transition text-slate-800 font-mono uppercase"
                   />
                 </div>
 
@@ -1596,7 +1591,7 @@ export default function MyCoursesView({
                   ) : (
                     <>
                       <PlusCircle className="w-3.5 h-3.5" />
-                      <span>রিচার্জ ক্লেইম করুন</span>
+                      <span>রিচার্জ ক怼ইম করুন</span>
                     </>
                   )}
                 </button>
