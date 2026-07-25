@@ -217,10 +217,11 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
 
   const handleApproveRequest = async (req: any) => {
     try {
+      const nowISO = new Date().toISOString();
       const reqRef = doc(db, 'access_requests', req.id);
-      await updateDoc(reqRef, { status: 'approved' });
+      await updateDoc(reqRef, { status: 'approved', spent: true, spentAt: nowISO });
       
-      setCourseRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved' } : r));
+      setCourseRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved', spent: true } : r));
 
       const emailLower = req.email.toLowerCase();
       if (!allowedUsers.includes(emailLower)) {
@@ -231,6 +232,36 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
         await updateDoc(courseRef, {
           allowedUsers: updatedAllowed
         });
+      }
+
+      // Mark matching payment in global_verified_payments as spent
+      if (req.trxId) {
+        const globalDocRef = doc(db, 'system_settings', 'global_verified_payments');
+        const vpSnap = await getDoc(globalDocRef);
+        if (vpSnap.exists()) {
+          const vps = vpSnap.data().verifiedPayments || [];
+          if (Array.isArray(vps)) {
+            const reqTrx = String(req.trxId).toLowerCase().trim();
+            let updated = false;
+            const updatedVps = vps.map((vp: any) => {
+              if ((vp.trxId || '').toLowerCase().trim() === reqTrx) {
+                updated = true;
+                return {
+                  ...vp,
+                  spent: true,
+                  claimed: true,
+                  claimedBy: emailLower,
+                  claimedAt: nowISO,
+                  spentAt: nowISO
+                };
+              }
+              return vp;
+            });
+            if (updated) {
+              await setDoc(globalDocRef, { verifiedPayments: updatedVps }, { merge: true });
+            }
+          }
+        }
       }
     } catch (e) {
       console.error('Failed to approve request:', e);

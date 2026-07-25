@@ -323,6 +323,7 @@ export default function MyCoursesView({
           allVps = globalVpSnap.data().verifiedPayments || [];
           if (Array.isArray(allVps)) {
             matchedVpIndex = allVps.findIndex((vp: any) => {
+              if (vp.spent || vp.claimed) return false;
               const vpPhone = cleanPhone(vp.bkashNumber || '');
               const vpTrx = (vp.trxId || '').toLowerCase().trim();
               return (vpPhone === matchPhone || (vp.bkashNumber || '').trim() === cleanSender) && vpTrx === matchTrx;
@@ -458,14 +459,18 @@ export default function MyCoursesView({
         const requestsSnap = await getDocs(query(collection(db, 'access_requests')));
         const existingWithTrx = requestsSnap.docs.find(d => {
           const reqData = d.data();
-          return reqData.trxId && reqData.trxId.toLowerCase().trim() === matchTrx;
+          const reqTrx = reqData.trxId ? String(reqData.trxId).toLowerCase().trim() : '';
+          if (reqTrx === matchTrx) {
+            return reqData.spent === true || reqData.status === 'approved' || reqData.status === 'pending' || reqData.verificationMethod === 'auto';
+          }
+          return false;
         });
 
         if (existingWithTrx) {
           setIsSubmittingRequest(false);
           setCheckoutMessage({
             type: 'error',
-            text: `এই ট্রাঞ্জেকশন আইডিটি (${cleanTrx}) ইতোমধ্যে একবার একটি কোর্স রিকুয়েস্টে ব্যবহৃত হয়েছে। একই ট্রাঞ্জেকশন আইডি দিয়ে একাধিকবার রিকুয়েস্ট করা সম্ভব নয়।`
+            text: `এই ট্রাঞ্জেকশন আইডিটি (${cleanTrx}) ইতোমধ্যে একবার সিস্টেমে ব্যবহার বা ক্লেইম করা হয়েছে। একই ট্রাঞ্জেকশন নম্বর দিয়ে একাধিকবার রিকুয়েস্ট করা সম্ভব নয়।`
           });
           return;
         }
@@ -489,7 +494,7 @@ export default function MyCoursesView({
       }
 
       // 1. Fetch global verified payments from central system_settings
-      let globalVps: { bkashNumber: string; trxId: string; amount?: number }[] = [];
+      let globalVps: any[] = [];
       try {
         const globalVpSnap = await getDoc(doc(db, 'system_settings', 'global_verified_payments'));
         if (globalVpSnap.exists()) {
@@ -499,31 +504,55 @@ export default function MyCoursesView({
         console.warn("Global verified payments check notice:", err);
       }
 
-      // Find matching verified payment entry
-      let matchedVp: { bkashNumber: string; trxId: string; amount?: number } | null = null;
+      // Find matching UNCLAIMED/UNSPENT verified payment entry
+      let matchedVp: any = null;
+      let matchedVpIndex = -1;
       
-      const foundGlobal = globalVps.find(vp => {
-        const vpPhone = cleanPhone(vp.bkashNumber);
-        const vpTrx = vp.trxId.toLowerCase().trim();
-        return (vpPhone === matchPhone || vp.bkashNumber.trim() === cleanSender) && vpTrx === matchTrx;
-      });
+      if (Array.isArray(globalVps)) {
+        matchedVpIndex = globalVps.findIndex((vp: any) => {
+          if (vp.spent || vp.claimed) return false;
+          const vpPhone = cleanPhone(vp.bkashNumber || '');
+          const vpTrx = (vp.trxId || '').toLowerCase().trim();
+          return (vpPhone === matchPhone || (vp.bkashNumber || '').trim() === cleanSender) && vpTrx === matchTrx;
+        });
+        if (matchedVpIndex !== -1) {
+          matchedVp = globalVps[matchedVpIndex];
+        }
+      }
 
-      if (foundGlobal) {
-        matchedVp = foundGlobal;
-      } else {
+      if (!matchedVp) {
         // Fallback to course-level legacy verified payments
         for (const course of allCourses) {
           if (course.verifiedPayments && course.verifiedPayments.length > 0) {
-            const found = course.verifiedPayments.find(vp => {
-              const vpPhone = cleanPhone(vp.bkashNumber);
-              const vpTrx = vp.trxId.toLowerCase().trim();
-              return (vpPhone === matchPhone || vp.bkashNumber.trim() === cleanSender) && vpTrx === matchTrx;
+            const found = course.verifiedPayments.find((vp: any) => {
+              if (vp.spent || vp.claimed) return false;
+              const vpPhone = cleanPhone(vp.bkashNumber || '');
+              const vpTrx = (vp.trxId || '').toLowerCase().trim();
+              return (vpPhone === matchPhone || (vp.bkashNumber || '').trim() === cleanSender) && vpTrx === matchTrx;
             });
             if (found) {
               matchedVp = found;
               break;
             }
           }
+        }
+      }
+
+      // MARK VERIFIED PAYMENT AS SPENT/CLAIMED IMMEDIATELY IN FIRESTORE
+      if (matchedVp && matchedVpIndex !== -1 && Array.isArray(globalVps)) {
+        const nowISO = new Date().toISOString();
+        globalVps[matchedVpIndex] = {
+          ...matchedVp,
+          spent: true,
+          claimed: true,
+          claimedBy: cleanEmail.toLowerCase(),
+          claimedAt: nowISO,
+          spentAt: nowISO
+        };
+        try {
+          await setDoc(doc(db, 'system_settings', 'global_verified_payments'), { verifiedPayments: globalVps }, { merge: true });
+        } catch (vpUpdateErr) {
+          console.warn("Failed to mark VP as spent in global_verified_payments:", vpUpdateErr);
         }
       }
 
@@ -595,6 +624,9 @@ export default function MyCoursesView({
         email: cleanEmail.toLowerCase(),
         trxId: cleanTrx,
         status: isFullyApproved ? 'approved' : (isPartiallyApproved ? 'approved' : 'pending'),
+        verificationMethod: matchedVp ? 'auto' : (existingWalletBalance > 0 ? 'wallet_balance' : 'manual'),
+        spent: matchedVp ? true : false,
+        spentAt: matchedVp ? new Date().toISOString() : undefined,
         price: targetCourses[0].price || 30,
         totalPrice,
         createdAt: new Date().toISOString(),

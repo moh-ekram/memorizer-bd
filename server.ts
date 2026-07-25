@@ -98,6 +98,7 @@ async function startServer() {
         allVps = globalVpSnap.data().verifiedPayments || [];
         if (Array.isArray(allVps)) {
           matchedVpIndex = allVps.findIndex((vp: any) => {
+            if (vp.spent || vp.claimed) return false;
             const vpPhone = cleanPhone(vp.bkashNumber || '');
             const vpTrx = (vp.trxId || '').toLowerCase().trim();
             return (vpPhone === matchPhone || (vp.bkashNumber || '').trim() === cleanSender) && vpTrx === cleanTrx;

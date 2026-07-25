@@ -155,11 +155,81 @@ export default function StatsDashboard({
       const matchTrx = cleanTrx.toLowerCase().trim();
       const matchPhone = cleanPhone(cleanSender);
 
-      const isAutoApproved = selectedBuyCourse.verifiedPayments && selectedBuyCourse.verifiedPayments.some(vp => {
-        const vpPhone = cleanPhone(vp.bkashNumber);
-        const vpTrx = vp.trxId.toLowerCase().trim();
-        return (vpPhone === matchPhone || vp.bkashNumber.trim() === cleanSender) && vpTrx === matchTrx;
-      });
+      // --- TRANSACTION ID UNIQUENESS CHECK ---
+      try {
+        const requestsSnap = await getDocs(query(collection(db, 'access_requests')));
+        const existingWithTrx = requestsSnap.docs.find(d => {
+          const reqData = d.data();
+          const reqTrx = reqData.trxId ? String(reqData.trxId).toLowerCase().trim() : '';
+          if (reqTrx === matchTrx) {
+            return reqData.spent === true || reqData.status === 'approved' || reqData.status === 'pending' || reqData.verificationMethod === 'auto';
+          }
+          return false;
+        });
+
+        if (existingWithTrx) {
+          setIsSubmittingRequest(false);
+          setCheckoutMessage({
+            type: 'error',
+            text: `এই ট্রাঞ্জেকশন আইডিটি (${cleanTrx}) ইতোমধ্যে একবার সিস্টেমে ব্যবহার বা ক্লেইম করা হয়েছে। একই ট্রাঞ্জেকশন নম্বর দিয়ে একাধিকবার রিকুয়েস্ট করা সম্ভব নয়।`
+          });
+          return;
+        }
+      } catch (trxCheckErr) {
+        console.warn("Trx ID check notice:", trxCheckErr);
+      }
+
+      // Check global_verified_payments
+      let isAutoApproved = false;
+      let matchedVpIndex = -1;
+      let globalVps: any[] = [];
+
+      try {
+        const globalVpSnap = await getDoc(doc(db, 'system_settings', 'global_verified_payments'));
+        if (globalVpSnap.exists()) {
+          globalVps = globalVpSnap.data().verifiedPayments || [];
+          if (Array.isArray(globalVps)) {
+            matchedVpIndex = globalVps.findIndex((vp: any) => {
+              if (vp.spent || vp.claimed) return false;
+              const vpPhone = cleanPhone(vp.bkashNumber || '');
+              const vpTrx = (vp.trxId || '').toLowerCase().trim();
+              return (vpPhone === matchPhone || (vp.bkashNumber || '').trim() === cleanSender) && vpTrx === matchTrx;
+            });
+            if (matchedVpIndex !== -1) {
+              isAutoApproved = true;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Global VP check notice:", err);
+      }
+
+      if (!isAutoApproved && selectedBuyCourse.verifiedPayments) {
+        isAutoApproved = selectedBuyCourse.verifiedPayments.some((vp: any) => {
+          if (vp.spent || vp.claimed) return false;
+          const vpPhone = cleanPhone(vp.bkashNumber || '');
+          const vpTrx = (vp.trxId || '').toLowerCase().trim();
+          return (vpPhone === matchPhone || (vp.bkashNumber || '').trim() === cleanSender) && vpTrx === matchTrx;
+        });
+      }
+
+      const nowISO = new Date().toISOString();
+
+      if (isAutoApproved && matchedVpIndex !== -1 && Array.isArray(globalVps)) {
+        globalVps[matchedVpIndex] = {
+          ...globalVps[matchedVpIndex],
+          spent: true,
+          claimed: true,
+          claimedBy: cleanEmail.toLowerCase(),
+          claimedAt: nowISO,
+          spentAt: nowISO
+        };
+        try {
+          await setDoc(doc(db, 'system_settings', 'global_verified_payments'), { verifiedPayments: globalVps }, { merge: true });
+        } catch (vpUpdateErr) {
+          console.warn("Failed to mark VP spent:", vpUpdateErr);
+        }
+      }
 
       const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       const requestPayload = {
@@ -169,9 +239,12 @@ export default function StatsDashboard({
         bkashNumber: cleanSender,
         email: cleanEmail.toLowerCase(),
         trxId: cleanTrx,
-        status: 'pending',
+        status: isAutoApproved ? 'approved' : 'pending',
+        verificationMethod: isAutoApproved ? 'auto' : 'manual',
+        spent: isAutoApproved,
+        spentAt: isAutoApproved ? nowISO : undefined,
         price: (selectedBuyCourse.price && selectedBuyCourse.price > 0) ? selectedBuyCourse.price : 30,
-        createdAt: new Date().toISOString(),
+        createdAt: nowISO,
         requestedBy: user?.email || 'anonymous'
       };
 

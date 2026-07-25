@@ -481,8 +481,40 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         } : c));
       }
 
-      // Update local requests state
-      setAccessRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved' } : r));
+      // Mark matching payment in system_settings/global_verified_payments as spent for course requests as well
+      if (req.trxId) {
+        const globalDocRef = doc(db, 'system_settings', 'global_verified_payments');
+        const vpSnap = await getDoc(globalDocRef);
+        if (vpSnap.exists()) {
+          const vps = vpSnap.data().verifiedPayments || [];
+          if (Array.isArray(vps)) {
+            const reqTrx = req.trxId.toLowerCase().trim();
+            let updated = false;
+            const updatedVps = vps.map((vp: any) => {
+              if ((vp.trxId || '').toLowerCase().trim() === reqTrx) {
+                updated = true;
+                return {
+                  ...vp,
+                  spent: true,
+                  claimed: true,
+                  claimedBy: userEmail,
+                  claimedAt: nowISO,
+                  spentAt: nowISO
+                };
+              }
+              return vp;
+            });
+            if (updated) {
+              await setDoc(globalDocRef, { verifiedPayments: updatedVps }, { merge: true });
+              setGlobalVerifiedPayments(updatedVps);
+            }
+          }
+        }
+      }
+
+      // Update local requests state and mark spent in DB
+      await updateDoc(doc(db, 'access_requests', req.id), { spent: true, spentAt: nowISO });
+      setAccessRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved', spent: true } : r));
       alert(`Access request approved successfully! User ${userEmail} granted access to ${targetCourseIds.length} course(s) ${selectedExpiry ? `until ${selectedExpiry}` : 'permanently'}.`);
     } catch (err) {
       console.error('Error approving request:', err);
@@ -1331,11 +1363,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             autoApprovedRequestsCount++;
 
             if (matchedVp) {
+              const nowISO = new Date().toISOString();
               updatedVpList[matchedVpIdx] = {
                 ...matchedVp,
+                spent: true,
                 claimed: true,
                 claimedBy: reqEmail,
-                claimedAt: new Date().toISOString()
+                claimedAt: nowISO,
+                spentAt: nowISO
               };
             }
 
@@ -1349,6 +1384,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             await setDoc(doc(db, 'access_requests', req.id), {
               status: 'approved',
               verificationMethod: matchedVp ? 'auto' : 'wallet_balance',
+              spent: matchedVp ? true : false,
+              spentAt: matchedVp ? new Date().toISOString() : undefined,
               approvedCoursesCount: approvedTargetIds.length,
               remainingWalletBalance: remainingBalance,
               updatedAt: new Date().toISOString()
