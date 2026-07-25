@@ -37,6 +37,8 @@ import {
   FileSpreadsheet,
   Trash2,
   PlusCircle,
+  Plus,
+  Save,
   BookOpen,
   Edit,
   Lock,

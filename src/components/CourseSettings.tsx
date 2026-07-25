@@ -860,6 +860,12 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   const [storyUploadError, setStoryUploadError] = useState<string | null>(null);
   const [pastedStoryText, setPastedStoryText] = useState<string>('');
 
+  useEffect(() => {
+    if (course?.stories) {
+      setLocalStories(course.stories);
+    }
+  }, [course?.stories]);
+
   // --- WORDS LIST STATES ---
   const sanitizeWordsList = (wordsList: VocabularyWord[]) => {
     return (wordsList || []).map((w, idx) => {
@@ -4035,8 +4041,9 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
 
                 {/* Upload Card */}
                 <div className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-4">
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                    <label className="flex-1 cursor-pointer bg-white border-2 border-dashed border-indigo-200 hover:border-indigo-400 p-5 rounded-xl text-center transition group">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Document Upload */}
+                    <label className="cursor-pointer bg-white border-2 border-dashed border-indigo-200 hover:border-indigo-400 p-5 rounded-xl text-center transition group flex flex-col items-center justify-center">
                       <input
                         type="file"
                         accept=".docx,.doc,.txt"
@@ -4062,7 +4069,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                           }
                         }}
                       />
-                      <UploadCloud className="w-7 h-7 text-indigo-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
+                      <UploadCloud className="w-7 h-7 text-indigo-500 mb-1 group-hover:scale-110 transition-transform" />
                       <span className="text-xs font-bold text-slate-800 block">
                         {storyUploadLoading ? 'Extracting stories from document...' : 'Upload Word Document (.docx / .doc / .txt)'}
                       </span>
@@ -4070,13 +4077,44 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                         Select or drag and drop your document file here
                       </span>
                     </label>
+
+                    {/* Paste Text / Direct Input */}
+                    <div className="bg-white p-4 rounded-xl border border-indigo-150 space-y-2 flex flex-col">
+                      <label className="text-xs font-extrabold text-slate-800 block">
+                        Paste Story Text Directly:
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={pastedStoryText}
+                        onChange={(e) => setPastedStoryText(e.target.value)}
+                        placeholder="Story Title&#10;First paragraph of story..."
+                        className="w-full text-xs text-slate-700 border border-slate-200 rounded-lg p-2 focus:border-indigo-500 outline-none flex-1 font-mono resize-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!pastedStoryText.trim()) return;
+                          const parsed = parseStoriesFromRawText(pastedStoryText, course.id);
+                          if (parsed.length > 0) {
+                            setLocalStories(prev => [...prev, ...parsed]);
+                            setPastedStoryText('');
+                            setStoryUploadError(null);
+                          } else {
+                            setStoryUploadError('No valid story detected in pasted text.');
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition cursor-pointer self-end"
+                      >
+                        Parse & Add Stories
+                      </button>
+                    </div>
                   </div>
 
                   {/* Format Guide */}
                   <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 text-xs text-slate-600 space-y-1.5">
-                    <span className="font-extrabold text-slate-800 block">💡 Document Format Guide:</span>
+                    <span className="font-extrabold text-slate-800 block">💡 Document / Text Format Guide:</span>
                     <p className="text-[11px] text-slate-500 leading-relaxed">
-                      Your document can contain multiple stories. Each title will be automatically extracted and matched with its story content:
+                      Your document or pasted text can contain multiple stories. Each title will be automatically extracted and matched with its story content:
                     </p>
                     <pre className="text-[11px] font-mono text-indigo-900 bg-indigo-50/80 p-2.5 rounded-lg border border-indigo-100 leading-relaxed whitespace-pre font-medium">
 {`Story Title 1
@@ -4100,15 +4138,35 @@ First paragraph of story 2...`}
                     <h5 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
                       Uploaded Stories List ({localStories.length})
                     </h5>
-                    {localStories.length > 0 && (
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => setLocalStories([])}
-                        className="text-xs font-bold text-rose-600 hover:text-rose-700 transition cursor-pointer"
+                        onClick={() => {
+                          setLocalStories(prev => [
+                            ...prev,
+                            {
+                              id: `story-${course.id}-${Date.now()}-${prev.length + 1}`,
+                              title: `Story Title ${prev.length + 1}`,
+                              content: '',
+                              createdAt: new Date().toISOString()
+                            }
+                          ]);
+                        }}
+                        className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-200 transition cursor-pointer flex items-center gap-1"
                       >
-                        Remove All Stories
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Story Manually</span>
                       </button>
-                    )}
+                      {localStories.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setLocalStories([])}
+                          className="text-xs font-bold text-rose-600 hover:text-rose-700 transition cursor-pointer"
+                        >
+                          Remove All Stories
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {localStories.length > 0 ? (

@@ -52,6 +52,7 @@ service cloud.firestore {
         && (data.get('description', null) == null || (data.description is string && data.description.size() <= 10000))
         && (data.get('totalGroups', null) == null || data.totalGroups is int || data.totalGroups is float)
         && (data.get('words', null) == null || data.words is list)
+        && (data.get('stories', null) == null || data.stories is list)
         && (data.get('createdAt', null) == null || (data.createdAt is string && data.createdAt.size() <= 128))
         && (data.get('createdBy', null) == null || (data.createdBy is string && data.createdBy.size() <= 256))
         && (data.get('isDefault', null) == null || data.isDefault is bool)
