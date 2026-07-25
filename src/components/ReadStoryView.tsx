@@ -40,6 +40,7 @@ export default function ReadStoryView({
   const [selectedStoryIndex, setSelectedStoryIndex] = useState<number>(0);
   const [activeWordPopup, setActiveWordPopup] = useState<VocabularyWord | null>(null);
   const [fontSize, setFontSize] = useState<'sm' | 'base' | 'lg' | 'xl'>('base');
+  const [highlightColor, setHighlightColor] = useState<'red' | 'green' | 'blue' | 'black'>('blue');
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -142,6 +143,13 @@ export default function ReadStoryView({
   const renderParagraphWithBoldWords = (text: string) => {
     if (!wordRegex) return text;
 
+    const colorClasses = {
+      red: 'text-red-600 hover:text-red-700 decoration-red-500',
+      green: 'text-emerald-600 hover:text-emerald-700 decoration-emerald-500',
+      blue: 'text-blue-600 hover:text-blue-700 decoration-blue-500',
+      black: 'text-slate-950 hover:text-black decoration-slate-900'
+    };
+
     const parts: React.ReactNode[] = [];
     let lastIndex = 0;
     let match: RegExpExecArray | null;
@@ -162,8 +170,6 @@ export default function ReadStoryView({
       const matchedWordObj = wordLookupMap.get(matchedText.toLowerCase());
 
       if (matchedWordObj) {
-        const wordStatus = progress[matchedWordObj.id]?.status || 'unrated';
-
         parts.push(
           <button
             key={`vocab-${matchIndex}-${matchedWordObj.id}`}
@@ -172,19 +178,10 @@ export default function ReadStoryView({
               e.stopPropagation();
               setActiveWordPopup(matchedWordObj);
             }}
-            className={`inline-flex items-center px-1.5 py-0.5 my-0.5 mx-0.5 rounded font-black text-xs sm:text-sm cursor-pointer transition-all duration-200 border group ${
-              wordStatus === 'know'
-                ? 'bg-emerald-100/90 hover:bg-emerald-200 text-emerald-950 border-emerald-300'
-                : wordStatus === 'dont_know'
-                ? 'bg-rose-100/90 hover:bg-rose-200 text-rose-950 border-rose-300'
-                : wordStatus === 'confusion'
-                ? 'bg-amber-100/90 hover:bg-amber-200 text-amber-950 border-amber-300'
-                : 'bg-indigo-100/90 hover:bg-indigo-200 text-indigo-950 border-indigo-300 shadow-2xs'
-            }`}
-            title={`Click to view meaning: ${matchedWordObj.meaning}`}
+            className={`inline font-extrabold underline underline-offset-2 cursor-pointer transition-colors ${colorClasses[highlightColor]}`}
+            title={`Click to view flashcard for "${matchedWordObj.word}"`}
           >
-            <span>{matchedText}</span>
-            <Sparkles className="w-2.5 h-2.5 ml-1 opacity-70 group-hover:opacity-100 text-indigo-600" />
+            {matchedText}
           </button>
         );
       } else {
@@ -335,6 +332,43 @@ export default function ReadStoryView({
 
                 {/* Toolbar buttons */}
                 <div className="flex items-center gap-2 flex-wrap">
+                  {/* Word Color Picker */}
+                  <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200" title="Vocabulary word highlight color">
+                    <span className="text-[10px] font-extrabold text-slate-500 pl-1">Color:</span>
+                    <button
+                      type="button"
+                      onClick={() => setHighlightColor('red')}
+                      className={`w-5 h-5 rounded-lg transition-all cursor-pointer ${
+                        highlightColor === 'red' ? 'bg-red-600 ring-2 ring-red-400 scale-110' : 'bg-red-500 hover:scale-105 opacity-60'
+                      }`}
+                      title="Red"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setHighlightColor('green')}
+                      className={`w-5 h-5 rounded-lg transition-all cursor-pointer ${
+                        highlightColor === 'green' ? 'bg-emerald-600 ring-2 ring-emerald-400 scale-110' : 'bg-emerald-500 hover:scale-105 opacity-60'
+                      }`}
+                      title="Green"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setHighlightColor('blue')}
+                      className={`w-5 h-5 rounded-lg transition-all cursor-pointer ${
+                        highlightColor === 'blue' ? 'bg-blue-600 ring-2 ring-blue-400 scale-110' : 'bg-blue-500 hover:scale-105 opacity-60'
+                      }`}
+                      title="Blue"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setHighlightColor('black')}
+                      className={`w-5 h-5 rounded-lg transition-all cursor-pointer ${
+                        highlightColor === 'black' ? 'bg-slate-900 ring-2 ring-slate-400 scale-110' : 'bg-slate-800 hover:scale-105 opacity-60'
+                      }`}
+                      title="Black"
+                    />
+                  </div>
+
                   {/* Speech Button */}
                   <button
                     type="button"
@@ -437,94 +471,160 @@ export default function ReadStoryView({
         </div>
       </div>
 
-      {/* Interactive Word Detail Modal / Popover when clicking a bolded word */}
+      {/* Interactive Word Flashcard Modal when clicking a vocabulary word */}
       <AnimatePresence>
         {activeWordPopup && (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div 
+            className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+            onClick={() => setActiveWordPopup(null)}
+          >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              initial={{ opacity: 0, scale: 0.9, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-200 space-y-4 relative overflow-hidden"
+              exit={{ opacity: 0, scale: 0.9, y: 15 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden relative"
             >
-              {/* Close Button */}
-              <button
-                type="button"
-                onClick={() => setActiveWordPopup(null)}
-                className="absolute right-4 top-4 p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              {/* Flashcard Header Bar */}
+              <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 relative">
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={() => setActiveWordPopup(null)}
+                  className="absolute right-4 top-4 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition cursor-pointer backdrop-blur-xs"
+                  title="Close Flashcard"
+                >
+                  <X className="w-4 h-4" />
+                </button>
 
-              {/* Modal Header */}
-              <div className="space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-150 inline-block">
-                  Vocabulary Word #{activeWordPopup.id}
-                </span>
-                <h3 className="text-2xl font-black text-slate-900 tracking-tight">
-                  {activeWordPopup.word}
-                </h3>
+                {/* Badges */}
+                <div className="flex items-center gap-2 flex-wrap mb-3 pr-8">
+                  <span className="text-[10px] font-mono font-black uppercase tracking-wider text-indigo-200 bg-indigo-500/20 px-2.5 py-0.5 rounded-full border border-indigo-400/30">
+                    Flashcard
+                  </span>
+                  {activeWordPopup.group !== undefined && (
+                    <span className="text-[10px] font-mono font-extrabold text-amber-300 bg-amber-400/10 px-2.5 py-0.5 rounded-full border border-amber-400/20">
+                      Group #{activeWordPopup.group}
+                    </span>
+                  )}
+                  {progress[activeWordPopup.id]?.status && (
+                    <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase border ${
+                      progress[activeWordPopup.id]?.status === 'know'
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30'
+                        : progress[activeWordPopup.id]?.status === 'dont_know'
+                        ? 'bg-rose-500/20 text-rose-300 border-rose-400/30'
+                        : 'bg-amber-500/20 text-amber-300 border-amber-400/30'
+                    }`}>
+                      {progress[activeWordPopup.id]?.status === 'know' ? 'Learned' : progress[activeWordPopup.id]?.status === 'dont_know' ? 'Unlearned' : 'In Progress'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Word Title & Speech Pronunciation */}
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-white capitalize">
+                    {activeWordPopup.word}
+                  </h2>
+                  
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof window !== 'undefined' && window.speechSynthesis) {
+                        window.speechSynthesis.cancel();
+                        const u = new SpeechSynthesisUtterance(activeWordPopup.word);
+                        u.lang = 'en-US';
+                        u.rate = 0.85;
+                        window.speechSynthesis.speak(u);
+                      }
+                    }}
+                    className="p-3 bg-indigo-500/30 hover:bg-indigo-500/50 text-indigo-200 rounded-2xl transition border border-indigo-400/30 cursor-pointer shrink-0"
+                    title="Pronounce word"
+                  >
+                    <Volume2 className="w-5 h-5 text-amber-300" />
+                  </button>
+                </div>
               </div>
 
-              {/* Meaning & Details */}
-              <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-150 text-xs">
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase block">বাংলা অর্থ (Bengali Meaning)</span>
-                  <p className="text-base font-extrabold text-indigo-950 mt-0.5">
+              {/* Flashcard Content Body */}
+              <div className="p-6 space-y-4 bg-slate-50/50">
+                {/* Bengali Meaning */}
+                <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                    বাংলা অর্থ (Bengali Meaning)
+                  </span>
+                  <p className="text-xl sm:text-2xl font-black text-indigo-950 leading-snug">
                     {activeWordPopup.meaning || 'N/A'}
                   </p>
                 </div>
 
-                {activeWordPopup.synonyms && (
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase block">সমার্থ শব্দ (Synonyms)</span>
-                    <p className="text-xs font-semibold text-slate-700 mt-0.5">
-                      {activeWordPopup.synonyms}
-                    </p>
+                {/* Synonyms */}
+                {activeWordPopup.synonyms && activeWordPopup.synonyms.trim() !== '' && (
+                  <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                      সমার্থ শব্দ (Synonyms)
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {activeWordPopup.synonyms.split(/[,;/]+/).map((syn, sIdx) => {
+                        const cleaned = syn.trim();
+                        if (!cleaned) return null;
+                        return (
+                          <span 
+                            key={sIdx}
+                            className="px-2.5 py-1 bg-indigo-50 text-indigo-900 text-xs font-bold rounded-lg border border-indigo-100"
+                          >
+                            {cleaned}
+                          </span>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
-                {activeWordPopup.example && (
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase block">বাক্যে প্রয়োগ (Example Sentence)</span>
-                    <p className="text-xs font-medium text-slate-600 italic mt-0.5">
+                {/* Example Sentence */}
+                {activeWordPopup.example && activeWordPopup.example.trim() !== '' && (
+                  <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                      বাক্যে প্রয়োগ (Example Sentence)
+                    </span>
+                    <p className="text-xs sm:text-sm font-medium text-slate-700 italic leading-relaxed border-l-2 border-indigo-500 pl-3 py-0.5">
                       "{activeWordPopup.example}"
                     </p>
                   </div>
                 )}
-              </div>
 
-              {/* Status Action Buttons */}
-              {onRateWord && (
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-extrabold text-slate-400 uppercase">স্ট্যাটাস সেট করুন:</span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onRateWord(activeWordPopup.id, 'know');
-                        setActiveWordPopup(null);
-                      }}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition shadow-2xs flex items-center gap-1 cursor-pointer"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Learned</span>
-                    </button>
+                {/* Flashcard Action Rating Buttons */}
+                {onRateWord && (
+                  <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-extrabold text-slate-500">Rate word status:</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onRateWord(activeWordPopup.id, 'dont_know');
+                          setActiveWordPopup(null);
+                        }}
+                        className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-extrabold transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        <span>Unlearned</span>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onRateWord(activeWordPopup.id, 'dont_know');
-                        setActiveWordPopup(null);
-                      }}
-                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-extrabold transition shadow-2xs flex items-center gap-1 cursor-pointer"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                      <span>Unlearned</span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onRateWord(activeWordPopup.id, 'know');
+                          setActiveWordPopup(null);
+                        }}
+                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Learned</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </motion.div>
           </div>
         )}
