@@ -178,5 +178,11 @@ service cloud.firestore {
       allow read, create, update: if true;
       allow delete: if isAdmin();
     }
+
+    // 10. Used Transactions Collection
+    match /used_transactions/{trxId} {
+      allow read, create, update: if true;
+      allow delete: if isAdmin();
+    }
   }
 }

@@ -69,6 +69,19 @@ async function startServer() {
         return res.status(400).json({ success: false, reason: "অনুগ্রহ করে সঠিক ট্রাঞ্জেকশন আইডি (TrxID) প্রদান করুন।" });
       }
 
+      // SERVER-SIDE CHECK 0: Check lock in 'used_transactions' collection
+      const usedTxRef = doc(db, 'used_transactions', cleanTrx);
+      const usedTxSnap = await getDoc(usedTxRef);
+      if (usedTxSnap.exists()) {
+        const usedData = usedTxSnap.data();
+        if (usedData.spent === true || usedData.status === 'spent') {
+          return res.status(400).json({
+            success: false,
+            reason: `এই ট্রাঞ্জেকশন আইডিটি (${trxId}) ইতোমধ্যে 'spent' বা ব্যবহৃত হিসেবে 'used_transactions'-এ লক্ করা রয়েছে। একই ট্রাঞ্জেকশন দিয়ে একাধিকবার ব্যালেন্স রিচার্জ সম্ভব নয়।`
+          });
+        }
+      }
+
       // SERVER-SIDE CHECK 1: Ensure transaction ID was NOT already used or spent in access_requests
       const requestsSnap = await getDocs(query(collection(db, 'access_requests')));
       const isAlreadyUsedReq = requestsSnap.docs.some(docSnap => {
@@ -125,6 +138,19 @@ async function startServer() {
         const currentBalance = walletSnap.exists() ? (walletSnap.data().balance || 0) : 0;
         const newBalance = currentBalance + addAmount;
         const nowISO = new Date().toISOString();
+
+        // ATOMIC LOCK: Record transaction in used_transactions collection as 'spent' BEFORE updating wallet balance
+        await setDoc(doc(db, 'used_transactions', cleanTrx), {
+          trxId: cleanTrx,
+          spent: true,
+          status: 'spent',
+          email: cleanEmail,
+          usedBy: cleanEmail,
+          bkashNumber: cleanSender,
+          amount: addAmount,
+          createdAt: nowISO,
+          usedAt: nowISO
+        }, { merge: true });
 
         // Update Wallet Balance
         await setDoc(walletRef, {

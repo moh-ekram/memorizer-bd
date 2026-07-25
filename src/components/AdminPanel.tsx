@@ -378,17 +378,41 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     try {
       const selectedExpiry = requestExpiryDates[req.id] || '';
       
+      const userEmail = req.email.toLowerCase().trim();
+      const nowISO = new Date().toISOString();
+
+      // Check and set used_transactions lock
+      if (req.trxId) {
+        const reqTrx = req.trxId.toLowerCase().trim();
+        const usedTxSnap = await getDoc(doc(db, 'used_transactions', reqTrx));
+        if (usedTxSnap.exists()) {
+          const usedData = usedTxSnap.data();
+          if (usedData.spent === true || usedData.status === 'spent') {
+            alert(`ত্রুটি: ট্রাঞ্জেকশন আইডিটি (${req.trxId}) ইতোমধ্যে used_transactions কালেকশনে 'spent' হিসেবে লক্ রয়েছে।`);
+            return;
+          }
+        }
+
+        await setDoc(doc(db, 'used_transactions', reqTrx), {
+          trxId: reqTrx,
+          spent: true,
+          status: 'spent',
+          email: userEmail,
+          usedBy: userEmail,
+          bkashNumber: req.bkashNumber || '',
+          amount: req.totalPrice || req.price || 0,
+          createdAt: nowISO,
+          usedAt: nowISO
+        }, { merge: true });
+      }
+
       // 1. Update request status to 'approved' and spent = true
       const reqRef = doc(db, 'access_requests', req.id);
-      const nowISO = new Date().toISOString();
       await updateDoc(reqRef, { 
         status: 'approved',
         spent: true,
         spentAt: nowISO
       });
-
-      // 2. Add email to the course(s) allowed users list with expiry
-      const userEmail = req.email.toLowerCase().trim();
 
       if (req.courseId === 'wallet_recharge') {
         const rechargeAmt = req.totalPrice || req.price || (req as any).amount || 50;
@@ -1269,10 +1293,20 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       let totalCoursesGranted = 0;
       let updatedVpList = [...vpsToUse];
 
-      for (const req of pendingReqs) {
-        const reqPhone = cleanPhone(req.bkashNumber);
-        const reqTrx = req.trxId.toLowerCase().trim();
-        const reqEmail = req.email.toLowerCase().trim();
+        for (const req of pendingReqs) {
+          const reqPhone = cleanPhone(req.bkashNumber);
+          const reqTrx = req.trxId.toLowerCase().trim();
+          const reqEmail = req.email.toLowerCase().trim();
+
+          // Check if reqTrx is already locked in used_transactions
+          try {
+            const usedTxSnap = await getDoc(doc(db, 'used_transactions', reqTrx));
+            if (usedTxSnap.exists() && (usedTxSnap.data().spent === true || usedTxSnap.data().status === 'spent')) {
+              continue;
+            }
+          } catch (e) {
+            console.warn("used_transactions check notice:", e);
+          }
 
         // Match against unclaimed/unspent verified payment
         const matchedVpIdx = updatedVpList.findIndex(vp => {
@@ -1294,6 +1328,19 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             const newBal = existingWalletBalance + rechargeAmt;
             const nowISO = new Date().toISOString();
             
+            // Lock in used_transactions
+            await setDoc(doc(db, 'used_transactions', reqTrx), {
+              trxId: reqTrx,
+              spent: true,
+              status: 'spent',
+              email: reqEmail,
+              usedBy: reqEmail,
+              bkashNumber: req.bkashNumber,
+              amount: rechargeAmt,
+              createdAt: nowISO,
+              usedAt: nowISO
+            }, { merge: true });
+
             // Mark payment as claimed and spent
             updatedVpList[matchedVpIdx] = {
               ...matchedVp,
@@ -1364,6 +1411,19 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
             if (matchedVp) {
               const nowISO = new Date().toISOString();
+              // Lock in used_transactions
+              await setDoc(doc(db, 'used_transactions', reqTrx), {
+                trxId: reqTrx,
+                spent: true,
+                status: 'spent',
+                email: reqEmail,
+                usedBy: reqEmail,
+                bkashNumber: req.bkashNumber,
+                amount: req.totalPrice || req.price || 0,
+                createdAt: nowISO,
+                usedAt: nowISO
+              }, { merge: true });
+
               updatedVpList[matchedVpIdx] = {
                 ...matchedVp,
                 spent: true,

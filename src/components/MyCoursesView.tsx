@@ -299,6 +299,17 @@ export default function MyCoursesView({
         const matchTrx = cleanTrx;
         const matchPhone = cleanPhone(cleanSender);
 
+        // Check used_transactions lock
+        const usedTxSnap = await getDoc(doc(db, 'used_transactions', matchTrx));
+        if (usedTxSnap.exists() && (usedTxSnap.data().spent === true || usedTxSnap.data().status === 'spent')) {
+          setRechargeMessage({
+            type: 'error',
+            text: `এই ট্রাঞ্জেকশন আইডিটি (${rechargeTrx}) ইতোমধ্যে 'spent' বা ব্যবহৃত হিসেবে 'used_transactions'-এ লক্ করা রয়েছে।`
+          });
+          setIsSubmittingRecharge(false);
+          return;
+        }
+
         const existingReqsSnap = await getDocs(query(collection(db, 'access_requests')));
         const isAlreadyUsedReq = existingReqsSnap.docs.some(docSnap => {
           const d = docSnap.data();
@@ -350,6 +361,19 @@ export default function MyCoursesView({
           const currentBalance = walletSnap.exists() ? (walletSnap.data().balance || 0) : 0;
           const newBalance = currentBalance + addAmount;
           const nowISO = new Date().toISOString();
+
+          // ATOMIC LOCK: Record transaction in used_transactions collection as 'spent' BEFORE updating wallet balance
+          await setDoc(doc(db, 'used_transactions', matchTrx), {
+            trxId: matchTrx,
+            spent: true,
+            status: 'spent',
+            email: cleanEmail,
+            usedBy: cleanEmail,
+            bkashNumber: cleanSender,
+            amount: addAmount,
+            createdAt: nowISO,
+            usedAt: nowISO
+          }, { merge: true });
 
           await setDoc(walletRef, {
             email: cleanEmail,
@@ -454,6 +478,24 @@ export default function MyCoursesView({
       const matchTrx = cleanTrx.toLowerCase().trim();
       const matchPhone = cleanPhone(cleanSender);
 
+      // --- USED_TRANSACTIONS LOCK CHECK ---
+      try {
+        const usedTxSnap = await getDoc(doc(db, 'used_transactions', matchTrx));
+        if (usedTxSnap.exists()) {
+          const usedData = usedTxSnap.data();
+          if (usedData.spent === true || usedData.status === 'spent') {
+            setIsSubmittingRequest(false);
+            setCheckoutMessage({
+              type: 'error',
+              text: `এই ট্রাঞ্জেকশন আইডিটি (${cleanTrx}) ইতোমধ্যে 'spent' বা ব্যবহৃত হিসেবে 'used_transactions'-এ লক্ করা রয়েছে।`
+            });
+            return;
+          }
+        }
+      } catch (lockErr) {
+        console.warn("used_transactions lock check notice:", lockErr);
+      }
+
       // --- TRANSACTION ID UNIQUENESS CHECK ---
       try {
         const requestsSnap = await getDocs(query(collection(db, 'access_requests')));
@@ -538,7 +580,26 @@ export default function MyCoursesView({
         }
       }
 
-      // MARK VERIFIED PAYMENT AS SPENT/CLAIMED IMMEDIATELY IN FIRESTORE
+      // MARK VERIFIED PAYMENT AS SPENT/CLAIMED IMMEDIATELY IN FIRESTORE & LOCK IN used_transactions
+      if (matchedVp) {
+        const nowISO = new Date().toISOString();
+        try {
+          await setDoc(doc(db, 'used_transactions', matchTrx), {
+            trxId: matchTrx,
+            spent: true,
+            status: 'spent',
+            email: cleanEmail.toLowerCase(),
+            usedBy: cleanEmail.toLowerCase(),
+            bkashNumber: cleanSender,
+            amount: matchedVp.amount || 30,
+            createdAt: nowISO,
+            usedAt: nowISO
+          }, { merge: true });
+        } catch (lockWriteErr) {
+          console.warn("Failed to lock in used_transactions:", lockWriteErr);
+        }
+      }
+
       if (matchedVp && matchedVpIndex !== -1 && Array.isArray(globalVps)) {
         const nowISO = new Date().toISOString();
         globalVps[matchedVpIndex] = {

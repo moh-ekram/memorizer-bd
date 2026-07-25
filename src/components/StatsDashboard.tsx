@@ -155,6 +155,24 @@ export default function StatsDashboard({
       const matchTrx = cleanTrx.toLowerCase().trim();
       const matchPhone = cleanPhone(cleanSender);
 
+      // --- USED_TRANSACTIONS LOCK CHECK ---
+      try {
+        const usedTxSnap = await getDoc(doc(db, 'used_transactions', matchTrx));
+        if (usedTxSnap.exists()) {
+          const usedData = usedTxSnap.data();
+          if (usedData.spent === true || usedData.status === 'spent') {
+            setIsSubmittingRequest(false);
+            setCheckoutMessage({
+              type: 'error',
+              text: `এই ট্রাঞ্জেকশন আইডিটি (${cleanTrx}) ইতোমধ্যে 'spent' বা ব্যবহৃত হিসেবে 'used_transactions'-এ লক্ করা রয়েছে।`
+            });
+            return;
+          }
+        }
+      } catch (lockErr) {
+        console.warn("used_transactions lock check notice:", lockErr);
+      }
+
       // --- TRANSACTION ID UNIQUENESS CHECK ---
       try {
         const requestsSnap = await getDocs(query(collection(db, 'access_requests')));
@@ -214,6 +232,23 @@ export default function StatsDashboard({
       }
 
       const nowISO = new Date().toISOString();
+
+      if (isAutoApproved) {
+        try {
+          await setDoc(doc(db, 'used_transactions', matchTrx), {
+            trxId: matchTrx,
+            spent: true,
+            status: 'spent',
+            email: cleanEmail.toLowerCase(),
+            usedBy: cleanEmail.toLowerCase(),
+            bkashNumber: cleanSender,
+            createdAt: nowISO,
+            usedAt: nowISO
+          }, { merge: true });
+        } catch (lockWriteErr) {
+          console.warn("Failed to set lock in used_transactions:", lockWriteErr);
+        }
+      }
 
       if (isAutoApproved && matchedVpIndex !== -1 && Array.isArray(globalVps)) {
         globalVps[matchedVpIndex] = {

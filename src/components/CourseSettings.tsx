@@ -218,12 +218,37 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   const handleApproveRequest = async (req: any) => {
     try {
       const nowISO = new Date().toISOString();
+      const emailLower = req.email.toLowerCase();
+
+      if (req.trxId) {
+        const reqTrx = String(req.trxId).toLowerCase().trim();
+        const usedTxSnap = await getDoc(doc(db, 'used_transactions', reqTrx));
+        if (usedTxSnap.exists()) {
+          const usedData = usedTxSnap.data();
+          if (usedData.spent === true || usedData.status === 'spent') {
+            alert(`Error: Transaction ID (${req.trxId}) is already marked as 'spent' in used_transactions lock collection.`);
+            return;
+          }
+        }
+
+        await setDoc(doc(db, 'used_transactions', reqTrx), {
+          trxId: reqTrx,
+          spent: true,
+          status: 'spent',
+          email: emailLower,
+          usedBy: emailLower,
+          bkashNumber: req.bkashNumber || '',
+          amount: req.totalPrice || req.price || 0,
+          createdAt: nowISO,
+          usedAt: nowISO
+        }, { merge: true });
+      }
+
       const reqRef = doc(db, 'access_requests', req.id);
       await updateDoc(reqRef, { status: 'approved', spent: true, spentAt: nowISO });
       
       setCourseRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved', spent: true } : r));
 
-      const emailLower = req.email.toLowerCase();
       if (!allowedUsers.includes(emailLower)) {
         const updatedAllowed = [...allowedUsers, emailLower];
         setAllowedUsers(updatedAllowed);

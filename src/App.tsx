@@ -71,7 +71,8 @@ const LOCAL_STORAGE_ENROLLED_COURSES_KEY = 'vocab_memorizer_enrolled_courses_v2'
 const LOCAL_STORAGE_ACTIVE_COURSE_KEY = 'vocab_memorizer_active_course_v2';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('profile');
+  const [profileSubTab, setProfileSubTab] = useState<'flashcard' | 'dashboard' | 'my_courses'>('flashcard');
   const [selectedGroupFromDash, setSelectedGroupFromDash] = useState<number | string | null>(null);
 
   // --- MOBILE SWIPE NAVIGATION SETUP ---
@@ -86,9 +87,10 @@ export default function App() {
     isCancelled: boolean;
   } | null>(null);
 
-  const MAIN_TABS = ['dashboard', 'my_courses', 'flashcard', 'leaderboard', 'practice', 'study_tools', 'settings'];
+  const MAIN_TABS = ['profile', 'leaderboard', 'practice', 'study_tools', 'settings'];
 
   const TAB_LABELS: Record<string, string> = {
+    profile: 'My Profile',
     dashboard: 'Dashboard',
     my_courses: 'My Courses',
     flashcard: 'Flashcard',
@@ -100,6 +102,7 @@ export default function App() {
   };
 
   const getPrimaryTab = (tab: string): string => {
+    if (['profile', 'dashboard', 'my_courses', 'flashcard'].includes(tab)) return 'profile';
     if (['practice', 'synonym', 'quiz', 'match'].includes(tab)) return 'practice';
     if (['study_tools', 'dictionary', 'lists', 'planner', 'story'].includes(tab)) return 'study_tools';
     return tab;
