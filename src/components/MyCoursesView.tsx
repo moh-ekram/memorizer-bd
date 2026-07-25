@@ -769,21 +769,39 @@ export default function MyCoursesView({
           </div>
 
           {/* Footer Action Buttons */}
-          <div className="mt-4 pt-1 flex items-center gap-2">
+          <div className="mt-4 pt-1 flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
             {!isUserAllowed && (
-              <button
-                type="button"
-                onClick={(e) => toggleCartCourse(course, e)}
-                title={cart.some(c => c.id === course.id) ? "Remove from Cart" : "Add to Cart"}
-                className={`px-3 py-2 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer border ${
-                  cart.some(c => c.id === course.id)
-                    ? 'bg-emerald-500 text-white border-emerald-600 font-black shadow-2xs'
-                    : 'bg-orange-100 hover:bg-orange-200 text-orange-950 border-orange-300/80 font-extrabold'
-                }`}
-              >
-                <ShoppingBag className="w-3.5 h-3.5" />
-                <span>{cart.some(c => c.id === course.id) ? 'In Cart ✓' : '+ Cart'}</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => toggleCartCourse(course, e)}
+                  title={cart.some(c => c.id === course.id) ? "Remove from Cart" : "Add to Cart"}
+                  className={`px-2.5 py-2 rounded-xl text-[11px] font-bold flex items-center gap-1 transition cursor-pointer border ${
+                    cart.some(c => c.id === course.id)
+                      ? 'bg-emerald-500 text-white border-emerald-600 font-black shadow-2xs'
+                      : 'bg-orange-100 hover:bg-orange-200 text-orange-950 border-orange-300/80 font-extrabold'
+                  }`}
+                >
+                  <ShoppingBag className="w-3.5 h-3.5" />
+                  <span>{cart.some(c => c.id === course.id) ? 'Cart ✓' : '+ Cart'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveCourseId(course.id);
+                    if (onSelectTab) {
+                      onSelectTab('flashcard');
+                    }
+                  }}
+                  title="ফ্রি ফ্ল্যাশকার্ড প্র্যাকটিস করুন (Free Sample Flashcards)"
+                  className="flex-1 py-2 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 transition shadow-xs cursor-pointer border border-indigo-500/80 active:scale-98"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current text-amber-300" />
+                  <span>ফ্রি কার্ডস</span>
+                </button>
+              </>
             )}
 
             <button
@@ -800,7 +818,7 @@ export default function MyCoursesView({
                   onSelectTab('flashcard');
                 }
               }}
-              className={`flex-1 py-2 px-3.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer ${
+              className={`${!isUserAllowed ? 'px-3' : 'flex-1'} py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer ${
                 isActive
                   ? 'bg-white text-emerald-900 hover:bg-emerald-50 font-black shadow-md'
                   : isUserAllowed
@@ -808,8 +826,17 @@ export default function MyCoursesView({
                   : 'bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold'
               }`}
             >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>{isUserAllowed ? 'Start Flashcard' : 'Buy Now'}</span>
+              {isUserAllowed ? (
+                <>
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Start Flashcard</span>
+                </>
+              ) : (
+                <>
+                  <ShoppingBag className="w-3.5 h-3.5" />
+                  <span>Buy Now</span>
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -1153,16 +1180,32 @@ export default function MyCoursesView({
                 {/* Modal Footer Actions */}
                 <div className="p-4 bg-slate-50 border-t border-slate-150 flex flex-wrap items-center gap-2">
                   {!isUserAllowed ? (
-                    <button
-                      onClick={() => {
-                        setSelectedDetailCourse(null);
-                        setSelectedBuyCourse(course);
-                      }}
-                      className="flex-1 py-2.5 bg-pink-600 hover:bg-pink-700 text-white text-xs font-black rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-pink-600/10"
-                    >
-                      <ShoppingBag className="w-4 h-4" />
-                      <span>Request Access (Buy Course - ৳{(course.price && course.price > 0) ? course.price : 30})</span>
-                    </button>
+                    <div className="w-full flex flex-col sm:flex-row items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setActiveCourseId(course.id);
+                          if (onSelectTab) {
+                            onSelectTab('flashcard');
+                          }
+                          setSelectedDetailCourse(null);
+                        }}
+                        className="flex-1 w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/10 active:scale-98"
+                      >
+                        <Play className="w-4 h-4 fill-current text-amber-300" />
+                        <span>ফ্রি কার্ডস দেখুন ({course.freeFlashcardsCount || 10}টি ফ্রি)</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setSelectedDetailCourse(null);
+                          setSelectedBuyCourse(course);
+                        }}
+                        className="flex-1 w-full py-2.5 bg-pink-600 hover:bg-pink-700 text-white text-xs font-black rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-pink-600/10 active:scale-98"
+                      >
+                        <ShoppingBag className="w-4 h-4" />
+                        <span>Buy Course (৳{(course.price && course.price > 0) ? course.price : 30})</span>
+                      </button>
+                    </div>
                   ) : (
                     <>
                       <button
