@@ -244,134 +244,173 @@ export default function MyCoursesView({
     setRechargeMessage(null);
 
     try {
-      const matchTrx = cleanTrx;
-      const matchPhone = cleanPhone(cleanSender);
-
-      // 1. STRICT DUPLICATE CHECK: Verify if TrxID was already claimed or used in ANY request
-      const existingReqsSnap = await getDocs(query(collection(db, 'access_requests')));
-      const isAlreadyUsedReq = existingReqsSnap.docs.some(docSnap => {
-        const d = docSnap.data();
-        return d.trxId && String(d.trxId).trim().toLowerCase() === matchTrx;
+      // 1. Call SERVER-SIDE API verification check & spent marking endpoint
+      const res = await fetch('/api/verify-transaction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: cleanEmail,
+          bkashNumber: cleanSender,
+          trxId: cleanTrx
+        })
       });
 
-      if (isAlreadyUsedReq) {
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
         setRechargeMessage({
           type: 'error',
-          text: `এই ট্রাঞ্জেকশন আইডিটি (${rechargeTrx}) ইতোমধ্যে একবার সিস্টেমে ব্যবহার করা হয়েছে। একই ট্রাঞ্জেকশন আইডি দিয়ে একাধিকবার রিচার্জ পাওয়া সম্ভব নয়।`
+          text: data.reason || 'রিচার্জ প্রসেস করার সময়ে একটি সমস্যা তৈরি হয়েছে।'
         });
         setIsSubmittingRecharge(false);
         return;
       }
 
-      // 2. Fetch system_settings/global_verified_payments to check for Auto-Verification and Claim Status
-      const globalVpSnap = await getDoc(doc(db, 'system_settings', 'global_verified_payments'));
-      let allVps: any[] = [];
-      let matchedVpIndex = -1;
-      let matchedVp: { bkashNumber: string; trxId: string; amount?: number; claimed?: boolean; claimedBy?: string } | null = null;
-
-      if (globalVpSnap.exists()) {
-        allVps = globalVpSnap.data().verifiedPayments || [];
-        if (Array.isArray(allVps)) {
-          matchedVpIndex = allVps.findIndex((vp: any) => {
-            const vpPhone = cleanPhone(vp.bkashNumber || '');
-            const vpTrx = (vp.trxId || '').toLowerCase().trim();
-            return (vpPhone === matchPhone || (vp.bkashNumber || '').trim() === cleanSender) && vpTrx === matchTrx;
-          });
-          if (matchedVpIndex !== -1) {
-            matchedVp = allVps[matchedVpIndex];
-          }
-        }
-      }
-
-      // Check if matched transaction in system_settings was already claimed
-      if (matchedVp && matchedVp.claimed) {
-        setRechargeMessage({
-          type: 'error',
-          text: `এই ট্রাঞ্জেকশন আইডিটি (${rechargeTrx}) ইতোমধ্যে ${matchedVp.claimedBy || 'অন্য একজন ইউজার'} ক্লেইম করে রিচার্জ নিয়ে নিয়েছেন।`
-        });
-        setIsSubmittingRecharge(false);
-        return;
-      }
-
-      if (matchedVp) {
-        // AUTO-VERIFIED MATCH FOUND! Read amount from admin's data!
-        const addAmount = matchedVp.amount && matchedVp.amount > 0 ? matchedVp.amount : 50;
-        const walletRef = doc(db, 'user_wallets', cleanEmail);
-        const walletSnap = await getDoc(walletRef);
-        const currentBalance = walletSnap.exists() ? (walletSnap.data().balance || 0) : 0;
-        const newBalance = currentBalance + addAmount;
-
-        // Update Wallet Balance
-        await setDoc(walletRef, {
-          email: cleanEmail,
-          bkashNumber: cleanSender,
-          balance: newBalance,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-
-        // Mark transaction as claimed in system_settings/global_verified_payments
-        allVps[matchedVpIndex] = {
-          ...matchedVp,
-          claimed: true,
-          claimedBy: cleanEmail,
-          claimedAt: new Date().toISOString()
-        };
-        await setDoc(doc(db, 'system_settings', 'global_verified_payments'), { verifiedPayments: allVps }, { merge: true });
-
-        setUserWalletBalance(newBalance);
-
-        // Save approved recharge request in history
-        const reqId = `req_recharge_auto_${Date.now()}`;
-        await setDoc(doc(db, 'access_requests', reqId), {
-          id: reqId,
-          courseId: 'wallet_recharge',
-          courseTitle: `Wallet Recharge (৳${addAmount} BDT)`,
-          bkashNumber: cleanSender,
-          email: cleanEmail,
-          trxId: cleanTrx,
-          status: 'approved',
-          verificationMethod: 'auto',
-          price: addAmount,
-          totalPrice: addAmount,
-          createdAt: new Date().toISOString(),
-          requestedBy: user?.email || cleanEmail
-        });
-
+      if (data.autoVerified) {
+        setUserWalletBalance(data.newBalance || 0);
         setRechargeMessage({
           type: 'success',
-          text: `অটো-ভেরিফিকেশন সফল! এডমিনের ভেরিফাইড পেমেন্ট থেকে ৳${addAmount} BDT সরাসরি আপনার ওয়ালেটে জমা হয়েছে। বর্তমান ওয়ালেট ব্যালেন্স: ৳${newBalance} BDT।`
+          text: data.message || `অটো-ভেরিফিকেশন সফল! ৳${data.amountAdded} BDT ওয়ালেটে জমা হয়েছে।`
         });
         setRechargeTrx('');
       } else {
-        // NOT AUTO-VERIFIED YET -> Create Pending Request for Admin Review
-        const reqId = `req_recharge_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-        await setDoc(doc(db, 'access_requests', reqId), {
-          id: reqId,
-          courseId: 'wallet_recharge',
-          courseTitle: `Wallet Recharge Claim`,
-          bkashNumber: cleanSender,
-          email: cleanEmail,
-          trxId: cleanTrx,
-          status: 'pending',
-          verificationMethod: 'manual',
-          price: 0,
-          totalPrice: 0,
-          createdAt: new Date().toISOString(),
-          requestedBy: user?.email || cleanEmail
-        });
-
         setRechargeMessage({
           type: 'info',
-          text: `আপনার ওয়ালেট রিচার্জ রিকুয়েস্ট সফলভাবে জমা হয়েছে। এডমিন প্যানেল থেকে ভেরিফাই করে দ্রুত আপনার ওয়ালেটে ব্যালেন্স যোগ করা হবে, অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন।`
+          text: data.message || `আপনার ওয়ালেট রিচার্জ রিকুয়েস্ট জমা হয়েছে। এডমিন প্যানেল থেকে ভেরিফাই করে দ্রুত ব্যালেন্স যোগ করা হবে।`
         });
         setRechargeTrx('');
       }
-    } catch (err: any) {
-      console.error("Error submitting recharge claim:", err);
-      setRechargeMessage({
-        type: 'error',
-        text: err?.message ? `ত্রুটি: ${err.message}` : 'রিচার্জ ক্লেইম জমা নিতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।'
-      });
+    } catch (err) {
+      console.error('Error verifying recharge on server:', err);
+      // Fallback client-side verification if server is unreachable
+      try {
+        const matchTrx = cleanTrx;
+        const matchPhone = cleanPhone(cleanSender);
+
+        const existingReqsSnap = await getDocs(query(collection(db, 'access_requests')));
+        const isAlreadyUsedReq = existingReqsSnap.docs.some(docSnap => {
+          const d = docSnap.data();
+          return (d.trxId && String(d.trxId).trim().toLowerCase() === matchTrx) && (d.spent === true || d.status === 'approved' || d.status === 'pending');
+        });
+
+        if (isAlreadyUsedReq) {
+          setRechargeMessage({
+            type: 'error',
+            text: `এই ট্রাঞ্জেকশন আইডিটি (${rechargeTrx}) ইতোমধ্যে একবার সিস্টেমে ব্যবহার বা ক্লেইম করা হয়েছে। একই ট্রাঞ্জেকশন নম্বর দিয়ে একাধিকবার রিচার্জ পাওয়া সম্ভব নয়।`
+          });
+          setIsSubmittingRecharge(false);
+          return;
+        }
+
+        const globalVpSnap = await getDoc(doc(db, 'system_settings', 'global_verified_payments'));
+        let allVps: any[] = [];
+        let matchedVpIndex = -1;
+        let matchedVp: any = null;
+
+        if (globalVpSnap.exists()) {
+          allVps = globalVpSnap.data().verifiedPayments || [];
+          if (Array.isArray(allVps)) {
+            matchedVpIndex = allVps.findIndex((vp: any) => {
+              const vpPhone = cleanPhone(vp.bkashNumber || '');
+              const vpTrx = (vp.trxId || '').toLowerCase().trim();
+              return (vpPhone === matchPhone || (vp.bkashNumber || '').trim() === cleanSender) && vpTrx === matchTrx;
+            });
+            if (matchedVpIndex !== -1) {
+              matchedVp = allVps[matchedVpIndex];
+            }
+          }
+        }
+
+        if (matchedVp && (matchedVp.claimed || matchedVp.spent)) {
+          setRechargeMessage({
+            type: 'error',
+            text: `এই ট্রাঞ্জেকশন আইডিটি (${rechargeTrx}) ইতোমধ্যে ${matchedVp.claimedBy || 'অন্য এক ইউজার'} ক্লেইম/Spent করে নিয়েছেন।`
+          });
+          setIsSubmittingRecharge(false);
+          return;
+        }
+
+        if (matchedVp) {
+          const addAmount = matchedVp.amount && matchedVp.amount > 0 ? matchedVp.amount : 50;
+          const walletRef = doc(db, 'user_wallets', cleanEmail);
+          const walletSnap = await getDoc(walletRef);
+          const currentBalance = walletSnap.exists() ? (walletSnap.data().balance || 0) : 0;
+          const newBalance = currentBalance + addAmount;
+          const nowISO = new Date().toISOString();
+
+          await setDoc(walletRef, {
+            email: cleanEmail,
+            bkashNumber: cleanSender,
+            balance: newBalance,
+            updatedAt: nowISO
+          }, { merge: true });
+
+          allVps[matchedVpIndex] = {
+            ...matchedVp,
+            spent: true,
+            claimed: true,
+            claimedBy: cleanEmail,
+            claimedAt: nowISO,
+            spentAt: nowISO
+          };
+          await setDoc(doc(db, 'system_settings', 'global_verified_payments'), { verifiedPayments: allVps }, { merge: true });
+
+          setUserWalletBalance(newBalance);
+
+          const reqId = `req_recharge_auto_${Date.now()}`;
+          await setDoc(doc(db, 'access_requests', reqId), {
+            id: reqId,
+            courseId: 'wallet_recharge',
+            courseTitle: `Wallet Recharge (৳${addAmount} BDT)`,
+            bkashNumber: cleanSender,
+            email: cleanEmail,
+            trxId: cleanTrx,
+            status: 'approved',
+            verificationMethod: 'auto',
+            spent: true,
+            spentAt: nowISO,
+            price: addAmount,
+            totalPrice: addAmount,
+            createdAt: nowISO,
+            requestedBy: user?.email || cleanEmail
+          });
+
+          setRechargeMessage({
+            type: 'success',
+            text: `অটো-ভেরিফিকেশন সফল! এডমিনের ভেরিফাইড পেমেন্ট থেকে ৳${addAmount} BDT সরাসরি আপনার ওয়ালেটে জমা হয়েছে এবং ট্রাঞ্জেকশনটি 'Spent' হিসেবে চিহ্নিত হয়েছে।`
+          });
+          setRechargeTrx('');
+        } else {
+          const reqId = `req_recharge_manual_${Date.now()}`;
+          const nowISO = new Date().toISOString();
+          await setDoc(doc(db, 'access_requests', reqId), {
+            id: reqId,
+            courseId: 'wallet_recharge',
+            courseTitle: `Wallet Recharge Claim`,
+            bkashNumber: cleanSender,
+            email: cleanEmail,
+            trxId: cleanTrx,
+            status: 'pending',
+            verificationMethod: 'manual',
+            spent: false,
+            price: 0,
+            totalPrice: 0,
+            createdAt: nowISO,
+            requestedBy: user?.email || cleanEmail
+          });
+
+          setRechargeMessage({
+            type: 'info',
+            text: `আপনার ওয়ালেট রিচার্জ রিকুয়েস্ট সফলভাবে জমা হয়েছে। এডমিন প্যানেল থেকে ভেরিফাই করে ব্যালেন্স যোগ করা হবে।`
+          });
+          setRechargeTrx('');
+        }
+      } catch (clientErr) {
+        setRechargeMessage({
+          type: 'error',
+          text: 'রিচার্জ আবেদন জমা দিতে ব্যর্থ হয়েছে: ' + (clientErr instanceof Error ? clientErr.message : String(clientErr))
+        });
+      }
     } finally {
       setIsSubmittingRecharge(false);
     }

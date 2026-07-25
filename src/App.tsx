@@ -1098,17 +1098,17 @@ export default function App() {
     setActiveCourseId(course.id);
   };
 
-  const activeCourse = (() => {
+  const rawActiveCourse = (() => {
     const normActiveId = activeCourseId?.trim().toLowerCase();
     const course = allCourses.find(c => c.id.trim().toLowerCase() === normActiveId);
     if (!course) return defaultGreCourse;
-
-    // Check access permissions strictly via isCourseAccessible helper
-    if (isCourseAccessible(course, enrolledCourseIds, user?.email)) {
-      return course;
-    }
-    return defaultGreCourse;
+    return course;
   })() || defaultGreCourse;
+
+  const isCourseFullyAccessible = isCourseAccessible(rawActiveCourse, enrolledCourseIds, user?.email);
+  const isRestrictedLocked = !isCourseFullyAccessible && !!rawActiveCourse.isRestricted;
+
+  const activeCourse = rawActiveCourse;
   const activeWords = activeCourse.words || [];
 
   // --- DATABASE STATE HANDLERS ---
@@ -1716,6 +1716,11 @@ export default function App() {
               onUpdateSettings={setSettings}
               placeLabels={activeCourse?.placeLabels}
               googleSearchQuery={activeCourse?.googleSearchQuery}
+              isRestrictedLocked={isRestrictedLocked}
+              freeFlashcardsCount={activeCourse?.freeFlashcardsCount}
+              coursePrice={activeCourse?.price}
+              courseTitle={activeCourse?.title}
+              onUnlockCourse={() => setActiveTab('my_courses')}
             />
           )}
 

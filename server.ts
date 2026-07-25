@@ -1,16 +1,206 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import { initializeApp } from "firebase/app";
+import { 
+  getFirestore, 
+  doc, 
+  getDoc, 
+  setDoc, 
+  getDocs, 
+  collection, 
+  query 
+} from "firebase/firestore";
 
 dotenv.config();
+
+// Read Firebase config for server-side initialization
+const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
+let firebaseConfig: any = {};
+try {
+  if (fs.existsSync(firebaseConfigPath)) {
+    firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf8"));
+  }
+} catch (e) {
+  console.warn("Could not load firebase-applet-config.json in server.ts:", e);
+}
+
+const fbConfig = {
+  apiKey: process.env.VITE_FIREBASE_API_KEY || firebaseConfig.apiKey || "AIzaSyCYIkpASqZD6R2bOOi9F3hvQMl_iTLsjBI",
+  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfig.authDomain || "myvocab-13ebc.firebaseapp.com",
+  projectId: process.env.VITE_FIREBASE_PROJECT_ID || firebaseConfig.projectId || "myvocab-13ebc",
+  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket || "myvocab-13ebc.firebasestorage.app",
+  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfig.messagingSenderId || "531149838847",
+  appId: process.env.VITE_FIREBASE_APP_ID || firebaseConfig.appId || "1:531149838847:web:a4577c60628b9c4c6b2fca"
+};
+
+const firebaseServerApp = initializeApp(fbConfig, "server-app");
+const db = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== "(default)"
+  ? getFirestore(firebaseServerApp, firebaseConfig.firestoreDatabaseId)
+  : getFirestore(firebaseServerApp);
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
   app.use(express.json());
+
+  // API Route for server-side transaction verification and marking as 'spent'
+  app.post("/api/verify-transaction", async (req, res) => {
+    try {
+      const { email, bkashNumber, trxId } = req.body;
+
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const cleanSender = (bkashNumber || '').trim();
+      const cleanTrx = (trxId || '').trim().toLowerCase();
+      const cleanPhone = (p: string) => (p || '').replace(/\D/g, '').slice(-10);
+      const matchPhone = cleanPhone(cleanSender);
+
+      if (!cleanEmail || !cleanEmail.includes('@')) {
+        return res.status(400).json({ success: false, reason: "অনুগ্রহ করে একটি সঠিক ইমেইল ঠিকানা প্রদান করুন।" });
+      }
+      if (!cleanSender || cleanSender.length < 10) {
+        return res.status(400).json({ success: false, reason: "অনুগ্রহ করে সঠিক বিকাশ সেন্ডার নম্বর প্রদান করুন।" });
+      }
+      if (!cleanTrx || cleanTrx.length < 4) {
+        return res.status(400).json({ success: false, reason: "অনুগ্রহ করে সঠিক ট্রাঞ্জেকশন আইডি (TrxID) প্রদান করুন।" });
+      }
+
+      // SERVER-SIDE CHECK 1: Ensure transaction ID was NOT already used or spent in access_requests
+      const requestsSnap = await getDocs(query(collection(db, 'access_requests')));
+      const isAlreadyUsedReq = requestsSnap.docs.some(docSnap => {
+        const d = docSnap.data();
+        const dTrx = (d.trxId || '').toString().trim().toLowerCase();
+        if (dTrx === cleanTrx) {
+          // Used if already spent or approved or pending
+          return d.spent === true || d.status === 'approved' || d.status === 'pending' || d.verificationMethod === 'auto';
+        }
+        return false;
+      });
+
+      if (isAlreadyUsedReq) {
+        return res.status(400).json({
+          success: false,
+          reason: `এই ট্রাঞ্জেকশন আইডিটি (${trxId}) ইতোমধ্যে একবার সিস্টেমে ব্যবহার বা ক্লেইম করা হয়েছে। একই ট্রাঞ্জেকশন আইডি দিয়ে একাধিকবার রিচার্জ পাওয়া সম্ভব নয়।`
+        });
+      }
+
+      // SERVER-SIDE CHECK 2: Match against system_settings/global_verified_payments
+      const globalVpSnap = await getDoc(doc(db, 'system_settings', 'global_verified_payments'));
+      let allVps: any[] = [];
+      let matchedVpIndex = -1;
+      let matchedVp: any = null;
+
+      if (globalVpSnap.exists()) {
+        allVps = globalVpSnap.data().verifiedPayments || [];
+        if (Array.isArray(allVps)) {
+          matchedVpIndex = allVps.findIndex((vp: any) => {
+            const vpPhone = cleanPhone(vp.bkashNumber || '');
+            const vpTrx = (vp.trxId || '').toLowerCase().trim();
+            return (vpPhone === matchPhone || (vp.bkashNumber || '').trim() === cleanSender) && vpTrx === cleanTrx;
+          });
+          if (matchedVpIndex !== -1) {
+            matchedVp = allVps[matchedVpIndex];
+          }
+        }
+      }
+
+      // Check if matched transaction is already spent / claimed in admin payments
+      if (matchedVp) {
+        if (matchedVp.spent || matchedVp.claimed) {
+          return res.status(400).json({
+            success: false,
+            reason: `এই ট্রাঞ্জেকশন আইডিটি (${trxId}) ইতোমধ্যে 'Spent/Used' হিসেবে চিহ্নিত রয়েছে (ক্লেইমকারী: ${matchedVp.claimedBy || 'অন্য এক ইউজার'})।`
+          });
+        }
+
+        // AUTO-VERIFIED MATCH FOUND! Read exact amount from verified payment item
+        const addAmount = matchedVp.amount && matchedVp.amount > 0 ? matchedVp.amount : 50;
+        const walletRef = doc(db, 'user_wallets', cleanEmail);
+        const walletSnap = await getDoc(walletRef);
+        const currentBalance = walletSnap.exists() ? (walletSnap.data().balance || 0) : 0;
+        const newBalance = currentBalance + addAmount;
+        const nowISO = new Date().toISOString();
+
+        // Update Wallet Balance
+        await setDoc(walletRef, {
+          email: cleanEmail,
+          bkashNumber: cleanSender,
+          balance: newBalance,
+          updatedAt: nowISO
+        }, { merge: true });
+
+        // Mark transaction as SPENT & CLAIMED in system_settings/global_verified_payments
+        allVps[matchedVpIndex] = {
+          ...matchedVp,
+          spent: true,
+          claimed: true,
+          claimedBy: cleanEmail,
+          claimedAt: nowISO,
+          spentAt: nowISO
+        };
+        await setDoc(doc(db, 'system_settings', 'global_verified_payments'), { verifiedPayments: allVps }, { merge: true });
+
+        // Record approved request doc with spent = true
+        const reqId = `recharge_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        await setDoc(doc(db, 'access_requests', reqId), {
+          id: reqId,
+          courseId: 'wallet_recharge',
+          courseTitle: 'Wallet Recharge Claim',
+          bkashNumber: cleanSender,
+          email: cleanEmail,
+          trxId: cleanTrx,
+          status: 'approved',
+          verificationMethod: 'auto',
+          spent: true,
+          spentAt: nowISO,
+          price: addAmount,
+          totalPrice: addAmount,
+          createdAt: nowISO,
+          requestedBy: cleanEmail
+        });
+
+        return res.json({
+          success: true,
+          autoVerified: true,
+          amountAdded: addAmount,
+          newBalance,
+          message: `অটো-ভেরিফিকেশন সফল! এডমিনের ভেরিফাইড পেমেন্ট থেকে ৳${addAmount} BDT সরাসরি আপনার ওয়ালেটে জমা হয়েছে এবং ট্রাঞ্জেকশনটি 'Spent' হিসেবে রেকর্ড করা হয়েছে। বর্তমান ওয়ালেট ব্যালেন্স: ৳${newBalance} BDT।`
+        });
+      } else {
+        // Submit for manual verification
+        const reqId = `recharge_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const nowISO = new Date().toISOString();
+        await setDoc(doc(db, 'access_requests', reqId), {
+          id: reqId,
+          courseId: 'wallet_recharge',
+          courseTitle: 'Wallet Recharge Claim',
+          bkashNumber: cleanSender,
+          email: cleanEmail,
+          trxId: cleanTrx,
+          status: 'pending',
+          verificationMethod: 'manual',
+          spent: false,
+          price: 0,
+          totalPrice: 0,
+          createdAt: nowISO,
+          requestedBy: cleanEmail
+        });
+
+        return res.json({
+          success: true,
+          autoVerified: false,
+          message: `আপনার ওয়ালেট রিচার্জ রিকুয়েস্ট সফলভাবে জমা হয়েছে। এডমিন প্যানেল থেকে ভেরিফাই করে দ্রুত আপনার ওয়ালেটে ব্যালেন্স যোগ করা হবে, অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন।`
+        });
+      }
+    } catch (err: any) {
+      console.error("Server-side transaction verification error:", err);
+      return res.status(500).json({ success: false, reason: "সার্ভার এরর: " + (err.message || String(err)) });
+    }
+  });
 
   // Initialize Gemini Client
   const ai = new GoogleGenAI({

@@ -6,7 +6,7 @@ import {
   setDoc
 } from '../lib/firebase';
 import { collection, getDocs, deleteDoc, updateDoc, getDoc, query, where } from 'firebase/firestore';
-import { VocabularyWord, UserProgress, Course, AccessRequest, BlankQuestion, AppSettings } from '../types';
+import { VocabularyWord, UserProgress, Course, AccessRequest, BlankQuestion, AppSettings, VerifiedPayment } from '../types';
 import { read, utils } from 'xlsx';
 import { CourseSettings } from './CourseSettings';
 import { 
@@ -125,6 +125,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
   // Course management and upload states
   const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'courses' | 'reports' | 'access-requests' | 'autoverify' | 'system-settings'>('courses');
+  const [requestsSubTab, setRequestsSubTab] = useState<'pending' | 'autoverify'>('pending');
   const [customCourses, setCustomCourses] = useState<Course[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(false);
   const [coursesError, setCoursesError] = useState<string | null>(null);
@@ -374,9 +375,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     try {
       const selectedExpiry = requestExpiryDates[req.id] || '';
       
-      // 1. Update request status to 'approved'
+      // 1. Update request status to 'approved' and spent = true
       const reqRef = doc(db, 'access_requests', req.id);
-      await updateDoc(reqRef, { status: 'approved' });
+      const nowISO = new Date().toISOString();
+      await updateDoc(reqRef, { 
+        status: 'approved',
+        spent: true,
+        spentAt: nowISO
+      });
 
       // 2. Add email to the course(s) allowed users list with expiry
       const userEmail = req.email.toLowerCase().trim();
@@ -390,11 +396,42 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         await setDoc(walletRef, {
           email: userEmail,
           balance: newBal,
-          updatedAt: new Date().toISOString()
+          updatedAt: nowISO
         }, { merge: true });
 
-        setAccessRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved' } : r));
-        alert(`Wallet recharge request approved! ৳${rechargeAmt} BDT added to ${userEmail}'s wallet (New Balance: ৳${newBal} BDT).`);
+        // Mark matching payment in system_settings/global_verified_payments as spent
+        if (req.trxId) {
+          const globalDocRef = doc(db, 'system_settings', 'global_verified_payments');
+          const vpSnap = await getDoc(globalDocRef);
+          if (vpSnap.exists()) {
+            const vps = vpSnap.data().verifiedPayments || [];
+            if (Array.isArray(vps)) {
+              const reqTrx = req.trxId.toLowerCase().trim();
+              let updated = false;
+              const updatedVps = vps.map((vp: any) => {
+                if ((vp.trxId || '').toLowerCase().trim() === reqTrx) {
+                  updated = true;
+                  return {
+                    ...vp,
+                    spent: true,
+                    claimed: true,
+                    claimedBy: userEmail,
+                    claimedAt: nowISO,
+                    spentAt: nowISO
+                  };
+                }
+                return vp;
+              });
+              if (updated) {
+                await setDoc(globalDocRef, { verifiedPayments: updatedVps }, { merge: true });
+                setGlobalVerifiedPayments(updatedVps);
+              }
+            }
+          }
+        }
+
+        setAccessRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved', spent: true } : r));
+        alert(`Wallet recharge request approved! ৳${rechargeAmt} BDT added to ${userEmail}'s wallet (New Balance: ৳${newBal} BDT). Transaction marked as Spent.`);
         return;
       }
 
@@ -1200,9 +1237,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         const reqTrx = req.trxId.toLowerCase().trim();
         const reqEmail = req.email.toLowerCase().trim();
 
-        // Match against unclaimed verified payment
+        // Match against unclaimed/unspent verified payment
         const matchedVpIdx = updatedVpList.findIndex(vp => {
-          if (vp.claimed) return false;
+          if (vp.claimed || vp.spent) return false;
           const vpPhone = cleanPhone(vp.bkashNumber);
           const vpTrx = vp.trxId.toLowerCase().trim();
           return (vpPhone === reqPhone || vp.bkashNumber.trim() === req.bkashNumber.trim()) && vpTrx === reqTrx;
@@ -1218,29 +1255,34 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           if (matchedVp) {
             const rechargeAmt = matchedVp.amount || req.totalPrice || req.price || 50;
             const newBal = existingWalletBalance + rechargeAmt;
+            const nowISO = new Date().toISOString();
             
-            // Mark payment as claimed
+            // Mark payment as claimed and spent
             updatedVpList[matchedVpIdx] = {
               ...matchedVp,
+              spent: true,
               claimed: true,
               claimedBy: reqEmail,
-              claimedAt: new Date().toISOString()
+              claimedAt: nowISO,
+              spentAt: nowISO
             };
 
             await setDoc(walletRef, {
               email: reqEmail,
               bkashNumber: req.bkashNumber,
               balance: newBal,
-              updatedAt: new Date().toISOString()
+              updatedAt: nowISO
             }, { merge: true });
 
             await setDoc(doc(db, 'access_requests', req.id), {
               status: 'approved',
               verificationMethod: 'auto',
+              spent: true,
+              spentAt: nowISO,
               price: rechargeAmt,
               totalPrice: rechargeAmt,
               remainingWalletBalance: newBal,
-              updatedAt: new Date().toISOString()
+              updatedAt: nowISO
             }, { merge: true });
             autoApprovedRequestsCount++;
           }
@@ -1474,7 +1516,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       </div>
 
       {/* Admin Tab Navigation - Responsive Wrapping Pill Grid */}
-      <div className="bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5">
+      <div className="bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
         <button
           onClick={() => setActiveAdminTab('courses')}
           className={`px-3 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center ${
@@ -1518,33 +1560,19 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           onClick={() => {
             setActiveAdminTab('access-requests');
             fetchAccessRequests();
+            fetchGlobalVerifiedPayments();
           }}
           className={`px-3 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center relative ${
-            activeAdminTab === 'access-requests'
-              ? 'bg-white text-indigo-700 shadow-xs font-black border border-indigo-200/60'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+            activeAdminTab === 'access-requests' || activeAdminTab === 'autoverify'
+              ? 'bg-amber-400 text-slate-950 font-black shadow-xs border border-amber-300'
+              : 'bg-white text-slate-700 hover:text-slate-900 hover:bg-white/50 border border-slate-200/60'
           }`}
         >
-          <ShieldCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-          <span className="truncate">Pending ({accessRequests.filter(r => r.status === 'pending').length})</span>
+          <Zap className="w-3.5 h-3.5 fill-slate-950 text-slate-950 shrink-0" />
+          <span className="truncate">bKash Gateway & Pending ({accessRequests.filter(r => r.status === 'pending').length})</span>
           {accessRequests.filter(r => r.status === 'pending').length > 0 && (
             <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0 animate-pulse" />
           )}
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveAdminTab('autoverify');
-            fetchGlobalVerifiedPayments();
-          }}
-          className={`px-3 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center ${
-            activeAdminTab === 'autoverify'
-              ? 'bg-amber-400 text-slate-950 font-black shadow-xs border border-amber-300'
-              : 'bg-amber-50/80 text-amber-900 hover:bg-amber-100/80 border border-amber-200/50'
-          }`}
-        >
-          <Zap className="w-3.5 h-3.5 fill-amber-500 text-amber-700 shrink-0" />
-          <span className="truncate">bKash Gateway</span>
         </button>
 
         <button
@@ -2235,261 +2263,280 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         </div>
       )}
 
-      {activeAdminTab === 'access-requests' && (
-        <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-sm space-y-6">
-          {/* Central Gateway Quick Action Banner */}
-          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-4 sm:p-5 rounded-2xl border border-indigo-800/60 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 font-sans" style={{ fontFamily: "'Poppins', sans-serif" }}>
-            <div className="space-y-1">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-amber-400/20 text-amber-300 rounded-full text-[10px] font-extrabold border border-amber-400/30">
-                <Zap className="w-3 h-3 fill-amber-300" />
-                <span>Central bKash Gateway</span>
-              </div>
-              <h4 className="font-black text-white text-sm sm:text-base">Auto-Verification Engine</h4>
-              <p className="text-xs text-indigo-200 font-medium">Verify pending requests automatically against verified transaction records.</p>
+      {(activeAdminTab === 'access-requests' || activeAdminTab === 'autoverify') && (
+        <div className="space-y-6 font-sans" style={{ fontFamily: "'Poppins', sans-serif" }}>
+          {/* Sub-Tab Navigation Header */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs">
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-200/60">
+              <button
+                type="button"
+                onClick={() => {
+                  setRequestsSubTab('pending');
+                  fetchAccessRequests();
+                }}
+                className={`px-4 py-2 text-xs font-black rounded-lg transition cursor-pointer flex items-center gap-2 ${
+                  requestsSubTab === 'pending'
+                    ? 'bg-white text-indigo-700 shadow-2xs border border-indigo-200/60'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                <span>📋 Pending Requests ({accessRequests.filter(r => r.status === 'pending').length})</span>
+                {accessRequests.filter(r => r.status === 'pending').length > 0 && (
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setRequestsSubTab('autoverify');
+                  fetchGlobalVerifiedPayments();
+                }}
+                className={`px-4 py-2 text-xs font-black rounded-lg transition cursor-pointer flex items-center gap-2 ${
+                  requestsSubTab === 'autoverify'
+                    ? 'bg-amber-400 text-slate-950 shadow-2xs border border-amber-300'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Zap className="w-4 h-4 fill-slate-950 text-slate-950" />
+                <span>⚡ bKash Gateway ({globalVerifiedPayments.length})</span>
+              </button>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+
+            <div className="flex items-center gap-2 self-end sm:self-center">
               <button
                 type="button"
                 onClick={() => handleRunCentralAutoVerification()}
                 disabled={isAutoVerifyingAll}
-                className="px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-xl text-xs transition shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-xl text-xs transition shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <Zap className={`w-3.5 h-3.5 fill-slate-950 ${isAutoVerifyingAll ? 'animate-spin' : ''}`} />
                 <span>{isAutoVerifyingAll ? 'Verifying...' : '⚡ Auto-Verify All'}</span>
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveAdminTab('autoverify');
-                  fetchGlobalVerifiedPayments();
-                }}
-                className="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-xs transition flex items-center gap-1 cursor-pointer border border-white/20"
-              >
-                <span>Manage Gateway ➔</span>
-              </button>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="font-extrabold text-slate-800 text-base">Course Access & Balance Requests</h3>
-              <p className="text-xs text-slate-400 font-medium">Verify bKash transactions, approve course access, and manage wallet balance recharges.</p>
-            </div>
-            <button
-              onClick={fetchAccessRequests}
-              className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer self-start sm:self-center"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${accessRequestsLoading ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
-            </button>
-          </div>
-
-          {accessRequestsLoading ? (
-            <div className="flex items-center justify-center py-12 text-slate-400">
-              <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-              <span className="text-xs font-bold font-mono">Loading access requests...</span>
-            </div>
-          ) : accessRequests.length === 0 ? (
-            <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-2xl space-y-2">
-              <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto" />
-              <div className="space-y-0.5">
-                <p className="text-xs font-bold text-slate-700">No requests found</p>
-                <p className="text-[10px] text-slate-400 font-semibold">No students have requested access yet.</p>
+          {requestsSubTab === 'pending' ? (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-sm space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-extrabold text-slate-800 text-base">Course Access & Balance Requests</h3>
+                  <p className="text-xs text-slate-400 font-medium">Verify bKash transactions, approve course access, and manage wallet balance recharges.</p>
+                </div>
+                <button
+                  onClick={fetchAccessRequests}
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer self-start sm:self-center"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${accessRequestsLoading ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
               </div>
-            </div>
-          ) : (
-            <div className="overflow-hidden border border-slate-200 rounded-xl bg-white shadow-xs">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-400 font-mono uppercase h-10">
-                    <th className="px-4 py-2">Course Details</th>
-                    <th className="px-4 py-2">Course Code</th>
-                    <th className="px-4 py-2">Student Email</th>
-                    <th className="px-4 py-2">bKash Number</th>
-                    <th className="px-4 py-2">Transaction ID</th>
-                    <th className="px-4 py-2">Access Expiration</th>
-                    <th className="px-4 py-2">Status</th>
-                    <th className="px-4 py-2 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-150 font-sans text-xs">
-                  {accessRequests.map((req) => (
-                    <tr key={req.id} className="hover:bg-slate-50/50 transition">
-                      <td className="px-4 py-3">
-                        {req.courseIds && req.courseIds.length > 1 ? (
-                          <div className="space-y-1">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-800 font-extrabold text-[10px] rounded-full border border-indigo-200">
-                              🛒 Multi-Course Cart Bundle ({req.courseIds.length} Courses)
-                            </span>
-                            <div className="text-[11px] font-bold text-slate-800 pl-1 space-y-0.5">
-                              {req.courseTitles && req.courseTitles.length > 0 ? (
-                                req.courseTitles.map((t, idx) => (
-                                  <div key={idx} className="flex items-center gap-1 text-slate-700">
-                                    <span className="text-indigo-500 font-black">•</span> {t}
-                                  </div>
-                                ))
-                              ) : (
-                                <div>{req.courseTitle}</div>
-                              )}
+
+            {accessRequestsLoading ? (
+              <div className="flex items-center justify-center py-12 text-slate-400">
+                <RefreshCw className="w-5 h-5 animate-spin mr-2" />
+                <span className="text-xs font-bold font-mono">Loading access requests...</span>
+              </div>
+            ) : accessRequests.length === 0 ? (
+              <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-2xl space-y-2">
+                <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto" />
+                <div className="space-y-0.5">
+                  <p className="text-xs font-bold text-slate-700">No requests found</p>
+                  <p className="text-[10px] text-slate-400 font-semibold">No students have requested access yet.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="overflow-hidden border border-slate-200 rounded-xl bg-white shadow-xs">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-400 font-mono uppercase h-10">
+                      <th className="px-4 py-2">Course Details</th>
+                      <th className="px-4 py-2">Course Code</th>
+                      <th className="px-4 py-2">Student Email</th>
+                      <th className="px-4 py-2">bKash Number</th>
+                      <th className="px-4 py-2">Transaction ID</th>
+                      <th className="px-4 py-2">Access Expiration</th>
+                      <th className="px-4 py-2">Status</th>
+                      <th className="px-4 py-2 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-150 font-sans text-xs">
+                    {accessRequests.map((req) => (
+                      <tr key={req.id} className="hover:bg-slate-50/50 transition">
+                        <td className="px-4 py-3">
+                          {req.courseIds && req.courseIds.length > 1 ? (
+                            <div className="space-y-1">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-800 font-extrabold text-[10px] rounded-full border border-indigo-200">
+                                🛒 Multi-Course Cart Bundle ({req.courseIds.length} Courses)
+                              </span>
+                              <div className="text-[11px] font-bold text-slate-800 pl-1 space-y-0.5">
+                                {req.courseTitles && req.courseTitles.length > 0 ? (
+                                  req.courseTitles.map((t, idx) => (
+                                    <div key={idx} className="flex items-center gap-1 text-slate-700">
+                                      <span className="text-indigo-500 font-black">•</span> {t}
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div>{req.courseTitle}</div>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-emerald-700 font-black font-mono mt-1">
+                                Total Paid Amount: ৳{req.totalPrice || req.price} BDT
+                              </div>
                             </div>
-                            <div className="text-[10px] text-emerald-700 font-black font-mono mt-1">
-                              Total Paid Amount: ৳{req.totalPrice || req.price} BDT
+                          ) : (
+                            <div>
+                              <div className="font-extrabold text-slate-800 text-sm">{req.courseTitle}</div>
+                              <div className="text-[10px] text-indigo-600 font-bold font-mono uppercase tracking-wide mt-0.5">
+                                Price: ৳{req.totalPrice || req.price || 30} BDT
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <div>
-                            <div className="font-extrabold text-slate-800 text-sm">{req.courseTitle}</div>
-                            <div className="text-[10px] text-indigo-600 font-bold font-mono uppercase tracking-wide mt-0.5">
-                              Price: ৳{req.totalPrice || req.price || 30} BDT
-                            </div>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 font-bold rounded-lg text-xs font-mono tracking-wide border border-indigo-200/60 uppercase">
-                          {req.courseCode || (req.courseIds && req.courseIds.join(', ')) || req.courseId}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-slate-700">
-                        {req.email}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-pink-50 text-pink-700 font-bold rounded-full text-[10px] font-mono tracking-wider border border-pink-200/50">
-                          {req.bkashNumber}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
-                          <span className="font-mono bg-slate-50 border border-slate-200 text-slate-650 px-2 py-0.5 rounded text-xs select-all">
-                            {req.trxId}
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 font-bold rounded-lg text-xs font-mono tracking-wide border border-indigo-200/60 uppercase">
+                            {req.courseCode || (req.courseIds && req.courseIds.join(', ')) || req.courseId}
                           </span>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(req.trxId);
-                              alert('Copied Transaction ID: ' + req.trxId);
-                            }}
-                            className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 transition"
-                            title="Copy transaction ID"
-                          >
-                            <Copy className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        {req.status === 'pending' ? (
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="date"
-                                value={requestExpiryDates[req.id] || ''}
-                                onChange={(e) => setRequestExpiryDates(prev => ({ ...prev, [req.id]: e.target.value }))}
-                                className="px-2 py-1 text-[10px] bg-slate-50 border border-slate-200 rounded font-bold text-slate-700 outline-none w-28 cursor-pointer focus:bg-white"
-                                title="Exact Expiry Date"
-                              />
-                              <input
-                                type="month"
-                                onChange={(e) => {
-                                  if (!e.target.value) return;
-                                  const [yStr, mStr] = e.target.value.split('-');
-                                  const y = parseInt(yStr, 10);
-                                  const m = parseInt(mStr, 10);
-                                  const lastDay = new Date(y, m, 0).getDate();
-                                  const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-                                  setRequestExpiryDates(prev => ({ ...prev, [req.id]: dateStr }));
-                                }}
-                                className="px-1.5 py-1 text-[10px] bg-slate-50 border border-slate-200 rounded font-bold text-slate-700 outline-none w-24 cursor-pointer focus:bg-white"
-                                title="Select Month (Sets expiry to end of month)"
-                              />
-                            </div>
-                            <div className="flex items-center gap-1">
-                              {[
-                                { label: '+1 Mo', m: 1 },
-                                { label: '+3 Mo', m: 3 },
-                                { label: '+6 Mo', m: 6 },
-                                { label: '+1 Yr', m: 12 },
-                              ].map(preset => (
-                                <button
-                                  key={preset.label}
-                                  type="button"
-                                  onClick={() => {
-                                    const d = new Date();
-                                    d.setMonth(d.getMonth() + preset.m);
-                                    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-slate-700">
+                          {req.email}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-pink-50 text-pink-700 font-bold rounded-full text-[10px] font-mono tracking-wider border border-pink-200/50">
+                            {req.bkashNumber}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1">
+                            <span className="font-mono bg-slate-50 border border-slate-200 text-slate-650 px-2 py-0.5 rounded text-xs select-all">
+                              {req.trxId}
+                            </span>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(req.trxId);
+                                alert('Copied Transaction ID: ' + req.trxId);
+                              }}
+                              className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 transition"
+                              title="Copy transaction ID"
+                            >
+                              <Copy className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {req.status === 'pending' ? (
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="date"
+                                  value={requestExpiryDates[req.id] || ''}
+                                  onChange={(e) => setRequestExpiryDates(prev => ({ ...prev, [req.id]: e.target.value }))}
+                                  className="px-2 py-1 text-[10px] bg-slate-50 border border-slate-200 rounded font-bold text-slate-700 outline-none w-28 cursor-pointer focus:bg-white"
+                                  title="Exact Expiry Date"
+                                />
+                                <input
+                                  type="month"
+                                  onChange={(e) => {
+                                    if (!e.target.value) return;
+                                    const [yStr, mStr] = e.target.value.split('-');
+                                    const y = parseInt(yStr, 10);
+                                    const m = parseInt(mStr, 10);
+                                    const lastDay = new Date(y, m, 0).getDate();
+                                    const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
                                     setRequestExpiryDates(prev => ({ ...prev, [req.id]: dateStr }));
                                   }}
-                                  className="px-1.5 py-0.5 bg-slate-100 hover:bg-indigo-100 text-slate-600 hover:text-indigo-700 rounded text-[9px] font-bold transition cursor-pointer"
-                                >
-                                  {preset.label}
-                                </button>
-                              ))}
+                                  className="px-1.5 py-1 text-[10px] bg-slate-50 border border-slate-200 rounded font-bold text-slate-700 outline-none w-24 cursor-pointer focus:bg-white"
+                                  title="Select Month (Sets expiry to end of month)"
+                                />
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {[
+                                  { label: '+1 Mo', m: 1 },
+                                  { label: '+3 Mo', m: 3 },
+                                  { label: '+6 Mo', m: 6 },
+                                  { label: '+1 Yr', m: 12 },
+                                ].map(preset => (
+                                  <button
+                                    key={preset.label}
+                                    type="button"
+                                    onClick={() => {
+                                      const d = new Date();
+                                      d.setMonth(d.getMonth() + preset.m);
+                                      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                      setRequestExpiryDates(prev => ({ ...prev, [req.id]: dateStr }));
+                                    }}
+                                    className="px-1.5 py-0.5 bg-slate-100 hover:bg-indigo-100 text-slate-600 hover:text-indigo-700 rounded text-[9px] font-bold transition cursor-pointer"
+                                  >
+                                    {preset.label}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 font-mono text-[10px]">
-                            {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : 'Processed'}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {req.status === 'approved' ? (
-                          <div className="space-y-0.5">
-                            <span className="inline-block px-2 py-0.5 bg-emerald-50 text-emerald-700 font-black rounded-full text-[10px] uppercase font-mono tracking-wider border border-emerald-200/50">
-                              Approved
-                            </span>
-                            <div className="text-[9px] font-bold font-mono">
-                              {req.verificationMethod === 'auto' ? (
-                                <span className="text-amber-600">⚡ Auto Verified</span>
-                              ) : req.verificationMethod === 'wallet_balance' ? (
-                                <span className="text-indigo-600">💳 Wallet Balance</span>
-                              ) : (
-                                <span className="text-slate-400">👤 Manual Admin</span>
-                              )}
-                            </div>
-                          </div>
-                        ) : req.status === 'rejected' ? (
-                          <span className="inline-block px-2 py-0.5 bg-rose-50 text-rose-700 font-black rounded-full text-[10px] uppercase font-mono tracking-wider border border-rose-200/50">
-                            Rejected
-                          </span>
-                        ) : (
-                          <span className="inline-block px-2 py-0.5 bg-amber-50 text-amber-700 font-black rounded-full text-[10px] uppercase font-mono tracking-wider border border-amber-200/50">
-                            Pending
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {req.status === 'pending' ? (
-                            <>
-                              <button
-                                onClick={() => handleApproveAccessRequest(req)}
-                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-lg text-[10px] transition cursor-pointer flex items-center gap-1"
-                              >
-                                <CheckCircle className="w-3.5 h-3.5" />
-                                Approve
-                              </button>
-                              <button
-                                onClick={() => handleRejectAccessRequest(req.id)}
-                                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold rounded-lg text-[10px] transition cursor-pointer flex items-center gap-1"
-                              >
-                                <XCircle className="w-3.5 h-3.5" />
-                                Reject
-                              </button>
-                            </>
                           ) : (
-                            <span className="text-slate-350 italic font-bold text-[10px]">Processed</span>
+                            <span className="text-slate-400 font-mono text-[10px]">
+                              {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : 'Processed'}
+                            </span>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {activeAdminTab === 'autoverify' && (
+                        </td>
+                        <td className="px-4 py-3">
+                          {req.status === 'approved' ? (
+                            <div className="space-y-0.5">
+                              <span className="inline-block px-2 py-0.5 bg-emerald-50 text-emerald-700 font-black rounded-full text-[10px] uppercase font-mono tracking-wider border border-emerald-200/50">
+                                Approved
+                              </span>
+                              <div className="text-[9px] font-bold font-mono">
+                                {req.verificationMethod === 'auto' ? (
+                                  <span className="text-amber-600">⚡ Auto Verified</span>
+                                ) : req.verificationMethod === 'wallet_balance' ? (
+                                  <span className="text-indigo-600">💳 Wallet Balance</span>
+                                ) : (
+                                  <span className="text-slate-400">👤 Manual Admin</span>
+                                )}
+                              </div>
+                            </div>
+                          ) : req.status === 'rejected' ? (
+                            <span className="inline-block px-2 py-0.5 bg-rose-50 text-rose-700 font-black rounded-full text-[10px] uppercase font-mono tracking-wider border border-rose-200/50">
+                              Rejected
+                            </span>
+                          ) : (
+                            <span className="inline-block px-2 py-0.5 bg-amber-50 text-amber-700 font-black rounded-full text-[10px] uppercase font-mono tracking-wider border border-amber-200/50">
+                              Pending
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {req.status === 'pending' ? (
+                              <>
+                                <button
+                                  onClick={() => handleApproveAccessRequest(req)}
+                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-lg text-[10px] transition cursor-pointer flex items-center gap-1"
+                                >
+                                  <CheckCircle className="w-3.5 h-3.5" />
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => handleRejectAccessRequest(req.id)}
+                                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold rounded-lg text-[10px] transition cursor-pointer flex items-center gap-1"
+                                >
+                                  <XCircle className="w-3.5 h-3.5" />
+                                  Reject
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-slate-350 italic font-bold text-[10px]">Processed</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        ) : (
         <div className="space-y-6 font-sans" style={{ fontFamily: "'Poppins', sans-serif" }}>
           {/* Header Banner */}
           <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 rounded-2xl border border-indigo-800/60 shadow-md">
@@ -2716,14 +2763,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                             </span>
                           </td>
                           <td className="px-4 py-2.5">
-                            {vp.claimed ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 font-bold rounded-md text-[10px] border border-purple-200" title={`Claimed by ${vp.claimedBy || 'User'}`}>
-                                <span>Used</span>
+                            {vp.claimed || vp.spent ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 font-bold rounded-md text-[10px] border border-purple-200" title={`Spent/Claimed by ${vp.claimedBy || 'User'}`}>
+                                <span>Spent</span>
                                 {vp.claimedBy && <span className="text-[9px] text-purple-500 max-w-[100px] truncate">({vp.claimedBy})</span>}
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-600 font-bold rounded-md text-[10px] border border-emerald-200">
-                                Unclaimed
+                                Available
                               </span>
                             )}
                           </td>
@@ -2748,6 +2795,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           </div>
         </div>
       )}
+    </div>
+  )}
 
       {activeAdminTab === 'system-settings' && (
         <div className="space-y-6 animate-fade-in">
@@ -3152,6 +3201,47 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     {settings?.autoPlayAudio ? 'Enabled' : 'Disabled'}
                   </button>
                 </div>
+              </div>
+            </div>
+
+            {/* Restricted Course Free Flashcards Limit */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-amber-500" />
+                  <span>রেস্ট্রিকটেড কোর্সের ফ্রি ফ্ল্যাশকার্ড সংখ্যা (Free Sample Limit)</span>
+                </h4>
+                <span className="px-2.5 py-1 bg-amber-50 text-amber-800 font-extrabold text-[10px] rounded-lg uppercase">
+                  Free Trial Limit
+                </span>
+              </div>
+
+              <div className="space-y-3 pt-1 font-sans">
+                <label className="block text-xs font-bold text-slate-700">
+                  সবগুলো রেস্ট্রিকটেড কোর্সের প্রথম কতোটি ফ্ল্যাশকার্ড সবার জন্য উন্মুক্ত থাকবে?
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={0}
+                    max={200}
+                    value={settings?.freeFlashcardsCount ?? 10}
+                    onChange={(e) => {
+                      const val = Math.max(0, parseInt(e.target.value) || 0);
+                      if (settings && onUpdateSettings) {
+                        onUpdateSettings({
+                          ...settings,
+                          freeFlashcardsCount: val
+                        });
+                      }
+                    }}
+                    className="w-28 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 focus:bg-white outline-none text-sm font-mono font-extrabold text-slate-800"
+                  />
+                  <span className="text-xs font-bold text-slate-600">টি ফ্ল্যাশকার্ড ফ্রিতে দেখা যাবে (ডিফল্ট: ১০টি)</span>
+                </div>
+                <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                  ফ্রি ফ্ল্যাশকার্ড এর ট্রায়াল সীমা শেষ হবার পর শিক্ষার্থীদের কোর্স কেনার/আনলক করার বার্তা পাঠানো হবে।
+                </p>
               </div>
             </div>
           </div>

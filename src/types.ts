@@ -76,6 +76,7 @@ export interface AppSettings {
   soundEffectsEnabled?: boolean;
   showBengaliTranslations?: boolean;
   dailyGoalWordCount?: number;
+  freeFlashcardsCount?: number; // Free sample flashcards count for restricted courses (default 10)
 }
 
 export interface SyncLogEntry {
@@ -116,6 +117,7 @@ export interface Course {
   createdAt: string;
   createdBy: string;
   price?: number;
+  freeFlashcardsCount?: number;
   bkashNumber?: string;
   order?: number;
   code?: string;
@@ -148,6 +150,8 @@ export interface AccessRequest {
   requestedBy?: string;
   expiryDate?: string;
   verificationMethod?: 'auto' | 'manual' | 'wallet_balance';
+  spent?: boolean;
+  spentAt?: string;
 }
 
 export interface VerifiedPayment {
@@ -160,6 +164,8 @@ export interface VerifiedPayment {
   claimed?: boolean;
   claimedBy?: string;
   claimedAt?: string;
+  spent?: boolean;
+  spentAt?: string;
 }
 
 export interface UserWallet {

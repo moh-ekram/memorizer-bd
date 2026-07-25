@@ -60,6 +60,11 @@ interface FlashcardViewerProps {
     place6?: string;
   };
   googleSearchQuery?: string;
+  isRestrictedLocked?: boolean;
+  freeFlashcardsCount?: number;
+  coursePrice?: number;
+  courseTitle?: string;
+  onUnlockCourse?: () => void;
 }
 
 export default function FlashcardViewer({
@@ -74,8 +79,22 @@ export default function FlashcardViewer({
   onUpdateSettings,
   variableToggles,
   placeLabels,
-  googleSearchQuery
+  googleSearchQuery,
+  isRestrictedLocked,
+  freeFlashcardsCount,
+  coursePrice,
+  courseTitle,
+  onUnlockCourse
 }: FlashcardViewerProps) {
+  const effectiveFreeLimit = freeFlashcardsCount || settings?.freeFlashcardsCount || 10;
+  const activeWordsList = React.useMemo(() => {
+    if (isRestrictedLocked) {
+      return words.slice(0, effectiveFreeLimit);
+    }
+    return words;
+  }, [words, isRestrictedLocked, effectiveFreeLimit]);
+
+  const [isTrialLimitModalOpen, setIsTrialLimitModalOpen] = useState(false);
   // Session active state - true when inside the full-screen card focus mode, false when on intermediate filter setup screen
   const [isSessionActive, setIsSessionActive] = useState<boolean>(() => Boolean(initialGroup));
 
@@ -351,7 +370,7 @@ export default function FlashcardViewer({
 
   // Phase 1: Filter words by selected groups, tag status, and custom bookmark folder
   useEffect(() => {
-    let result = [...words];
+    let result = [...activeWordsList];
 
     if (selectedGroups.length < uniqueGroups.length) {
       result = result.filter(w => selectedGroups.includes(w.group));
@@ -454,7 +473,11 @@ export default function FlashcardViewer({
     if (currentIndex < filteredWords.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
-      setCurrentIndex(0);
+      if (isRestrictedLocked) {
+        setIsTrialLimitModalOpen(true);
+      } else {
+        setCurrentIndex(0);
+      }
     }
   };
 
@@ -609,6 +632,41 @@ export default function FlashcardViewer({
   if (!isSessionActive) {
     return (
       <div className="space-y-4 max-w-5xl mx-auto" id="flashcard-setup-view">
+        {/* Restricted Course Free Trial Notice Banner */}
+        {isRestrictedLocked && (
+          <div className="p-4 bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-indigo-500/10 border border-amber-400/40 rounded-2xl shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 font-sans">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-amber-400/20 text-amber-600 rounded-xl border border-amber-400/30 shrink-0">
+                <Lock className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="font-black text-slate-900 text-xs sm:text-sm">
+                    ফ্রি ট্রায়াল মোড চালু রয়েছে (Free Sample Active)
+                  </h4>
+                  <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-black rounded-md">
+                    {effectiveFreeLimit}টি কার্ড
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  এই কোর্সের ১ম {effectiveFreeLimit}টি ফ্ল্যাশকার্ড সবার জন্য উন্মুক্ত। পুরো কোর্স আনলক করতে কোর্সটি কিনে নিন।
+                </p>
+              </div>
+            </div>
+
+            {onUnlockCourse && (
+              <button
+                type="button"
+                onClick={onUnlockCourse}
+                className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-extrabold rounded-xl text-xs transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>কোর্স কিনুন ({coursePrice || 30} ৳)</span>
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Header Hero Banner / Start Flashcard Button */}
         <button
           type="button"
@@ -1439,6 +1497,66 @@ export default function FlashcardViewer({
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Free Trial Flashcards Limit Reached Modal */}
+      {isTrialLimitModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn font-sans">
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 max-w-md w-full shadow-2xl text-center space-y-6 relative overflow-hidden">
+            <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto border border-amber-200 shadow-inner">
+              <Lock className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-2">
+              <span className="px-3 py-1 bg-amber-50 text-amber-800 text-[11px] font-black rounded-full uppercase tracking-wider border border-amber-200">
+                Free Sample Reached
+              </span>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                ফ্রি ফ্ল্যাশকার্ড এর সীমা শেষ!
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                {courseTitle ? <strong className="text-indigo-600 font-extrabold">{courseTitle}</strong> : 'এই'} কোর্সের প্রথম {effectiveFreeLimit}টি ফ্রি ফ্ল্যাশকার্ড দেখা সম্পন্ন হয়েছে। পুরো কোর্সের সকল ফ্ল্যাশকার্ড ও ফিচার পেতে কোর্সটি কিনে নিন।
+              </p>
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-left space-y-2">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                <span>কোর্সের নির্ধারিত মূল্য:</span>
+                <span className="text-sm font-black text-emerald-600">{coursePrice || 30} ৳</span>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                আপনার ওয়ালেটে পর্যাপ্ত ব্যালেন্স থাকলে সাথে সাথে আনলক হবে, অথবা বিকাশ সেন্ড মানি করে ব্যালেন্স রিচার্জ করুন।
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2.5 pt-1">
+              {onUnlockCourse && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsTrialLimitModalOpen(false);
+                    setIsSessionActive(false);
+                    onUnlockCourse();
+                  }}
+                  className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Lock className="w-4 h-4" />
+                  <span>কোর্সটি কিনুন / আনলক করুন</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsTrialLimitModalOpen(false);
+                  setIsSessionActive(false);
+                }}
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
+              >
+                আগে দেখুন (Back to Setup)
+              </button>
             </div>
           </div>
         </div>
