@@ -41,7 +41,7 @@ import { read, utils, writeFile } from 'xlsx';
 interface CourseSettingsProps {
   course: Course;
   onClose: () => void;
-  onSaveSuccess: () => void;
+  onSaveSuccess: (updatedCourse?: Course) => void;
   initialTab?: 'general' | 'variables' | 'access' | 'students' | 'wordlist' | 'addwords' | 'verification' | 'blank-questions' | 'ooo-questions' | 'analogy-questions' | 'practice-games' | 'story-management';
   initialEditWordName?: string;
 }
@@ -1786,7 +1786,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
       
       setSuccess(true);
       setTimeout(() => {
-        onSaveSuccess();
+        onSaveSuccess(updatedCourse);
         onClose();
       }, 1000);
     } catch (err) {

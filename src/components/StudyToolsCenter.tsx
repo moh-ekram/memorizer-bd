@@ -59,7 +59,7 @@ export default function StudyToolsCenter({
 }: StudyToolsCenterProps) {
   const [subTab, setSubTab] = useState<'hub' | 'lists' | 'dictionary' | 'planner' | 'story'>(initialSubTab);
 
-  const activeStories = stories || course?.stories || [];
+  const activeStories = (stories && stories.length > 0) ? stories : (course?.stories || []);
   const isStoryEnabled = enableStoryMode && course?.enabledGames?.story !== false;
 
   // Stagger animation variants for cards

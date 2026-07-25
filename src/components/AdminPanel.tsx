@@ -547,7 +547,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       const qSnap = await getDocs(collection(db, 'courses'));
       const list: Course[] = [];
       qSnap.forEach(docSnap => {
-        list.push(docSnap.data() as Course);
+        list.push({ id: docSnap.id, ...docSnap.data() } as Course);
       });
       setCustomCourses(list);
       setHasFetchedCourses(true);
@@ -1015,6 +1015,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         description: newCourseDesc.trim() || `${uploadedWords.length} words vocabulary course.`,
         totalGroups,
         words: uploadedWords,
+        stories: [],
+        enabledGames: { quiz: true, match: true, synonym: true, blank: true, story: true },
         isDefault: newCourseIsDefault,
         isRestricted: newCourseIsRestricted,
         allowedUsers: allowedUsers,
@@ -3519,7 +3521,20 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             setCourseSettingsInitialTab(undefined);
             setCourseSettingsInitialEditWordName(undefined);
           }} 
-          onSaveSuccess={fetchCustomCourses} 
+          onSaveSuccess={(updatedCourse) => {
+            if (updatedCourse) {
+              setCustomCourses(prev => {
+                const idx = prev.findIndex(c => c.id === updatedCourse.id);
+                if (idx >= 0) {
+                  const next = [...prev];
+                  next[idx] = updatedCourse;
+                  return next;
+                }
+                return [...prev, updatedCourse];
+              });
+            }
+            fetchCustomCourses();
+          }} 
           initialTab={courseSettingsInitialTab}
           initialEditWordName={courseSettingsInitialEditWordName}
         />

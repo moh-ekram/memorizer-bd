@@ -43,6 +43,12 @@ export default function ReadStoryView({
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  useEffect(() => {
+    if (selectedStoryIndex >= stories.length && stories.length > 0) {
+      setSelectedStoryIndex(0);
+    }
+  }, [stories.length, selectedStoryIndex]);
+
   const activeStory = stories[selectedStoryIndex] || null;
 
   // Build a lookup map of course words for fast matching (lowercase)

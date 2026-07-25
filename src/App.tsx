@@ -627,6 +627,24 @@ export default function App() {
         });
         setCustomCourses(loaded);
         localStorage.setItem('vocab_memorizer_cached_custom_courses', JSON.stringify(loaded));
+
+        // Sync importedCourses if any match custom course IDs
+        setImportedCourses(prev => {
+          let hasChanges = false;
+          const next = prev.map(imp => {
+            const match = loaded.find(c => c.id.trim().toLowerCase() === imp.id.trim().toLowerCase());
+            if (match) {
+              hasChanges = true;
+              return { ...imp, ...match };
+            }
+            return imp;
+          });
+          if (hasChanges) {
+            localStorage.setItem('vocab_memorizer_imported_courses', JSON.stringify(next));
+            return next;
+          }
+          return prev;
+        });
       }, (error) => {
         console.warn("Error in real-time courses listener (Offline-first active):", error);
       });
