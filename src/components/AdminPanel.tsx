@@ -152,6 +152,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   }, [customCourses, hasFetchedCourses, onCoursesUpdated]);
 
   // New course form states
+  const [showCreateCourseModal, setShowCreateCourseModal] = useState(false);
   const [newCourseTitle, setNewCourseTitle] = useState('');
   const [newCourseId, setNewCourseId] = useState('');
   const [isSlugTouched, setIsSlugTouched] = useState(false);
@@ -1741,9 +1742,18 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 <h3 className="font-extrabold text-slate-900 text-base">Course Management Table</h3>
                 <p className="text-xs text-slate-400 font-medium">Spreadsheet view of all created & default courses</p>
               </div>
-              <span className="text-xs font-bold px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full font-mono">
-                {1 + filteredCustomCoursesList.length} Courses
-              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowCreateCourseModal(true)}
+                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create New Course</span>
+                </button>
+                <span className="text-xs font-bold px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full font-mono">
+                  {1 + filteredCustomCoursesList.length} Courses
+                </span>
+              </div>
             </div>
 
             {/* Excel Table Grid Container */}
@@ -3511,6 +3521,231 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           initialTab={courseSettingsInitialTab}
           initialEditWordName={courseSettingsInitialEditWordName}
         />
+      )}
+
+      {/* Create New Course Modal */}
+      {showCreateCourseModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in text-slate-700 p-4">
+          <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl relative font-sans overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-2xl">
+                  <Plus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-base">Create & Publish New Course</h3>
+                  <p className="text-xs text-slate-400 font-medium">Upload Excel spreadsheet or paste word list to create a new course</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCreateCourseModal(false)}
+                className="p-2 hover:bg-slate-200/70 text-slate-400 hover:text-slate-600 rounded-xl transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto space-y-6">
+              {/* Title, Slug & Description */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-extrabold text-slate-700 block mb-1">Course Title *</label>
+                  <input
+                    type="text"
+                    value={newCourseTitle}
+                    onChange={(e) => setNewCourseTitle(e.target.value)}
+                    placeholder="e.g. BCS Special Wordlist"
+                    className="w-full text-xs font-bold text-slate-900 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-extrabold text-slate-700 block mb-1">Course ID / Slug *</label>
+                  <input
+                    type="text"
+                    value={newCourseId}
+                    onChange={(e) => {
+                      setNewCourseId(e.target.value);
+                      setIsSlugTouched(true);
+                    }}
+                    placeholder="bcs-special-wordlist"
+                    className="w-full text-xs font-bold font-mono text-indigo-900 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-extrabold text-slate-700 block mb-1">Course Description</label>
+                <input
+                  type="text"
+                  value={newCourseDesc}
+                  onChange={(e) => setNewCourseDesc(e.target.value)}
+                  placeholder="Brief overview of course content..."
+                  className="w-full text-xs text-slate-800 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none"
+                />
+              </div>
+
+              {/* Toggles */}
+              <div className="flex flex-wrap items-center gap-6 p-4 bg-slate-50 rounded-2xl border border-slate-200/80">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newCourseIsDefault}
+                    onChange={(e) => setNewCourseIsDefault(e.target.checked)}
+                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                  />
+                  <span className="text-xs font-bold text-slate-800">Set as Default Course</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newCourseIsRestricted}
+                    onChange={(e) => setNewCourseIsRestricted(e.target.checked)}
+                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                  />
+                  <span className="text-xs font-bold text-slate-800">Restricted Course (Specific Emails Only)</span>
+                </label>
+              </div>
+
+              {newCourseIsRestricted && (
+                <div>
+                  <label className="text-xs font-extrabold text-slate-700 block mb-1">Allowed Student Emails (One email per line)</label>
+                  <textarea
+                    rows={3}
+                    value={newCourseAllowedUsersText}
+                    onChange={(e) => setNewCourseAllowedUsersText(e.target.value)}
+                    placeholder="student1@gmail.com&#10;student2@gmail.com"
+                    className="w-full text-xs font-mono text-slate-800 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none"
+                  />
+                </div>
+              )}
+
+              {/* Upload / Paste Tabs */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                  <button
+                    type="button"
+                    onClick={() => setCreationMethod('excel')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      creationMethod === 'excel'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-slate-500 hover:bg-slate-100'
+                    }`}
+                  >
+                    Excel File (.xlsx / .xls)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCreationMethod('paste')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      creationMethod === 'paste'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-slate-500 hover:bg-slate-100'
+                    }`}
+                  >
+                    Paste Text / TSV
+                  </button>
+                </div>
+
+                {creationMethod === 'excel' ? (
+                  <label className="block cursor-pointer bg-slate-50 border-2 border-dashed border-slate-300 hover:border-indigo-500 p-6 rounded-2xl text-center transition group">
+                    <input
+                      type="file"
+                      accept=".xlsx, .xls, .csv"
+                      onChange={handleFileInputChange}
+                      className="hidden"
+                    />
+                    <UploadCloud className="w-8 h-8 text-indigo-500 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                    <span className="text-xs font-bold text-slate-800 block">Click or Drag & Drop Excel File</span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Supports .xlsx and .xls files with columns: id, word, meaning, group, etc.</span>
+                  </label>
+                ) : (
+                  <div className="space-y-2">
+                    <textarea
+                      rows={5}
+                      value={pasteInputText}
+                      onChange={(e) => {
+                        setPasteInputText(e.target.value);
+                        processPastedText(e.target.value);
+                      }}
+                      placeholder="Paste tab-separated or comma-separated word list here..."
+                      className="w-full text-xs font-mono text-slate-800 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none"
+                    />
+                  </div>
+                )}
+
+                {uploadError && (
+                  <p className="text-xs font-bold text-rose-600 bg-rose-50 p-3 rounded-xl border border-rose-200">
+                    {uploadError}
+                  </p>
+                )}
+              </div>
+
+              {/* Parsed Words Summary & Preview */}
+              {uploadedWords.length > 0 && (
+                <div className="space-y-3 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-indigo-900">
+                      Parsed {uploadedWords.length} Words successfully!
+                    </span>
+                    <span className="text-[10px] font-bold font-mono text-indigo-700 bg-indigo-100 px-2.5 py-0.5 rounded-full">
+                      {new Set(uploadedWords.map(w => w.group)).size} Groups Detected
+                    </span>
+                  </div>
+
+                  <div className="max-h-40 overflow-y-auto space-y-1.5 scrollbar-thin pr-1">
+                    {uploadedWords.slice(0, 10).map((w, idx) => (
+                      <div key={idx} className="bg-white p-2.5 rounded-xl border border-slate-200 text-xs flex items-center justify-between shadow-2xs">
+                        <span className="font-extrabold text-slate-900">{w.word}</span>
+                        <span className="text-slate-600 font-medium">{w.meaning}</span>
+                        <span className="text-[10px] font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">G{w.group}</span>
+                      </div>
+                    ))}
+                    {uploadedWords.length > 10 && (
+                      <p className="text-[10px] font-extrabold text-slate-400 text-center pt-1">
+                        ...and {uploadedWords.length - 10} more words
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {saveError && (
+                <p className="text-xs font-bold text-rose-600 bg-rose-50 p-3 rounded-xl border border-rose-200">
+                  {saveError}
+                </p>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCreateCourseModal(false)}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-200/60 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saveStatus === 'saving' || !newCourseTitle.trim() || !newCourseId.trim() || uploadedWords.length === 0}
+                onClick={async () => {
+                  await handleSaveCourse();
+                  if (saveStatus !== 'error') {
+                    setShowCreateCourseModal(false);
+                  }
+                }}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 transition shadow-md cursor-pointer disabled:opacity-50"
+              >
+                {saveStatus === 'saving' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                <span>Save & Publish Course</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

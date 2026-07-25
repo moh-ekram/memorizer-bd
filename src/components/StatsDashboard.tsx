@@ -119,6 +119,15 @@ export default function StatsDashboard({
   // Sync accessEmail when user changes
   const activeCourse = allCourses.find(c => c.id === activeCourseId) || allCourses[0];
 
+  const [headerToggle, setHeaderToggle] = useState<boolean>(false);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setHeaderToggle(prev => !prev);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
   useEffect(() => {
     if (user?.email) {
       setAccessEmail(user.email);
@@ -579,16 +588,26 @@ export default function StatsDashboard({
         </AnimatePresence>
         <div className="absolute right-0 top-0 translate-x-10 -translate-y-10 w-48 h-48 bg-white/5 rounded-full blur-2xl"></div>
         <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-6">
-          <div className="space-y-1">
-            <h2 className="text-xl md:text-3xl font-black font-sans tracking-tight">Your Vocabulary Dashboard</h2>
-            {activeCourse && (
-              <p className="text-xs sm:text-sm font-extrabold flex items-center gap-1.5 pt-0.5">
-                <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span className="text-amber-300 font-bold bg-gradient-to-r from-emerald-300 via-amber-300 to-yellow-400 bg-clip-text text-transparent">
-                  {activeCourse.title}
-                </span>
-              </p>
-            )}
+          <div className="space-y-1 min-h-[58px]">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={headerToggle ? 'course' : 'dashboard'}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.6, ease: "easeInOut" }}
+              >
+                <h2 className="text-xl md:text-3xl font-black font-sans tracking-tight">
+                  {headerToggle && activeCourse ? activeCourse.title : "Your Memorizer Dashboard"}
+                </h2>
+                <p className="text-xs sm:text-sm font-extrabold flex items-center gap-1.5 pt-0.5">
+                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span className="font-bold bg-gradient-to-r from-emerald-300 via-amber-300 to-yellow-400 bg-clip-text text-transparent">
+                    {headerToggle || !activeCourse ? "Your Memorizer Dashboard" : activeCourse.title}
+                  </span>
+                </p>
+              </motion.div>
+            </AnimatePresence>
           </div>
 
           <div className="grid grid-cols-3 md:flex md:items-center md:justify-end gap-2.5 sm:gap-4 w-full md:w-auto">
