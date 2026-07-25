@@ -4,7 +4,8 @@ import {
   BookOpen, Check, Trash2, Lock, Sparkles, Volume2, PlusCircle, 
   FileSpreadsheet, HelpCircle, Shuffle, GraduationCap, Trophy, 
   Gamepad2, Search, CheckCircle, AlertCircle, ShoppingBag, X, 
-  Copy, ArrowRight, Star, Heart, Calendar, ShieldAlert, Layers, Play
+  Copy, ArrowRight, Star, Heart, Calendar, ShieldAlert, Layers, Play,
+  ChevronDown, ChevronUp, Info
 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { doc, setDoc, getDoc, getDocs, query, collection, where } from 'firebase/firestore';
@@ -70,6 +71,17 @@ export default function MyCoursesView({
   const [cart, setCart] = useState<Course[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCartCheckoutMode, setIsCartCheckoutMode] = useState(false);
+
+  // Mobile Course Card Expansion State
+  const [expandedCourseIds, setExpandedCourseIds] = useState<Record<string, boolean>>({});
+
+  const toggleCourseExpand = (courseId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setExpandedCourseIds(prev => ({
+      ...prev,
+      [courseId]: !prev[courseId]
+    }));
+  };
 
   // Payment states
   const [selectedBuyCourse, setSelectedBuyCourse] = useState<Course | null>(null);
@@ -652,192 +664,315 @@ export default function MyCoursesView({
     const isUserAllowed = isCourseAccessible(course, enrolledCourseIds, user?.email);
     const wordsCount = course.words?.length || 0;
 
+    const courseWords = course.words || [];
+    const masteredCount = courseWords.filter(w => progress[w.id]?.status === 'know').length;
+    const progressPercent = wordsCount > 0 ? Math.round((masteredCount / wordsCount) * 100) : 0;
+    const isExpanded = !!expandedCourseIds[course.id];
+
     return (
       <motion.div
         key={course.id}
         layout
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        whileHover={{ y: -4 }}
-        onClick={() => setSelectedDetailCourse(course)}
-        className={`group relative rounded-3xl transition-all duration-300 cursor-pointer flex flex-col justify-between ${
+        className={`group relative rounded-2xl sm:rounded-3xl transition-all duration-300 flex flex-col justify-between ${
           isActive 
-            ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 p-[3px] shadow-xl shadow-emerald-500/20 ring-4 ring-emerald-500/25' 
+            ? 'bg-gradient-to-r from-slate-700 via-slate-800 to-slate-900 p-[2px] sm:p-[3px] shadow-md sm:shadow-xl shadow-slate-900/20 ring-2 sm:ring-4 ring-slate-400/30' 
             : isUserAllowed
-            ? 'bg-emerald-200/80 hover:bg-emerald-300 p-[2px] shadow-2xs hover:shadow-md'
-            : 'bg-gradient-to-r from-orange-300 via-amber-300 to-orange-400 p-[2px] shadow-2xs hover:shadow-lg'
+            ? 'bg-slate-200 hover:bg-slate-300 p-[1.5px] sm:p-[2px] shadow-2xs hover:shadow-md'
+            : 'bg-gradient-to-r from-orange-300 via-amber-300 to-orange-400 p-[1.5px] sm:p-[2px] shadow-2xs hover:shadow-lg'
         }`}
       >
         {/* Inner Card Container */}
-        <div className={`w-full h-full rounded-[22px] p-5 flex flex-col justify-between relative overflow-hidden transition-all duration-300 ${
+        <div className={`w-full h-full rounded-[14px] sm:rounded-[22px] p-2.5 sm:p-5 flex flex-col justify-between relative overflow-hidden transition-all duration-300 ${
           isActive 
-            ? 'bg-gradient-to-br from-emerald-700 via-teal-800 to-emerald-900 text-white' 
+            ? 'bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 text-white' 
             : isUserAllowed
-            ? 'bg-emerald-50/90 hover:bg-emerald-100/90 text-slate-900 border border-emerald-200/80'
+            ? 'bg-white hover:bg-slate-50/90 text-slate-900 border border-slate-200'
             : 'bg-orange-50/80 hover:bg-orange-100/90 text-slate-900 border border-orange-200/90'
         }`}>
-          {/* Header Row */}
-          <div>
-            <div className="flex justify-between items-center gap-2 mb-3">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {isActive ? (
-                  <span className="px-3 py-1 bg-white/20 backdrop-blur-md text-white font-black text-[9px] rounded-full uppercase tracking-wider border border-white/30 flex items-center gap-1 shadow-2xs">
-                    <Check className="w-3 h-3 text-emerald-200" /> Active Course
-                  </span>
-                ) : !isUserAllowed ? (
-                  <span className="px-2.5 py-0.5 bg-orange-100 text-orange-800 border border-orange-200/80 font-extrabold text-[9px] rounded-full uppercase tracking-wider flex items-center gap-1">
-                    <Lock className="w-2.5 h-2.5 text-orange-600" /> Locked
-                  </span>
-                ) : (
-                  <span className="px-2.5 py-0.5 bg-emerald-200/80 text-emerald-900 border border-emerald-300/80 font-extrabold text-[9px] rounded-full uppercase tracking-wider">
-                    ✓ Enrolled
-                  </span>
-                )}
 
-                {course.isDefault && (
-                  <span className={`px-2 py-0.5 font-extrabold text-[9px] rounded-full uppercase tracking-wider ${
-                    isActive ? 'bg-white/20 text-white' : isUserAllowed ? 'bg-emerald-100 text-emerald-800' : 'bg-orange-100 text-orange-800'
-                  }`}>
-                    Default
-                  </span>
-                )}
-              </div>
+          {/* MOBILE COMPACT HEADER (Visible on mobile <sm:) */}
+          <div 
+            onClick={() => toggleCourseExpand(course.id)}
+            className="sm:hidden flex items-center justify-between gap-2 cursor-pointer select-none py-0.5"
+          >
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              {/* Status Dot / Badge */}
+              {isActive ? (
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse flex-shrink-0 ring-2 ring-indigo-200/50" title="Active Course" />
+              ) : !isUserAllowed ? (
+                <Lock className="w-3.5 h-3.5 text-orange-600 flex-shrink-0" />
+              ) : (
+                <Check className="w-3.5 h-3.5 text-slate-700 flex-shrink-0" />
+              )}
 
-              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
-                isActive 
-                  ? 'bg-white/10 text-emerald-100' 
-                  : isUserAllowed 
-                  ? 'bg-emerald-100/80 text-emerald-800' 
-                  : 'bg-orange-100 text-orange-800'
-              }`}>
-                #{course.id}
-              </span>
+              {/* Title */}
+              <h3 
+                style={{ fontFamily: "'Poppins', sans-serif" }}
+                className={`text-xs font-bold truncate ${
+                  isActive ? 'text-white' : 'text-slate-900'
+                }`}
+              >
+                {course.title}
+              </h3>
             </div>
 
-            {/* Course Title */}
-            <h3 
-              style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 300 }}
-              className={`text-base sm:text-lg tracking-tight leading-snug line-clamp-2 my-1.5 ${
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Progress Percent Pill */}
+              <span className={`text-[10px] font-mono font-black px-1.5 py-0.5 rounded border ${
                 isActive 
-                  ? 'text-white' 
+                  ? 'bg-white/20 text-white border-white/30' 
                   : isUserAllowed 
-                  ? 'text-slate-900 group-hover:text-emerald-700 transition-colors' 
-                  : 'text-slate-900 group-hover:text-orange-600 transition-colors'
-              }`}
-            >
-              {course.title}
-            </h3>
-
-            {/* Price Tag */}
-            <div className="mt-2.5 flex items-baseline gap-1.5">
-              <span className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${
-                isActive 
-                  ? 'text-white' 
-                  : isUserAllowed 
-                  ? 'text-emerald-950' 
-                  : 'text-orange-950'
+                  ? 'bg-slate-100 text-slate-800 border-slate-200' 
+                  : 'bg-orange-200/80 text-orange-950 border-orange-300'
               }`}>
+                {progressPercent}%
+              </span>
+
+              {/* Price */}
+              <span className={`text-xs font-black font-mono ${isActive ? 'text-white' : 'text-slate-900'}`}>
                 ৳{(course.price && course.price > 0) ? course.price : 30}
               </span>
-              <span className={`text-[10px] font-extrabold uppercase tracking-wider ${
+
+              {/* Expand Toggle Button */}
+              <button 
+                type="button" 
+                onClick={(e) => toggleCourseExpand(course.id, e)}
+                className={`p-1 rounded-lg transition-colors ${
+                  isActive ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-slate-200/60 hover:bg-slate-200 text-slate-700'
+                }`}
+              >
+                {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+
+          {/* DESKTOP CONTENT (Always visible on sm:), MOBILE CONTENT (Visible when isExpanded on <sm:) */}
+          <div className={`${isExpanded ? 'block mt-2.5 pt-2 sm:mt-0 sm:pt-0 border-t border-slate-200/30 sm:border-0' : 'hidden sm:block'}`}>
+            {/* Header Row (Badges + Course ID) */}
+            <div 
+              onClick={() => setSelectedDetailCourse(course)}
+              className="cursor-pointer"
+            >
+              <div className="flex justify-between items-center gap-2 mb-2 sm:mb-3">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {isActive ? (
+                    <span className="px-2.5 py-0.5 sm:px-3 sm:py-1 bg-white/20 backdrop-blur-md text-white font-black text-[9px] rounded-full uppercase tracking-wider border border-white/30 flex items-center gap-1 shadow-2xs">
+                      <Check className="w-3 h-3 text-indigo-300" /> Active Course
+                    </span>
+                  ) : !isUserAllowed ? (
+                    <span className="px-2.5 py-0.5 bg-orange-100 text-orange-800 border border-orange-200/80 font-extrabold text-[9px] rounded-full uppercase tracking-wider flex items-center gap-1">
+                      <Lock className="w-2.5 h-2.5 text-orange-600" /> Locked
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-0.5 bg-slate-100 text-slate-800 border border-slate-200 font-extrabold text-[9px] rounded-full uppercase tracking-wider">
+                      ✓ Enrolled
+                    </span>
+                  )}
+
+                  {course.isDefault && (
+                    <span className={`px-2 py-0.5 font-extrabold text-[9px] rounded-full uppercase tracking-wider border ${
+                      isActive 
+                        ? 'bg-white/20 text-white border-white/30' 
+                        : isUserAllowed 
+                        ? 'bg-slate-100 text-slate-700 border-slate-200' 
+                        : 'bg-orange-100 text-orange-800 border-orange-200'
+                    }`}>
+                      Default
+                    </span>
+                  )}
+                </div>
+
+                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                  isActive 
+                    ? 'bg-white/10 text-slate-200 border-white/20' 
+                    : isUserAllowed 
+                    ? 'bg-slate-100 text-slate-700 border-slate-200' 
+                    : 'bg-orange-100 text-orange-800 border-orange-200'
+                }`}>
+                  #{course.id}
+                </span>
+              </div>
+
+              {/* Course Title */}
+              <h3 
+                style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 300 }}
+                className={`text-sm sm:text-lg tracking-tight leading-snug line-clamp-2 my-1 sm:my-1.5 ${
+                  isActive 
+                    ? 'text-white' 
+                    : isUserAllowed 
+                    ? 'text-slate-900 group-hover:text-indigo-600 transition-colors' 
+                    : 'text-slate-900 group-hover:text-orange-600 transition-colors'
+                }`}
+              >
+                {course.title}
+              </h3>
+
+              {/* Price Tag */}
+              <div className="mt-1.5 sm:mt-2.5 flex items-baseline gap-1.5">
+                <span className={`text-lg sm:text-2xl font-black font-mono tracking-tight ${
+                  isActive 
+                    ? 'text-white' 
+                    : isUserAllowed 
+                    ? 'text-slate-900' 
+                    : 'text-orange-950'
+                }`}>
+                  ৳{(course.price && course.price > 0) ? course.price : 30}
+                </span>
+                <span className={`text-[10px] font-extrabold uppercase tracking-wider ${
+                  isActive 
+                    ? 'text-slate-300' 
+                    : isUserAllowed 
+                    ? 'text-slate-500' 
+                    : 'text-orange-700'
+                }`}>
+                  BDT
+                </span>
+              </div>
+            </div>
+
+            {/* Word Count & Visual Progress Bar Indicator */}
+            <div 
+              style={{ fontFamily: "'Poppins', sans-serif" }}
+              className={`mt-2.5 sm:mt-3 pt-2 sm:pt-2.5 border-t space-y-1.5 text-xs ${
                 isActive 
-                  ? 'text-emerald-100' 
+                  ? 'border-white/20 text-slate-200' 
                   : isUserAllowed 
-                  ? 'text-emerald-700' 
-                  : 'text-orange-700'
-              }`}>
-                BDT
-              </span>
-            </div>
-          </div>
-
-          {/* Word Count & Feature Indicator */}
-          <div 
-            style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 300 }}
-            className={`mt-3 pt-3 border-t space-y-1 text-xs ${
-              isActive 
-                ? 'border-white/20 text-emerald-100' 
-                : isUserAllowed 
-                ? 'border-emerald-200/60 text-emerald-800' 
-                : 'border-orange-200/60 text-orange-800'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-white' : isUserAllowed ? 'bg-emerald-600' : 'bg-orange-500'}`} />
-              <span>Vocabulary Words: <strong className={isActive ? 'text-white' : isUserAllowed ? 'text-emerald-950' : 'text-slate-900'} style={{ fontWeight: 400 }}>{wordsCount}</strong></span>
-            </div>
-          </div>
-
-          {/* Footer Action Buttons */}
-          <div className="mt-4 pt-1 flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
-            {!isUserAllowed && (
-              <>
-                <button
-                  type="button"
-                  onClick={(e) => toggleCartCourse(course, e)}
-                  title={cart.some(c => c.id === course.id) ? "Remove from Cart" : "Add to Cart"}
-                  className={`px-2.5 py-2 rounded-xl text-[11px] font-bold flex items-center gap-1 transition cursor-pointer border ${
-                    cart.some(c => c.id === course.id)
-                      ? 'bg-emerald-500 text-white border-emerald-600 font-black shadow-2xs'
-                      : 'bg-orange-100 hover:bg-orange-200 text-orange-950 border-orange-300/80 font-extrabold'
-                  }`}
-                >
-                  <ShoppingBag className="w-3.5 h-3.5" />
-                  <span>{cart.some(c => c.id === course.id) ? 'Cart ✓' : '+ Cart'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveCourseId(course.id);
-                    if (onSelectTab) {
-                      onSelectTab('flashcard');
-                    }
-                  }}
-                  title="ফ্রি ফ্ল্যাশকার্ড প্র্যাকটিস করুন (Free Sample Flashcards)"
-                  className="flex-1 py-2 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 transition shadow-xs cursor-pointer border border-indigo-500/80 active:scale-98"
-                >
-                  <Play className="w-3.5 h-3.5 fill-current text-amber-300" />
-                  <span>ফ্রি কার্ডস</span>
-                </button>
-              </>
-            )}
-
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (!isUserAllowed) {
-                  setIsCartCheckoutMode(false);
-                  setSelectedBuyCourse(course);
-                  return;
-                }
-                setActiveCourseId(course.id);
-                if (onSelectTab) {
-                  onSelectTab('flashcard');
-                }
-              }}
-              className={`${!isUserAllowed ? 'px-3' : 'flex-1'} py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer ${
-                isActive
-                  ? 'bg-white text-emerald-900 hover:bg-emerald-50 font-black shadow-md'
-                  : isUserAllowed
-                  ? 'bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold'
-                  : 'bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold'
+                  ? 'border-slate-200 text-slate-700' 
+                  : 'border-orange-200/60 text-orange-900'
               }`}
             >
-              {isUserAllowed ? (
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="flex items-center gap-1.5 font-bold">
+                  <Trophy className={`w-3.5 h-3.5 ${
+                    isActive ? 'text-amber-300' : isUserAllowed ? 'text-amber-500' : 'text-orange-500'
+                  }`} />
+                  <span>Mastered: <strong className={`font-extrabold ${isActive ? 'text-white' : 'text-slate-900'}`}>{masteredCount}</strong> / {wordsCount} words</span>
+                </span>
+                <span className={`font-black font-mono text-[10px] px-1.5 py-0.5 rounded-md border ${
+                  isActive 
+                    ? 'bg-white/20 text-white border-white/30' 
+                    : isUserAllowed 
+                    ? 'bg-slate-100 text-slate-800 border-slate-200' 
+                    : 'bg-orange-200/80 text-orange-900 border-orange-300'
+                }`}>
+                  {progressPercent}%
+                </span>
+              </div>
+
+              {/* Progress Bar Track */}
+              <div className={`w-full h-2 rounded-full overflow-hidden p-0.5 ${
+                isActive 
+                  ? 'bg-black/30' 
+                  : isUserAllowed 
+                  ? 'bg-slate-100 border border-slate-200' 
+                  : 'bg-orange-200/70 border border-orange-300/50'
+              }`}>
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progressPercent}%` }}
+                  transition={{ duration: 0.6, ease: 'easeOut' }}
+                  className={`h-full rounded-full transition-all ${
+                    isActive
+                      ? 'bg-gradient-to-r from-amber-300 to-indigo-300 shadow-xs'
+                      : isUserAllowed
+                      ? 'bg-gradient-to-r from-slate-700 to-slate-900'
+                      : 'bg-gradient-to-r from-orange-400 to-amber-500'
+                  }`}
+                />
+              </div>
+            </div>
+
+            {/* Footer Action Buttons */}
+            <div className="mt-3 sm:mt-4 pt-1 flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
+              {!isUserAllowed && (
                 <>
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>Start Flashcard</span>
-                </>
-              ) : (
-                <>
-                  <ShoppingBag className="w-3.5 h-3.5" />
-                  <span>Buy Now</span>
+                  <button
+                    type="button"
+                    onClick={(e) => toggleCartCourse(course, e)}
+                    title={cart.some(c => c.id === course.id) ? "Remove from Cart" : "Add to Cart"}
+                    className={`px-2.5 py-2 rounded-xl text-[11px] font-bold flex items-center gap-1 transition cursor-pointer border ${
+                      cart.some(c => c.id === course.id)
+                        ? 'bg-slate-800 text-white border-slate-900 font-black shadow-2xs'
+                        : 'bg-orange-100 hover:bg-orange-200 text-orange-950 border-orange-300/80 font-extrabold'
+                    }`}
+                  >
+                    <ShoppingBag className="w-3.5 h-3.5" />
+                    <span>{cart.some(c => c.id === course.id) ? 'Cart ✓' : '+ Cart'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveCourseId(course.id);
+                      if (onSelectTab) {
+                        onSelectTab('flashcard');
+                      }
+                    }}
+                    title="ফ্রি ফ্ল্যাশকার্ড প্র্যাকটিস করুন (Free Sample Flashcards)"
+                    className="flex-1 py-2 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 transition shadow-xs cursor-pointer border border-indigo-500/80 active:scale-98"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current text-amber-300" />
+                    <span>ফ্রি কার্ডস</span>
+                  </button>
                 </>
               )}
-            </button>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!isUserAllowed) {
+                    setIsCartCheckoutMode(false);
+                    setSelectedBuyCourse(course);
+                    return;
+                  }
+                  setActiveCourseId(course.id);
+                  if (onSelectTab) {
+                    onSelectTab('flashcard');
+                  }
+                }}
+                className={`${!isUserAllowed ? 'px-3' : 'flex-1'} py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer ${
+                  isActive
+                    ? 'bg-white text-slate-900 hover:bg-slate-100 font-black shadow-md'
+                    : isUserAllowed
+                    ? 'bg-slate-900 hover:bg-black text-white font-extrabold'
+                    : 'bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold'
+                }`}
+              >
+                {isUserAllowed ? (
+                  <>
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Start Flashcard</span>
+                  </>
+                ) : (
+                  <>
+                    <ShoppingBag className="w-3.5 h-3.5" />
+                    <span>Buy Now</span>
+                  </>
+                )}
+              </button>
+
+              {/* View Details Button for Mobile */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedDetailCourse(course);
+                }}
+                className={`sm:hidden px-2.5 py-2 rounded-xl text-[11px] font-bold flex items-center gap-1 transition cursor-pointer border ${
+                  isActive 
+                    ? 'bg-white/10 hover:bg-white/20 text-white border-white/20' 
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200'
+                }`}
+                title="কোর্সের সকল তথ্য দেখুন"
+              >
+                <Info className="w-3.5 h-3.5" />
+                <span>বিস্তারিত</span>
+              </button>
+            </div>
           </div>
         </div>
       </motion.div>
@@ -1108,18 +1243,43 @@ export default function MyCoursesView({
                   </div>
 
                   {/* Quick Stats Grid */}
-                  <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
                     <div className="p-3 bg-indigo-50/60 rounded-2xl border border-indigo-100/60">
                       <span className="text-[9px] font-extrabold text-indigo-500 uppercase tracking-wider block">Total Words</span>
                       <span className="text-lg font-black text-indigo-900">{wordsCount}</span>
                     </div>
                     <div className="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-100/60">
-                      <span className="text-[9px] font-extrabold text-emerald-600 uppercase tracking-wider block">Total Groups</span>
-                      <span className="text-lg font-black text-emerald-900">{course.totalGroups || 1}</span>
+                      <span className="text-[9px] font-extrabold text-emerald-600 uppercase tracking-wider block">Mastered Words</span>
+                      <span className="text-lg font-black text-emerald-900">{progressCount} ({progressPercent}%)</span>
+                    </div>
+                    <div className="p-3 bg-teal-50/60 rounded-2xl border border-teal-100/60">
+                      <span className="text-[9px] font-extrabold text-teal-600 uppercase tracking-wider block">Total Groups</span>
+                      <span className="text-lg font-black text-teal-900">{course.totalGroups || 1}</span>
                     </div>
                     <div className="p-3 bg-amber-50/60 rounded-2xl border border-amber-100/60">
                       <span className="text-[9px] font-extrabold text-amber-600 uppercase tracking-wider block">Course Price</span>
                       <span className="text-lg font-black text-amber-900">৳{(course.price && course.price > 0) ? course.price : 30}</span>
+                    </div>
+                  </div>
+
+                  {/* Course Mastered Visual Progress Bar */}
+                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-extrabold text-slate-700 flex items-center gap-1.5">
+                        <Trophy className="w-4 h-4 text-amber-500" />
+                        <span>Course Mastery Progress</span>
+                      </span>
+                      <span className="font-mono font-black text-emerald-700 text-xs bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-200">
+                        {progressCount} / {wordsCount} words ({progressPercent}%)
+                      </span>
+                    </div>
+                    <div className="w-full h-2.5 bg-slate-200/80 rounded-full overflow-hidden p-0.5 border border-slate-300/40">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${progressPercent}%` }}
+                        transition={{ duration: 0.5, ease: 'easeOut' }}
+                        className="h-full bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full shadow-2xs" 
+                      />
                     </div>
                   </div>
 
