@@ -5,18 +5,23 @@ import {
   BookOpen, 
   CalendarCheck2, 
   ArrowLeft,
-  ChevronRight
+  ChevronRight,
+  BookText
 } from 'lucide-react';
 import CustomLists from './CustomLists';
 import SearchDictionary from './SearchDictionary';
 import DailyPlanner from './DailyPlanner';
-import { VocabularyWord, WordStatus, CustomFolder, UserProgress, StudyGoal, AppSettings } from '../types';
+import ReadStoryView from './ReadStoryView';
+import { VocabularyWord, WordStatus, CustomFolder, UserProgress, StudyGoal, AppSettings, Course, StoryItem } from '../types';
 
 interface StudyToolsCenterProps {
   words: VocabularyWord[];
   progress: Record<string, UserProgress>;
   folders: CustomFolder[];
   settings?: AppSettings;
+  course?: Course;
+  stories?: StoryItem[];
+  enableStoryMode?: boolean;
   onRateWord: (wordId: string, status: WordStatus) => void;
   onUpdateNotes: (wordId: string, notes: string) => void;
   onToggleBookmark: (wordId: string, folderId: string) => void;
@@ -27,7 +32,8 @@ interface StudyToolsCenterProps {
   goal: StudyGoal;
   setGoal: (goal: StudyGoal) => void;
   onLaunchPractice: () => void;
-  initialSubTab?: 'hub' | 'lists' | 'dictionary' | 'planner';
+  onOpenSettings?: () => void;
+  initialSubTab?: 'hub' | 'lists' | 'dictionary' | 'planner' | 'story';
 }
 
 export default function StudyToolsCenter({
@@ -35,6 +41,9 @@ export default function StudyToolsCenter({
   progress,
   folders,
   settings,
+  course,
+  stories,
+  enableStoryMode = true,
   onRateWord,
   onUpdateNotes,
   onToggleBookmark,
@@ -45,9 +54,13 @@ export default function StudyToolsCenter({
   goal,
   setGoal,
   onLaunchPractice,
+  onOpenSettings,
   initialSubTab = 'hub'
 }: StudyToolsCenterProps) {
-  const [subTab, setSubTab] = useState<'hub' | 'lists' | 'dictionary' | 'planner'>(initialSubTab);
+  const [subTab, setSubTab] = useState<'hub' | 'lists' | 'dictionary' | 'planner' | 'story'>(initialSubTab);
+
+  const activeStories = stories || course?.stories || [];
+  const isStoryEnabled = enableStoryMode && course?.enabledGames?.story !== false;
 
   // Stagger animation variants for cards
   const containerVariants = {
@@ -113,6 +126,20 @@ export default function StudyToolsCenter({
               <CalendarCheck2 className="w-3.5 h-3.5" />
               <span>Planner</span>
             </button>
+
+            {isStoryEnabled && (
+              <button
+                onClick={() => setSubTab('story')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex-shrink-0 ${
+                  subTab === 'story'
+                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-150'
+                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 border border-transparent'
+                }`}
+              >
+                <BookText className="w-3.5 h-3.5" />
+                <span>Read story</span>
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -138,7 +165,7 @@ export default function StudyToolsCenter({
             variants={containerVariants}
             initial="hidden"
             animate="show"
-            className="grid grid-cols-1 md:grid-cols-3 gap-6"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
           >
             {/* 1. Bookmarks & Folder Lists */}
             <motion.div
@@ -220,6 +247,35 @@ export default function StudyToolsCenter({
                 </span>
               </div>
             </motion.div>
+
+            {/* 4. Read Story Card */}
+            {isStoryEnabled && (
+              <motion.div
+                variants={itemVariants}
+                whileHover={{ y: -4, scale: 1.01 }}
+                onClick={() => setSubTab('story')}
+                className="bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md hover:border-indigo-200 transition duration-300 p-6 flex flex-col justify-between cursor-pointer space-y-6"
+              >
+                <div className="space-y-4">
+                  <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
+                    <BookText className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="font-extrabold text-slate-800 text-lg">Read Story</h3>
+                    <p className="text-xs text-slate-400 font-semibold leading-relaxed">
+                      গল্পের মাধ্যমে শব্দের সঠিক ব্যবহার শিখুন। কোর্সের শব্দসমূহ বোল্ড আকারে পড়ার সুযোগ পাবেন।
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                  <span className="text-[10px] font-bold text-indigo-600 tracking-wider uppercase font-mono">{activeStories.length} Stories</span>
+                  <span className="flex items-center gap-1 text-xs font-bold text-slate-700 hover:text-indigo-600 transition">
+                    <span>Read Stories</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </span>
+                </div>
+              </motion.div>
+            )}
           </motion.div>
         </div>
       )}
@@ -255,6 +311,17 @@ export default function StudyToolsCenter({
           goal={goal}
           setGoal={setGoal}
           onLaunchPractice={onLaunchPractice}
+        />
+      )}
+
+      {subTab === 'story' && (
+        <ReadStoryView
+          stories={activeStories}
+          words={words}
+          progress={progress}
+          onRateWord={onRateWord}
+          onToggleBookmark={onToggleBookmark}
+          onOpenSettings={onOpenSettings}
         />
       )}
     </div>

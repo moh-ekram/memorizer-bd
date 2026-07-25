@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Course, VocabularyWord, BlankQuestion, OddOneOutQuestion, WordAnalogyQuestion } from '../types';
+import { Course, VocabularyWord, BlankQuestion, OddOneOutQuestion, WordAnalogyQuestion, StoryItem } from '../types';
+import { extractTextFromWordFile, parseStoriesFromRawText } from '../utils/storyParser';
 import { 
   X, 
   CheckCircle, 
@@ -848,8 +849,15 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     match: true,
     synonym: true,
     blank: true,
+    story: true,
     ...(course.enabledGames || {})
   });
+
+  // --- STORY MANAGEMENT STATES ---
+  const [localStories, setLocalStories] = useState<StoryItem[]>(course.stories || []);
+  const [storyUploadLoading, setStoryUploadLoading] = useState<boolean>(false);
+  const [storyUploadError, setStoryUploadError] = useState<string | null>(null);
+  const [pastedStoryText, setPastedStoryText] = useState<string>('');
 
   // --- WORDS LIST STATES ---
   const sanitizeWordsList = (wordsList: VocabularyWord[]) => {
@@ -1576,7 +1584,8 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
               continue;
             }
 
-            const wordId = rawId || `w-${course.id}-${group}-${updatedLocalWords.length + 1}`;
+            const normalizedWordSlug = baseWord.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+            const wordId = rawId || (normalizedWordSlug ? `w-${course.id}-${normalizedWordSlug}` : `w-${course.id}-${group}-${updatedLocalWords.length + 1}`);
 
             updatedLocalWords.push({
               id: wordId,
@@ -1754,6 +1763,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
         allowedUsers: finalAllowedUsers, // Always preserve the allowed users list
         allowedUsersExpiry: allowedUsersExpiry, // Save student access expiry dates map
         words: localWords,
+        stories: localStories,
         variableToggles: finalToggles,
         enabledGames: enabledGames, // Save practice and games toggles!
         totalGroups: uniqueGroupsSize || 1,
@@ -2101,7 +2111,8 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                     { key: 'synonym', label: 'Synonym Check', desc: 'Synonym matching and verification game.', icon: Sparkles },
                     { key: 'blank', label: 'Blank Filling Practice', desc: 'Sentence fill-in-the-blanks practice.', icon: BookOpen },
                     { key: 'odd_one_out', label: 'Odd One Out', desc: 'Synonyms word selection challenge.', icon: HelpCircle },
-                    { key: 'analogy', label: 'Word Analogy', desc: 'Word pairs analogy logic challenge.', icon: Shuffle }
+                    { key: 'analogy', label: 'Word Analogy', desc: 'Word pairs analogy logic challenge.', icon: Shuffle },
+                    { key: 'story', label: 'Read Story / গল্প পড়া', desc: 'ওয়ার্ড ফাইল থেকে আপলোডকৃত গল্পের সেকশন।', icon: BookOpen }
                   ].map(item => {
                     const isEnabled = enabledGames[item.key] !== false;
                     
@@ -2144,6 +2155,155 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                       </div>
                     );
                   })}
+                </div>
+
+                {/* --- STORY UPLOAD & MANAGEMENT SECTION --- */}
+                <div className="mt-8 border-t border-slate-200 pt-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                        <BookOpen className="w-4 h-4 text-indigo-600" />
+                        <span>Read Story / গল্প আপলোড ও ম্যানেজমেন্ট</span>
+                      </h4>
+                      <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                        ওয়ার্ড ফাইল (.docx / .doc / .txt) আপলোড করুন। ফাইলটিতে একের পর এক টাইটেল ও গল্প থাকবে।
+                      </p>
+                    </div>
+
+                    <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-black rounded-lg border border-indigo-150">
+                      {localStories.length} Stories Loaded
+                    </span>
+                  </div>
+
+                  {/* Word File Upload Area */}
+                  <div className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-4">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                      <label className="flex-1 cursor-pointer bg-white border-2 border-dashed border-indigo-200 hover:border-indigo-400 p-4 rounded-xl text-center transition group">
+                        <input
+                          type="file"
+                          accept=".docx,.doc,.txt"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setStoryUploadLoading(true);
+                            setStoryUploadError(null);
+                            try {
+                              const rawText = await extractTextFromWordFile(file);
+                              const parsed = parseStoriesFromRawText(rawText, course.id);
+                              if (parsed.length === 0) {
+                                setStoryUploadError('ফাইলে কোনো গল্প বা টাইটেল খুঁজে পাওয়া যায়নি।');
+                              } else {
+                                setLocalStories(prev => [...prev, ...parsed]);
+                              }
+                            } catch (err) {
+                              console.error(err);
+                              setStoryUploadError('ওয়ার্ড ফাইলটি পড়তে সমস্যা হয়েছে। দয়া করে সঠিক .docx ফাইল চেষ্টা করুন।');
+                            } finally {
+                              setStoryUploadLoading(false);
+                            }
+                          }}
+                        />
+                        <UploadCloud className="w-6 h-6 text-indigo-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
+                        <span className="text-xs font-bold text-slate-800 block">
+                          {storyUploadLoading ? 'ওয়ার্ড ফাইল প্রসেস হচ্ছে...' : 'ওয়ার্ড ফাইল সিলেক্ট করুন (.docx / .doc / .txt)'}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                          ক্লিক করে ফাইল চুজ করুন বা ড্র্যাগ করে দিন
+                        </span>
+                      </label>
+                    </div>
+
+                    {/* Format Guide */}
+                    <div className="bg-white p-3 rounded-xl border border-slate-200/80 text-[11px] text-slate-600 space-y-1">
+                      <span className="font-extrabold text-slate-800 block">💡 ওয়ার্ড ফাইলের ফরম্যাট নির্দেশিকা:</span>
+                      <p className="font-mono text-[10px] text-indigo-900 bg-indigo-50 p-2 rounded border border-indigo-100 leading-relaxed whitespace-pre">
+{`Title 1 Name
+Story content paragraph 1...
+Story content paragraph 2...
+
+Title 2 Name
+Story content paragraph 1...`}
+                      </p>
+                      <p className="text-[10px] text-slate-500 italic">
+                        প্যারাগ্রাফ শুরুর আগের টাইটেল লাইনগুলো স্বয়ংক্রিয়ভাবে শনাক্ত করে গল্পগুলোকে আলাদা করে দেয়া হবে।
+                      </p>
+                    </div>
+
+                    {storyUploadError && (
+                      <p className="text-xs font-bold text-rose-600 bg-rose-50 p-2.5 rounded-lg border border-rose-200">
+                        {storyUploadError}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Stories Preview / Edit List */}
+                  {localStories.length > 0 ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-700">আপলোডকৃত গল্পের তালিকা ({localStories.length}):</span>
+                        <button
+                          type="button"
+                          onClick={() => setLocalStories([])}
+                          className="text-[11px] font-bold text-rose-600 hover:text-rose-700 transition cursor-pointer"
+                        >
+                          সব গল্প মুছে ফেলুন
+                        </button>
+                      </div>
+
+                      <div className="space-y-3 max-h-96 overflow-y-auto pr-1 scrollbar-thin">
+                        {localStories.map((story, sIdx) => (
+                          <div key={story.id || sIdx} className="bg-white p-4 rounded-2xl border border-slate-200 space-y-2 shadow-2xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <span className="text-[10px] font-mono font-black px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded border border-indigo-150">
+                                  #{sIdx + 1}
+                                </span>
+                                <input
+                                  type="text"
+                                  value={story.title}
+                                  onChange={(e) => {
+                                    const updated = [...localStories];
+                                    updated[sIdx].title = e.target.value;
+                                    setLocalStories(updated);
+                                  }}
+                                  placeholder="গল্পের টাইটেল..."
+                                  className="text-xs font-bold text-slate-900 border border-slate-200 rounded-lg px-2.5 py-1 w-full focus:border-indigo-500 outline-none"
+                                />
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLocalStories(prev => prev.filter((_, i) => i !== sIdx));
+                                }}
+                                className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                title="Delete Story"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+
+                            <textarea
+                              rows={3}
+                              value={story.content}
+                              onChange={(e) => {
+                                const updated = [...localStories];
+                                updated[sIdx].content = e.target.value;
+                                setLocalStories(updated);
+                              }}
+                              className="w-full text-xs text-slate-700 border border-slate-200 rounded-xl p-2.5 focus:border-indigo-500 outline-none resize-y font-normal"
+                              placeholder="গল্পের কন্টেন্ট..."
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-4 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                      এখনও কোনো গল্প আপলোড করা হয়নি।
+                    </div>
+                  )}
                 </div>
               </div>
             )}

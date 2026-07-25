@@ -101,7 +101,7 @@ export default function App() {
 
   const getPrimaryTab = (tab: string): string => {
     if (['practice', 'synonym', 'quiz', 'match'].includes(tab)) return 'practice';
-    if (['study_tools', 'dictionary', 'lists', 'planner'].includes(tab)) return 'study_tools';
+    if (['study_tools', 'dictionary', 'lists', 'planner', 'story'].includes(tab)) return 'study_tools';
     return tab;
   };
 
@@ -1593,9 +1593,9 @@ export default function App() {
 
         <button
           onClick={() => setActiveTab('study_tools')}
-          data-active={['study_tools', 'dictionary', 'lists', 'planner'].includes(activeTab)}
+          data-active={['study_tools', 'dictionary', 'lists', 'planner', 'story'].includes(activeTab)}
           className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 p-2 md:px-4 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 text-xs font-bold ${
-            ['study_tools', 'dictionary', 'lists', 'planner'].includes(activeTab)
+            ['study_tools', 'dictionary', 'lists', 'planner', 'story'].includes(activeTab)
               ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/15'
               : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
           }`}
@@ -1753,12 +1753,15 @@ export default function App() {
             />
           )}
 
-          {['study_tools', 'dictionary', 'lists', 'planner'].includes(activeTab) && (
+          {['study_tools', 'dictionary', 'lists', 'planner', 'story'].includes(activeTab) && (
             <StudyToolsCenter
               words={activeWords}
               progress={progress}
               folders={folders}
               settings={settings}
+              course={activeCourse}
+              stories={activeCourse?.stories || []}
+              enableStoryMode={activeCourse?.enabledGames?.story !== false}
               onRateWord={handleRateWord}
               onUpdateNotes={handleUpdateNotes}
               onToggleBookmark={handleToggleBookmark}
@@ -1768,11 +1771,12 @@ export default function App() {
               onLaunchFolderStudy={handleLaunchFolderStudy}
               goal={goal}
               setGoal={setGoal}
+              onOpenSettings={() => setActiveTab('admin')}
               onLaunchPractice={() => {
                 setSelectedGroupFromDash(null);
                 setActiveTab('flashcard');
               }}
-              initialSubTab={activeTab === 'study_tools' ? 'hub' : activeTab}
+              initialSubTab={activeTab === 'study_tools' ? 'hub' : (activeTab as any)}
             />
           )}
 

@@ -28,7 +28,7 @@ export interface CustomFolder {
   createdAt?: string;
 }
 
-export type ActiveTab = 'dashboard' | 'my_courses' | 'flashcard' | 'synonym' | 'quiz' | 'match' | 'dictionary' | 'lists' | 'planner' | 'settings' | 'admin' | 'leaderboard' | 'practice' | 'study_tools';
+export type ActiveTab = 'dashboard' | 'my_courses' | 'flashcard' | 'synonym' | 'quiz' | 'match' | 'dictionary' | 'lists' | 'planner' | 'settings' | 'admin' | 'leaderboard' | 'practice' | 'study_tools' | 'story';
 
 export interface AppSettings {
   defaultFlashcardTags: WordStatus[];
@@ -102,12 +102,20 @@ export interface StudyGoal {
   history: Record<string, number>; // date YYYY-MM-DD -> words studied count
 }
 
+export interface StoryItem {
+  id: string;
+  title: string;
+  content: string;
+  createdAt?: string;
+}
+
 export interface Course {
   id: string;
   title: string;
   description: string;
   totalGroups: number;
   words: VocabularyWord[];
+  stories?: StoryItem[];
   isDefault?: boolean;
   isRestricted?: boolean;
   allowedUsers?: string[];
