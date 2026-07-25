@@ -31,7 +31,8 @@ import {
   Gamepad2,
   GraduationCap,
   Sparkles,
-  Shuffle
+  Shuffle,
+  Save
 } from 'lucide-react';
 import { doc, setDoc, collection, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -41,7 +42,7 @@ interface CourseSettingsProps {
   course: Course;
   onClose: () => void;
   onSaveSuccess: () => void;
-  initialTab?: 'general' | 'variables' | 'access' | 'students' | 'wordlist' | 'addwords' | 'verification' | 'blank-questions' | 'ooo-questions' | 'analogy-questions' | 'practice-games';
+  initialTab?: 'general' | 'variables' | 'access' | 'students' | 'wordlist' | 'addwords' | 'verification' | 'blank-questions' | 'ooo-questions' | 'analogy-questions' | 'practice-games' | 'story-management';
   initialEditWordName?: string;
 }
 
@@ -1800,6 +1801,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     { id: 'blank-questions' as const, label: 'Blank Questions', icon: FileSpreadsheet, badge: courseBlankQuestions.length },
     { id: 'ooo-questions' as const, label: 'Odd One Out', icon: HelpCircle, badge: courseOooQuestions.length },
     { id: 'analogy-questions' as const, label: 'Word Analogy', icon: Shuffle, badge: courseAnalogyQuestions.length },
+    { id: 'story-management' as const, label: 'Read Story Management', icon: BookOpen, badge: localStories.length },
   ];
 
   return (
@@ -2112,7 +2114,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                     { key: 'blank', label: 'Blank Filling Practice', desc: 'Sentence fill-in-the-blanks practice.', icon: BookOpen },
                     { key: 'odd_one_out', label: 'Odd One Out', desc: 'Synonyms word selection challenge.', icon: HelpCircle },
                     { key: 'analogy', label: 'Word Analogy', desc: 'Word pairs analogy logic challenge.', icon: Shuffle },
-                    { key: 'story', label: 'Read Story / গল্প পড়া', desc: 'ওয়ার্ড ফাইল থেকে আপলোডকৃত গল্পের সেকশন।', icon: BookOpen }
+                    { key: 'story', label: 'Read Story Mode', desc: 'Enable or disable story-based learning module.', icon: BookOpen }
                   ].map(item => {
                     const isEnabled = enabledGames[item.key] !== false;
                     
@@ -2155,155 +2157,6 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                       </div>
                     );
                   })}
-                </div>
-
-                {/* --- STORY UPLOAD & MANAGEMENT SECTION --- */}
-                <div className="mt-8 border-t border-slate-200 pt-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-                        <BookOpen className="w-4 h-4 text-indigo-600" />
-                        <span>Read Story / গল্প আপলোড ও ম্যানেজমেন্ট</span>
-                      </h4>
-                      <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                        ওয়ার্ড ফাইল (.docx / .doc / .txt) আপলোড করুন। ফাইলটিতে একের পর এক টাইটেল ও গল্প থাকবে।
-                      </p>
-                    </div>
-
-                    <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-black rounded-lg border border-indigo-150">
-                      {localStories.length} Stories Loaded
-                    </span>
-                  </div>
-
-                  {/* Word File Upload Area */}
-                  <div className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-4">
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                      <label className="flex-1 cursor-pointer bg-white border-2 border-dashed border-indigo-200 hover:border-indigo-400 p-4 rounded-xl text-center transition group">
-                        <input
-                          type="file"
-                          accept=".docx,.doc,.txt"
-                          className="hidden"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            setStoryUploadLoading(true);
-                            setStoryUploadError(null);
-                            try {
-                              const rawText = await extractTextFromWordFile(file);
-                              const parsed = parseStoriesFromRawText(rawText, course.id);
-                              if (parsed.length === 0) {
-                                setStoryUploadError('ফাইলে কোনো গল্প বা টাইটেল খুঁজে পাওয়া যায়নি।');
-                              } else {
-                                setLocalStories(prev => [...prev, ...parsed]);
-                              }
-                            } catch (err) {
-                              console.error(err);
-                              setStoryUploadError('ওয়ার্ড ফাইলটি পড়তে সমস্যা হয়েছে। দয়া করে সঠিক .docx ফাইল চেষ্টা করুন।');
-                            } finally {
-                              setStoryUploadLoading(false);
-                            }
-                          }}
-                        />
-                        <UploadCloud className="w-6 h-6 text-indigo-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
-                        <span className="text-xs font-bold text-slate-800 block">
-                          {storyUploadLoading ? 'ওয়ার্ড ফাইল প্রসেস হচ্ছে...' : 'ওয়ার্ড ফাইল সিলেক্ট করুন (.docx / .doc / .txt)'}
-                        </span>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">
-                          ক্লিক করে ফাইল চুজ করুন বা ড্র্যাগ করে দিন
-                        </span>
-                      </label>
-                    </div>
-
-                    {/* Format Guide */}
-                    <div className="bg-white p-3 rounded-xl border border-slate-200/80 text-[11px] text-slate-600 space-y-1">
-                      <span className="font-extrabold text-slate-800 block">💡 ওয়ার্ড ফাইলের ফরম্যাট নির্দেশিকা:</span>
-                      <p className="font-mono text-[10px] text-indigo-900 bg-indigo-50 p-2 rounded border border-indigo-100 leading-relaxed whitespace-pre">
-{`Title 1 Name
-Story content paragraph 1...
-Story content paragraph 2...
-
-Title 2 Name
-Story content paragraph 1...`}
-                      </p>
-                      <p className="text-[10px] text-slate-500 italic">
-                        প্যারাগ্রাফ শুরুর আগের টাইটেল লাইনগুলো স্বয়ংক্রিয়ভাবে শনাক্ত করে গল্পগুলোকে আলাদা করে দেয়া হবে।
-                      </p>
-                    </div>
-
-                    {storyUploadError && (
-                      <p className="text-xs font-bold text-rose-600 bg-rose-50 p-2.5 rounded-lg border border-rose-200">
-                        {storyUploadError}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Stories Preview / Edit List */}
-                  {localStories.length > 0 ? (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-700">আপলোডকৃত গল্পের তালিকা ({localStories.length}):</span>
-                        <button
-                          type="button"
-                          onClick={() => setLocalStories([])}
-                          className="text-[11px] font-bold text-rose-600 hover:text-rose-700 transition cursor-pointer"
-                        >
-                          সব গল্প মুছে ফেলুন
-                        </button>
-                      </div>
-
-                      <div className="space-y-3 max-h-96 overflow-y-auto pr-1 scrollbar-thin">
-                        {localStories.map((story, sIdx) => (
-                          <div key={story.id || sIdx} className="bg-white p-4 rounded-2xl border border-slate-200 space-y-2 shadow-2xs">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <span className="text-[10px] font-mono font-black px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded border border-indigo-150">
-                                  #{sIdx + 1}
-                                </span>
-                                <input
-                                  type="text"
-                                  value={story.title}
-                                  onChange={(e) => {
-                                    const updated = [...localStories];
-                                    updated[sIdx].title = e.target.value;
-                                    setLocalStories(updated);
-                                  }}
-                                  placeholder="গল্পের টাইটেল..."
-                                  className="text-xs font-bold text-slate-900 border border-slate-200 rounded-lg px-2.5 py-1 w-full focus:border-indigo-500 outline-none"
-                                />
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setLocalStories(prev => prev.filter((_, i) => i !== sIdx));
-                                }}
-                                className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                                title="Delete Story"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-
-                            <textarea
-                              rows={3}
-                              value={story.content}
-                              onChange={(e) => {
-                                const updated = [...localStories];
-                                updated[sIdx].content = e.target.value;
-                                setLocalStories(updated);
-                              }}
-                              className="w-full text-xs text-slate-700 border border-slate-200 rounded-xl p-2.5 focus:border-indigo-500 outline-none resize-y font-normal"
-                              placeholder="গল্পের কন্টেন্ট..."
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-4 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                      এখনও কোনো গল্প আপলোড করা হয়নি।
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -4149,6 +4002,184 @@ Story content paragraph 1...`}
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* --- SECTION: READ STORY MANAGEMENT --- */}
+            {activeTab === 'story-management' && (
+              <div className="space-y-6 overflow-y-auto max-h-[60vh] pr-2 animate-fadeIn">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-3 mb-2">
+                  <div>
+                    <h4 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                      <BookOpen className="w-4.5 h-4.5 text-indigo-600" />
+                      <span>Read Story Management</span>
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-1 font-medium">
+                      Upload stories via Word document (.docx, .doc, .txt) or manage existing stories for this course.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isSaving}
+                    onClick={handleSave}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm cursor-pointer shrink-0 disabled:opacity-50"
+                  >
+                    {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    <span>Save Stories to Cloud</span>
+                  </button>
+                </div>
+
+                {/* Upload Card */}
+                <div className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-4">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <label className="flex-1 cursor-pointer bg-white border-2 border-dashed border-indigo-200 hover:border-indigo-400 p-5 rounded-xl text-center transition group">
+                      <input
+                        type="file"
+                        accept=".docx,.doc,.txt"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setStoryUploadLoading(true);
+                          setStoryUploadError(null);
+                          try {
+                            const rawText = await extractTextFromWordFile(file);
+                            const parsed = parseStoriesFromRawText(rawText, course.id);
+                            if (parsed.length === 0) {
+                              setStoryUploadError('No valid story titles or paragraphs were detected in the file.');
+                            } else {
+                              setLocalStories(prev => [...prev, ...parsed]);
+                            }
+                          } catch (err) {
+                            console.error(err);
+                            setStoryUploadError('Could not process document file. Please ensure it is a valid .docx or .txt file.');
+                          } finally {
+                            setStoryUploadLoading(false);
+                          }
+                        }}
+                      />
+                      <UploadCloud className="w-7 h-7 text-indigo-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
+                      <span className="text-xs font-bold text-slate-800 block">
+                        {storyUploadLoading ? 'Extracting stories from document...' : 'Upload Word Document (.docx / .doc / .txt)'}
+                      </span>
+                      <span className="text-[10px] text-slate-400 block mt-0.5">
+                        Select or drag and drop your document file here
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Format Guide */}
+                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 text-xs text-slate-600 space-y-1.5">
+                    <span className="font-extrabold text-slate-800 block">💡 Document Format Guide:</span>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Your document can contain multiple stories. Each title will be automatically extracted and matched with its story content:
+                    </p>
+                    <pre className="text-[11px] font-mono text-indigo-900 bg-indigo-50/80 p-2.5 rounded-lg border border-indigo-100 leading-relaxed whitespace-pre font-medium">
+{`Story Title 1
+First paragraph of story 1...
+
+Story Title 2
+First paragraph of story 2...`}
+                    </pre>
+                  </div>
+
+                  {storyUploadError && (
+                    <p className="text-xs font-bold text-rose-600 bg-rose-50 p-2.5 rounded-lg border border-rose-200">
+                      {storyUploadError}
+                    </p>
+                  )}
+                </div>
+
+                {/* Uploaded Stories List - Displayed one after another separately */}
+                <div className="space-y-4 pt-2">
+                  <div className="flex items-center justify-between">
+                    <h5 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
+                      Uploaded Stories List ({localStories.length})
+                    </h5>
+                    {localStories.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setLocalStories([])}
+                        className="text-xs font-bold text-rose-600 hover:text-rose-700 transition cursor-pointer"
+                      >
+                        Remove All Stories
+                      </button>
+                    )}
+                  </div>
+
+                  {localStories.length > 0 ? (
+                    <div className="space-y-4">
+                      {localStories.map((story, sIdx) => (
+                        <div key={story.id || sIdx} className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3 shadow-2xs">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 flex-1">
+                              <span className="text-xs font-mono font-black px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg border border-indigo-150 shrink-0">
+                                Story #{sIdx + 1}
+                              </span>
+                              <input
+                                type="text"
+                                value={story.title}
+                                onChange={(e) => {
+                                  const updated = [...localStories];
+                                  updated[sIdx].title = e.target.value;
+                                  setLocalStories(updated);
+                                }}
+                                placeholder="Story Title..."
+                                className="text-xs font-extrabold text-slate-900 border border-slate-200 rounded-xl px-3 py-1.5 w-full focus:border-indigo-500 outline-none"
+                              />
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setLocalStories(prev => prev.filter((_, i) => i !== sIdx));
+                              }}
+                              className="p-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition cursor-pointer shrink-0"
+                              title="Delete Story"
+                            >
+                              <Trash2 className="w-4.5 h-4.5" />
+                            </button>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">
+                              Story Content
+                            </label>
+                            <textarea
+                              rows={4}
+                              value={story.content}
+                              onChange={(e) => {
+                                const updated = [...localStories];
+                                updated[sIdx].content = e.target.value;
+                                setLocalStories(updated);
+                              }}
+                              className="w-full text-xs text-slate-700 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none resize-y font-normal leading-relaxed"
+                              placeholder="Enter or edit story content..."
+                            />
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Save to Cloud Button at bottom of story list */}
+                      <div className="pt-2 flex justify-end">
+                        <button
+                          type="button"
+                          disabled={isSaving}
+                          onClick={handleSave}
+                          className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 transition shadow-md cursor-pointer disabled:opacity-50"
+                        >
+                          {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                          <span>Save Stories to Cloud</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center text-xs text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 font-medium">
+                      No stories uploaded yet. Use the document uploader above to add stories.
                     </div>
                   )}
                 </div>

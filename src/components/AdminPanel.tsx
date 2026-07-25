@@ -1775,10 +1775,15 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                           {c.id}
                         </td>
 
-                        {/* Column 2: Title & Description */}
-                        <td className="py-2.5 px-3 border-r border-slate-200">
-                          <div className="font-bold text-slate-900 leading-tight">
-                            {c.title} {isDefault && <span className="text-[10px] font-mono font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded ml-1 border border-indigo-200">Default</span>}
+                        {/* Column 2: Title & Description (Clickable) */}
+                        <td 
+                          className="py-2.5 px-3 border-r border-slate-200 cursor-pointer hover:bg-indigo-50/50 transition group"
+                          onClick={() => setEditingCourse(c)}
+                          title="Click to open course settings"
+                        >
+                          <div className="font-extrabold text-indigo-900 group-hover:text-indigo-600 group-hover:underline leading-tight flex items-center gap-1">
+                            <span>{c.title}</span>
+                            {isDefault && <span className="text-[10px] font-mono font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded ml-1 border border-indigo-200 no-underline">Default</span>}
                           </div>
                           {c.description && (
                             <div className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-normal">
