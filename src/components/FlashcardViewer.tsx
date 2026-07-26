@@ -693,28 +693,13 @@ export default function FlashcardViewer({
           <div className="absolute -left-10 -top-10 w-36 h-36 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
           <div className="absolute -right-10 -bottom-10 w-36 h-36 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
 
-          {/* Left Side: Flashcard Practice Button with Image-matching Stacked Cards Icon */}
+          {/* Left Side: Flashcard Practice Title */}
           <button
             type="button"
             onClick={() => setIsSessionActive(true)}
             disabled={filteredWords.length === 0}
             className="flex items-center gap-3.5 text-left transition cursor-pointer hover:opacity-90 disabled:opacity-50 shrink-0"
           >
-            {/* Custom Stacked Cards Icon matching uploaded image */}
-            <div className="relative w-11 h-13 sm:w-12 sm:h-14 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-300">
-              {/* Card 1 (Back) */}
-              <div className="absolute inset-0 bg-indigo-400/40 border border-indigo-300/40 rounded-lg shadow-2xs transform -rotate-20 -translate-x-2" />
-              {/* Card 2 (Middle) */}
-              <div className="absolute inset-0 bg-indigo-300/60 border border-indigo-200/50 rounded-lg shadow-2xs transform -rotate-10 -translate-x-1" />
-              {/* Card 3 (Front) */}
-              <div className="relative w-full h-full bg-white rounded-lg shadow-md p-1.5 flex flex-col justify-center gap-1 border border-indigo-100">
-                <div className="w-[65%] h-1 bg-indigo-500 rounded-full" />
-                <div className="w-[40%] h-1 bg-indigo-300 rounded-full" />
-                <div className="w-[85%] h-1 bg-indigo-500 rounded-full" />
-                <div className="w-[50%] h-1 bg-indigo-300 rounded-full" />
-              </div>
-            </div>
-
             <div>
               <h1 className="text-base sm:text-lg font-black tracking-tight font-sans text-white flex items-center gap-2">
                 Flashcard Practice
@@ -744,23 +729,6 @@ export default function FlashcardViewer({
                 <div className="w-[50%] h-1.5 bg-indigo-300 rounded-full" />
               </div>
             </div>
-          </div>
-
-          {/* Right Side: STREAK Button replacing "Start Now" */}
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => setIsSessionActive(true)}
-              className="px-4 py-2.5 sm:px-5 sm:py-2.5 bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-slate-950 font-black rounded-xl text-xs sm:text-sm flex items-center gap-2 transition shadow-md border border-amber-300/60 cursor-pointer"
-            >
-              <div className="p-1 bg-slate-950/20 rounded-lg text-slate-950 animate-pulse">
-                <Flame className="w-4 h-4 fill-current text-slate-950" />
-              </div>
-              <div className="flex flex-col text-left leading-none">
-                <span className="text-[9px] font-black uppercase tracking-wider text-slate-900/80">STREAK</span>
-                <span className="text-xs sm:text-sm font-extrabold text-slate-950">{effectiveStreak} Days</span>
-              </div>
-            </button>
           </div>
         </div>
 

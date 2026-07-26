@@ -1660,7 +1660,7 @@ export default function App() {
           {['profile', 'dashboard', 'my_courses', 'flashcard'].includes(activeTab) && (
             <div className="space-y-6">
               {/* My Profile Sub-Navigation Pills */}
-              <div className="bg-white p-1.5 sm:p-2 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-center gap-1 sm:gap-2 max-w-xl mx-auto">
+              <div className="bg-white p-1.5 sm:p-2 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-center gap-1 sm:gap-2 max-w-md mx-auto">
                 <button
                   type="button"
                   onClick={() => {
@@ -1675,23 +1675,6 @@ export default function App() {
                 >
                   <CreditCard className="w-4 h-4" />
                   <span>Flashcard</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedGroupFromDash(null);
-                    setActiveTab('profile');
-                    setProfileSubTab('dashboard');
-                  }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl font-extrabold text-xs transition cursor-pointer ${
-                    profileSubTab === 'dashboard'
-                      ? 'bg-indigo-600 text-white shadow-xs shadow-indigo-500/20'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                  }`}
-                >
-                  <LayoutDashboard className="w-4 h-4" />
-                  <span>Dashboard</span>
                 </button>
 
                 <button
