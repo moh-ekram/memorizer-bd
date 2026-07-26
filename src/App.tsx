@@ -1060,21 +1060,6 @@ export default function App() {
     });
   }, []);
 
-  // Keep users active in at least one enrolled course by default so it does not remain empty
-  useEffect(() => {
-    if (enrolledCourseIds && enrolledCourseIds.length > 0) {
-      const isCurrentlyEnrolled = enrolledCourseIds.some(
-        id => id.trim().toLowerCase() === activeCourseId?.trim().toLowerCase()
-      );
-      if (!activeCourseId || !isCurrentlyEnrolled) {
-        setActiveCourseId(enrolledCourseIds[0]);
-      }
-    } else {
-      setEnrolledCourseIds(['gre']);
-      setActiveCourseId('gre');
-    }
-  }, [enrolledCourseIds, activeCourseId]);
-
   // helper function to format current date string
   function getTodayString() {
     const d = new Date();
@@ -1126,6 +1111,21 @@ export default function App() {
   // Sort courses according to custom order set by admin
   allCourses.sort((a, b) => (a.order !== undefined ? a.order : 999) - (b.order !== undefined ? b.order : 999));
   const allAvailableCourses: Course[] = allCourses;
+
+  // Keep users active in a valid accessible course by default so it does not remain empty
+  useEffect(() => {
+    if (!allCourses || allCourses.length === 0) return;
+    const normActiveId = activeCourseId?.trim().toLowerCase();
+    const selectedCourse = allCourses.find(c => c.id.trim().toLowerCase() === normActiveId);
+    const isAccessible = selectedCourse && isCourseAccessible(selectedCourse, enrolledCourseIds, user?.email);
+
+    if (!activeCourseId || !selectedCourse || !isAccessible) {
+      const fallbackId = enrolledCourseIds[0] || 'gre';
+      if (fallbackId !== activeCourseId) {
+        setActiveCourseId(fallbackId);
+      }
+    }
+  }, [enrolledCourseIds, activeCourseId, allCourses, user?.email]);
 
   const handleImportCourse = (course: Course) => {
     setImportedCourses(prev => {

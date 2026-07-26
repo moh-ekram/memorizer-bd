@@ -74,6 +74,7 @@ export default function MyCoursesView({
 
   // Mobile Course Card Expansion State
   const [expandedCourseIds, setExpandedCourseIds] = useState<Record<string, boolean>>({});
+  const [activeCourseToast, setActiveCourseToast] = useState<string | null>(null);
 
   const toggleCourseExpand = (courseId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -789,51 +790,77 @@ export default function MyCoursesView({
         layout
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className={`group relative rounded-none transition-all duration-300 flex flex-col justify-between bg-white overflow-hidden ${
+        onClick={() => {
+          if (isUserAllowed) {
+            setActiveCourseId(course.id);
+            setActiveCourseToast(`Activated "${course.title}" course!`);
+            setTimeout(() => setActiveCourseToast(null), 2500);
+          }
+        }}
+        className={`group relative transition-all duration-300 flex flex-col justify-between overflow-hidden ${
+          isUserAllowed ? 'cursor-pointer' : ''
+        } ${
           isActive 
-            ? 'border-0 border-b-4 border-b-emerald-600 shadow-md' 
+            ? 'bg-gradient-to-br from-emerald-600/95 via-emerald-700/95 to-teal-800/95 backdrop-blur-md text-white border-2 border-emerald-400/60 shadow-xl shadow-emerald-950/20 ring-4 ring-emerald-500/20 rounded-2xl p-4 sm:p-5' 
             : isUserAllowed
-            ? 'border-0 border-b-4 border-b-indigo-600 shadow-sm hover:shadow-md'
-            : 'border-0 border-b-4 border-b-slate-400 shadow-sm hover:shadow-md'
+            ? 'bg-white text-slate-900 border-0 border-b-4 border-b-indigo-600 shadow-sm hover:shadow-md rounded-xl'
+            : 'bg-white text-slate-900 border-0 border-b-4 border-b-slate-400 shadow-sm hover:shadow-md rounded-xl'
         }`}
         style={{ fontFamily: "'Poppins', sans-serif" }}
       >
         {/* Top Active Course Banner */}
         {isActive && (
-          <div className="bg-emerald-600 text-white text-[9px] font-bold uppercase tracking-wider py-0.5 px-2.5 text-center flex items-center justify-center gap-1 shadow-2xs font-poppins">
-            <Check className="w-2.5 h-2.5 stroke-[3]" />
+          <div className="bg-white/20 backdrop-blur-md text-white text-[9.5px] font-black uppercase tracking-wider py-1 px-3 rounded-full text-center flex items-center justify-center gap-1.5 shadow-xs border border-white/30 font-poppins mb-3 w-fit">
+            <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping" />
+            <Check className="w-3 h-3 stroke-[3] text-emerald-200" />
             <span>Active Course</span>
+          </div>
+        )}
+        {!isActive && isUserAllowed && (
+          <div className="bg-indigo-600 text-white text-[9px] font-bold uppercase tracking-wider py-0.5 px-2.5 text-center flex items-center justify-center gap-1 shadow-2xs font-poppins">
+            <BookOpen className="w-2.5 h-2.5" />
+            <span>Enrolled Course</span>
           </div>
         )}
 
         {/* Card Body */}
-        <div className="p-2.5 sm:p-3 flex-1 flex flex-col justify-between space-y-2">
+        <div className={isActive ? "flex-1 flex flex-col justify-between space-y-3" : "p-2.5 sm:p-3 flex-1 flex flex-col justify-between space-y-2"}>
           <div>
             {/* Header: Title & Clean Word Count */}
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight leading-tight line-clamp-1 font-poppins">
+                <h3 className={`text-xs sm:text-sm font-extrabold tracking-tight leading-tight line-clamp-1 font-poppins ${
+                  isActive ? 'text-white' : 'text-slate-900'
+                }`}>
                   {course.title}
                 </h3>
-                <p className="text-[9px] text-slate-400 font-medium mt-0.5">
+                <p className={`text-[9px] font-medium mt-0.5 ${
+                  isActive ? 'text-emerald-100/90' : 'text-slate-400'
+                }`}>
                   #{course.id} • Lifetime
                 </p>
               </div>
 
               {/* Word Count Display (14px font size, no star, W suffix) */}
               <div className="shrink-0 pt-0.5">
-                <span className="text-xs sm:text-sm font-extrabold text-slate-800 font-poppins tracking-tight">
+                <span className={`text-xs sm:text-sm font-extrabold font-poppins tracking-tight ${
+                  isActive ? 'text-emerald-100 bg-white/10 px-2 py-0.5 rounded-lg border border-white/20' : 'text-slate-800'
+                }`}>
                   {wordsCount} W
                 </span>
               </div>
             </div>
 
             {/* Mobile Expand / Collapse Toggle Header */}
-            <div className="block sm:hidden mt-1.5 pt-1.5 border-t border-slate-100">
+            <div className={`block sm:hidden mt-1.5 pt-1.5 border-t ${
+              isActive ? 'border-emerald-500/40' : 'border-slate-100'
+            }`}>
               <button
                 type="button"
                 onClick={(e) => toggleCourseExpand(course.id, e)}
-                className="w-full text-left flex items-center justify-between text-[10px] font-semibold text-indigo-600 py-0.5"
+                className={`w-full text-left flex items-center justify-between text-[10px] font-semibold py-0.5 ${
+                  isActive ? 'text-emerald-200' : 'text-indigo-600'
+                }`}
               >
                 <span>{isExpanded ? 'Hide Details' : 'Includes'}</span>
                 {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
@@ -842,38 +869,58 @@ export default function MyCoursesView({
 
             {/* Includes Section (Desktop or Mobile Expanded) */}
             <div className={`mt-2 ${isExpanded ? 'block' : 'hidden sm:block'}`}>
-              <div className="border-t border-slate-100 pt-1.5">
-                <p className="text-[9px] font-bold text-slate-900 tracking-wider uppercase mb-1 font-poppins">
+              <div className={`border-t pt-1.5 ${
+                isActive ? 'border-emerald-500/40' : 'border-slate-100'
+              }`}>
+                <p className={`text-[9px] font-bold tracking-wider uppercase mb-1 font-poppins ${
+                  isActive ? 'text-emerald-100' : 'text-slate-900'
+                }`}>
                   Includes
                 </p>
                 <ul className="space-y-0.5 text-[7.5px] sm:text-[8px]">
-                  <li className="flex items-center gap-1 text-slate-600 font-medium">
-                    <div className="w-3 h-3 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[6px] shrink-0">
+                  <li className={`flex items-center gap-1 font-medium ${
+                    isActive ? 'text-emerald-50' : 'text-slate-600'
+                  }`}>
+                    <div className={`w-3 h-3 rounded-full flex items-center justify-center font-bold text-[6px] shrink-0 ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'
+                    }`}>
                       ✓
                     </div>
-                    <span><strong className="text-slate-900">{wordsCount} W</strong> (Vocabulary Words)</span>
+                    <span><strong className={isActive ? 'text-white' : 'text-slate-900'}>{wordsCount} W</strong> (Vocabulary Words)</span>
                   </li>
                   {enabledPracticeList.length > 0 && (
-                    <li className="flex items-start gap-1 text-slate-600 font-medium">
-                      <div className="w-3 h-3 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[6px] shrink-0 mt-0.5">
+                    <li className={`flex items-start gap-1 font-medium ${
+                      isActive ? 'text-emerald-50' : 'text-slate-600'
+                    }`}>
+                      <div className={`w-3 h-3 rounded-full flex items-center justify-center font-bold text-[6px] shrink-0 mt-0.5 ${
+                        isActive ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'
+                      }`}>
                         ✓
                       </div>
-                      <span className="line-clamp-1"><strong>Practice:</strong> {enabledPracticeList.join(', ')}</span>
+                      <span className="line-clamp-1"><strong className={isActive ? 'text-white' : ''}>Practice:</strong> {enabledPracticeList.join(', ')}</span>
                     </li>
                   )}
                   {enabledStudyList.length > 0 && (
-                    <li className="flex items-start gap-1 text-slate-600 font-medium">
-                      <div className="w-3 h-3 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[6px] shrink-0 mt-0.5">
+                    <li className={`flex items-start gap-1 font-medium ${
+                      isActive ? 'text-emerald-50' : 'text-slate-600'
+                    }`}>
+                      <div className={`w-3 h-3 rounded-full flex items-center justify-center font-bold text-[6px] shrink-0 mt-0.5 ${
+                        isActive ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'
+                      }`}>
                         ✓
                       </div>
-                      <span className="line-clamp-1"><strong>Study Tools:</strong> {enabledStudyList.join(', ')}</span>
+                      <span className="line-clamp-1"><strong className={isActive ? 'text-white' : ''}>Study Tools:</strong> {enabledStudyList.join(', ')}</span>
                     </li>
                   )}
-                  <li className="flex items-center gap-1 text-slate-600 font-medium">
-                    <div className="w-3 h-3 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[6px] shrink-0">
+                  <li className={`flex items-center gap-1 font-medium ${
+                    isActive ? 'text-emerald-50' : 'text-slate-600'
+                  }`}>
+                    <div className={`w-3 h-3 rounded-full flex items-center justify-center font-bold text-[6px] shrink-0 ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'
+                    }`}>
                       ✓
                     </div>
-                    <span>Mastered: <strong className="text-slate-900">{masteredCount}/{wordsCount}</strong> ({progressPercent}%)</span>
+                    <span>Mastered: <strong className={isActive ? 'text-white' : 'text-slate-900'}>{masteredCount}/{wordsCount}</strong> ({progressPercent}%)</span>
                   </li>
                 </ul>
               </div>
@@ -881,13 +928,19 @@ export default function MyCoursesView({
           </div>
 
           {/* Price & Action Options */}
-          <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1.5">
+          <div className={`pt-2 border-t flex items-center justify-between gap-1.5 ${
+            isActive ? 'border-emerald-500/40' : 'border-slate-100'
+          }`}>
             <div>
               <div className="flex items-baseline gap-0.5">
-                <span className="text-sm sm:text-base font-extrabold text-slate-900 font-poppins tracking-tight">
+                <span className={`text-sm sm:text-base font-extrabold font-poppins tracking-tight ${
+                  isActive ? 'text-white' : 'text-slate-900'
+                }`}>
                   ৳{(course.price && course.price > 0) ? course.price : 30}
                 </span>
-                <span className="text-[9px] text-slate-400 font-bold uppercase">BDT</span>
+                <span className={`text-[9px] font-bold uppercase ${
+                  isActive ? 'text-emerald-200' : 'text-slate-400'
+                }`}>BDT</span>
               </div>
             </div>
 
@@ -906,7 +959,11 @@ export default function MyCoursesView({
                       }
                     }
                   }}
-                  className="px-1.5 py-1 rounded-md text-[9px] font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer flex items-center gap-1"
+                  className={`px-1.5 py-1 rounded-md text-[9px] font-semibold transition cursor-pointer flex items-center gap-1 ${
+                    isActive
+                      ? 'bg-rose-950/40 hover:bg-rose-900/60 text-rose-200 border border-rose-400/40'
+                      : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'
+                  }`}
                   title="Cancel Enrollment"
                 >
                   <Trash2 className="w-2.5 h-2.5" />
@@ -965,51 +1022,105 @@ export default function MyCoursesView({
         </div>
 
         {/* Bottom Main Action Button */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (!isUserAllowed) {
-              setIsCartCheckoutMode(false);
-              setSelectedBuyCourse(course);
-              return;
-            }
-            setActiveCourseId(course.id);
-            if (onSelectTab) {
-              onSelectTab('flashcard');
-            }
-          }}
-          className={`w-full py-2.5 px-4 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition cursor-pointer font-poppins ${
-            isActive
-              ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
-              : isUserAllowed
-              ? 'bg-slate-900 hover:bg-slate-800 text-white'
-              : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-          }`}
-        >
+        <div className={isActive ? "w-full flex items-center mt-3" : "w-full flex items-center"}>
           {isActive ? (
-            <>
-              <span>Active Course</span>
-              <Check className="w-3.5 h-3.5 stroke-[3]" />
-            </>
+            <div className="w-full flex items-center divide-x divide-white/20 bg-emerald-950/40 rounded-xl overflow-hidden border border-white/20">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveCourseId(course.id);
+                  setActiveCourseToast(`"${course.title}" is currently active.`);
+                  setTimeout(() => setActiveCourseToast(null), 2500);
+                }}
+                className="flex-1 py-2.5 px-3 font-extrabold text-xs text-white flex items-center justify-center gap-1.5 transition hover:bg-white/10 cursor-pointer font-poppins"
+              >
+                <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-300" />
+                <span>Active Course</span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveCourseId(course.id);
+                  if (onSelectTab) {
+                    onSelectTab('flashcard');
+                  }
+                }}
+                className="py-2.5 px-3 font-black text-xs bg-white text-emerald-900 hover:bg-emerald-50 flex items-center justify-center gap-1 transition cursor-pointer font-poppins shrink-0"
+                title="Open Flashcards"
+              >
+                <span>Study</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           ) : isUserAllowed ? (
-            <>
-              <span>Select Course</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </>
+            <div className="w-full flex items-center divide-x divide-indigo-700 bg-indigo-600">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveCourseId(course.id);
+                  setActiveCourseToast(`Activated "${course.title}" course!`);
+                  setTimeout(() => setActiveCourseToast(null), 2500);
+                }}
+                className="flex-1 py-2.5 px-3 font-extrabold text-xs text-white flex items-center justify-center gap-1.5 transition hover:bg-indigo-700 cursor-pointer font-poppins"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Set Active (এক্টিভ করুন)</span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveCourseId(course.id);
+                  if (onSelectTab) {
+                    onSelectTab('flashcard');
+                  }
+                }}
+                className="py-2.5 px-3 font-bold text-xs bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center gap-1 transition cursor-pointer font-poppins shrink-0"
+                title="Study Flashcards"
+              >
+                <span>Study</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           ) : (
-            <>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsCartCheckoutMode(false);
+                setSelectedBuyCourse(course);
+              }}
+              className="w-full py-2.5 px-4 font-bold text-xs sm:text-sm bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white flex items-center justify-center gap-1.5 transition cursor-pointer font-poppins"
+            >
               <span>Unlock Course (৳{(course.price && course.price > 0) ? course.price : 30})</span>
               <ArrowRight className="w-3.5 h-3.5" />
-            </>
+            </button>
           )}
-        </button>
+        </div>
       </motion.div>
     );
   };
 
   return (
     <div className="space-y-5" id="my-courses-view-root" style={{ fontFamily: "'Poppins', sans-serif" }}>
+      {/* Active Course Feedback Toast */}
+      <AnimatePresence>
+        {activeCourseToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-900 text-white px-4 py-2 rounded-full shadow-2xl border border-emerald-400/50 flex items-center gap-2 text-xs font-bold font-poppins"
+          >
+            <CheckCircle className="w-4 h-4 text-emerald-400" />
+            <span>{activeCourseToast}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 1. Merged Course Directory Header & Wallet Balance Banner */}
       <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 rounded-xl p-3 sm:p-4 text-white relative overflow-hidden shadow-sm border border-indigo-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-poppins">
         <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
@@ -1053,6 +1164,57 @@ export default function MyCoursesView({
             <PlusCircle className="w-3 h-3" />
             <span>Recharge Wallet</span>
           </button>
+        </div>
+      </div>
+
+      {/* 1.5 Current Active Course Quick Switcher Bar */}
+      <div className="bg-emerald-50/90 border border-emerald-200 rounded-2xl p-3 sm:p-3.5 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-2xs">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
+            <CheckCircle className="w-5 h-5 stroke-[2.5]" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800">Current Active Course</span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full bg-emerald-200/80 text-emerald-900 text-[9px] font-extrabold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-ping" />
+                Active Now
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm font-black text-slate-900 font-poppins mt-0.5">
+              {allCourses.find(c => c.id === activeCourseId)?.title || activeCourseId.toUpperCase()}
+              <span className="ml-2 text-[10px] text-slate-500 font-normal">
+                ({allCourses.find(c => c.id === activeCourseId)?.words?.length || 0} Words)
+              </span>
+            </p>
+          </div>
+        </div>
+
+        {/* Enrolled Courses Switcher Buttons */}
+        <div className="flex items-center gap-1.5 flex-wrap w-full md:w-auto">
+          <span className="text-[10px] font-bold text-slate-500 mr-1 hidden sm:inline">Select Course:</span>
+          {sortedEnrolledCourses.map(c => {
+            const isCurrActive = c.id === activeCourseId;
+            return (
+              <button
+                key={`switcher-${c.id}`}
+                type="button"
+                onClick={() => {
+                  setActiveCourseId(c.id);
+                  setActiveCourseToast(`Activated "${c.title}" course!`);
+                  setTimeout(() => setActiveCourseToast(null), 2500);
+                }}
+                className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  isCurrActive
+                    ? 'bg-emerald-600 text-white shadow-xs border border-emerald-500'
+                    : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs'
+                }`}
+              >
+                {isCurrActive && <Check className="w-3 h-3 stroke-[3]" />}
+                <span>{c.title}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

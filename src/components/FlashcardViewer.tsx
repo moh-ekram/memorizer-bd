@@ -152,6 +152,37 @@ export default function FlashcardViewer({
     }
   }, [initialGroup]);
 
+  // Track previous course signature to reset filter states on course switch
+  const courseSignature = `${courseTitle || ''}_${words.length}_${words[0]?.id || ''}`;
+  const prevCourseSig = useRef(courseSignature);
+
+  useEffect(() => {
+    if (prevCourseSig.current !== courseSignature) {
+      prevCourseSig.current = courseSignature;
+      const grps = new Set<string | number>();
+      activeWordsList.forEach(w => {
+        if (w.group !== undefined && w.group !== null) {
+          grps.add(w.group);
+        }
+      });
+      const sortedGrps = Array.from(grps).sort((a, b) => {
+        if (typeof a === 'number' && typeof b === 'number') return a - b;
+        return String(a).localeCompare(String(b), 'bn');
+      });
+
+      if (initialGroup && sortedGrps.includes(initialGroup)) {
+        setSelectedGroups([initialGroup]);
+        setIsSessionActive(true);
+      } else {
+        setSelectedGroups(sortedGrps);
+        setIsSessionActive(Boolean(initialGroup));
+      }
+      setUserHasManuallyChangedStatuses(false);
+      setCurrentIndex(0);
+      setIsFlipped(false);
+    }
+  }, [courseSignature, activeWordsList, initialGroup, courseTitle, words]);
+
   const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false);
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
   const [isFilterExpanded, setIsFilterExpanded] = useState(false);
@@ -702,10 +733,10 @@ export default function FlashcardViewer({
           >
             <div>
               <h1 className="text-base sm:text-lg font-black tracking-tight font-sans text-white flex items-center gap-2">
-                Flashcard Practice
+                <span>{courseTitle || 'Flashcard Practice'}</span>
               </h1>
               <p className="text-xs text-indigo-200 font-medium">
-                {filteredWords.length} words selected in current deck
+                Flashcard Practice • {filteredWords.length} words selected in current deck
               </p>
             </div>
           </button>
