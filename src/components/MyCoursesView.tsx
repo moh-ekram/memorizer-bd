@@ -766,16 +766,35 @@ export default function MyCoursesView({
 
     const isExpanded = !!expandedCourseIds[course.id];
 
+    // Enabled Practice & Study Tools Lists for Includes
+    const enabledPracticeList = [
+      { key: 'quiz', label: 'MCQ Quiz', enabled: course.enabledGames?.quiz !== false },
+      { key: 'match', label: 'Word Match', enabled: course.enabledGames?.match !== false },
+      { key: 'synonym', label: 'Synonym Check', enabled: course.enabledGames?.synonym !== false },
+      { key: 'blank', label: 'Blank Filling', enabled: course.enabledGames?.blank !== false },
+      { key: 'odd_one_out', label: 'Odd One Out', enabled: course.enabledGames?.odd_one_out !== false },
+      { key: 'analogy', label: 'Word Analogy', enabled: course.enabledGames?.analogy !== false },
+    ].filter(i => i.enabled).map(i => i.label);
+
+    const enabledStudyList = [
+      { key: 'lists', label: 'Bookmark & Lists', enabled: true },
+      { key: 'dictionary', label: 'Dictionary', enabled: true },
+      { key: 'planner', label: 'Daily Planner', enabled: true },
+      { key: 'story', label: 'Read Story', enabled: course.enabledGames?.story !== false },
+    ].filter(i => i.enabled).map(i => i.label);
+
     return (
       <motion.div
         key={course.id}
         layout
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className={`group relative rounded-2xl transition-all duration-300 flex flex-col justify-between bg-white overflow-hidden ${
+        className={`group relative rounded-none transition-all duration-300 flex flex-col justify-between bg-white overflow-hidden ${
           isActive 
-            ? 'border-2 border-emerald-500 shadow-lg shadow-emerald-600/10 ring-2 ring-emerald-500/10' 
-            : 'border border-slate-200/90 shadow-sm hover:shadow-md'
+            ? 'border-0 border-b-4 border-b-emerald-600 shadow-md' 
+            : isUserAllowed
+            ? 'border-0 border-b-4 border-b-indigo-600 shadow-sm hover:shadow-md'
+            : 'border-0 border-b-4 border-b-slate-400 shadow-sm hover:shadow-md'
         }`}
         style={{ fontFamily: "'Poppins', sans-serif" }}
       >
@@ -790,7 +809,7 @@ export default function MyCoursesView({
         {/* Card Body */}
         <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between space-y-3">
           <div>
-            {/* Header: Title & Clean Word Count (No Background) */}
+            {/* Header: Title & Clean Word Count */}
             <div className="flex items-start justify-between gap-2.5">
               <div className="min-w-0 flex-1">
                 <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-snug line-clamp-2 font-poppins">
@@ -801,11 +820,10 @@ export default function MyCoursesView({
                 </p>
               </div>
 
-              {/* Word Count Display (No background badge as requested) */}
+              {/* Word Count Display (18px font size, no star, W suffix) */}
               <div className="shrink-0 pt-0.5">
-                <span className="text-xs font-semibold text-slate-700 flex items-center gap-1 font-poppins">
-                  <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />
-                  <span>{wordsCount} Words</span>
+                <span className="text-[18px] font-extrabold text-slate-800 font-poppins tracking-tight">
+                  {wordsCount} W
                 </span>
               </div>
             </div>
@@ -824,31 +842,35 @@ export default function MyCoursesView({
 
             {/* Includes Section (Desktop or Mobile Expanded) */}
             <div className={`mt-3 ${isExpanded ? 'block' : 'hidden sm:block'}`}>
-              <div className="border-t border-slate-100 pt-3">
-                <p className="text-[10px] font-bold text-slate-900 tracking-wider uppercase mb-2 font-poppins">
+              <div className="border-t border-slate-100 pt-2.5">
+                <p className="text-[10px] font-bold text-slate-900 tracking-wider uppercase mb-1.5 font-poppins">
                   Includes
                 </p>
-                <ul className="space-y-1.5 text-[10px] sm:text-xs">
-                  <li className="flex items-center gap-2 text-slate-600 font-medium">
-                    <div className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[9px] shrink-0">
+                <ul className="space-y-1 text-[8px]">
+                  <li className="flex items-center gap-1.5 text-slate-600 font-medium">
+                    <div className="w-3.5 h-3.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[7px] shrink-0">
                       ✓
                     </div>
-                    <span><strong className="text-slate-900">{wordsCount}</strong> Essential Vocabulary Words</span>
+                    <span><strong className="text-slate-900">{wordsCount} W</strong> (Vocabulary Words)</span>
                   </li>
-                  <li className="flex items-center gap-2 text-slate-600 font-medium">
-                    <div className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[9px] shrink-0">
-                      ✓
-                    </div>
-                    <span>Bangla Meaning & Examples</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-slate-600 font-medium">
-                    <div className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[9px] shrink-0">
-                      ✓
-                    </div>
-                    <span>Voice Audio & Practice Quizzes</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-slate-600 font-medium">
-                    <div className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[9px] shrink-0">
+                  {enabledPracticeList.length > 0 && (
+                    <li className="flex items-start gap-1.5 text-slate-600 font-medium">
+                      <div className="w-3.5 h-3.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[7px] shrink-0 mt-0.5">
+                        ✓
+                      </div>
+                      <span><strong>Practice:</strong> {enabledPracticeList.join(', ')}</span>
+                    </li>
+                  )}
+                  {enabledStudyList.length > 0 && (
+                    <li className="flex items-start gap-1.5 text-slate-600 font-medium">
+                      <div className="w-3.5 h-3.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[7px] shrink-0 mt-0.5">
+                        ✓
+                      </div>
+                      <span><strong>Study Tools:</strong> {enabledStudyList.join(', ')}</span>
+                    </li>
+                  )}
+                  <li className="flex items-center gap-1.5 text-slate-600 font-medium">
+                    <div className="w-3.5 h-3.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[7px] shrink-0">
                       ✓
                     </div>
                     <span>Mastered: <strong className="text-slate-900">{masteredCount}/{wordsCount}</strong> ({progressPercent}%)</span>
