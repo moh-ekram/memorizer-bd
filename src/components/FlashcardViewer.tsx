@@ -115,10 +115,10 @@ export default function FlashcardViewer({
   // Session active state - true when inside the full-screen card focus mode, false when on intermediate filter setup screen
   const [isSessionActive, setIsSessionActive] = useState<boolean>(() => Boolean(initialGroup));
 
-  // Filter States - Dynamic unique groups from words list
+  // Filter States - Dynamic unique groups from activeWordsList
   const uniqueGroups = React.useMemo(() => {
     const grps = new Set<string | number>();
-    words.forEach(w => {
+    activeWordsList.forEach(w => {
       if (w.group !== undefined && w.group !== null) {
         grps.add(w.group);
       }
@@ -127,14 +127,14 @@ export default function FlashcardViewer({
       if (typeof a === 'number' && typeof b === 'number') return a - b;
       return String(a).localeCompare(String(b), 'bn');
     });
-  }, [words]);
+  }, [activeWordsList]);
 
   const [selectedGroups, setSelectedGroups] = useState<(number | string)[]>(() => {
     if (initialGroup) {
       return [initialGroup];
     }
     const grps = new Set<string | number>();
-    words.forEach(w => {
+    activeWordsList.forEach(w => {
       if (w.group !== undefined && w.group !== null) {
         grps.add(w.group);
       }
@@ -191,11 +191,11 @@ export default function FlashcardViewer({
   };
 
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() => {
-    if (words && words.length > 0) {
+    if (activeWordsList && activeWordsList.length > 0) {
       let hasUnrated = false;
       let hasStrugglingOrConfusion = false;
 
-      words.forEach(w => {
+      activeWordsList.forEach(w => {
         const status = progress[w.id]?.status || 'unrated';
         if (status === 'unrated') {
           hasUnrated = true;
@@ -218,12 +218,12 @@ export default function FlashcardViewer({
   // Automatically adapt selectedStatuses to progress changes if user has not manually modified it
   useEffect(() => {
     if (userHasManuallyChangedStatuses) return;
-    if (!words || words.length === 0) return;
+    if (!activeWordsList || activeWordsList.length === 0) return;
 
     let hasUnrated = false;
     let hasStrugglingOrConfusion = false;
 
-    words.forEach(w => {
+    activeWordsList.forEach(w => {
       const status = progress[w.id]?.status || 'unrated';
       if (status === 'unrated') {
         hasUnrated = true;
@@ -246,7 +246,7 @@ export default function FlashcardViewer({
     if (currentSorted !== targetSorted) {
       setSelectedStatuses(targetStatuses);
     }
-  }, [words, progress, userHasManuallyChangedStatuses, selectedStatuses]);
+  }, [activeWordsList, progress, userHasManuallyChangedStatuses, selectedStatuses]);
 
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
@@ -409,7 +409,7 @@ export default function FlashcardViewer({
     }
 
     setBaseFilteredWords(result);
-  }, [selectedGroups, selectedStatuses, selectedFolder, words, progress, uniqueGroups.length]);
+  }, [selectedGroups, selectedStatuses, selectedFolder, activeWordsList, progress, uniqueGroups.length]);
 
   const wordIdsString = baseFilteredWords.map(w => w.id).join(',');
 

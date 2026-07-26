@@ -1129,7 +1129,7 @@ export default function App() {
   })() || defaultGreCourse;
 
   const isCourseFullyAccessible = isCourseAccessible(rawActiveCourse, enrolledCourseIds, user?.email);
-  const isRestrictedLocked = !isCourseFullyAccessible && !!rawActiveCourse.isRestricted;
+  const isRestrictedLocked = !isCourseFullyAccessible;
 
   const activeCourse = rawActiveCourse;
   const activeWords = activeCourse.words || [];

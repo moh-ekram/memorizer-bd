@@ -122,6 +122,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   const [localPlaceLabels, setLocalPlaceLabels] = useState<Record<string, string>>(course.placeLabels || {});
   const [isDefault, setIsDefault] = useState(!!course.isDefault);
   const [isRestricted, setIsRestricted] = useState(!!course.isRestricted);
+  const [hidden, setHidden] = useState<boolean>(!!course.hidden);
   const [price, setPrice] = useState<number>((course.price && course.price > 0) ? course.price : 30);
   const [bkashNumber, setBkashNumber] = useState<string>((course.bkashNumber && course.bkashNumber !== '01700000000' && course.bkashNumber.trim() !== '') ? course.bkashNumber : '01581624202');
   const [googleSearchQuery, setGoogleSearchQuery] = useState<string>(course.googleSearchQuery || '');
@@ -986,6 +987,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     setDescription(course.description);
     setIsDefault(!!course.isDefault);
     setIsRestricted(!!course.isRestricted);
+    setHidden(!!course.hidden);
     setPrice((course.price && course.price > 0) ? course.price : 30);
     setBkashNumber((course.bkashNumber && course.bkashNumber !== '01700000000' && course.bkashNumber.trim() !== '') ? course.bkashNumber : '01581624202');
     setGoogleSearchQuery(course.googleSearchQuery || '');
@@ -1823,6 +1825,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
         description: description.trim(),
         isDefault: isDefault,
         isRestricted: isRestricted,
+        hidden: hidden,
         allowedUsers: finalAllowedUsers, // Always preserve the allowed users list
         allowedUsersExpiry: allowedUsersExpiry, // Save student access expiry dates map
         words: localWords,
@@ -2055,6 +2058,29 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                   <p className="pt-0.5 leading-normal" style={settingInstructionStyle}>
                     Define what will be automatically typed in the Google search bar when clicking the Google search button beside a word in this course. Using the <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600 font-bold">{'{word}'}</code> tag replaces it with the target word (e.g. <code className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 font-semibold">{'{word} meaning in Bengali'}</code>) or you can enter suffix keywords (e.g. <code className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 font-semibold">definition and examples</code>).
                   </p>
+                </div>
+
+                {/* Course Visibility / Hide Control */}
+                <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl flex items-center justify-between gap-4">
+                  <div>
+                    <span className="font-extrabold text-xs text-slate-900 block">Hide Course from All Users</span>
+                    <span className="text-[11px] text-slate-500 font-medium block mt-0.5">
+                      When enabled, this course will be completely hidden from all users' course lists across the application.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setHidden(!hidden)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      hidden ? 'bg-rose-600' : 'bg-slate-200'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        hidden ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
                 </div>
 
                 <div className="p-5 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex items-start gap-3.5">

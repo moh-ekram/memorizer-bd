@@ -139,6 +139,7 @@ export interface Course {
     place6?: string;
   };
   googleSearchQuery?: string;
+  hidden?: boolean;
 }
 
 export interface AccessRequest {
