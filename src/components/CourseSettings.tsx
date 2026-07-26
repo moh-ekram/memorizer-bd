@@ -128,6 +128,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   const [googleSearchQuery, setGoogleSearchQuery] = useState<string>(course.googleSearchQuery || '');
   const [allowedUsers, setAllowedUsers] = useState<string[]>(course.allowedUsers || []);
   const [allowedUsersExpiry, setAllowedUsersExpiry] = useState<Record<string, string>>(course.allowedUsersExpiry || {});
+  const [accessDurationDays, setAccessDurationDays] = useState<number>(course.accessDurationDays || 365);
   const [newUserInput, setNewUserInput] = useState('');
   const [newStudentExpiry, setNewStudentExpiry] = useState('');
   const [bulkInput, setBulkInput] = useState('');
@@ -993,6 +994,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     setGoogleSearchQuery(course.googleSearchQuery || '');
     setAllowedUsers(course.allowedUsers || []);
     setAllowedUsersExpiry(course.allowedUsersExpiry || {});
+    setAccessDurationDays(course.accessDurationDays || 365);
     setBulkInput((course.allowedUsers || []).join('\n'));
     setLocalWords(sanitizeWordsList(course.words || []));
     setVerifiedPayments(course.verifiedPayments || []);
@@ -1828,6 +1830,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
         hidden: hidden,
         allowedUsers: finalAllowedUsers, // Always preserve the allowed users list
         allowedUsersExpiry: allowedUsersExpiry, // Save student access expiry dates map
+        accessDurationDays: Number(accessDurationDays) || 365,
         words: localWords,
         stories: localStories,
         variableToggles: finalToggles,
@@ -2340,6 +2343,27 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                             <ToggleLeft className="w-10 h-10 text-slate-300" />
                           )}
                         </button>
+                      </div>
+
+                      {/* Access Duration setting */}
+                      <div className="border-t border-slate-200/50 pt-3.5 flex items-center justify-between gap-4">
+                        <div className="space-y-1">
+                          <span className="text-xs font-extrabold text-slate-800 block">Default Course Access Duration</span>
+                          <span className="block text-[11px] text-slate-500 leading-relaxed" style={settingInstructionStyle}>
+                            Default access validity period when a student is enrolled/approved for this course. Default is 365 days (1 Year).
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <input
+                            type="number"
+                            min="1"
+                            max="3650"
+                            value={accessDurationDays}
+                            onChange={(e) => setAccessDurationDays(parseInt(e.target.value, 10) || 365)}
+                            className="w-20 px-3 py-1.5 bg-white border border-slate-300 rounded-xl font-bold text-xs text-slate-900 text-center outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100"
+                          />
+                          <span className="text-xs font-bold text-slate-600">Days</span>
+                        </div>
                       </div>
                     </div>
 

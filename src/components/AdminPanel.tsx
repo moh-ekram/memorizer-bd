@@ -181,6 +181,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   // Access requests states
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
   const [accessRequestsLoading, setAccessRequestsLoading] = useState(false);
+  const [selectedActionRequest, setSelectedActionRequest] = useState<AccessRequest | null>(null);
+  const [actionBalanceInput, setActionBalanceInput] = useState<string>('');
+  const [isProcessingAction, setIsProcessingAction] = useState<boolean>(false);
 
   // Blank questions states
   const [blankQuestions, setBlankQuestions] = useState<BlankQuestion[]>([]);
@@ -374,10 +377,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     }
   };
 
-  const handleApproveAccessRequest = async (req: AccessRequest) => {
+  const handleApproveAccessRequest = async (req: AccessRequest, overrideBalance?: number) => {
     try {
-      const selectedExpiry = requestExpiryDates[req.id] || '';
-      
+      const finalPrice = overrideBalance !== undefined ? overrideBalance : (req.totalPrice || req.price || 0);
       const userEmail = req.email.toLowerCase().trim();
       const nowISO = new Date().toISOString();
 
@@ -400,22 +402,24 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           email: userEmail,
           usedBy: userEmail,
           bkashNumber: req.bkashNumber || '',
-          amount: req.totalPrice || req.price || 0,
+          amount: finalPrice,
           createdAt: nowISO,
           usedAt: nowISO
         }, { merge: true });
       }
 
-      // 1. Update request status to 'approved' and spent = true
+      // 1. Update request status to 'approved', spent = true, price = finalPrice
       const reqRef = doc(db, 'access_requests', req.id);
       await updateDoc(reqRef, { 
         status: 'approved',
         spent: true,
-        spentAt: nowISO
+        spentAt: nowISO,
+        price: finalPrice,
+        totalPrice: finalPrice
       });
 
-      if (req.courseId === 'wallet_recharge') {
-        const rechargeAmt = req.totalPrice || req.price || (req as any).amount || 50;
+      if (req.courseId === 'wallet_recharge' || req.courseTitle?.includes('Wallet Recharge')) {
+        const rechargeAmt = finalPrice;
         const walletRef = doc(db, 'user_wallets', userEmail);
         const walletSnap = await getDoc(walletRef);
         const curBal = walletSnap.exists() ? (walletSnap.data().balance || 0) : 0;
@@ -457,8 +461,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           }
         }
 
-        setAccessRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved', spent: true } : r));
-        alert(`Wallet recharge request approved! ৳${rechargeAmt} BDT added to ${userEmail}'s wallet (New Balance: ৳${newBal} BDT). Transaction marked as Spent.`);
+        setAccessRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved', spent: true, price: finalPrice, totalPrice: finalPrice } : r));
+        alert(`Wallet recharge request approved! ৳${rechargeAmt} BDT added to ${userEmail}'s wallet (New Balance: ৳${newBal} BDT).`);
         return;
       }
 
@@ -467,10 +471,11 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         : [req.courseId];
 
       for (const courseId of targetCourseIds) {
-        if (!courseId) continue;
+        if (!courseId || courseId === 'wallet_recharge') continue;
         let courseObj = customCourses.find(c => c.id === courseId);
         let currentAllowed: string[] = [];
         let currentAllowedExpiry: Record<string, string> = {};
+        let durationDays = courseObj?.accessDurationDays || 365;
         
         if (courseObj) {
           currentAllowed = courseObj.allowedUsers || [];
@@ -481,14 +486,20 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             const courseData = courseDoc.data() as Course;
             currentAllowed = courseData.allowedUsers || [];
             currentAllowedExpiry = courseData.allowedUsersExpiry || {};
+            if (courseData.accessDurationDays) {
+              durationDays = courseData.accessDurationDays;
+            }
           }
         }
 
         const updatedAllowed = currentAllowed.includes(userEmail) ? currentAllowed : [...currentAllowed, userEmail];
         const updatedExpiryMap = { ...currentAllowedExpiry };
-        if (selectedExpiry) {
-          updatedExpiryMap[userEmail] = selectedExpiry;
-        }
+
+        // Automatically set expiry to default duration (365 days / 1 year) from today
+        const expDate = new Date();
+        expDate.setDate(expDate.getDate() + durationDays);
+        const expiryDateStr = expDate.toISOString().split('T')[0];
+        updatedExpiryMap[userEmail] = expiryDateStr;
 
         // Update the course in Firestore
         const courseRef = doc(db, 'courses', courseId);
@@ -505,7 +516,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         } : c));
       }
 
-      // Mark matching payment in system_settings/global_verified_payments as spent for course requests as well
+      // Mark matching payment in system_settings/global_verified_payments as spent
       if (req.trxId) {
         const globalDocRef = doc(db, 'system_settings', 'global_verified_payments');
         const vpSnap = await getDoc(globalDocRef);
@@ -537,9 +548,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       }
 
       // Update local requests state and mark spent in DB
-      await updateDoc(doc(db, 'access_requests', req.id), { spent: true, spentAt: nowISO });
-      setAccessRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved', spent: true } : r));
-      alert(`Access request approved successfully! User ${userEmail} granted access to ${targetCourseIds.length} course(s) ${selectedExpiry ? `until ${selectedExpiry}` : 'permanently'}.`);
+      await updateDoc(doc(db, 'access_requests', req.id), { spent: true, spentAt: nowISO, price: finalPrice, totalPrice: finalPrice });
+      setAccessRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved', spent: true, price: finalPrice, totalPrice: finalPrice } : r));
+      alert(`Access request approved successfully! User ${userEmail} granted access for 1 Year.`);
     } catch (err) {
       console.error('Error approving request:', err);
       alert('Failed to approve request: ' + (err instanceof Error ? err.message : String(err)));
@@ -1159,7 +1170,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     bkashNumber: String(vp.bkashNumber || '').trim(),
     trxId: String(vp.trxId || '').trim(),
     amount: Number(vp.amount) || 30,
-    createdAt: String(vp.createdAt || new Date().toISOString())
+    createdAt: String(vp.createdAt || new Date().toISOString()),
+    ...(vp.claimed ? { claimed: true } : {}),
+    ...(vp.spent ? { spent: true } : {}),
+    ...(vp.claimedBy ? { claimedBy: String(vp.claimedBy) } : {})
   });
 
   const handleAddGlobalVerifiedPayment = async () => {
@@ -2195,7 +2209,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       <th className="px-4 py-2">Transaction ID</th>
                       <th className="px-4 py-2">Access Expiration</th>
                       <th className="px-4 py-2">Status</th>
-                      <th className="px-4 py-2 text-right">Actions</th>
+                      <th className="px-4 py-2 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-150 font-sans text-xs">
@@ -2262,57 +2276,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          {req.status === 'pending' ? (
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="date"
-                                  value={requestExpiryDates[req.id] || ''}
-                                  onChange={(e) => setRequestExpiryDates(prev => ({ ...prev, [req.id]: e.target.value }))}
-                                  className="px-2 py-1 text-[10px] bg-slate-50 border border-slate-200 rounded font-bold text-slate-700 outline-none w-28 cursor-pointer focus:bg-white"
-                                  title="Exact Expiry Date"
-                                />
-                                <input
-                                  type="month"
-                                  onChange={(e) => {
-                                    if (!e.target.value) return;
-                                    const [yStr, mStr] = e.target.value.split('-');
-                                    const y = parseInt(yStr, 10);
-                                    const m = parseInt(mStr, 10);
-                                    const lastDay = new Date(y, m, 0).getDate();
-                                    const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-                                    setRequestExpiryDates(prev => ({ ...prev, [req.id]: dateStr }));
-                                  }}
-                                  className="px-1.5 py-1 text-[10px] bg-slate-50 border border-slate-200 rounded font-bold text-slate-700 outline-none w-24 cursor-pointer focus:bg-white"
-                                  title="Select Month (Sets expiry to end of month)"
-                                />
-                              </div>
-                              <div className="flex items-center gap-1">
-                                {[
-                                  { label: '+1 Mo', m: 1 },
-                                  { label: '+3 Mo', m: 3 },
-                                  { label: '+6 Mo', m: 6 },
-                                  { label: '+1 Yr', m: 12 },
-                                ].map(preset => (
-                                  <button
-                                    key={preset.label}
-                                    type="button"
-                                    onClick={() => {
-                                      const d = new Date();
-                                      d.setMonth(d.getMonth() + preset.m);
-                                      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                                      setRequestExpiryDates(prev => ({ ...prev, [req.id]: dateStr }));
-                                    }}
-                                    className="px-1.5 py-0.5 bg-slate-100 hover:bg-indigo-100 text-slate-600 hover:text-indigo-700 rounded text-[9px] font-bold transition cursor-pointer"
-                                  >
-                                    {preset.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
+                          {req.courseId === 'wallet_recharge' ? (
+                            <span className="text-slate-400 font-mono text-[11px] font-semibold">
+                              N/A (Recharge)
+                            </span>
                           ) : (
-                            <span className="text-slate-400 font-mono text-[10px]">
-                              {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : 'Processed'}
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50/80 text-indigo-700 font-bold rounded-lg text-[11px] border border-indigo-100">
+                              <Clock className="w-3 h-3 text-indigo-500" />
+                              1 Year Access
                             </span>
                           )}
                         </td>
@@ -2345,24 +2316,21 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-2">
                             {req.status === 'pending' ? (
-                              <>
-                                <button
-                                  onClick={() => handleApproveAccessRequest(req)}
-                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-lg text-[10px] transition cursor-pointer flex items-center gap-1"
-                                >
-                                  <CheckCircle className="w-3.5 h-3.5" />
-                                  Approve
-                                </button>
-                                <button
-                                  onClick={() => handleRejectAccessRequest(req.id)}
-                                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold rounded-lg text-[10px] transition cursor-pointer flex items-center gap-1"
-                                >
-                                  <XCircle className="w-3.5 h-3.5" />
-                                  Reject
-                                </button>
-                              </>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedActionRequest(req);
+                                  setActionBalanceInput(String(req.totalPrice || req.price || ''));
+                                }}
+                                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-xs transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                              >
+                                <ShieldCheck className="w-3.5 h-3.5" />
+                                <span>Action / Process</span>
+                              </button>
                             ) : (
-                              <span className="text-slate-350 italic font-bold text-[10px]">Processed</span>
+                              <span className="text-slate-400 font-extrabold text-[11px] bg-slate-100 px-2.5 py-1 rounded-lg">
+                                Processed
+                              </span>
                             )}
                           </div>
                         </td>
@@ -2370,6 +2338,139 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* Action Popup Modal for Payment & Balance Requests */}
+            {selectedActionRequest && (
+              <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+                <div className="bg-white rounded-3xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden space-y-0 font-sans" style={{ fontFamily: "'Poppins', sans-serif" }}>
+                  {/* Modal Header */}
+                  <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-indigo-600/80 border border-indigo-400/40 flex items-center justify-center text-white shrink-0">
+                        <ShieldCheck className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-extrabold text-base text-white">পেমেন্ট ও কোর্স এক্সেস একশন</h3>
+                        <p className="text-[11px] text-indigo-200">Process request & set account balance</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedActionRequest(null)}
+                      className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Modal Body */}
+                  <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+                    {/* Request Details Card */}
+                    <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-2.5 text-xs">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                        <span className="font-extrabold text-slate-500 uppercase tracking-wider text-[10px]">Student Email</span>
+                        <span className="font-bold text-slate-900 font-mono text-xs">{selectedActionRequest.email}</span>
+                      </div>
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                        <span className="font-extrabold text-slate-500 uppercase tracking-wider text-[10px]">Request Details</span>
+                        <span className="font-bold text-indigo-700">{selectedActionRequest.courseTitle || selectedActionRequest.courseId}</span>
+                      </div>
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                        <span className="font-extrabold text-slate-500 uppercase tracking-wider text-[10px]">bKash Number</span>
+                        <span className="font-bold text-pink-700 font-mono">{selectedActionRequest.bkashNumber || 'N/A'}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-slate-500 uppercase tracking-wider text-[10px]">Transaction ID</span>
+                        <span className="font-bold text-slate-800 font-mono bg-white px-2 py-0.5 rounded border border-slate-200">{selectedActionRequest.trxId || 'N/A'}</span>
+                      </div>
+                    </div>
+
+                    {/* Balance Input Box */}
+                    <div className="space-y-2 bg-indigo-50/60 border border-indigo-100 p-4 rounded-2xl">
+                      <label className="block text-xs font-black text-slate-900">
+                        ব্যালেন্স / কোর্স মূল্য বসান (BDT ৳) <span className="text-rose-500">*</span>
+                      </label>
+                      <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                        ইউজার ব্যালেন্স ইনপুট দেননি। এপ্রুভ করার পূর্বে কাঙ্ক্ষিত ব্যালেন্স বা মূল্য বসিয়ে দিন। (কোর্স রিক্যুয়েস্টে ডিফল্ট ১ বছরের এক্সেস দেওয়া হবে)
+                      </p>
+                      <div className="relative mt-2">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-black text-slate-500 text-sm">৳</span>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={actionBalanceInput}
+                          onChange={(e) => setActionBalanceInput(e.target.value)}
+                          className="w-full pl-8 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl font-black text-slate-900 text-base outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 font-mono shadow-2xs"
+                        />
+                      </div>
+
+                      {/* Quick Presets */}
+                      <div className="flex items-center gap-1.5 pt-1.5 flex-wrap">
+                        <span className="text-[10px] font-bold text-slate-500 mr-1">Quick Sets:</span>
+                        {[30, 50, 100, 200, 500, 1000].map((amt) => (
+                          <button
+                            key={amt}
+                            type="button"
+                            onClick={() => setActionBalanceInput(String(amt))}
+                            className="px-2.5 py-1 bg-white hover:bg-indigo-600 hover:text-white text-indigo-700 font-bold text-[10px] rounded-lg border border-indigo-200 transition cursor-pointer shadow-2xs"
+                          >
+                            ৳{amt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Modal Footer Actions */}
+                  <div className="p-5 bg-slate-50 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-end gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedActionRequest(null)}
+                      disabled={isProcessingAction}
+                      className="w-full sm:w-auto px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-extrabold text-xs rounded-xl transition cursor-pointer"
+                    >
+                      বাতিল (Cancel)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!selectedActionRequest) return;
+                        setIsProcessingAction(true);
+                        await handleRejectAccessRequest(selectedActionRequest.id);
+                        setIsProcessingAction(false);
+                        setSelectedActionRequest(null);
+                      }}
+                      disabled={isProcessingAction}
+                      className="w-full sm:w-auto px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold text-xs rounded-xl border border-rose-200 transition cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      <span>ডিক্লাইন (Decline)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!selectedActionRequest) return;
+                        const balNum = Number(actionBalanceInput);
+                        if (isNaN(balNum) || actionBalanceInput === '') {
+                          alert('অনুগ্রহ করে সঠিক ব্যালেন্স/মূল্য ইনপুট দিন');
+                          return;
+                        }
+                        setIsProcessingAction(true);
+                        await handleApproveAccessRequest(selectedActionRequest, balNum);
+                        setIsProcessingAction(false);
+                        setSelectedActionRequest(null);
+                      }}
+                      disabled={isProcessingAction}
+                      className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      <span>{isProcessingAction ? 'Processing...' : 'এপ্রুভ করুন (Approve)'}</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -2588,43 +2689,72 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       .filter(vp => {
                         if (!globalVpSearch) return true;
                         const q = globalVpSearch.toLowerCase();
-                        return vp.bkashNumber.includes(q) || vp.trxId.toLowerCase().includes(q) || (vp.claimedBy || '').toLowerCase().includes(q);
+                        return vp.bkashNumber.includes(q) || vp.trxId.toLowerCase().includes(q) || ((vp as any).claimedBy || '').toLowerCase().includes(q);
                       })
-                      .map((vp, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50 transition">
-                          <td className="px-4 py-2.5 font-bold text-slate-800">{vp.bkashNumber}</td>
-                          <td className="px-4 py-2.5 font-bold text-indigo-600 uppercase">{vp.trxId}</td>
-                          <td className="px-4 py-2.5">
-                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 font-black rounded-full text-[10px] border border-emerald-200">
-                              ৳{vp.amount || 30} BDT
-                            </span>
-                          </td>
-                          <td className="px-4 py-2.5">
-                            {vp.claimed || vp.spent ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 font-bold rounded-md text-[10px] border border-purple-200" title={`Spent/Claimed by ${vp.claimedBy || 'User'}`}>
-                                <span>Spent</span>
-                                {vp.claimedBy && <span className="text-[9px] text-purple-500 max-w-[100px] truncate">({vp.claimedBy})</span>}
+                      .map((vp, idx) => {
+                        const cleanNum = (s: string) => (s || '').replace(/\D/g, '').slice(-10);
+                        const vpTrx = (vp.trxId || '').toLowerCase().trim();
+                        const vpNum = cleanNum(vp.bkashNumber);
+
+                        const matchingReq = accessRequests.find(req => {
+                          const reqTrx = (req.trxId || '').toLowerCase().trim();
+                          const reqNum = cleanNum(req.bkashNumber);
+                          if (vpTrx && reqTrx && vpTrx === reqTrx) return true;
+                          if (vpNum && reqNum && vpNum === reqNum && vpTrx && reqTrx && vpTrx === reqTrx) return true;
+                          return false;
+                        });
+
+                        const isAdded = (vp as any).claimed || (vp as any).spent || !!matchingReq;
+                        const claimedEmail = (vp as any).claimedBy || matchingReq?.email;
+
+                        return (
+                          <tr key={idx} className="hover:bg-slate-50/50 transition">
+                            <td className="px-4 py-2.5 font-bold text-slate-800">{vp.bkashNumber}</td>
+                            <td className="px-4 py-2.5 font-bold text-indigo-600 uppercase">{vp.trxId}</td>
+                            <td className="px-4 py-2.5">
+                              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 font-black rounded-full text-[10px] border border-emerald-200">
+                                ৳{vp.amount || 30} BDT
                               </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-600 font-bold rounded-md text-[10px] border border-emerald-200">
-                                Available
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-2.5 text-[10px] text-slate-400">
-                            {vp.createdAt ? new Date(vp.createdAt).toLocaleDateString() : 'Active'}
-                          </td>
-                          <td className="px-4 py-2.5 text-right">
-                            <button
-                              onClick={() => handleDeleteGlobalVerifiedPayment(vp.bkashNumber, vp.trxId)}
-                              className="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
-                              title="Delete Record"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="px-4 py-2.5 font-sans">
+                              {isAdded ? (
+                                <span
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 font-extrabold rounded-lg text-xs border border-emerald-200 shadow-2xs"
+                                  title={claimedEmail ? `Claimed by ${claimedEmail}` : 'Matched with user request'}
+                                >
+                                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                  <span>এডেড (Added)</span>
+                                  {claimedEmail && (
+                                    <span className="text-[10px] text-emerald-600/80 font-normal max-w-[120px] truncate">
+                                      ({claimedEmail})
+                                    </span>
+                                  )}
+                                </span>
+                              ) : (
+                                <span
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 font-extrabold rounded-lg text-xs border border-amber-200 shadow-2xs"
+                                  title="Not claimed by any user request yet"
+                                >
+                                  <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                  <span>পেন্ডিং (Pending)</span>
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-2.5 text-[10px] text-slate-400 font-mono">
+                              {vp.createdAt ? new Date(vp.createdAt).toLocaleDateString() : 'Active'}
+                            </td>
+                            <td className="px-4 py-2.5 text-right font-sans">
+                              <button
+                                onClick={() => handleDeleteGlobalVerifiedPayment(vp.bkashNumber, vp.trxId)}
+                                className="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
+                                title="Delete Record"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>

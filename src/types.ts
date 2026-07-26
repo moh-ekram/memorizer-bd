@@ -124,6 +124,7 @@ export interface Course {
   isRestricted?: boolean;
   allowedUsers?: string[];
   allowedUsersExpiry?: Record<string, string>;
+  accessDurationDays?: number;
   variableToggles?: Record<string, boolean>;
   enabledGames?: Record<string, boolean>;
   createdAt: string;
