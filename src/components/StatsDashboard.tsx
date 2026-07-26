@@ -718,35 +718,24 @@ export default function StatsDashboard({
             </AnimatePresence>
           </div>
 
-          <div className="grid grid-cols-3 md:flex md:items-center md:justify-end gap-2.5 sm:gap-4 w-full md:w-auto">
-            {/* Streak card */}
-            <motion.div 
-              whileHover={{ scale: 1.05 }}
-              className="bg-white/10 backdrop-blur-md rounded-2xl p-2 sm:p-4 flex flex-col sm:flex-row items-center text-center sm:text-left gap-1.5 sm:gap-3 border border-white/10 shadow-xs w-full justify-center sm:justify-start col-span-1 md:w-36 md:flex-shrink-0"
-            >
-              <div className="p-1 sm:p-2 bg-amber-400 rounded-xl text-amber-950 animate-pulse flex-shrink-0">
-                <Flame className="w-4 h-4 sm:w-6 sm:h-6 fill-current" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[8px] sm:text-[10px] text-indigo-200 font-bold uppercase tracking-wider font-sans truncate">Streak</p>
-                <p className="text-xs sm:text-xl font-black font-sans truncate">{goal.streak} Days</p>
-              </div>
-            </motion.div>
-
+          <div className="flex items-center justify-end gap-2.5 sm:gap-4 w-full md:w-auto">
             {/* Daily Goal card */}
             <motion.div 
-              whileHover={{ scale: 1.05 }}
+              whileHover={{ scale: 1.03 }}
               onClick={() => onSelectTab?.('flashcard')}
-              className="bg-white/10 backdrop-blur-md rounded-2xl p-2 sm:p-4 flex flex-row items-center text-left gap-2 sm:gap-3 border border-white/10 shadow-xs cursor-pointer hover:bg-white/15 transition-all w-full justify-start col-span-2 md:flex-1 md:max-w-[280px]"
+              className="bg-white/10 backdrop-blur-md rounded-2xl p-2.5 sm:p-4 flex flex-row items-center text-left gap-3 border border-white/10 shadow-xs cursor-pointer hover:bg-white/15 transition-all w-full md:w-auto min-w-[220px]"
               title="Go to Flashcards"
             >
-              <div className="p-1 sm:p-2 bg-indigo-500 rounded-xl text-white flex-shrink-0">
-                <CreditCard className="w-4 h-4 sm:w-6 sm:h-6 animate-icon-flip" />
+              <div className="p-2 bg-indigo-500/80 rounded-xl text-white flex-shrink-0">
+                <CreditCard className="w-5 h-5 sm:w-6 sm:h-6 animate-icon-flip" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs sm:text-xl font-black font-sans flex items-center justify-between sm:justify-start gap-1 truncate">
+                <p className="text-xs sm:text-base font-black font-sans flex items-center justify-between gap-1 truncate">
                   <span>Flashcards Practice</span>
-                  <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-200 flex-shrink-0" />
+                  <ChevronRight className="w-4 h-4 text-indigo-200 flex-shrink-0" />
+                </p>
+                <p className="text-[10px] sm:text-xs text-indigo-200 font-semibold truncate">
+                  {wordsStudiedToday}/{goal.dailyTarget || 20} studied today
                 </p>
               </div>
             </motion.div>

@@ -1718,6 +1718,7 @@ export default function App() {
                     words={activeWords}
                     progress={progress}
                     folders={folders}
+                    streak={goal.streak}
                     onRateWord={handleRateWord}
                     onUpdateNotes={handleUpdateNotes}
                     onToggleBookmark={handleToggleBookmark}

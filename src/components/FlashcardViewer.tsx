@@ -41,13 +41,15 @@ import {
   ArrowLeft,
   Settings,
   HelpCircle,
-  SkipForward
+  SkipForward,
+  Flame
 } from 'lucide-react';
 
 interface FlashcardViewerProps {
   words: VocabularyWord[];
   progress: Record<string, UserProgress>;
   folders: CustomFolder[];
+  streak?: number;
   onRateWord: (wordId: string, status: WordStatus) => void;
   onUpdateNotes: (wordId: string, notes: string) => void;
   onToggleBookmark: (wordId: string, folderId: string) => void;
@@ -75,6 +77,7 @@ export default function FlashcardViewer({
   words,
   progress,
   folders,
+  streak,
   onRateWord,
   onUpdateNotes,
   onToggleBookmark,
@@ -91,6 +94,16 @@ export default function FlashcardViewer({
   onUnlockCourse
 }: FlashcardViewerProps) {
   const effectiveFreeLimit = freeFlashcardsCount || settings?.freeFlashcardsCount || 10;
+  const effectiveStreak = streak !== undefined ? streak : (() => {
+    try {
+      const savedGoal = localStorage.getItem('vocab_memorizer_study_goal');
+      if (savedGoal) {
+        const parsed = JSON.parse(savedGoal);
+        if (parsed?.streak) return parsed.streak;
+      }
+    } catch {}
+    return 1;
+  })();
   const activeWordsList = React.useMemo(() => {
     if (isRestrictedLocked) {
       return words.slice(0, effectiveFreeLimit);
@@ -673,30 +686,83 @@ export default function FlashcardViewer({
         )}
 
         {/* Header Hero Banner / Start Flashcard Button */}
-        <button
-          type="button"
-          onClick={() => setIsSessionActive(true)}
-          disabled={filteredWords.length === 0}
-          className="w-full bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 hover:from-indigo-800 hover:to-slate-800 disabled:opacity-50 text-white rounded-2xl p-4 sm:p-5 shadow-md border border-indigo-700/50 flex items-center justify-between transition cursor-pointer group"
+        <div
+          className="w-full bg-gradient-to-r from-indigo-950 via-indigo-900 to-slate-950 text-white rounded-2xl p-4 sm:p-5 shadow-lg border border-indigo-700/50 flex flex-col sm:flex-row items-center justify-between gap-4 transition relative overflow-hidden group"
         >
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-indigo-500/30 text-amber-300 border border-indigo-400/30 group-hover:scale-105 transition">
-              <Play className="w-5 h-5 fill-current" />
+          {/* Background Glow Accents */}
+          <div className="absolute -left-10 -top-10 w-36 h-36 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute -right-10 -bottom-10 w-36 h-36 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
+
+          {/* Left Side: Flashcard Practice Button with Image-matching Stacked Cards Icon */}
+          <button
+            type="button"
+            onClick={() => setIsSessionActive(true)}
+            disabled={filteredWords.length === 0}
+            className="flex items-center gap-3.5 text-left transition cursor-pointer hover:opacity-90 disabled:opacity-50 shrink-0"
+          >
+            {/* Custom Stacked Cards Icon matching uploaded image */}
+            <div className="relative w-11 h-13 sm:w-12 sm:h-14 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-300">
+              {/* Card 1 (Back) */}
+              <div className="absolute inset-0 bg-indigo-400/40 border border-indigo-300/40 rounded-lg shadow-2xs transform -rotate-20 -translate-x-2" />
+              {/* Card 2 (Middle) */}
+              <div className="absolute inset-0 bg-indigo-300/60 border border-indigo-200/50 rounded-lg shadow-2xs transform -rotate-10 -translate-x-1" />
+              {/* Card 3 (Front) */}
+              <div className="relative w-full h-full bg-white rounded-lg shadow-md p-1.5 flex flex-col justify-center gap-1 border border-indigo-100">
+                <div className="w-[65%] h-1 bg-indigo-500 rounded-full" />
+                <div className="w-[40%] h-1 bg-indigo-300 rounded-full" />
+                <div className="w-[85%] h-1 bg-indigo-500 rounded-full" />
+                <div className="w-[50%] h-1 bg-indigo-300 rounded-full" />
+              </div>
             </div>
-            <div className="text-left">
-              <h1 className="text-base sm:text-lg font-extrabold tracking-tight font-sans text-white">
-                Start Flashcard
+
+            <div>
+              <h1 className="text-base sm:text-lg font-black tracking-tight font-sans text-white flex items-center gap-2">
+                Flashcard Practice
               </h1>
-              <p className="text-xs text-indigo-200">
+              <p className="text-xs text-indigo-200 font-medium">
                 {filteredWords.length} words selected in current deck
               </p>
             </div>
+          </button>
+
+          {/* Center: Animated Stacked Flashcards Illustration (matching uploaded image) */}
+          <div 
+            onClick={() => setIsSessionActive(true)}
+            className="flex items-center justify-center cursor-pointer group-hover:scale-105 transition-transform duration-300 my-1 sm:my-0"
+            title="Click to start practice"
+          >
+            <div className="relative w-16 h-20 sm:w-20 sm:h-24 flex items-center justify-center animate-pulse">
+              {/* Card 1 (Back) */}
+              <div className="absolute inset-0 bg-indigo-400/35 border border-indigo-300/40 rounded-xl shadow-xs transform -rotate-22 -translate-x-3.5 transition-transform duration-500 group-hover:-rotate-26 group-hover:-translate-x-5" />
+              {/* Card 2 (Middle) */}
+              <div className="absolute inset-0 bg-indigo-300/55 border border-indigo-200/50 rounded-xl shadow-xs transform -rotate-11 -translate-x-2 transition-transform duration-500 group-hover:-rotate-14 group-hover:-translate-x-3" />
+              {/* Card 3 (Front - Standing with Lines) */}
+              <div className="relative w-full h-full bg-white rounded-xl shadow-xl p-2.5 sm:p-3 flex flex-col justify-center gap-1.5 border border-indigo-100 transition-transform duration-500 group-hover:scale-105">
+                <div className="w-[60%] h-1.5 bg-indigo-500 rounded-full" />
+                <div className="w-[40%] h-1.5 bg-indigo-300 rounded-full" />
+                <div className="w-[80%] h-1.5 bg-indigo-500 rounded-full" />
+                <div className="w-[50%] h-1.5 bg-indigo-300 rounded-full" />
+              </div>
+            </div>
           </div>
-          <span className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black rounded-xl text-xs sm:text-sm flex items-center gap-1.5 transition shadow-sm">
-            <span>Start Now</span>
-            <Play className="w-3.5 h-3.5 fill-current" />
-          </span>
-        </button>
+
+          {/* Right Side: STREAK Button replacing "Start Now" */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsSessionActive(true)}
+              className="px-4 py-2.5 sm:px-5 sm:py-2.5 bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-slate-950 font-black rounded-xl text-xs sm:text-sm flex items-center gap-2 transition shadow-md border border-amber-300/60 cursor-pointer"
+            >
+              <div className="p-1 bg-slate-950/20 rounded-lg text-slate-950 animate-pulse">
+                <Flame className="w-4 h-4 fill-current text-slate-950" />
+              </div>
+              <div className="flex flex-col text-left leading-none">
+                <span className="text-[9px] font-black uppercase tracking-wider text-slate-900/80">STREAK</span>
+                <span className="text-xs sm:text-sm font-extrabold text-slate-950">{effectiveStreak} Days</span>
+              </div>
+            </button>
+          </div>
+        </div>
 
         {/* Filter Configuration Controls (Compact Expanding Div) */}
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden transition-all duration-200">
