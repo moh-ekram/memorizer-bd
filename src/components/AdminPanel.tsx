@@ -390,7 +390,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         if (usedTxSnap.exists()) {
           const usedData = usedTxSnap.data();
           if (usedData.spent === true || usedData.status === 'spent') {
-            alert(`ত্রুটি: ট্রাঞ্জেকশন আইডিটি (${req.trxId}) ইতোমধ্যে used_transactions কালেকশনে 'spent' হিসেবে লক্ রয়েছে।`);
+            alert(`Error: Transaction ID (${req.trxId}) is already marked as spent in the system.`);
             return;
           }
         }
@@ -2352,7 +2352,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         <ShieldCheck className="w-5 h-5" />
                       </div>
                       <div>
-                        <h3 className="font-extrabold text-base text-white">পেমেন্ট ও কোর্স এক্সেস একশন</h3>
+                        <h3 className="font-extrabold text-base text-white">Payment & Access Processing Action</h3>
                         <p className="text-[11px] text-indigo-200">Process request & set account balance</p>
                       </div>
                     </div>
@@ -2390,10 +2390,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     {/* Balance Input Box */}
                     <div className="space-y-2 bg-indigo-50/60 border border-indigo-100 p-4 rounded-2xl">
                       <label className="block text-xs font-black text-slate-900">
-                        ব্যালেন্স / কোর্স মূল্য বসান (BDT ৳) <span className="text-rose-500">*</span>
+                        Set Balance / Course Price (BDT ৳) <span className="text-rose-500">*</span>
                       </label>
                       <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
-                        ইউজার ব্যালেন্স ইনপুট দেননি। এপ্রুভ করার পূর্বে কাঙ্ক্ষিত ব্যালেন্স বা মূল্য বসিয়ে দিন। (কোর্স রিক্যুয়েস্টে ডিফল্ট ১ বছরের এক্সেস দেওয়া হবে)
+                        User did not enter a balance. Please enter the desired balance or price before approving. (Default course access duration is 1 year)
                       </p>
                       <div className="relative mt-2">
                         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-black text-slate-500 text-sm">৳</span>
@@ -2432,7 +2432,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       disabled={isProcessingAction}
                       className="w-full sm:w-auto px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-extrabold text-xs rounded-xl transition cursor-pointer"
                     >
-                      বাতিল (Cancel)
+                      Cancel
                     </button>
                     <button
                       type="button"
@@ -2447,7 +2447,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       className="w-full sm:w-auto px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold text-xs rounded-xl border border-rose-200 transition cursor-pointer flex items-center justify-center gap-1.5"
                     >
                       <XCircle className="w-4 h-4" />
-                      <span>ডিক্লাইন (Decline)</span>
+                      <span>Decline</span>
                     </button>
                     <button
                       type="button"
@@ -2455,7 +2455,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         if (!selectedActionRequest) return;
                         const balNum = Number(actionBalanceInput);
                         if (isNaN(balNum) || actionBalanceInput === '') {
-                          alert('অনুগ্রহ করে সঠিক ব্যালেন্স/মূল্য ইনপুট দিন');
+                          alert('Please enter a valid balance/price');
                           return;
                         }
                         setIsProcessingAction(true);
@@ -2467,7 +2467,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center justify-center gap-1.5"
                     >
                       <CheckCircle className="w-4 h-4" />
-                      <span>{isProcessingAction ? 'Processing...' : 'এপ্রুভ করুন (Approve)'}</span>
+                      <span>{isProcessingAction ? 'Processing...' : 'Approve'}</span>
                     </button>
                   </div>
                 </div>
@@ -2723,7 +2723,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                                   title={claimedEmail ? `Claimed by ${claimedEmail}` : 'Matched with user request'}
                                 >
                                   <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                  <span>এডেড (Added)</span>
+                                  <span>Added</span>
                                   {claimedEmail && (
                                     <span className="text-[10px] text-emerald-600/80 font-normal max-w-[120px] truncate">
                                       ({claimedEmail})
@@ -2736,7 +2736,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                                   title="Not claimed by any user request yet"
                                 >
                                   <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                                  <span>পেন্ডিং (Pending)</span>
+                                  <span>Pending</span>
                                 </span>
                               )}
                             </td>
@@ -3176,7 +3176,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                   <Lock className="w-4 h-4 text-amber-500" />
-                  <span>রেস্ট্রিকটেড কোর্সের ফ্রি ফ্ল্যাশকার্ড সংখ্যা (Free Sample Limit)</span>
+                  <span>Free Sample Limit (Restricted Courses)</span>
                 </h4>
                 <span className="px-2.5 py-1 bg-amber-50 text-amber-800 font-extrabold text-[10px] rounded-lg uppercase">
                   Free Trial Limit
@@ -3185,7 +3185,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
               <div className="space-y-3 pt-1 font-sans">
                 <label className="block text-xs font-bold text-slate-700">
-                  সবগুলো রেস্ট্রিকটেড কোর্সের প্রথম কতোটি ফ্ল্যাশকার্ড সবার জন্য উন্মুক্ত থাকবে?
+                  How many initial flashcards in restricted courses should be unlocked for free preview?
                 </label>
                 <div className="flex items-center gap-3">
                   <input
@@ -3204,10 +3204,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     }}
                     className="w-28 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 focus:bg-white outline-none text-sm font-mono font-extrabold text-slate-800"
                   />
-                  <span className="text-xs font-bold text-slate-600">টি ফ্ল্যাশকার্ড ফ্রিতে দেখা যাবে (ডিফল্ট: ১০টি)</span>
+                  <span className="text-xs font-bold text-slate-600">flashcards viewable for free (Default: 10)</span>
                 </div>
                 <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                  ফ্রি ফ্ল্যাশকার্ড এর ট্রায়াল সীমা শেষ হবার পর শিক্ষার্থীদের কোর্স কেনার/আনলক করার বার্তা পাঠানো হবে।
+                  After reaching the free flashcard trial limit, students will be prompted to enroll or unlock the course.
                 </p>
               </div>
             </div>
@@ -3218,10 +3218,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 <div>
                   <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                     <Gamepad2 className="w-4 h-4 text-purple-600" />
-                    <span>প্র্যাকটিস ও গেমস আইটেম পজিশন (Practice & Games Ordering)</span>
+                    <span>Practice & Games Item Ordering</span>
                   </h4>
                   <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                    ইউজারের Practice & Games পেজে কোন আইটেমটি কোন পজিশনে থাকবে তা নিয়ন্ত্রণ করুন
+                    Control the order and display position of items on the user's Practice & Games page
                   </p>
                 </div>
                 <button
@@ -3242,12 +3242,12 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               <div className="space-y-2 pt-1">
                 {(() => {
                   const practiceDict: Record<string, { label: string; desc: string; icon: string }> = {
-                    quiz: { label: 'MCQ Quiz', desc: 'মক টেস্ট ও ৪ বিকল্প কুইজ গেম', icon: '🎯' },
-                    match: { label: 'Word Match', desc: 'শব্দ ও অর্থের দ্রুত মিলকরণ গেম', icon: '🧩' },
-                    synonym: { label: 'Synonym Check', desc: 'সমার্থক শব্দ প্রস্তুতি ও প্র্যাকটিস', icon: '🔤' },
-                    blank: { label: 'Blank Filling', desc: 'বাক্যে উপযুক্ত শব্দ বসানো', icon: '✍️' },
-                    odd_one_out: { label: 'Odd One Out', desc: 'ব্যতিক্রমী শব্দ সনাক্তকরণ গেম', icon: '🔍' },
-                    analogy: { label: 'Word Analogy', desc: 'শব্দের পারস্পরিক সম্পর্ক গেম', icon: '⚖️' },
+                    quiz: { label: 'MCQ Quiz', desc: 'Mock test & 4-option quiz game', icon: '🎯' },
+                    match: { label: 'Word Match', desc: 'Fast-paced word & meaning matching game', icon: '🧩' },
+                    synonym: { label: 'Synonym Check', desc: 'Synonym preparation and practice', icon: '🔤' },
+                    blank: { label: 'Blank Filling', desc: 'Fill in missing words in sentences', icon: '✍️' },
+                    odd_one_out: { label: 'Odd One Out', desc: 'Identify the odd word out', icon: '🔍' },
+                    analogy: { label: 'Word Analogy', desc: 'Word relationships and analogy game', icon: '⚖️' },
                   };
                   const currentOrder = settings?.practiceItemsOrder && settings.practiceItemsOrder.length > 0
                     ? settings.practiceItemsOrder
@@ -3318,10 +3318,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 <div>
                   <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                     <BookOpen className="w-4 h-4 text-emerald-600" />
-                    <span>স্টাডি টুলস আইটেম পজিশন (Study Tools Ordering)</span>
+                    <span>Study Tools Item Ordering</span>
                   </h4>
                   <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                    ইউজারের Study Tools পেজে কোন টুলটি কোন পজিশনে থাকবে তা নির্ধারণ করুন
+                    Determine the order and display position of tools on the user's Study Tools page
                   </p>
                 </div>
                 <button
@@ -3342,10 +3342,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               <div className="space-y-2 pt-1">
                 {(() => {
                   const studyDict: Record<string, { label: string; desc: string; icon: string }> = {
-                    lists: { label: 'Bookmark & Lists', desc: 'পছন্দের শব্দ তালিকা এবং বুকমার্ক ফোল্ডার', icon: '🔖' },
-                    dictionary: { label: 'Dictionary Search', desc: 'ইংরেজি এবং বাংলা অভিধান ও বিস্তারিত অর্থ', icon: '📖' },
-                    planner: { label: 'Daily Planner', desc: 'দৈনিক পড়ার লক্ষ্য ও স্টাডি রুটিন', icon: '📅' },
-                    story: { label: 'Read Story', desc: 'গল্প ও রীডিং আর্টিকেলস', icon: '📚' },
+                    lists: { label: 'Bookmark & Lists', desc: 'Favorite word lists and bookmark folders', icon: '🔖' },
+                    dictionary: { label: 'Dictionary Search', desc: 'English & Bengali dictionary with detailed definitions', icon: '📖' },
+                    planner: { label: 'Daily Planner', desc: 'Daily reading goals and study routine', icon: '📅' },
+                    story: { label: 'Read Story', desc: 'Stories and reading articles', icon: '📚' },
                   };
                   const currentOrder = settings?.studyToolsItemsOrder && settings.studyToolsItemsOrder.length > 0
                     ? settings.studyToolsItemsOrder

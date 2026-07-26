@@ -9,14 +9,11 @@ import {
   Sparkles, 
   Check, 
   X, 
-  HelpCircle, 
-  Bookmark, 
-  Info, 
   Search, 
-  AArrowDown, 
-  AArrowUp, 
-  RotateCcw,
-  BookMarked
+  Eye, 
+  BookMarked,
+  Layers,
+  ArrowRight
 } from 'lucide-react';
 import { VocabularyWord, UserProgress, WordStatus, StoryItem } from '../types';
 
@@ -37,59 +34,144 @@ export default function ReadStoryView({
   onToggleBookmark,
   onOpenSettings
 }: ReadStoryViewProps) {
-  const [selectedStoryIndex, setSelectedStoryIndex] = useState<number>(0);
+  const [selectedStoryIndex, setSelectedStoryIndex] = useState<number | null>(null);
+  const [isStoryModalOpen, setIsStoryModalOpen] = useState<boolean>(false);
   const [activeWordPopup, setActiveWordPopup] = useState<VocabularyWord | null>(null);
   const [fontSize, setFontSize] = useState<'sm' | 'base' | 'lg' | 'xl'>('base');
   const [highlightColor, setHighlightColor] = useState<'red' | 'green' | 'blue' | 'black'>('blue');
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  useEffect(() => {
-    if (selectedStoryIndex >= stories.length && stories.length > 0) {
-      setSelectedStoryIndex(0);
+  // Helper function to extract clean terms from text (meanings, synonyms, words)
+  const extractCleanTerms = (text: string | undefined): string[] => {
+    if (!text || !text.trim()) return [];
+    // Remove parenthetical annotations like (বিশেষণ), (noun), (বিঃ)
+    const cleaned = text.replace(/\(.*?\)/g, ' ').replace(/\[.*?\]/g, ' ');
+    // Split by comma, semicolon, slash, or newline
+    const parts = cleaned.split(/[,;/|\n]+/);
+    const results: string[] = [];
+    for (const part of parts) {
+      const trimmed = part.trim();
+      // Require at least 2 characters for meaningful matching
+      if (trimmed.length >= 2) {
+        results.push(trimmed);
+      }
     }
-  }, [stories.length, selectedStoryIndex]);
+    return results;
+  };
 
-  const activeStory = stories[selectedStoryIndex] || null;
-
-  // Build a lookup map of course words for fast matching (lowercase)
-  const wordLookupMap = useMemo(() => {
+  // Build a lookup map of course words, meanings & synonyms for fast matching
+  const { wordLookupMap, allSearchTerms } = useMemo(() => {
     const map = new Map<string, VocabularyWord>();
+    const termsSet = new Set<string>();
+
     words.forEach(w => {
+      // 1. Base Word
       if (w.word && w.word.trim()) {
-        const clean = w.word.trim().toLowerCase();
-        map.set(clean, w);
+        const cleanWord = w.word.trim().toLowerCase();
+        map.set(cleanWord, w);
+        termsSet.add(cleanWord);
+      }
+
+      // 2. Extra Word if present
+      if (w.extraWord && w.extraWord.trim()) {
+        const cleanExtra = w.extraWord.trim().toLowerCase();
+        if (!map.has(cleanExtra)) map.set(cleanExtra, w);
+        termsSet.add(cleanExtra);
+      }
+
+      // 3. Meaning terms (e.g., Bengali meanings like "দয়ালু", "হ্রাস করা")
+      if (w.meaning) {
+        const meanings = extractCleanTerms(w.meaning);
+        meanings.forEach(m => {
+          const cleanM = m.toLowerCase();
+          if (!map.has(cleanM)) {
+            map.set(cleanM, w);
+          }
+          termsSet.add(cleanM);
+        });
+      }
+
+      // 4. Extra Meaning if present
+      if (w.extraMeaning) {
+        const extraMeanings = extractCleanTerms(w.extraMeaning);
+        extraMeanings.forEach(m => {
+          const cleanEM = m.toLowerCase();
+          if (!map.has(cleanEM)) {
+            map.set(cleanEM, w);
+          }
+          termsSet.add(cleanEM);
+        });
+      }
+
+      // 5. Synonyms terms
+      if (w.synonyms) {
+        const syns = extractCleanTerms(w.synonyms);
+        syns.forEach(s => {
+          const cleanS = s.toLowerCase();
+          if (!map.has(cleanS)) {
+            map.set(cleanS, w);
+          }
+          termsSet.add(cleanS);
+        });
       }
     });
-    return map;
-  }, [words]);
 
-  // Construct regex pattern for matching course words in story content
-  const wordRegex = useMemo(() => {
-    if (words.length === 0) return null;
-    const escapedWords = words
-      .map(w => w.word ? w.word.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '')
-      .filter(w => w.length > 0)
-      // Sort longer words first so "benevolent" matches before "benevol"
+    const sortedTerms = Array.from(termsSet)
+      .filter(t => t.length > 0)
+      // Sort longer terms first so longer phrases or multi-word terms match before shorter sub-terms
       .sort((a, b) => b.length - a.length);
 
-    if (escapedWords.length === 0) return null;
-
-    try {
-      return new RegExp(`\\b(${escapedWords.join('|')})\\b`, 'gi');
-    } catch (e) {
-      console.error('Regex compilation error:', e);
-      return null;
-    }
+    return { wordLookupMap: map, allSearchTerms: sortedTerms };
   }, [words]);
 
-  // Stop speech when story changes
+  // Construct regex pattern using Unicode boundary lookarounds
+  const wordRegex = useMemo(() => {
+    if (allSearchTerms.length === 0) return null;
+
+    const escapedWords = allSearchTerms.map(w => 
+      w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    );
+
+    try {
+      // Using Unicode lookarounds (?<![\p{L}\p{N}\p{M}_]) and (?![\\p{L}\\p{N}\\p{M}_]) with 'giu' flags
+      // This accurately handles both ASCII English and Unicode Bengali script boundaries!
+      return new RegExp(`(?<![\\p{L}\\p{N}\\p{M}_])(${escapedWords.join('|')})(?![\\p{L}\\p{N}\\p{M}_])`, 'giu');
+    } catch (e) {
+      console.error('Unicode Regex compilation error:', e);
+      try {
+        return new RegExp(`(${escapedWords.join('|')})`, 'gi');
+      } catch {
+        return null;
+      }
+    }
+  }, [allSearchTerms]);
+
+  // Stop speech when story changes or modal closes
   useEffect(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
     }
-  }, [selectedStoryIndex]);
+  }, [selectedStoryIndex, isStoryModalOpen]);
+
+  // Keyboard navigation for story modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isStoryModalOpen || selectedStoryIndex === null) return;
+      if (e.key === 'Escape') {
+        setIsStoryModalOpen(false);
+      } else if (e.key === 'ArrowLeft') {
+        setSelectedStoryIndex(prev => (prev !== null && prev > 0 ? prev - 1 : prev));
+      } else if (e.key === 'ArrowRight') {
+        setSelectedStoryIndex(prev => (prev !== null && prev < stories.length - 1 ? prev + 1 : prev));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isStoryModalOpen, selectedStoryIndex, stories.length]);
+
+  const activeStory = selectedStoryIndex !== null ? stories[selectedStoryIndex] || null : null;
 
   // Handle Text-to-Speech
   const handleToggleSpeech = () => {
@@ -100,10 +182,11 @@ export default function ReadStoryView({
       setIsSpeaking(false);
     } else if (activeStory) {
       window.speechSynthesis.cancel();
-      // Remove markdown bold markers if any
       const cleanText = activeStory.content.replace(/[\*_]/g, '');
       const utterance = new SpeechSynthesisUtterance(`${activeStory.title}. ${cleanText}`);
-      utterance.lang = 'en-US';
+      // Detect if text is mostly Bengali or English
+      const hasBengali = /[\u0980-\u09FF]/.test(cleanText);
+      utterance.lang = hasBengali ? 'bn-BD' : 'en-US';
       utterance.rate = 0.9;
 
       utterance.onend = () => setIsSpeaking(false);
@@ -121,52 +204,56 @@ export default function ReadStoryView({
     return stories.filter(s => s.title.toLowerCase().includes(q) || s.content.toLowerCase().includes(q));
   }, [stories, searchQuery]);
 
-  // Count vocabulary words present in the active story
-  const activeStoryVocab = useMemo(() => {
-    if (!activeStory || !wordLookupMap) return [];
+  // Helper to find unique vocabulary words in a given story text
+  const getVocabForStory = (content: string): VocabularyWord[] => {
+    if (!content || !wordLookupMap || !wordRegex) return [];
     const found = new Set<VocabularyWord>();
-    const textLower = activeStory.content.toLowerCase();
     
-    words.forEach(w => {
-      if (w.word && w.word.trim()) {
-        const regex = new RegExp(`\\b${w.word.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-        if (regex.test(textLower)) {
-          found.add(w);
-        }
+    // Reset regex index
+    wordRegex.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = wordRegex.exec(content)) !== null) {
+      const matchedTerm = match[0].toLowerCase();
+      const wordObj = wordLookupMap.get(matchedTerm);
+      if (wordObj) {
+        found.add(wordObj);
       }
-    });
+    }
 
     return Array.from(found);
-  }, [activeStory, words, wordLookupMap]);
+  };
 
-  // Render story paragraph with auto-bolded vocabulary words
+  // Vocab words present in current active story
+  const activeStoryVocab = useMemo(() => {
+    if (!activeStory) return [];
+    return getVocabForStory(activeStory.content);
+  }, [activeStory, wordLookupMap, wordRegex]);
+
+  // Render story paragraph with auto-detected vocabulary words/meanings
   const renderParagraphWithBoldWords = (text: string) => {
     if (!wordRegex) return text;
 
     const colorClasses = {
-      red: 'text-red-600 hover:text-red-700 decoration-red-500',
-      green: 'text-emerald-600 hover:text-emerald-700 decoration-emerald-500',
-      blue: 'text-blue-600 hover:text-blue-700 decoration-blue-500',
-      black: 'text-slate-950 hover:text-black decoration-slate-900'
+      red: 'text-red-600 hover:text-red-700 decoration-red-500 bg-red-50/60 hover:bg-red-100/80',
+      green: 'text-emerald-700 hover:text-emerald-800 decoration-emerald-500 bg-emerald-50/60 hover:bg-emerald-100/80',
+      blue: 'text-blue-700 hover:text-blue-800 decoration-blue-500 bg-blue-50/60 hover:bg-blue-100/80',
+      black: 'text-slate-950 hover:text-black decoration-slate-900 bg-slate-100/80 hover:bg-slate-200'
     };
 
     const parts: React.ReactNode[] = [];
     let lastIndex = 0;
     let match: RegExpExecArray | null;
 
-    // Reset regex index
     wordRegex.lastIndex = 0;
 
     while ((match = wordRegex.exec(text)) !== null) {
       const matchIndex = match.index;
       const matchedText = match[0];
 
-      // Push preceding text
       if (matchIndex > lastIndex) {
         parts.push(text.substring(lastIndex, matchIndex));
       }
 
-      // Find vocabulary object
       const matchedWordObj = wordLookupMap.get(matchedText.toLowerCase());
 
       if (matchedWordObj) {
@@ -178,8 +265,8 @@ export default function ReadStoryView({
               e.stopPropagation();
               setActiveWordPopup(matchedWordObj);
             }}
-            className={`inline font-extrabold underline underline-offset-2 cursor-pointer transition-colors ${colorClasses[highlightColor]}`}
-            title={`Click to view flashcard for "${matchedWordObj.word}"`}
+            className={`inline font-extrabold underline underline-offset-4 cursor-pointer transition-all px-1 py-0.5 rounded-md ${colorClasses[highlightColor]}`}
+            title={`Click to view flashcard for "${matchedWordObj.word}" (${matchedWordObj.meaning || ''})`}
           >
             {matchedText}
           </button>
@@ -198,12 +285,16 @@ export default function ReadStoryView({
     return parts;
   };
 
-  // Font size CSS class mapping
   const fontSizeClasses = {
     sm: 'text-xs sm:text-sm leading-relaxed',
     base: 'text-sm sm:text-base leading-relaxed',
     lg: 'text-base sm:text-lg leading-loose',
     xl: 'text-lg sm:text-xl leading-loose'
+  };
+
+  const handleOpenStoryModal = (originalIndex: number) => {
+    setSelectedStoryIndex(originalIndex);
+    setIsStoryModalOpen(true);
   };
 
   if (stories.length === 0) {
@@ -215,7 +306,7 @@ export default function ReadStoryView({
         <div className="max-w-md mx-auto space-y-2">
           <h3 className="font-extrabold text-slate-900 text-lg">কোনো গল্প পাওয়া যায়নি (No Stories Yet)</h3>
           <p className="text-xs text-slate-500 leading-relaxed font-medium">
-            এই কোর্সের জন্য কোনো গল্প এখনও আপলোড করা হয়নি। শিক্ষক বা অ্যাডমিন কোর্স সেটিংসে গিয়ে সরাসরি ওয়ার্ড ফাইল (.docx) থেকে গল্প আপলোড করতে পারবেন।
+            এই কোর্সের জন্য কোনো গল্প এখনও আপলোড করা হয়নি। শিক্ষক বা অ্যাডমিন কোর্স সেটিংসে গিয়ে সরাসরি ওয়ার্ড ফাইল (.docx) বা টেক্সট থেকে বাংলা ও ইংরেজি গল্প আপলোড করতে পারবেন।
           </p>
         </div>
         {onOpenSettings && (
@@ -241,7 +332,7 @@ export default function ReadStoryView({
           </span>
           <h2 className="text-2xl sm:text-3xl font-black tracking-tight">গল্প পড়ুন ও শব্দ শিখুন</h2>
           <p className="text-xs sm:text-sm text-indigo-200 leading-relaxed font-medium">
-            গল্পের মাঝে কোর্সের ভোকাবুলারি শব্দগুলো বোল্ড করা রয়েছে। শব্দে ক্লিক করে সাথে সাথে বাংলা অর্থ, সমার্থ ও উদাহরণ দেখে নিন।
+            গল্পের ভেতরে ভোকাবুলারি শব্দ ও বাংলা অর্থ হাইলাইট করা থাকে। গল্পটি ওপেন করে পড়তে যেকোনো গল্পে ক্লিক করুন।
           </p>
         </div>
 
@@ -259,223 +350,265 @@ export default function ReadStoryView({
         </div>
       </div>
 
-      {/* Main Layout: Story Selector + Story Reader */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Story Selector Sidebar (4 Cols) */}
-        <div className="lg:col-span-4 space-y-3">
-          {/* Search Box */}
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="গল্পের টাইটেল বা শব্দ খুঁজুন..."
-              className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:border-indigo-500 outline-none transition text-slate-800 shadow-2xs"
-            />
-          </div>
-
-          {/* Stories List */}
-          <div className="space-y-2 max-h-[550px] overflow-y-auto pr-1 scrollbar-thin">
-            {filteredStories.map((story, idx) => {
-              const originalIndex = stories.findIndex(s => s.id === story.id);
-              const isSelected = originalIndex === selectedStoryIndex;
-
-              return (
-                <div
-                  key={story.id}
-                  onClick={() => setSelectedStoryIndex(originalIndex)}
-                  className={`p-4 rounded-2xl cursor-pointer transition-all duration-200 border ${
-                    isSelected
-                      ? 'bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 text-white border-indigo-700 shadow-md ring-2 ring-indigo-500/20'
-                      : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200/80 shadow-2xs'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-1.5">
-                    <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full border ${
-                      isSelected
-                        ? 'bg-indigo-500/30 text-indigo-200 border-indigo-400/30'
-                        : 'bg-slate-100 text-slate-600 border-slate-200'
-                    }`}>
-                      Story #{originalIndex + 1}
-                    </span>
-
-                    <span className={`text-[10px] font-bold ${isSelected ? 'text-indigo-200' : 'text-slate-400'}`}>
-                      {story.content.split(/\s+/).length} Words
-                    </span>
-                  </div>
-
-                  <h4 className={`text-sm font-bold line-clamp-1 ${isSelected ? 'text-white' : 'text-slate-900'}`}>
-                    {story.title}
-                  </h4>
-
-                  <p className={`text-xs line-clamp-2 mt-1 font-normal ${isSelected ? 'text-indigo-200/80' : 'text-slate-500'}`}>
-                    {story.content}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
+      {/* Search Bar */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="গল্পের টাইটেল বা শব্দ খুঁজুন..."
+            className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:border-indigo-500 outline-none transition text-slate-800 shadow-2xs"
+          />
         </div>
 
-        {/* Story Reader Main Panel (8 Cols) */}
-        <div className="lg:col-span-8 space-y-4">
-          {activeStory ? (
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6 relative">
-              
-              {/* Reader Controls Toolbar */}
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-500">Story {selectedStoryIndex + 1} of {stories.length}</span>
+        <span className="text-xs text-slate-500 font-bold self-end sm:self-center">
+          {filteredStories.length} of {stories.length} stories
+        </span>
+      </div>
+
+      {/* Stories Catalog Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {filteredStories.map((story) => {
+          const originalIndex = stories.findIndex(s => s.id === story.id);
+          const vocabCount = getVocabForStory(story.content).length;
+
+          return (
+            <div
+              key={story.id}
+              onClick={() => handleOpenStoryModal(originalIndex)}
+              className="bg-white hover:bg-slate-50/80 rounded-2xl p-5 border border-slate-200 shadow-2xs hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between space-y-4 group relative overflow-hidden"
+            >
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-mono font-extrabold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-150">
+                    Story #{originalIndex + 1}
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-400">
+                    {story.content.split(/\s+/).length} Words
+                  </span>
                 </div>
 
-                {/* Toolbar buttons */}
+                <h3 className="text-base font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1">
+                  {story.title}
+                </h3>
+
+                <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed font-normal">
+                  {story.content}
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                {vocabCount > 0 ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">
+                    <Sparkles className="w-3 h-3 text-indigo-500" />
+                    <span>{vocabCount}টি শব্দ চিহ্নিত</span>
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-slate-400 font-medium">সাধারণ গল্প</span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenStoryModal(originalIndex);
+                  }}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-2xs cursor-pointer group-hover:scale-102"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>গল্প পড়ুন</span>
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* DEDICATED STORY READING POPUP MODAL (Hides surrounding stories) */}
+      <AnimatePresence>
+        {isStoryModalOpen && activeStory && (
+          <div 
+            className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+            onClick={() => setIsStoryModalOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl max-w-4xl w-full max-h-[92vh] shadow-2xl border border-slate-200 flex flex-col overflow-hidden relative"
+            >
+              {/* Modal Header Bar */}
+              <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 sm:p-6 flex items-center justify-between gap-4 border-b border-slate-800 shrink-0">
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <span className="text-xs font-mono font-black px-2.5 py-1 bg-indigo-500/20 text-indigo-200 rounded-full border border-indigo-400/30 shrink-0">
+                    Story {selectedStoryIndex! + 1} / {stories.length}
+                  </span>
+                  <h3 className="text-base sm:text-xl font-black tracking-tight text-white truncate">
+                    {activeStory.title}
+                  </h3>
+                </div>
+
+                {/* Close Modal Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsStoryModalOpen(false)}
+                  className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition cursor-pointer shrink-0"
+                  title="Close Story Popup (Esc)"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Reader Controls Toolbar Bar */}
+              <div className="bg-slate-50 px-5 sm:px-6 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  {/* Word Color Picker */}
-                  <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200" title="Vocabulary word highlight color">
-                    <span className="text-[10px] font-extrabold text-slate-500 pl-1">Color:</span>
+                  {/* Highlight Color Picker */}
+                  <div className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-xl border border-slate-200 shadow-2xs">
+                    <span className="text-[10px] font-extrabold text-slate-500">Color:</span>
+                    <button
+                      type="button"
+                      onClick={() => setHighlightColor('blue')}
+                      className={`w-4 h-4 rounded-full transition-all cursor-pointer ${
+                        highlightColor === 'blue' ? 'bg-blue-600 ring-2 ring-blue-400 scale-110' : 'bg-blue-500 opacity-60'
+                      }`}
+                      title="Blue"
+                    />
                     <button
                       type="button"
                       onClick={() => setHighlightColor('red')}
-                      className={`w-5 h-5 rounded-lg transition-all cursor-pointer ${
-                        highlightColor === 'red' ? 'bg-red-600 ring-2 ring-red-400 scale-110' : 'bg-red-500 hover:scale-105 opacity-60'
+                      className={`w-4 h-4 rounded-full transition-all cursor-pointer ${
+                        highlightColor === 'red' ? 'bg-red-600 ring-2 ring-red-400 scale-110' : 'bg-red-500 opacity-60'
                       }`}
                       title="Red"
                     />
                     <button
                       type="button"
                       onClick={() => setHighlightColor('green')}
-                      className={`w-5 h-5 rounded-lg transition-all cursor-pointer ${
-                        highlightColor === 'green' ? 'bg-emerald-600 ring-2 ring-emerald-400 scale-110' : 'bg-emerald-500 hover:scale-105 opacity-60'
+                      className={`w-4 h-4 rounded-full transition-all cursor-pointer ${
+                        highlightColor === 'green' ? 'bg-emerald-600 ring-2 ring-emerald-400 scale-110' : 'bg-emerald-500 opacity-60'
                       }`}
                       title="Green"
                     />
                     <button
                       type="button"
-                      onClick={() => setHighlightColor('blue')}
-                      className={`w-5 h-5 rounded-lg transition-all cursor-pointer ${
-                        highlightColor === 'blue' ? 'bg-blue-600 ring-2 ring-blue-400 scale-110' : 'bg-blue-500 hover:scale-105 opacity-60'
-                      }`}
-                      title="Blue"
-                    />
-                    <button
-                      type="button"
                       onClick={() => setHighlightColor('black')}
-                      className={`w-5 h-5 rounded-lg transition-all cursor-pointer ${
-                        highlightColor === 'black' ? 'bg-slate-900 ring-2 ring-slate-400 scale-110' : 'bg-slate-800 hover:scale-105 opacity-60'
+                      className={`w-4 h-4 rounded-full transition-all cursor-pointer ${
+                        highlightColor === 'black' ? 'bg-slate-900 ring-2 ring-slate-400 scale-110' : 'bg-slate-800 opacity-60'
                       }`}
                       title="Black"
                     />
                   </div>
 
-                  {/* Speech Button */}
-                  <button
-                    type="button"
-                    onClick={handleToggleSpeech}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer border ${
-                      isSpeaking
-                        ? 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse'
-                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
-                    }`}
-                    title="Audio Listen"
-                  >
-                    {isSpeaking ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-                    <span>{isSpeaking ? 'Stop Audio' : 'Listen Story'}</span>
-                  </button>
-
                   {/* Font Size Controls */}
-                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                  <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
                     <button
                       type="button"
                       onClick={() => setFontSize('sm')}
-                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold ${fontSize === 'sm' ? 'bg-white shadow-2xs text-indigo-700' : 'text-slate-500'}`}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition ${fontSize === 'sm' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
                     >
                       A-
                     </button>
                     <button
                       type="button"
                       onClick={() => setFontSize('base')}
-                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold ${fontSize === 'base' ? 'bg-white shadow-2xs text-indigo-700' : 'text-slate-500'}`}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition ${fontSize === 'base' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
                     >
                       A
                     </button>
                     <button
                       type="button"
                       onClick={() => setFontSize('lg')}
-                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold ${fontSize === 'lg' ? 'bg-white shadow-2xs text-indigo-700' : 'text-slate-500'}`}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition ${fontSize === 'lg' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
                     >
                       A+
                     </button>
                   </div>
+
+                  {/* Speech Listen Button */}
+                  <button
+                    type="button"
+                    onClick={handleToggleSpeech}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer border ${
+                      isSpeaking
+                        ? 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse'
+                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
+                    }`}
+                    title="Audio Speech Player"
+                  >
+                    {isSpeaking ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5 text-indigo-600" />}
+                    <span>{isSpeaking ? 'থামুন (Stop)' : 'শুনুন (Listen)'}</span>
+                  </button>
                 </div>
-              </div>
 
-              {/* Story Title */}
-              <div className="space-y-2">
-                <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight leading-snug">
-                  {activeStory.title}
-                </h3>
-
-                {/* Vocab found badge */}
                 {activeStoryVocab.length > 0 && (
-                  <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                    <span className="text-[10px] font-extrabold text-indigo-800 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-150 flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-indigo-600" />
-                      <span>{activeStoryVocab.length} vocabulary words in this story</span>
-                    </span>
-                  </div>
+                  <span className="text-[11px] font-extrabold text-indigo-800 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-150 inline-flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>{activeStoryVocab.length} vocabulary words detected</span>
+                  </span>
                 )}
               </div>
 
-              {/* Story Body Content */}
-              <div 
-                style={{ fontFamily: "'Poppins', sans-serif" }}
-                className={`text-slate-800 space-y-4 font-normal ${fontSizeClasses[fontSize]}`}
-              >
-                {activeStory.content.split(/\r?\n\s*\r?\n+/).map((paragraph, pIdx) => (
-                  <p key={`p-${pIdx}`} className="leading-relaxed whitespace-pre-wrap">
-                    {renderParagraphWithBoldWords(paragraph)}
-                  </p>
-                ))}
+              {/* Story Content Reading Body */}
+              <div className="p-6 sm:p-10 flex-1 overflow-y-auto space-y-6 bg-slate-50/30">
+                <div className="space-y-2 border-b border-slate-100 pb-4">
+                  <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-snug">
+                    {activeStory.title}
+                  </h2>
+                </div>
+
+                <div className={`text-slate-800 space-y-5 font-normal ${fontSizeClasses[fontSize]}`}>
+                  {activeStory.content.split(/\r?\n\s*\r?\n+/).map((paragraph, pIdx) => (
+                    <p key={`p-${pIdx}`} className="leading-relaxed whitespace-pre-wrap">
+                      {renderParagraphWithBoldWords(paragraph)}
+                    </p>
+                  ))}
+                </div>
               </div>
 
-              {/* Reader Footer Navigation */}
-              <div className="flex items-center justify-between pt-6 border-t border-slate-100">
+              {/* Modal Footer Controls */}
+              <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
                 <button
                   type="button"
                   disabled={selectedStoryIndex === 0}
-                  onClick={() => setSelectedStoryIndex(prev => Math.max(0, prev - 1))}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-800 rounded-xl text-xs font-extrabold flex items-center gap-1 transition cursor-pointer"
+                  onClick={() => setSelectedStoryIndex(prev => (prev !== null && prev > 0 ? prev - 1 : prev))}
+                  className="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-200 disabled:opacity-40 text-slate-800 rounded-xl text-xs font-extrabold flex items-center gap-1 transition cursor-pointer shadow-2xs"
                 >
                   <ChevronLeft className="w-4 h-4" />
-                  <span>Previous Story</span>
+                  <span>আগের গল্প (Previous)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsStoryModalOpen(false)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  বন্ধ করুন (Close)
                 </button>
 
                 <button
                   type="button"
                   disabled={selectedStoryIndex === stories.length - 1}
-                  onClick={() => setSelectedStoryIndex(prev => Math.min(stories.length - 1, prev + 1))}
+                  onClick={() => setSelectedStoryIndex(prev => (prev !== null && prev < stories.length - 1 ? prev + 1 : prev))}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl text-xs font-extrabold flex items-center gap-1 transition shadow-xs cursor-pointer"
                 >
-                  <span>Next Story</span>
+                  <span>পরের গল্প (Next)</span>
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
-            </div>
-          ) : (
-            <div className="bg-white rounded-3xl border border-slate-200 p-8 text-center text-slate-500 text-xs font-medium">
-              গল্প নির্বাচন করুন
-            </div>
-          )}
-        </div>
-      </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
-      {/* Interactive Word Flashcard Modal when clicking a vocabulary word */}
+      {/* Interactive Word Flashcard Modal when clicking a vocabulary word inside a story */}
       <AnimatePresence>
         {activeWordPopup && (
           <div 
-            className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+            className="fixed inset-0 z-60 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
             onClick={() => setActiveWordPopup(null)}
           >
             <motion.div

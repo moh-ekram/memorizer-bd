@@ -142,6 +142,83 @@ export default function MyCoursesView({
     setCart(prev => prev.filter(c => c.id !== courseId));
   };
 
+  // Free sample usage tracking state
+  const [usedFreeSamples, setUsedFreeSamples] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const cleanEmail = (user?.email || accessEmail || '').trim().toLowerCase();
+    const storageKey = `vocab_used_free_samples_${cleanEmail || 'guest'}`;
+    try {
+      const localData = localStorage.getItem(storageKey);
+      if (localData) {
+        setUsedFreeSamples(JSON.parse(localData));
+      }
+    } catch (e) {
+      console.warn("Error reading local free samples:", e);
+    }
+
+    if (cleanEmail) {
+      getDoc(doc(db, 'user_used_samples', cleanEmail)).then((snap) => {
+        if (snap.exists()) {
+          const remoteData = snap.data().samples || {};
+          setUsedFreeSamples(prev => {
+            const merged = { ...prev, ...remoteData };
+            try {
+              localStorage.setItem(storageKey, JSON.stringify(merged));
+            } catch {}
+            return merged;
+          });
+        }
+      }).catch(err => console.warn("Error fetching remote free samples:", err));
+    }
+  }, [user?.email, accessEmail]);
+
+  const isFreeSampleUsed = (courseId: string) => {
+    const normId = courseId.trim().toLowerCase();
+    return Boolean(usedFreeSamples[normId]);
+  };
+
+  const handleOpenFreeSample = async (course: Course, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const normId = course.id.trim().toLowerCase();
+    
+    // Check if free sample was already used
+    if (isFreeSampleUsed(normId)) {
+      alert(`আপনি ইতোমধ্যে "${course.title}" কোর্সের ফ্রি স্যাম্পল ফ্ল্যাশকার্ড দেখেছেন। কোর্সটি সম্পূর্ণ পড়তে অনুগ্রহ করে আনলক/ক্রয় করে নিন।`);
+      return;
+    }
+
+    // Mark as used locally and in DB
+    const cleanEmail = (user?.email || accessEmail || '').trim().toLowerCase();
+    const storageKey = `vocab_used_free_samples_${cleanEmail || 'guest'}`;
+    const updated = { ...usedFreeSamples, [normId]: true };
+    setUsedFreeSamples(updated);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+    } catch {}
+
+    if (cleanEmail) {
+      try {
+        await setDoc(doc(db, 'user_used_samples', cleanEmail), {
+          email: cleanEmail,
+          samples: updated,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (err) {
+        console.warn("Failed to update remote free sample record:", err);
+      }
+    }
+
+    // Close detail modal if open
+    setSelectedDetailCourse(null);
+
+    // Set active course & directly navigate to flashcards tab
+    setActiveCourseId(course.id);
+    if (onSelectTab) {
+      onSelectTab('flashcard');
+    }
+  };
+
   const cartTotalPrice = cart.reduce((sum, c) => sum + ((c.price && c.price > 0) ? c.price : 30), 0);
 
   // Direct Claim with Wallet Balance (no bKash Sender or TrxID required)
@@ -156,7 +233,21 @@ export default function MyCoursesView({
     const targetCourses = isCartPurchase ? cart : (selectedBuyCourse ? [selectedBuyCourse] : []);
     if (targetCourses.length === 0) return;
 
-    const totalPrice = targetCourses.reduce((sum, c) => sum + ((c.price && c.price > 0) ? c.price : 30), 0);
+    // Filter out courses that are ALREADY accessible/enrolled
+    const unpurchasedCourses = targetCourses.filter(c => !isCourseAccessible(c, enrolledCourseIds, cleanEmail));
+
+    if (unpurchasedCourses.length === 0) {
+      // All target courses are already unlocked!
+      setCheckoutMessage({
+        type: 'success',
+        text: 'এই কোর্সটি ইতোমধ্যে আপনার একাউন্টে সফলভাবে আনলক করা রয়েছে! কোনো ব্যালেন্স কাটা হয়নি।'
+      });
+      // Ensure local enrollment state is updated
+      targetCourses.forEach(c => onImportCourse(c));
+      return;
+    }
+
+    const totalPrice = unpurchasedCourses.reduce((sum, c) => sum + ((c.price && c.price > 0) ? c.price : 30), 0);
 
     if (userWalletBalance < totalPrice) {
       setCheckoutMessage({ 
@@ -182,8 +273,8 @@ export default function MyCoursesView({
 
       setUserWalletBalance(remainingBalance);
 
-      // 2. Unlock all target courses directly
-      for (const appCourse of targetCourses) {
+      // 2. Unlock all unpurchased courses directly
+      for (const appCourse of unpurchasedCourses) {
         try {
           const courseRef = doc(db, 'courses', appCourse.id);
           const courseSnap = await getDoc(courseRef);
@@ -201,20 +292,32 @@ export default function MyCoursesView({
         onImportCourse(appCourse);
       }
 
+      // Update local enrolledCourseIds state immediately
+      setEnrolledCourseIds(prev => {
+        const newIds = unpurchasedCourses.map(c => c.id.trim().toLowerCase());
+        const updated = [...prev];
+        newIds.forEach(id => {
+          if (!updated.some(existing => existing.trim().toLowerCase() === id)) {
+            updated.push(id);
+          }
+        });
+        return updated;
+      });
+
       // 3. Save approved access request record for history
       const requestId = `req_wallet_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       await setDoc(doc(db, 'access_requests', requestId), {
         id: requestId,
-        courseId: isCartPurchase ? 'multi_cart' : targetCourses[0].id,
-        courseTitle: isCartPurchase ? `Cart Purchase (${targetCourses.length} Courses)` : targetCourses[0].title,
-        courseCode: targetCourses.map(c => c.code || c.id).join(', '),
-        courseIds: targetCourses.map(c => c.id),
-        courseTitles: targetCourses.map(c => c.title),
+        courseId: isCartPurchase ? 'multi_cart' : unpurchasedCourses[0].id,
+        courseTitle: isCartPurchase ? `Cart Purchase (${unpurchasedCourses.length} Courses)` : unpurchasedCourses[0].title,
+        courseCode: unpurchasedCourses.map(c => c.code || c.id).join(', '),
+        courseIds: unpurchasedCourses.map(c => c.id),
+        courseTitles: unpurchasedCourses.map(c => c.title),
         bkashNumber: 'WALLET_BALANCE',
         email: cleanEmail,
         trxId: `WALLET_PAY_${Date.now()}`,
         status: 'approved',
-        price: targetCourses[0].price || 30,
+        price: unpurchasedCourses[0].price || 30,
         totalPrice,
         createdAt: new Date().toISOString(),
         requestedBy: user?.email || cleanEmail
@@ -968,21 +1071,25 @@ export default function MyCoursesView({
               {/* Locked Course Options: Free Cards, Cart, Info */}
               {!isUserAllowed && (
                 <>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveCourseId(course.id);
-                      if (onSelectTab) {
-                        onSelectTab('flashcard');
-                      }
-                    }}
-                    className="px-1.5 py-1 rounded-md text-[9px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-0.5 transition cursor-pointer"
-                    title="View Free Sample Cards"
-                  >
-                    <Eye className="w-2.5 h-2.5 text-amber-600" />
-                    <span className="hidden xs:inline">Free</span>
-                  </button>
+                  {(() => {
+                    const sampleUsed = isFreeSampleUsed(course.id);
+                    return (
+                      <button
+                        type="button"
+                        disabled={sampleUsed}
+                        onClick={(e) => handleOpenFreeSample(course, e)}
+                        className={`px-1.5 py-1 rounded-md text-[9px] font-bold flex items-center gap-0.5 transition ${
+                          sampleUsed
+                            ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
+                            : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 cursor-pointer'
+                        }`}
+                        title={sampleUsed ? "Free Sample Cards Already Viewed" : "View Free Sample Cards"}
+                      >
+                        <Eye className={`w-2.5 h-2.5 ${sampleUsed ? 'text-slate-400' : 'text-amber-600'}`} />
+                        <span className="hidden xs:inline">{sampleUsed ? 'Sample Used' : 'Free'}</span>
+                      </button>
+                    );
+                  })()}
 
                   <button
                     type="button"
@@ -1428,19 +1535,28 @@ export default function MyCoursesView({
                 <div className="p-4 bg-slate-50 border-t border-slate-150 flex flex-wrap items-center gap-2">
                   {!isUserAllowed ? (
                     <div className="w-full flex flex-col sm:flex-row items-center gap-2">
-                      <button
-                        onClick={() => {
-                          setActiveCourseId(course.id);
-                          if (onSelectTab) {
-                            onSelectTab('flashcard');
-                          }
-                          setSelectedDetailCourse(null);
-                        }}
-                        className="flex-1 w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/10 active:scale-98"
-                      >
-                        <Play className="w-4 h-4 fill-current text-amber-300" />
-                        <span>ফ্রি কার্ডস দেখুন ({course.freeFlashcardsCount || 10}টি ফ্রি)</span>
-                      </button>
+                      {(() => {
+                        const sampleUsed = isFreeSampleUsed(course.id);
+                        return (
+                          <button
+                            disabled={sampleUsed}
+                            onClick={() => handleOpenFreeSample(course)}
+                            className={`flex-1 w-full py-2.5 text-xs font-black rounded-xl transition flex items-center justify-center gap-1.5 shadow-md ${
+                              sampleUsed
+                                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
+                                : 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer shadow-indigo-600/10 active:scale-98'
+                            }`}
+                            title={sampleUsed ? "Free Sample Cards Already Viewed" : "View Free Sample Cards"}
+                          >
+                            <Play className={`w-4 h-4 fill-current ${sampleUsed ? 'text-slate-400' : 'text-amber-300'}`} />
+                            <span>
+                              {sampleUsed 
+                                ? 'Free Sample Used' 
+                                : `ফ্রি কার্ডস দেখুন (${course.freeFlashcardsCount || 10}টি ফ্রি)`}
+                            </span>
+                          </button>
+                        );
+                      })()}
 
                       <button
                         onClick={() => {
@@ -1727,10 +1843,46 @@ export default function MyCoursesView({
 
                 {/* Wallet Balance Check */}
                 {(() => {
+                  const targetCourses = isCartCheckoutMode && cart.length > 0 ? cart : (selectedBuyCourse ? [selectedBuyCourse] : []);
+                  const cleanEmail = accessEmail.trim().toLowerCase();
+                  const isAlreadyUnlocked = targetCourses.length > 0 && targetCourses.every(c => isCourseAccessible(c, enrolledCourseIds, cleanEmail));
                   const requiredPrice = isCartCheckoutMode && cart.length > 0 
                     ? cartTotalPrice 
                     : ((selectedBuyCourse?.price && selectedBuyCourse.price > 0) ? selectedBuyCourse.price : 30);
                   const hasEnoughBalance = userWalletBalance >= requiredPrice;
+
+                  if (isAlreadyUnlocked || checkoutMessage?.type === 'success') {
+                    return (
+                      <div className="space-y-3 pt-1 font-sans">
+                        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl space-y-1">
+                          <p className="text-xs font-bold flex items-center gap-1.5 text-emerald-800">
+                            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <span>কোর্সটি ইতোমধ্যে আপনার একাউন্টে সফলভাবে আনলক করা রয়েছে!</span>
+                          </p>
+                          <p className="text-[11px] text-emerald-700 font-medium">
+                            আপনার ওয়ালেট থেকে কোনো অতিরিক্ত টাকা কাটা হবে না। সরাসরি স্টাডি অপশনে ক্লিক করে পড়াশোনা শুরু করুন।
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (targetCourses.length > 0) {
+                              setActiveCourseId(targetCourses[0].id);
+                              if (onSelectTab) {
+                                onSelectTab('flashcard');
+                              }
+                            }
+                            setSelectedBuyCourse(null);
+                            setIsCartCheckoutMode(false);
+                          }}
+                          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl transition cursor-pointer shadow-md flex items-center justify-center gap-2"
+                        >
+                          <Play className="w-4 h-4 fill-current text-amber-300" />
+                          <span>কোর্সটিতে ঢুকুন (Start Studying)</span>
+                        </button>
+                      </div>
+                    );
+                  }
 
                   return (
                     <div className="space-y-3 pt-1">
