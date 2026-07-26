@@ -1548,44 +1548,17 @@ export default function App() {
       >
         <button
           onClick={() => {
-            setSelectedGroupFromDash(null);
-            setActiveTab('dashboard');
+            setActiveTab('profile');
           }}
-          data-active={activeTab === 'dashboard'}
+          data-active={['profile', 'dashboard', 'my_courses', 'flashcard'].includes(activeTab)}
           className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 p-2 md:px-4 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 text-xs font-bold ${
-            activeTab === 'dashboard'
+            ['profile', 'dashboard', 'my_courses', 'flashcard'].includes(activeTab)
               ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/15'
               : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
           }`}
         >
-          <LayoutDashboard className="w-4 h-4" />
-          <span className="hidden md:inline">Dashboard</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('my_courses')}
-          data-active={activeTab === 'my_courses'}
-          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 p-2 md:px-4 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 text-xs font-bold ${
-            activeTab === 'my_courses'
-              ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/15'
-              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-          }`}
-        >
-          <BookOpen className="w-4 h-4 text-emerald-500" />
-          <span className="hidden md:inline">My Courses</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('flashcard')}
-          data-active={activeTab === 'flashcard'}
-          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 p-2 md:px-4 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 text-xs font-bold ${
-            activeTab === 'flashcard'
-              ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/15'
-              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-          }`}
-        >
-          <CreditCard className="w-4 h-4 animate-icon-flip" />
-          <span className="hidden md:inline">Flashcard</span>
+          <User className="w-4 h-4 text-amber-300" />
+          <span>My Profile</span>
         </button>
 
         <button
@@ -1684,67 +1657,138 @@ export default function App() {
         onTouchEnd={handleTouchEnd}
       >
         <div className="max-w-7xl mx-auto">
-          {activeTab === 'dashboard' && (
-            <StatsDashboard
-              user={user}
-              words={activeWords}
-              progress={progress}
-              goal={goal}
-              setGoal={setGoal}
-              allCourses={allAvailableCourses}
-              enrolledCourseIds={enrolledCourseIds}
-              activeCourseId={activeCourseId}
-              setActiveCourseId={setActiveCourseId}
-              setEnrolledCourseIds={setEnrolledCourseIds}
-              onImportCourse={handleImportCourse}
-              onRateWord={handleRateWord}
-              onBatchRateWords={handleBatchRateWords}
-              onSelectGroup={(gNum) => {
-                setSelectedGroupFromDash(gNum);
-                setActiveTab('flashcard');
-              }}
-              onSelectTab={setActiveTab}
-              settings={settings}
-            />
-          )}
+          {['profile', 'dashboard', 'my_courses', 'flashcard'].includes(activeTab) && (
+            <div className="space-y-6">
+              {/* My Profile Sub-Navigation Pills */}
+              <div className="bg-white p-1.5 sm:p-2 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-center gap-1 sm:gap-2 max-w-xl mx-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('profile');
+                    setProfileSubTab('flashcard');
+                  }}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl font-extrabold text-xs transition cursor-pointer ${
+                    profileSubTab === 'flashcard'
+                      ? 'bg-indigo-600 text-white shadow-xs shadow-indigo-500/20'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <CreditCard className="w-4 h-4" />
+                  <span>Flashcard (ফ্ল্যাশকার্ড)</span>
+                </button>
 
-          {activeTab === 'my_courses' && (
-            <MyCoursesView
-              user={user}
-              allCourses={allAvailableCourses}
-              enrolledCourseIds={enrolledCourseIds}
-              activeCourseId={activeCourseId}
-              setActiveCourseId={setActiveCourseId}
-              setEnrolledCourseIds={setEnrolledCourseIds}
-              progress={progress}
-              onImportCourse={handleImportCourse}
-              onSelectTab={setActiveTab}
-            />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedGroupFromDash(null);
+                    setActiveTab('profile');
+                    setProfileSubTab('dashboard');
+                  }}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl font-extrabold text-xs transition cursor-pointer ${
+                    profileSubTab === 'dashboard'
+                      ? 'bg-indigo-600 text-white shadow-xs shadow-indigo-500/20'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <LayoutDashboard className="w-4 h-4" />
+                  <span>Dashboard (ড্যাশবোর্ড)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('profile');
+                    setProfileSubTab('my_courses');
+                  }}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl font-extrabold text-xs transition cursor-pointer ${
+                    profileSubTab === 'my_courses'
+                      ? 'bg-indigo-600 text-white shadow-xs shadow-indigo-500/20'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <BookOpen className="w-4 h-4" />
+                  <span>My Courses (কোর্স)</span>
+                </button>
+              </div>
+
+              {/* Flashcard Sub-View (First / Default when entering My Profile) */}
+              {profileSubTab === 'flashcard' && (
+                <FlashcardViewer
+                  words={activeWords}
+                  progress={progress}
+                  folders={folders}
+                  onRateWord={handleRateWord}
+                  onUpdateNotes={handleUpdateNotes}
+                  onToggleBookmark={handleToggleBookmark}
+                  initialGroup={selectedGroupFromDash}
+                  settings={settings}
+                  onUpdateSettings={setSettings}
+                  placeLabels={activeCourse?.placeLabels}
+                  googleSearchQuery={activeCourse?.googleSearchQuery}
+                  isRestrictedLocked={isRestrictedLocked}
+                  freeFlashcardsCount={activeCourse?.freeFlashcardsCount}
+                  coursePrice={activeCourse?.price}
+                  courseTitle={activeCourse?.title}
+                  onUnlockCourse={() => setProfileSubTab('my_courses')}
+                />
+              )}
+
+              {/* Dashboard Sub-View */}
+              {profileSubTab === 'dashboard' && (
+                <StatsDashboard
+                  user={user}
+                  words={activeWords}
+                  progress={progress}
+                  goal={goal}
+                  setGoal={setGoal}
+                  allCourses={allAvailableCourses}
+                  enrolledCourseIds={enrolledCourseIds}
+                  activeCourseId={activeCourseId}
+                  setActiveCourseId={setActiveCourseId}
+                  setEnrolledCourseIds={setEnrolledCourseIds}
+                  onImportCourse={handleImportCourse}
+                  onRateWord={handleRateWord}
+                  onBatchRateWords={handleBatchRateWords}
+                  onSelectGroup={(gNum) => {
+                    setSelectedGroupFromDash(gNum);
+                    setProfileSubTab('flashcard');
+                  }}
+                  onSelectTab={(tab) => {
+                    if (['flashcard', 'dashboard', 'my_courses'].includes(tab)) {
+                      setProfileSubTab(tab as any);
+                    } else {
+                      setActiveTab(tab as ActiveTab);
+                    }
+                  }}
+                  settings={settings}
+                />
+              )}
+
+              {/* My Courses Sub-View */}
+              {profileSubTab === 'my_courses' && (
+                <MyCoursesView
+                  user={user}
+                  allCourses={allAvailableCourses}
+                  enrolledCourseIds={enrolledCourseIds}
+                  activeCourseId={activeCourseId}
+                  setActiveCourseId={setActiveCourseId}
+                  setEnrolledCourseIds={setEnrolledCourseIds}
+                  progress={progress}
+                  onImportCourse={handleImportCourse}
+                  onSelectTab={(tab) => {
+                    if (['flashcard', 'dashboard', 'my_courses'].includes(tab)) {
+                      setProfileSubTab(tab as any);
+                    } else {
+                      setActiveTab(tab as ActiveTab);
+                    }
+                  }}
+                />
+              )}
+            </div>
           )}
 
           {activeTab === 'leaderboard' && (
             <GlobalLeaderboard />
-          )}
-
-          {activeTab === 'flashcard' && (
-            <FlashcardViewer
-              words={activeWords}
-              progress={progress}
-              folders={folders}
-              onRateWord={handleRateWord}
-              onUpdateNotes={handleUpdateNotes}
-              onToggleBookmark={handleToggleBookmark}
-              initialGroup={selectedGroupFromDash}
-              settings={settings}
-              onUpdateSettings={setSettings}
-              placeLabels={activeCourse?.placeLabels}
-              googleSearchQuery={activeCourse?.googleSearchQuery}
-              isRestrictedLocked={isRestrictedLocked}
-              freeFlashcardsCount={activeCourse?.freeFlashcardsCount}
-              coursePrice={activeCourse?.price}
-              courseTitle={activeCourse?.title}
-              onUnlockCourse={() => setActiveTab('my_courses')}
-            />
           )}
 
           {['practice', 'synonym', 'quiz', 'match'].includes(activeTab) && (
