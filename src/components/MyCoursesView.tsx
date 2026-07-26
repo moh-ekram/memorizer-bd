@@ -5,7 +5,7 @@ import {
   FileSpreadsheet, HelpCircle, Shuffle, GraduationCap, Trophy, 
   Gamepad2, Search, CheckCircle, AlertCircle, ShoppingBag, X, 
   Copy, ArrowRight, Star, Heart, Calendar, ShieldAlert, Layers, Play,
-  ChevronDown, ChevronUp, Info
+  ChevronDown, ChevronUp, Info, Eye
 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { doc, setDoc, getDoc, getDocs, query, collection, where } from 'firebase/firestore';

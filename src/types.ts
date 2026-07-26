@@ -77,6 +77,10 @@ export interface AppSettings {
   showBengaliTranslations?: boolean;
   dailyGoalWordCount?: number;
   freeFlashcardsCount?: number; // Free sample flashcards count for restricted courses (default 10)
+
+  // Item Position & Ordering Settings
+  practiceItemsOrder?: string[];
+  studyToolsItemsOrder?: string[];
 }
 
 export interface SyncLogEntry {

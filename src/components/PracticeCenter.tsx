@@ -7,6 +7,8 @@ import {
   ArrowLeft,
   Gamepad2,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   BookOpen,
   HelpCircle,
   Shuffle
@@ -75,12 +77,120 @@ export default function PracticeCenter({
 }: PracticeCenterProps) {
   const [subTab, setSubTab] = useState<'hub' | 'quiz' | 'match' | 'synonym' | 'blank' | 'odd_one_out' | 'analogy'>('hub');
 
+  const [mobileCollapsedState, setMobileCollapsedState] = useState<Record<string, boolean>>({});
+  const [allCollapsedMobile, setAllCollapsedMobile] = useState<boolean>(false);
+
   const isQuizEnabled = !enabledGames || enabledGames.quiz !== false;
   const isMatchEnabled = !enabledGames || enabledGames.match !== false;
   const isSynonymEnabled = !enabledGames || enabledGames.synonym !== false;
   const isBlankEnabled = !enabledGames || enabledGames.blank !== false;
   const isOddOneOutEnabled = !enabledGames || enabledGames.odd_one_out !== false;
   const isAnalogyEnabled = !enabledGames || enabledGames.analogy !== false;
+
+  // Configuration for practice items
+  const practiceItemsConfig = [
+    {
+      key: 'quiz',
+      title: 'MCQ Quiz',
+      banglaTitle: 'এমসিকিউ কুইজ',
+      desc: 'মক টেস্ট ও ৪ বিকল্প কুইজ দিয়ে স্মৃতি শক্তি যাচাই করুন',
+      tag: 'Test Recall',
+      btnText: 'Start Now',
+      iconBg: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+      borderHover: 'hover:border-indigo-200',
+      tagColor: 'text-indigo-600',
+      hoverText: 'hover:text-indigo-600',
+      enabled: isQuizEnabled,
+      icon: <GraduationCap className="w-6 h-6" />,
+      action: () => setSubTab('quiz')
+    },
+    {
+      key: 'match',
+      title: 'Word Match',
+      banglaTitle: 'ওয়ার্ড ম্যাচ গেম',
+      desc: 'শব্দ ও অর্থের দ্রুত মিলকরণ চ্যালেঞ্জ খেলুন',
+      tag: 'Play Game',
+      btnText: 'Start Play',
+      iconBg: 'bg-pink-50 text-pink-600 border-pink-100',
+      borderHover: 'hover:border-pink-200',
+      tagColor: 'text-pink-600',
+      hoverText: 'hover:text-pink-600',
+      enabled: isMatchEnabled,
+      icon: <Gamepad2 className="w-6 h-6 text-pink-650" />,
+      action: () => setSubTab('match')
+    },
+    {
+      key: 'synonym',
+      title: 'Synonym Check',
+      banglaTitle: 'সমার্থক শব্দ চেক',
+      desc: 'শব্দের সমার্থক রূপ যাচাই ও অনুশীলন করুন',
+      tag: 'AI Verification',
+      btnText: 'Verify Now',
+      iconBg: 'bg-amber-50 text-amber-600 border-amber-100',
+      borderHover: 'hover:border-amber-200',
+      tagColor: 'text-amber-600',
+      hoverText: 'hover:text-amber-600',
+      enabled: isSynonymEnabled,
+      icon: <Sparkle className="w-6 h-6 text-amber-500" />,
+      action: () => setSubTab('synonym')
+    },
+    {
+      key: 'blank',
+      title: 'Blank Filling',
+      banglaTitle: 'শূন্যস্থান পূরণ',
+      desc: 'বাক্যে সঠিক শব্দ বসিয়ে ব্যাকরণ ও অর্থ ঝালাই করুন',
+      tag: 'Sentence Quiz',
+      btnText: 'Practice Now',
+      iconBg: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+      borderHover: 'hover:border-emerald-200',
+      tagColor: 'text-emerald-600',
+      hoverText: 'hover:text-emerald-600',
+      enabled: isBlankEnabled,
+      icon: <BookOpen className="w-6 h-6 text-emerald-500" />,
+      action: () => setSubTab('blank')
+    },
+    {
+      key: 'odd_one_out',
+      title: 'Odd One Out',
+      banglaTitle: 'ব্যতিক্রমী শব্দ সনাক্তকরণ',
+      desc: 'চারটি শব্দের মধ্যে বেমানান শব্দটি খুঁজে বের করুন',
+      tag: 'Word Selection',
+      btnText: 'Play Now',
+      iconBg: 'bg-sky-50 text-sky-600 border-sky-100',
+      borderHover: 'hover:border-sky-200',
+      tagColor: 'text-sky-600',
+      hoverText: 'hover:text-sky-600',
+      enabled: isOddOneOutEnabled,
+      icon: <HelpCircle className="w-6 h-6 text-sky-500" />,
+      action: () => setSubTab('odd_one_out')
+    },
+    {
+      key: 'analogy',
+      title: 'Word Analogy',
+      banglaTitle: 'শব্দের এনালজি',
+      desc: 'শব্দের পারস্পরিক যৌক্তিক সম্পর্ক সমাধান করুন',
+      tag: 'Logic Challenge',
+      btnText: 'Solve Now',
+      iconBg: 'bg-purple-50 text-purple-650 border-purple-100',
+      borderHover: 'hover:border-purple-200',
+      tagColor: 'text-purple-600',
+      hoverText: 'hover:text-purple-600',
+      enabled: isAnalogyEnabled,
+      icon: <Shuffle className="w-6 h-6 text-purple-500" />,
+      action: () => setSubTab('analogy')
+    }
+  ];
+
+  // Sort items according to settings.practiceItemsOrder
+  const practiceOrder = settings?.practiceItemsOrder && settings.practiceItemsOrder.length > 0
+    ? settings.practiceItemsOrder
+    : ['quiz', 'match', 'synonym', 'blank', 'odd_one_out', 'analogy'];
+
+  const orderedItems = [...practiceItemsConfig].sort((a, b) => {
+    const idxA = practiceOrder.indexOf(a.key);
+    const idxB = practiceOrder.indexOf(b.key);
+    return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB);
+  });
 
   // Stagger animation variants for cards
   const containerVariants = {
@@ -113,170 +223,110 @@ export default function PracticeCenter({
             </div>
           </div>
 
+          {/* Mobile Collapse / Expand Control Header */}
+          <div className="sm:hidden flex items-center justify-between p-3.5 bg-slate-100/90 rounded-2xl border border-slate-200">
+            <span className="text-xs font-extrabold text-slate-800 flex items-center gap-2">
+              <Gamepad2 className="w-4 h-4 text-indigo-600" />
+              <span>প্র্যাকটিস আইটেমস ({orderedItems.filter(i => i.enabled).length})</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                const nextState = !allCollapsedMobile;
+                setAllCollapsedMobile(nextState);
+                const newState: Record<string, boolean> = {};
+                orderedItems.forEach(item => { newState[item.key] = nextState; });
+                setMobileCollapsedState(newState);
+              }}
+              className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            >
+              {allCollapsedMobile ? (
+                <>
+                  <ChevronDown className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Expand All</span>
+                </>
+              ) : (
+                <>
+                  <ChevronUp className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Collapse All</span>
+                </>
+              )}
+            </button>
+          </div>
+
           <motion.div 
             variants={containerVariants}
             initial="hidden"
             animate="show"
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"
           >
-            {/* 1. Practice & Quiz Card */}
-            {isQuizEnabled && (
-              <motion.div
-                variants={itemVariants}
-                whileHover={{ y: -4, scale: 1.01 }}
-                onClick={() => setSubTab('quiz')}
-                className="bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md hover:border-indigo-200 transition duration-300 p-6 flex flex-col justify-between cursor-pointer space-y-6"
-              >
-                <div className="space-y-4">
-                  <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
-                    <GraduationCap className="w-6 h-6" />
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="font-extrabold text-slate-800 text-lg">MCQ Quiz</h3>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                  <span className="text-[10px] font-bold text-indigo-600 tracking-wider uppercase font-mono">Test Recall</span>
-                  <span className="flex items-center gap-1 text-xs font-bold text-slate-700 hover:text-indigo-600 transition">
-                    <span>Start Now</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </span>
-                </div>
-              </motion.div>
-            )}
+            {orderedItems.filter(item => item.enabled).map((item) => {
+              const isCollapsedMobile = !!mobileCollapsedState[item.key];
 
-            {/* 2. Word Match Game Card */}
-            {isMatchEnabled && (
-              <motion.div
-                variants={itemVariants}
-                whileHover={{ y: -4, scale: 1.01 }}
-                onClick={() => setSubTab('match')}
-                className="bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md hover:border-pink-200 transition duration-300 p-6 flex flex-col justify-between cursor-pointer space-y-6"
-              >
-                <div className="space-y-4">
-                  <div className="w-12 h-12 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center border border-pink-100">
-                    <Gamepad2 className="w-6 h-6 text-pink-650" />
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="font-extrabold text-slate-800 text-lg">Word Match</h3>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                  <span className="text-[10px] font-bold text-pink-600 tracking-wider uppercase font-mono">Play Game</span>
-                  <span className="flex items-center gap-1 text-xs font-bold text-slate-700 hover:text-pink-600 transition">
-                    <span>Start Play</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </span>
-                </div>
-              </motion.div>
-            )}
+              return (
+                <motion.div
+                  key={item.key}
+                  variants={itemVariants}
+                  whileHover={{ y: -3, scale: 1.005 }}
+                  className={`bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md ${item.borderHover} transition duration-300 flex flex-col justify-between overflow-hidden`}
+                >
+                  {/* Card Header (Collapsible on Mobile) */}
+                  <div 
+                    onClick={() => {
+                      // On mobile, toggle collapse if clicked on header
+                      setMobileCollapsedState(prev => ({ ...prev, [item.key]: !prev[item.key] }));
+                    }}
+                    className="p-5 flex items-center justify-between cursor-pointer sm:cursor-default"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center border shrink-0 ${item.iconBg}`}>
+                        {item.icon}
+                      </div>
+                      <div>
+                        <h3 className="font-extrabold text-slate-800 text-base leading-tight">{item.title}</h3>
+                        <span className="text-[11px] font-semibold text-slate-400 block mt-0.5">{item.banglaTitle}</span>
+                      </div>
+                    </div>
 
-            {/* 3. Synonym Check Card */}
-            {isSynonymEnabled && (
-              <motion.div
-                variants={itemVariants}
-                whileHover={{ y: -4, scale: 1.01 }}
-                onClick={() => setSubTab('synonym')}
-                className="bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md hover:border-amber-200 transition duration-300 p-6 flex flex-col justify-between cursor-pointer space-y-6"
-              >
-                <div className="space-y-4">
-                  <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100">
-                    <Sparkle className="w-6 h-6 text-amber-500" />
+                    {/* Mobile Collapse Chevron Toggle */}
+                    <div className="sm:hidden text-slate-400 p-1">
+                      {isCollapsedMobile ? (
+                        <ChevronDown className="w-5 h-5 text-indigo-600" />
+                      ) : (
+                        <ChevronUp className="w-5 h-5 text-slate-400" />
+                      )}
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <h3 className="font-extrabold text-slate-800 text-lg">Synonym Check</h3>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                  <span className="text-[10px] font-bold text-amber-600 tracking-wider uppercase font-mono">AI Verification</span>
-                  <span className="flex items-center gap-1 text-xs font-bold text-slate-700 hover:text-amber-600 transition">
-                    <span>Verify Now</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </span>
-                </div>
-              </motion.div>
-            )}
 
-            {/* 4. Blank Filling Practice Card */}
-            {isBlankEnabled && (
-              <motion.div
-                variants={itemVariants}
-                whileHover={{ y: -4, scale: 1.01 }}
-                onClick={() => setSubTab('blank')}
-                className="bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md hover:border-emerald-200 transition duration-300 p-6 flex flex-col justify-between cursor-pointer space-y-6"
-              >
-                <div className="space-y-4">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
-                    <BookOpen className="w-6 h-6 text-emerald-500" />
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="font-extrabold text-slate-800 text-lg">Blank Filling</h3>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                  <span className="text-[10px] font-bold text-emerald-600 tracking-wider uppercase font-mono">Sentence Quiz</span>
-                  <span className="flex items-center gap-1 text-xs font-bold text-slate-700 hover:text-emerald-600 transition">
-                    <span>Practice Now</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </span>
-                </div>
-              </motion.div>
-            )}
+                  {/* Card Body & Footer (Hidden when collapsed on mobile) */}
+                  <div className={`${isCollapsedMobile ? 'hidden sm:block' : 'block'} px-5 pb-5 space-y-4 pt-0 border-t border-slate-100/60 sm:border-t-0`}>
+                    <p className="text-xs text-slate-500 font-medium leading-relaxed pt-2">
+                      {item.desc}
+                    </p>
 
-            {/* 5. Odd One Out Card */}
-            {isOddOneOutEnabled && (
-              <motion.div
-                variants={itemVariants}
-                whileHover={{ y: -4, scale: 1.01 }}
-                onClick={() => setSubTab('odd_one_out')}
-                className="bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md hover:border-sky-200 transition duration-300 p-6 flex flex-col justify-between cursor-pointer space-y-6"
-              >
-                <div className="space-y-4">
-                  <div className="w-12 h-12 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100">
-                    <HelpCircle className="w-6 h-6 text-sky-500" />
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                      <span className={`text-[10px] font-bold tracking-wider uppercase font-mono ${item.tagColor}`}>
+                        {item.tag}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          item.action();
+                        }}
+                        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-indigo-600 text-white text-xs font-bold transition shadow-2xs cursor-pointer`}
+                      >
+                        <span>{item.btnText}</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <h3 className="font-extrabold text-slate-800 text-lg">Odd One Out</h3>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                  <span className="text-[10px] font-bold text-sky-600 tracking-wider uppercase font-mono">Word Selection</span>
-                  <span className="flex items-center gap-1 text-xs font-bold text-slate-700 hover:text-sky-600 transition">
-                    <span>Play Now</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </span>
-                </div>
-              </motion.div>
-            )}
-
-            {/* 6. Word Analogy Card */}
-            {isAnalogyEnabled && (
-              <motion.div
-                variants={itemVariants}
-                whileHover={{ y: -4, scale: 1.01 }}
-                onClick={() => setSubTab('analogy')}
-                className="bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md hover:border-purple-200 transition duration-300 p-6 flex flex-col justify-between cursor-pointer space-y-6"
-              >
-                <div className="space-y-4">
-                  <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-650 flex items-center justify-center border border-purple-100">
-                    <Shuffle className="w-6 h-6 text-purple-500" />
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="font-extrabold text-slate-800 text-lg">Word Analogy</h3>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                  <span className="text-[10px] font-bold text-purple-600 tracking-wider uppercase font-mono">Logic Challenge</span>
-                  <span className="flex items-center gap-1 text-xs font-bold text-slate-700 hover:text-purple-600 transition">
-                    <span>Solve Now</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </span>
-                </div>
-              </motion.div>
-            )}
+                </motion.div>
+              );
+            })}
 
             {/* Empty State when no games are enabled */}
-            {!isQuizEnabled && !isMatchEnabled && !isSynonymEnabled && !isBlankEnabled && !isOddOneOutEnabled && !isAnalogyEnabled && (
+            {orderedItems.filter(item => item.enabled).length === 0 && (
               <div className="col-span-full py-12 text-center bg-white border border-slate-150 rounded-3xl p-8 space-y-3">
                 <Gamepad2 className="w-12 h-12 text-slate-350 mx-auto" />
                 <h3 className="font-extrabold text-slate-700 text-base">No practices or games available</h3>

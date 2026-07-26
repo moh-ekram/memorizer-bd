@@ -335,7 +335,11 @@ export default function App() {
       enableGlobalLeaderboard: parsed.enableGlobalLeaderboard !== undefined ? !!parsed.enableGlobalLeaderboard : true,
       soundEffectsEnabled: parsed.soundEffectsEnabled !== undefined ? !!parsed.soundEffectsEnabled : true,
       showBengaliTranslations: parsed.showBengaliTranslations !== undefined ? !!parsed.showBengaliTranslations : true,
-      dailyGoalWordCount: parsed.dailyGoalWordCount || 20
+      dailyGoalWordCount: parsed.dailyGoalWordCount || 20,
+
+      // Item Position & Order Defaults
+      practiceItemsOrder: parsed.practiceItemsOrder || ['quiz', 'match', 'synonym', 'blank', 'odd_one_out', 'analogy'],
+      studyToolsItemsOrder: parsed.studyToolsItemsOrder || ['lists', 'dictionary', 'planner', 'story']
     };
   });
 
@@ -653,6 +657,28 @@ export default function App() {
       });
     } catch (error) {
       console.error("Error setting up courses snapshot:", error);
+    }
+    return () => unsubscribe();
+  }, []);
+
+  // Load global system settings with real-time snapshot updates
+  useEffect(() => {
+    let unsubscribe = () => {};
+    try {
+      const sysRef = doc(db, 'system_settings', 'global');
+      unsubscribe = onSnapshot(sysRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const sysData = docSnap.data();
+          setSettings(prev => ({
+            ...prev,
+            ...sysData
+          }));
+        }
+      }, (error) => {
+        console.warn("Real-time system_settings listener notice:", error);
+      });
+    } catch (err) {
+      console.error("Error setting up system_settings snapshot:", err);
     }
     return () => unsubscribe();
   }, []);

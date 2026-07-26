@@ -34,7 +34,7 @@ import {
   Shuffle,
   Save
 } from 'lucide-react';
-import { doc, setDoc, collection, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { read, utils, writeFile } from 'xlsx';
 

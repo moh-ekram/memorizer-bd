@@ -3081,6 +3081,204 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 </p>
               </div>
             </div>
+
+            {/* Practice & Games Item Positioning Setting */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-4 col-span-1 md:col-span-2">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                    <Gamepad2 className="w-4 h-4 text-purple-600" />
+                    <span>প্র্যাকটিস ও গেমস আইটেম পজিশন (Practice & Games Ordering)</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                    ইউজারের Practice & Games পেজে কোন আইটেমটি কোন পজিশনে থাকবে তা নিয়ন্ত্রণ করুন
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const defaultOrder = ['quiz', 'match', 'synonym', 'blank', 'odd_one_out', 'analogy'];
+                    const updated = { ...settings, practiceItemsOrder: defaultOrder };
+                    if (onUpdateSettings) onUpdateSettings(updated);
+                    try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (e) {}
+                  }}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] rounded-lg transition"
+                >
+                  Reset Default Order
+                </button>
+              </div>
+
+              {/* Items List */}
+              <div className="space-y-2 pt-1">
+                {(() => {
+                  const practiceDict: Record<string, { label: string; desc: string; icon: string }> = {
+                    quiz: { label: 'MCQ Quiz', desc: 'মক টেস্ট ও ৪ বিকল্প কুইজ গেম', icon: '🎯' },
+                    match: { label: 'Word Match', desc: 'শব্দ ও অর্থের দ্রুত মিলকরণ গেম', icon: '🧩' },
+                    synonym: { label: 'Synonym Check', desc: 'সমার্থক শব্দ প্রস্তুতি ও প্র্যাকটিস', icon: '🔤' },
+                    blank: { label: 'Blank Filling', desc: 'বাক্যে উপযুক্ত শব্দ বসানো', icon: '✍️' },
+                    odd_one_out: { label: 'Odd One Out', desc: 'ব্যতিক্রমী শব্দ সনাক্তকরণ গেম', icon: '🔍' },
+                    analogy: { label: 'Word Analogy', desc: 'শব্দের পারস্পরিক সম্পর্ক গেম', icon: '⚖️' },
+                  };
+                  const currentOrder = settings?.practiceItemsOrder && settings.practiceItemsOrder.length > 0
+                    ? settings.practiceItemsOrder
+                    : ['quiz', 'match', 'synonym', 'blank', 'odd_one_out', 'analogy'];
+
+                  const moveItem = (index: number, direction: 'up' | 'down') => {
+                    const newOrder = [...currentOrder];
+                    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+                    if (targetIndex < 0 || targetIndex >= newOrder.length) return;
+                    const temp = newOrder[index];
+                    newOrder[index] = newOrder[targetIndex];
+                    newOrder[targetIndex] = temp;
+
+                    const updated = { ...settings, practiceItemsOrder: newOrder };
+                    if (onUpdateSettings) onUpdateSettings(updated);
+                    try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (e) {}
+                  };
+
+                  return currentOrder.map((key, idx) => {
+                    const itemInfo = practiceDict[key] || { label: key, desc: '', icon: '🎮' };
+                    return (
+                      <div key={key} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200/80 rounded-xl hover:bg-slate-100/60 transition">
+                        <div className="flex items-center gap-3">
+                          <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 font-extrabold text-xs flex items-center justify-center shrink-0">
+                            {idx + 1}
+                          </span>
+                          <span className="text-lg">{itemInfo.icon}</span>
+                          <div>
+                            <span className="font-extrabold text-xs text-slate-800 block">{itemInfo.label}</span>
+                            <span className="text-[10px] font-medium text-slate-500">{itemInfo.desc}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={() => moveItem(idx, 'up')}
+                            className={`p-1.5 rounded-lg border text-xs font-bold transition ${
+                              idx === 0 ? 'opacity-30 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-400' : 'bg-white hover:bg-purple-50 text-slate-700 border-slate-200 hover:border-purple-300'
+                            }`}
+                            title="Move Up"
+                          >
+                            <ChevronUp className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === currentOrder.length - 1}
+                            onClick={() => moveItem(idx, 'down')}
+                            className={`p-1.5 rounded-lg border text-xs font-bold transition ${
+                              idx === currentOrder.length - 1 ? 'opacity-30 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-400' : 'bg-white hover:bg-purple-50 text-slate-700 border-slate-200 hover:border-purple-300'
+                            }`}
+                            title="Move Down"
+                          >
+                            <ChevronDown className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+
+            {/* Study Tools Item Positioning Setting */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-4 col-span-1 md:col-span-2">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-emerald-600" />
+                    <span>স্টাডি টুলস আইটেম পজিশন (Study Tools Ordering)</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                    ইউজারের Study Tools পেজে কোন টুলটি কোন পজিশনে থাকবে তা নির্ধারণ করুন
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const defaultOrder = ['lists', 'dictionary', 'planner', 'story'];
+                    const updated = { ...settings, studyToolsItemsOrder: defaultOrder };
+                    if (onUpdateSettings) onUpdateSettings(updated);
+                    try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (e) {}
+                  }}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] rounded-lg transition"
+                >
+                  Reset Default Order
+                </button>
+              </div>
+
+              {/* Items List */}
+              <div className="space-y-2 pt-1">
+                {(() => {
+                  const studyDict: Record<string, { label: string; desc: string; icon: string }> = {
+                    lists: { label: 'Bookmark & Lists', desc: 'পছন্দের শব্দ তালিকা এবং বুকমার্ক ফোল্ডার', icon: '🔖' },
+                    dictionary: { label: 'Dictionary Search', desc: 'ইংরেজি এবং বাংলা অভিধান ও বিস্তারিত অর্থ', icon: '📖' },
+                    planner: { label: 'Daily Planner', desc: 'দৈনিক পড়ার লক্ষ্য ও স্টাডি রুটিন', icon: '📅' },
+                    story: { label: 'Read Story', desc: 'গল্প ও রীডিং আর্টিকেলস', icon: '📚' },
+                  };
+                  const currentOrder = settings?.studyToolsItemsOrder && settings.studyToolsItemsOrder.length > 0
+                    ? settings.studyToolsItemsOrder
+                    : ['lists', 'dictionary', 'planner', 'story'];
+
+                  const moveItem = (index: number, direction: 'up' | 'down') => {
+                    const newOrder = [...currentOrder];
+                    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+                    if (targetIndex < 0 || targetIndex >= newOrder.length) return;
+                    const temp = newOrder[index];
+                    newOrder[index] = newOrder[targetIndex];
+                    newOrder[targetIndex] = temp;
+
+                    const updated = { ...settings, studyToolsItemsOrder: newOrder };
+                    if (onUpdateSettings) onUpdateSettings(updated);
+                    try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (e) {}
+                  };
+
+                  return currentOrder.map((key, idx) => {
+                    const itemInfo = studyDict[key] || { label: key, desc: '', icon: '🛠️' };
+                    return (
+                      <div key={key} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200/80 rounded-xl hover:bg-slate-100/60 transition">
+                        <div className="flex items-center gap-3">
+                          <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-extrabold text-xs flex items-center justify-center shrink-0">
+                            {idx + 1}
+                          </span>
+                          <span className="text-lg">{itemInfo.icon}</span>
+                          <div>
+                            <span className="font-extrabold text-xs text-slate-800 block">{itemInfo.label}</span>
+                            <span className="text-[10px] font-medium text-slate-500">{itemInfo.desc}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={() => moveItem(idx, 'up')}
+                            className={`p-1.5 rounded-lg border text-xs font-bold transition ${
+                              idx === 0 ? 'opacity-30 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-400' : 'bg-white hover:bg-emerald-50 text-slate-700 border-slate-200 hover:border-emerald-300'
+                            }`}
+                            title="Move Up"
+                          >
+                            <ChevronUp className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === currentOrder.length - 1}
+                            onClick={() => moveItem(idx, 'down')}
+                            className={`p-1.5 rounded-lg border text-xs font-bold transition ${
+                              idx === currentOrder.length - 1 ? 'opacity-30 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-400' : 'bg-white hover:bg-emerald-50 text-slate-700 border-slate-200 hover:border-emerald-300'
+                            }`}
+                            title="Move Down"
+                          >
+                            <ChevronDown className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
           </div>
         </div>
       )}
