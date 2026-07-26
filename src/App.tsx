@@ -1745,10 +1745,6 @@ export default function App() {
 
                   {/* Dashboard shown directly below Flashcard Setup */}
                   <div className="pt-4 border-t border-slate-200/60">
-                    <div className="mb-4 flex items-center gap-2">
-                      <LayoutDashboard className="w-5 h-5 text-indigo-600" />
-                      <h2 className="text-lg font-black text-slate-900">Learning Dashboard & Statistics</h2>
-                    </div>
                     <StatsDashboard
                       user={user}
                       words={activeWords}

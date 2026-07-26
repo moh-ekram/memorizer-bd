@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { motion } from 'motion/react';
 import { VocabularyWord, WordStatus, UserProgress, CustomFolder, AppSettings } from '../types';
 import { getGoogleSearchUrl } from '../lib/searchUtils';
 import sentencesDataRaw from '../data/sentences.json';
@@ -741,24 +742,58 @@ export default function FlashcardViewer({
             </div>
           </button>
 
-          {/* Center: Animated Stacked Flashcards Illustration (matching uploaded image) */}
+          {/* Center: Animated Stacked Flashcards Illustration with 3D Sequential Vertical Rotation */}
           <div 
             onClick={() => setIsSessionActive(true)}
             className="flex items-center justify-center cursor-pointer group-hover:scale-105 transition-transform duration-300 my-1 sm:my-0"
             title="Click to start practice"
+            style={{ perspective: '800px' }}
           >
-            <div className="relative w-16 h-20 sm:w-20 sm:h-24 flex items-center justify-center animate-pulse">
-              {/* Card 1 (Back) */}
-              <div className="absolute inset-0 bg-indigo-400/35 border border-indigo-300/40 rounded-xl shadow-xs transform -rotate-22 -translate-x-3.5 transition-transform duration-500 group-hover:-rotate-26 group-hover:-translate-x-5" />
-              {/* Card 2 (Middle) */}
-              <div className="absolute inset-0 bg-indigo-300/55 border border-indigo-200/50 rounded-xl shadow-xs transform -rotate-11 -translate-x-2 transition-transform duration-500 group-hover:-rotate-14 group-hover:-translate-x-3" />
-              {/* Card 3 (Front - Standing with Lines) */}
-              <div className="relative w-full h-full bg-white rounded-xl shadow-xl p-2.5 sm:p-3 flex flex-col justify-center gap-1.5 border border-indigo-100 transition-transform duration-500 group-hover:scale-105">
+            <div className="relative w-16 h-20 sm:w-20 sm:h-24 flex items-center justify-center">
+              {/* Card 1 (Back - Rotates vertically first) */}
+              <motion.div 
+                animate={{
+                  rotateX: [0, 360, 360, 360]
+                }}
+                transition={{
+                  duration: 4.5,
+                  repeat: Infinity,
+                  times: [0, 0.33, 0.66, 1],
+                  ease: "easeInOut"
+                }}
+                className="absolute inset-0 bg-indigo-400/35 border border-indigo-300/40 rounded-xl shadow-xs transform -rotate-22 -translate-x-3.5 transition-transform duration-500 group-hover:-rotate-26 group-hover:-translate-x-5 transform-gpu origin-center"
+              />
+              {/* Card 2 (Middle - Rotates vertically second) */}
+              <motion.div 
+                animate={{
+                  rotateX: [0, 0, 360, 360]
+                }}
+                transition={{
+                  duration: 4.5,
+                  repeat: Infinity,
+                  times: [0, 0.33, 0.66, 1],
+                  ease: "easeInOut"
+                }}
+                className="absolute inset-0 bg-indigo-300/55 border border-indigo-200/50 rounded-xl shadow-xs transform -rotate-11 -translate-x-2 transition-transform duration-500 group-hover:-rotate-14 group-hover:-translate-x-3 transform-gpu origin-center"
+              />
+              {/* Card 3 (Front - Rotates vertically third) */}
+              <motion.div 
+                animate={{
+                  rotateX: [0, 0, 0, 360]
+                }}
+                transition={{
+                  duration: 4.5,
+                  repeat: Infinity,
+                  times: [0, 0.33, 0.66, 1],
+                  ease: "easeInOut"
+                }}
+                className="relative w-full h-full bg-white rounded-xl shadow-xl p-2.5 sm:p-3 flex flex-col justify-center gap-1.5 border border-indigo-100 transition-transform duration-500 group-hover:scale-105 transform-gpu origin-center"
+              >
                 <div className="w-[60%] h-1.5 bg-indigo-500 rounded-full" />
                 <div className="w-[40%] h-1.5 bg-indigo-300 rounded-full" />
                 <div className="w-[80%] h-1.5 bg-indigo-500 rounded-full" />
                 <div className="w-[50%] h-1.5 bg-indigo-300 rounded-full" />
-              </div>
+              </motion.div>
             </div>
           </div>
         </div>

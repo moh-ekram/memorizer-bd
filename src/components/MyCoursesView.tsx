@@ -816,12 +816,6 @@ export default function MyCoursesView({
             <span>Active Course</span>
           </div>
         )}
-        {!isActive && isUserAllowed && (
-          <div className="bg-indigo-600 text-white text-[9px] font-bold uppercase tracking-wider py-0.5 px-2.5 text-center flex items-center justify-center gap-1 shadow-2xs font-poppins">
-            <BookOpen className="w-2.5 h-2.5" />
-            <span>Enrolled Course</span>
-          </div>
-        )}
 
         {/* Card Body */}
         <div className={isActive ? "flex-1 flex flex-col justify-between space-y-3" : "p-2.5 sm:p-3 flex-1 flex flex-col justify-between space-y-2"}>
@@ -1022,9 +1016,9 @@ export default function MyCoursesView({
         </div>
 
         {/* Bottom Main Action Button */}
-        <div className={isActive ? "w-full flex items-center mt-3" : "w-full flex items-center"}>
+        <div className={isActive ? "w-full flex items-center mt-3" : "w-full flex items-center mt-2.5"}>
           {isActive ? (
-            <div className="w-full flex items-center divide-x divide-white/20 bg-emerald-950/40 rounded-xl overflow-hidden border border-white/20">
+            <div className="w-full flex items-center divide-x divide-white/20 bg-emerald-950/40 rounded-xl overflow-hidden border border-white/20 shadow-xs">
               <button
                 type="button"
                 onClick={(e) => {
@@ -1033,10 +1027,10 @@ export default function MyCoursesView({
                   setActiveCourseToast(`"${course.title}" is currently active.`);
                   setTimeout(() => setActiveCourseToast(null), 2500);
                 }}
-                className="flex-1 py-2.5 px-3 font-extrabold text-xs text-white flex items-center justify-center gap-1.5 transition hover:bg-white/10 cursor-pointer font-poppins"
+                className="flex-1 py-2 px-2 font-bold text-[10px] sm:text-xs text-white flex items-center justify-center gap-1 transition hover:bg-white/10 cursor-pointer font-poppins min-w-0"
               >
-                <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-300" />
-                <span>Active Course</span>
+                <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-300 shrink-0" />
+                <span className="whitespace-nowrap truncate">Active Course</span>
               </button>
               <button
                 type="button"
@@ -1047,15 +1041,15 @@ export default function MyCoursesView({
                     onSelectTab('flashcard');
                   }
                 }}
-                className="py-2.5 px-3 font-black text-xs bg-white text-emerald-900 hover:bg-emerald-50 flex items-center justify-center gap-1 transition cursor-pointer font-poppins shrink-0"
+                className="py-2 px-2.5 sm:px-3.5 font-bold text-[10px] sm:text-xs bg-white text-emerald-900 hover:bg-emerald-50 flex items-center justify-center gap-1 transition cursor-pointer font-poppins shrink-0"
                 title="Open Flashcards"
               >
-                <span>Study</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <span className="whitespace-nowrap">Study</span>
+                <ArrowRight className="w-3.5 h-3.5 shrink-0" />
               </button>
             </div>
           ) : isUserAllowed ? (
-            <div className="w-full flex items-center divide-x divide-indigo-700 bg-indigo-600">
+            <div className="w-full flex items-center divide-x divide-indigo-700/80 bg-indigo-600 rounded-xl overflow-hidden shadow-xs">
               <button
                 type="button"
                 onClick={(e) => {
@@ -1064,10 +1058,10 @@ export default function MyCoursesView({
                   setActiveCourseToast(`Activated "${course.title}" course!`);
                   setTimeout(() => setActiveCourseToast(null), 2500);
                 }}
-                className="flex-1 py-2.5 px-3 font-extrabold text-xs text-white flex items-center justify-center gap-1.5 transition hover:bg-indigo-700 cursor-pointer font-poppins"
+                className="flex-1 py-2 px-2 font-bold text-[10px] sm:text-xs text-white flex items-center justify-center gap-1 transition hover:bg-indigo-700 cursor-pointer font-poppins min-w-0"
               >
-                <Check className="w-3.5 h-3.5" />
-                <span>Set Active (এক্টিভ করুন)</span>
+                <Check className="w-3.5 h-3.5 shrink-0" />
+                <span className="whitespace-nowrap truncate">Set Active</span>
               </button>
               <button
                 type="button"
@@ -1078,11 +1072,11 @@ export default function MyCoursesView({
                     onSelectTab('flashcard');
                   }
                 }}
-                className="py-2.5 px-3 font-bold text-xs bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center gap-1 transition cursor-pointer font-poppins shrink-0"
+                className="py-2 px-2.5 sm:px-3.5 font-bold text-[10px] sm:text-xs bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center gap-1 transition cursor-pointer font-poppins shrink-0"
                 title="Study Flashcards"
               >
-                <span>Study</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <span className="whitespace-nowrap">Study</span>
+                <ArrowRight className="w-3.5 h-3.5 shrink-0" />
               </button>
             </div>
           ) : (
@@ -1093,10 +1087,10 @@ export default function MyCoursesView({
                 setIsCartCheckoutMode(false);
                 setSelectedBuyCourse(course);
               }}
-              className="w-full py-2.5 px-4 font-bold text-xs sm:text-sm bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white flex items-center justify-center gap-1.5 transition cursor-pointer font-poppins"
+              className="w-full py-2 px-3 font-bold text-[10px] sm:text-xs bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white flex items-center justify-center gap-1.5 transition cursor-pointer font-poppins rounded-xl shadow-xs"
             >
-              <span>Unlock Course (৳{(course.price && course.price > 0) ? course.price : 30})</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <span className="whitespace-nowrap">Unlock Course (৳{(course.price && course.price > 0) ? course.price : 30})</span>
+              <ArrowRight className="w-3.5 h-3.5 shrink-0" />
             </button>
           )}
         </div>
@@ -1163,100 +1157,6 @@ export default function MyCoursesView({
           >
             <PlusCircle className="w-3 h-3" />
             <span>Recharge Wallet</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 1.5 Current Active Course Quick Switcher Bar */}
-      <div className="bg-emerald-50/90 border border-emerald-200 rounded-2xl p-3 sm:p-3.5 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-2xs">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
-            <CheckCircle className="w-5 h-5 stroke-[2.5]" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800">Current Active Course</span>
-              <span className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full bg-emerald-200/80 text-emerald-900 text-[9px] font-extrabold">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-ping" />
-                Active Now
-              </span>
-            </div>
-            <p className="text-xs sm:text-sm font-black text-slate-900 font-poppins mt-0.5">
-              {allCourses.find(c => c.id === activeCourseId)?.title || activeCourseId.toUpperCase()}
-              <span className="ml-2 text-[10px] text-slate-500 font-normal">
-                ({allCourses.find(c => c.id === activeCourseId)?.words?.length || 0} Words)
-              </span>
-            </p>
-          </div>
-        </div>
-
-        {/* Enrolled Courses Switcher Buttons */}
-        <div className="flex items-center gap-1.5 flex-wrap w-full md:w-auto">
-          <span className="text-[10px] font-bold text-slate-500 mr-1 hidden sm:inline">Select Course:</span>
-          {sortedEnrolledCourses.map(c => {
-            const isCurrActive = c.id === activeCourseId;
-            return (
-              <button
-                key={`switcher-${c.id}`}
-                type="button"
-                onClick={() => {
-                  setActiveCourseId(c.id);
-                  setActiveCourseToast(`Activated "${c.title}" course!`);
-                  setTimeout(() => setActiveCourseToast(null), 2500);
-                }}
-                className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                  isCurrActive
-                    ? 'bg-emerald-600 text-white shadow-xs border border-emerald-500'
-                    : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs'
-                }`}
-              >
-                {isCurrActive && <Check className="w-3 h-3 stroke-[3]" />}
-                <span>{c.title}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 2. Advanced Search & Tabs Control */}
-      <div className="flex flex-col sm:flex-row gap-2.5 justify-between items-center bg-white p-2.5 sm:p-3 rounded-2xl border border-slate-200/70 shadow-xs max-w-full overflow-hidden">
-        {/* Search Input */}
-        <div className="relative w-full sm:max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-3.5 h-3.5" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search courses by name or keyword..."
-            className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none text-[11px] font-normal transition text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
-          />
-        </div>
-
-        {/* Tab Filters */}
-        <div className="flex bg-slate-100/80 p-1 rounded-xl w-full sm:w-auto overflow-x-auto max-w-full gap-1 shrink-0" id="course-filter-toggles">
-          <button
-            onClick={() => setFilter('all')}
-            className={`flex-1 sm:flex-initial px-2.5 py-1 rounded-lg text-[10px] font-medium transition whitespace-nowrap cursor-pointer shrink-0 ${
-              filter === 'all' ? 'bg-white text-indigo-700 shadow-xs font-semibold' : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            All Courses
-          </button>
-          <button
-            onClick={() => setFilter('enrolled')}
-            className={`flex-1 sm:flex-initial px-2.5 py-1 rounded-lg text-[10px] font-medium transition whitespace-nowrap cursor-pointer shrink-0 ${
-              filter === 'enrolled' ? 'bg-white text-indigo-700 shadow-xs font-semibold' : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            My Active / Enrolled
-          </button>
-          <button
-            onClick={() => setFilter('locked')}
-            className={`flex-1 sm:flex-initial px-2.5 py-1 rounded-lg text-[10px] font-medium transition whitespace-nowrap cursor-pointer shrink-0 ${
-              filter === 'locked' ? 'bg-white text-indigo-700 shadow-xs font-semibold' : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            Locked Courses
           </button>
         </div>
       </div>

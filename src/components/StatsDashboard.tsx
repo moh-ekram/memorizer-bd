@@ -668,7 +668,6 @@ export default function StatsDashboard({
                 <TrendingUp className="w-5 h-5 text-indigo-600" />
                 <span>Progress & Learning Distribution</span>
               </h3>
-              <p className="text-[11px] text-slate-400 font-bold font-sans">Overall vocabulary statistics and detailed study progress report</p>
             </div>
           </div>
 
