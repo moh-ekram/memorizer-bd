@@ -1674,7 +1674,7 @@ export default function App() {
                   }`}
                 >
                   <CreditCard className="w-4 h-4" />
-                  <span>Flashcard (ফ্ল্যাশকার্ড)</span>
+                  <span>Flashcard</span>
                 </button>
 
                 <button
@@ -1691,7 +1691,7 @@ export default function App() {
                   }`}
                 >
                   <LayoutDashboard className="w-4 h-4" />
-                  <span>Dashboard (ড্যাশবোর্ড)</span>
+                  <span>Dashboard</span>
                 </button>
 
                 <button
@@ -1707,30 +1707,67 @@ export default function App() {
                   }`}
                 >
                   <BookOpen className="w-4 h-4" />
-                  <span>My Courses (কোর্স)</span>
+                  <span>My Courses</span>
                 </button>
               </div>
 
-              {/* Flashcard Sub-View (First / Default when entering My Profile) */}
+              {/* Flashcard Sub-View with StatsDashboard underneath */}
               {profileSubTab === 'flashcard' && (
-                <FlashcardViewer
-                  words={activeWords}
-                  progress={progress}
-                  folders={folders}
-                  onRateWord={handleRateWord}
-                  onUpdateNotes={handleUpdateNotes}
-                  onToggleBookmark={handleToggleBookmark}
-                  initialGroup={selectedGroupFromDash}
-                  settings={settings}
-                  onUpdateSettings={setSettings}
-                  placeLabels={activeCourse?.placeLabels}
-                  googleSearchQuery={activeCourse?.googleSearchQuery}
-                  isRestrictedLocked={isRestrictedLocked}
-                  freeFlashcardsCount={activeCourse?.freeFlashcardsCount}
-                  coursePrice={activeCourse?.price}
-                  courseTitle={activeCourse?.title}
-                  onUnlockCourse={() => setProfileSubTab('my_courses')}
-                />
+                <div className="space-y-8">
+                  <FlashcardViewer
+                    words={activeWords}
+                    progress={progress}
+                    folders={folders}
+                    onRateWord={handleRateWord}
+                    onUpdateNotes={handleUpdateNotes}
+                    onToggleBookmark={handleToggleBookmark}
+                    initialGroup={selectedGroupFromDash}
+                    settings={settings}
+                    onUpdateSettings={setSettings}
+                    placeLabels={activeCourse?.placeLabels}
+                    googleSearchQuery={activeCourse?.googleSearchQuery}
+                    isRestrictedLocked={isRestrictedLocked}
+                    freeFlashcardsCount={activeCourse?.freeFlashcardsCount}
+                    coursePrice={activeCourse?.price}
+                    courseTitle={activeCourse?.title}
+                    onUnlockCourse={() => setProfileSubTab('my_courses')}
+                  />
+
+                  {/* Dashboard shown directly below Flashcard Setup */}
+                  <div className="pt-4 border-t border-slate-200/60">
+                    <div className="mb-4 flex items-center gap-2">
+                      <LayoutDashboard className="w-5 h-5 text-indigo-600" />
+                      <h2 className="text-lg font-black text-slate-900">Learning Dashboard & Statistics</h2>
+                    </div>
+                    <StatsDashboard
+                      user={user}
+                      words={activeWords}
+                      progress={progress}
+                      goal={goal}
+                      setGoal={setGoal}
+                      allCourses={allAvailableCourses}
+                      enrolledCourseIds={enrolledCourseIds}
+                      activeCourseId={activeCourseId}
+                      setActiveCourseId={setActiveCourseId}
+                      setEnrolledCourseIds={setEnrolledCourseIds}
+                      onImportCourse={handleImportCourse}
+                      onRateWord={handleRateWord}
+                      onBatchRateWords={handleBatchRateWords}
+                      onSelectGroup={(gNum) => {
+                        setSelectedGroupFromDash(gNum);
+                        setProfileSubTab('flashcard');
+                      }}
+                      onSelectTab={(tab) => {
+                        if (['flashcard', 'dashboard', 'my_courses'].includes(tab)) {
+                          setProfileSubTab(tab as any);
+                        } else {
+                          setActiveTab(tab as ActiveTab);
+                        }
+                      }}
+                      settings={settings}
+                    />
+                  </div>
+                </div>
               )}
 
               {/* Dashboard Sub-View */}

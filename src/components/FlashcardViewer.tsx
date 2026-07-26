@@ -704,33 +704,33 @@ export default function FlashcardViewer({
           <button
             type="button"
             onClick={() => setIsFilterExpanded(prev => !prev)}
-            className="w-full p-4 sm:p-5 flex items-center justify-between gap-3 text-left hover:bg-slate-50/80 transition cursor-pointer"
+            className="w-full py-2.5 px-3.5 sm:px-4 flex items-center justify-between gap-3 text-left hover:bg-slate-50/80 transition cursor-pointer"
           >
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-600 shrink-0">
-                <SlidersHorizontal className="w-4 h-4" />
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 bg-indigo-50 border border-indigo-100 rounded-lg text-indigo-600 shrink-0">
+                <SlidersHorizontal className="w-3.5 h-3.5" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="font-extrabold text-slate-900 text-sm sm:text-base">
-                    Filter & Customization (ফিল্টার অপশনসমূহ)
+                  <h3 className="font-extrabold text-slate-900 text-xs sm:text-sm">
+                    Filter & Customization
                   </h3>
                   <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-bold text-[10px] rounded-md border border-indigo-200">
-                    {isFilterExpanded ? 'বন্ধ করতে ক্লিক করুন' : 'ফিল্টার খুলুন'}
+                    {isFilterExpanded ? 'Collapse' : 'Expand'}
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {selectedGroups.length}/{uniqueGroups.length} Groups • {selectedStatuses.length} Statuses • {studyOrder === 'random' ? 'Shuffle' : studyOrder === 'alphabetical' ? 'A-Z' : 'Serial'} Order
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {selectedGroups.length}/{uniqueGroups.length} Groups • {selectedStatuses.length} Statuses • {studyOrder === 'random' ? 'Shuffle' : studyOrder === 'alphabetical' ? 'A-Z' : 'Serial'}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              <span className="hidden sm:inline-block text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">
-                {isFilterExpanded ? 'হাইড করুন' : 'ফিল্টার অপশনস'}
+              <span className="hidden sm:inline-block text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100">
+                {isFilterExpanded ? 'Hide Filters' : 'Show Filters'}
               </span>
-              <div className="p-2 rounded-xl bg-slate-100 text-slate-600">
-                {isFilterExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              <div className="p-1.5 rounded-lg bg-slate-100 text-slate-600">
+                {isFilterExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </div>
             </div>
           </button>
