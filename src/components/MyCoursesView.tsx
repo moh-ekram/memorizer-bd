@@ -800,77 +800,77 @@ export default function MyCoursesView({
       >
         {/* Top Active Course Banner */}
         {isActive && (
-          <div className="bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-wider py-1 px-3 text-center flex items-center justify-center gap-1 shadow-2xs font-poppins">
-            <Check className="w-3 h-3 stroke-[3]" />
+          <div className="bg-emerald-600 text-white text-[9px] font-bold uppercase tracking-wider py-0.5 px-2.5 text-center flex items-center justify-center gap-1 shadow-2xs font-poppins">
+            <Check className="w-2.5 h-2.5 stroke-[3]" />
             <span>Active Course</span>
           </div>
         )}
 
         {/* Card Body */}
-        <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between space-y-3">
+        <div className="p-2.5 sm:p-3 flex-1 flex flex-col justify-between space-y-2">
           <div>
             {/* Header: Title & Clean Word Count */}
-            <div className="flex items-start justify-between gap-2.5">
+            <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-snug line-clamp-2 font-poppins">
+                <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight leading-tight line-clamp-1 font-poppins">
                   {course.title}
                 </h3>
-                <p className="text-[10px] text-slate-400 font-medium mt-0.5">
-                  Code: #{course.id} • Lifetime Access
+                <p className="text-[9px] text-slate-400 font-medium mt-0.5">
+                  #{course.id} • Lifetime
                 </p>
               </div>
 
-              {/* Word Count Display (18px font size, no star, W suffix) */}
+              {/* Word Count Display (14px font size, no star, W suffix) */}
               <div className="shrink-0 pt-0.5">
-                <span className="text-[18px] font-extrabold text-slate-800 font-poppins tracking-tight">
+                <span className="text-xs sm:text-sm font-extrabold text-slate-800 font-poppins tracking-tight">
                   {wordsCount} W
                 </span>
               </div>
             </div>
 
             {/* Mobile Expand / Collapse Toggle Header */}
-            <div className="block sm:hidden mt-2 pt-2 border-t border-slate-100">
+            <div className="block sm:hidden mt-1.5 pt-1.5 border-t border-slate-100">
               <button
                 type="button"
                 onClick={(e) => toggleCourseExpand(course.id, e)}
-                className="w-full text-left flex items-center justify-between text-[11px] font-semibold text-indigo-600 py-1"
+                className="w-full text-left flex items-center justify-between text-[10px] font-semibold text-indigo-600 py-0.5"
               >
-                <span>{isExpanded ? 'Hide Course Details' : 'View Syllabus & Includes'}</span>
-                {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                <span>{isExpanded ? 'Hide Details' : 'Includes'}</span>
+                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
               </button>
             </div>
 
             {/* Includes Section (Desktop or Mobile Expanded) */}
-            <div className={`mt-3 ${isExpanded ? 'block' : 'hidden sm:block'}`}>
-              <div className="border-t border-slate-100 pt-2.5">
-                <p className="text-[10px] font-bold text-slate-900 tracking-wider uppercase mb-1.5 font-poppins">
+            <div className={`mt-2 ${isExpanded ? 'block' : 'hidden sm:block'}`}>
+              <div className="border-t border-slate-100 pt-1.5">
+                <p className="text-[9px] font-bold text-slate-900 tracking-wider uppercase mb-1 font-poppins">
                   Includes
                 </p>
-                <ul className="space-y-1 text-[8px]">
-                  <li className="flex items-center gap-1.5 text-slate-600 font-medium">
-                    <div className="w-3.5 h-3.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[7px] shrink-0">
+                <ul className="space-y-0.5 text-[7.5px] sm:text-[8px]">
+                  <li className="flex items-center gap-1 text-slate-600 font-medium">
+                    <div className="w-3 h-3 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[6px] shrink-0">
                       ✓
                     </div>
                     <span><strong className="text-slate-900">{wordsCount} W</strong> (Vocabulary Words)</span>
                   </li>
                   {enabledPracticeList.length > 0 && (
-                    <li className="flex items-start gap-1.5 text-slate-600 font-medium">
-                      <div className="w-3.5 h-3.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[7px] shrink-0 mt-0.5">
+                    <li className="flex items-start gap-1 text-slate-600 font-medium">
+                      <div className="w-3 h-3 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[6px] shrink-0 mt-0.5">
                         ✓
                       </div>
-                      <span><strong>Practice:</strong> {enabledPracticeList.join(', ')}</span>
+                      <span className="line-clamp-1"><strong>Practice:</strong> {enabledPracticeList.join(', ')}</span>
                     </li>
                   )}
                   {enabledStudyList.length > 0 && (
-                    <li className="flex items-start gap-1.5 text-slate-600 font-medium">
-                      <div className="w-3.5 h-3.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[7px] shrink-0 mt-0.5">
+                    <li className="flex items-start gap-1 text-slate-600 font-medium">
+                      <div className="w-3 h-3 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[6px] shrink-0 mt-0.5">
                         ✓
                       </div>
-                      <span><strong>Study Tools:</strong> {enabledStudyList.join(', ')}</span>
+                      <span className="line-clamp-1"><strong>Study Tools:</strong> {enabledStudyList.join(', ')}</span>
                     </li>
                   )}
-                  <li className="flex items-center gap-1.5 text-slate-600 font-medium">
-                    <div className="w-3.5 h-3.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[7px] shrink-0">
+                  <li className="flex items-center gap-1 text-slate-600 font-medium">
+                    <div className="w-3 h-3 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[6px] shrink-0">
                       ✓
                     </div>
                     <span>Mastered: <strong className="text-slate-900">{masteredCount}/{wordsCount}</strong> ({progressPercent}%)</span>
@@ -881,18 +881,18 @@ export default function MyCoursesView({
           </div>
 
           {/* Price & Action Options */}
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1.5">
             <div>
-              <div className="flex items-baseline gap-1">
-                <span className="text-lg sm:text-xl font-extrabold text-slate-900 font-poppins tracking-tight">
+              <div className="flex items-baseline gap-0.5">
+                <span className="text-sm sm:text-base font-extrabold text-slate-900 font-poppins tracking-tight">
                   ৳{(course.price && course.price > 0) ? course.price : 30}
                 </span>
-                <span className="text-[10px] text-slate-400 font-bold uppercase">BDT</span>
+                <span className="text-[9px] text-slate-400 font-bold uppercase">BDT</span>
               </div>
             </div>
 
             {/* Quick Action Buttons */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               {/* Enrolled Course Option: Cancel Enrollment */}
               {isUserAllowed && (
                 <button
@@ -906,10 +906,10 @@ export default function MyCoursesView({
                       }
                     }
                   }}
-                  className="px-2 py-1.5 rounded-lg text-[10px] font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer flex items-center gap-1"
+                  className="px-1.5 py-1 rounded-md text-[9px] font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer flex items-center gap-1"
                   title="Cancel Enrollment"
                 >
-                  <Trash2 className="w-3 h-3" />
+                  <Trash2 className="w-2.5 h-2.5" />
                   <span className="hidden xs:inline">Cancel</span>
                 </button>
               )}
@@ -926,24 +926,24 @@ export default function MyCoursesView({
                         onSelectTab('flashcard');
                       }
                     }}
-                    className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1 transition cursor-pointer"
+                    className="px-1.5 py-1 rounded-md text-[9px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-0.5 transition cursor-pointer"
                     title="View Free Sample Cards"
                   >
-                    <Eye className="w-3 h-3 text-amber-600" />
-                    <span>Free Cards</span>
+                    <Eye className="w-2.5 h-2.5 text-amber-600" />
+                    <span className="hidden xs:inline">Free</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={(e) => toggleCartCourse(course, e)}
-                    className={`px-2 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition cursor-pointer border ${
+                    className={`px-1.5 py-1 rounded-md text-[9px] font-bold flex items-center gap-0.5 transition cursor-pointer border ${
                       cart.some(c => c.id === course.id)
                         ? 'bg-slate-900 text-white border-slate-900'
                         : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
                     }`}
                     title={cart.some(c => c.id === course.id) ? "Remove from Cart" : "Add to Cart"}
                   >
-                    <ShoppingBag className="w-3 h-3" />
+                    <ShoppingBag className="w-2.5 h-2.5" />
                     <span>{cart.some(c => c.id === course.id) ? 'Cart' : '+ Cart'}</span>
                   </button>
 
@@ -953,10 +953,10 @@ export default function MyCoursesView({
                       e.stopPropagation();
                       setSelectedDetailCourse(course);
                     }}
-                    className="px-1.5 py-1.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center gap-1 transition cursor-pointer"
+                    className="px-1 py-1 rounded-md text-[9px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center gap-0.5 transition cursor-pointer"
                     title="Details"
                   >
-                    <Info className="w-3 h-3" />
+                    <Info className="w-2.5 h-2.5" />
                   </button>
                 </>
               )}
@@ -1010,50 +1010,47 @@ export default function MyCoursesView({
 
   return (
     <div className="space-y-5" id="my-courses-view-root" style={{ fontFamily: "'Poppins', sans-serif" }}>
-      {/* 1. Banner */}
-      <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 rounded-2xl p-4 sm:p-5 text-white relative overflow-hidden shadow-md border border-indigo-950">
+      {/* 1. Merged Course Directory Header & Wallet Balance Banner */}
+      <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 rounded-xl p-3 sm:p-4 text-white relative overflow-hidden shadow-sm border border-indigo-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-poppins">
         <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -ml-20 -mb-20 pointer-events-none" />
         
-        <div className="relative z-10 max-w-3xl space-y-1">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-200 text-[10px] font-bold uppercase tracking-widest font-poppins">
-            <Trophy className="w-3 h-3 text-amber-400" /> Course & Syllabus Hub
+        {/* Left Section: Course & Syllabus Hub */}
+        <div className="relative z-10 space-y-0.5">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-200 text-[9px] font-bold uppercase tracking-widest font-poppins">
+            <Trophy className="w-2.5 h-2.5 text-amber-400" /> Course & Syllabus Hub
           </span>
-          <h2 className="text-base sm:text-xl font-bold tracking-tight leading-tight text-white font-poppins">
+          <h2 className="text-sm sm:text-base font-bold tracking-tight leading-tight text-white font-poppins">
             My Courses & Syllabus Directory
           </h2>
         </div>
-      </div>
 
-      {/* 1.5 Wallet Credit Balance Banner (Clean English, Poppins Font) */}
-      <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-indigo-50 border border-emerald-200/80 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs font-poppins">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white font-bold text-base flex items-center justify-center shadow-xs shrink-0 font-poppins">
-            ৳
+        {/* Right Section: Wallet Credit Balance */}
+        <div className="relative z-10 bg-white/10 backdrop-blur-md border border-white/15 rounded-xl p-2 sm:p-2.5 flex items-center justify-between sm:justify-end gap-2.5 shrink-0 max-w-full">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500 text-white font-bold text-xs flex items-center justify-center shadow-xs shrink-0 font-poppins">
+              ৳
+            </div>
+            <div>
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-300 font-poppins">Wallet Balance</span>
+                <span className="px-1 py-0.2 bg-emerald-500/20 text-emerald-200 text-[7px] rounded font-bold">Active</span>
+              </div>
+              <div className="text-xs sm:text-sm font-extrabold text-white font-mono leading-none mt-0.5">
+                ৳{userWalletBalance} <span className="text-[9px] font-sans font-normal text-slate-300">BDT</span>
+              </div>
+            </div>
           </div>
-          <div>
-            <h4 className="font-extrabold text-xs text-emerald-950 uppercase tracking-wide flex items-center gap-1.5 font-poppins">
-              <span>Wallet Credit Balance</span>
-              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] rounded-full font-bold">Active</span>
-            </h4>
-            <p className="text-xs text-emerald-800 font-normal mt-0.5 font-poppins">
-              Your available account balance is <strong>৳{userWalletBalance} BDT</strong>. Click the button to top up your wallet.
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0 self-end sm:self-center font-poppins">
-          <span className="font-mono text-base sm:text-lg font-bold text-emerald-700 px-3 py-1 bg-white rounded-xl border border-emerald-200 shadow-2xs font-poppins">
-            ৳{userWalletBalance}
-          </span>
+
           <button
             type="button"
             onClick={() => {
               setIsRechargeModalOpen(true);
               setRechargeMessage(null);
             }}
-            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1.5 border border-emerald-700 font-poppins"
+            className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[11px] rounded-lg shadow-2xs transition cursor-pointer flex items-center gap-1 border border-emerald-400/40 font-poppins shrink-0"
           >
-            <PlusCircle className="w-3.5 h-3.5" />
+            <PlusCircle className="w-3 h-3" />
             <span>Recharge Wallet</span>
           </button>
         </div>
@@ -1115,7 +1112,7 @@ export default function MyCoursesView({
             </div>
 
             {sortedEnrolledCourses.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5">
                 {sortedEnrolledCourses.map(course => renderCourseCard(course))}
               </div>
             ) : (
@@ -1164,7 +1161,7 @@ export default function MyCoursesView({
             </div>
 
             {lockedCoursesList.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5">
                 {lockedCoursesList.map(course => renderCourseCard(course))}
               </div>
             ) : (
