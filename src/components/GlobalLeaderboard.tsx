@@ -4,7 +4,7 @@ import { auth, db } from '../lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { 
   Crown, Trophy, Award, Flame, RefreshCw, Search, 
-  HelpCircle, Star, Users, Medal, GraduationCap 
+  HelpCircle, Star, Users, Medal, GraduationCap, FileSpreadsheet 
 } from 'lucide-react';
 
 interface LeaderboardEntry {
@@ -271,8 +271,8 @@ export default function GlobalLeaderboard() {
         {/* Search controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h2 className="text-base font-black text-slate-800 flex items-center gap-2">
-            <Users className="w-5 h-5 text-indigo-600" />
-            <span>Top 10 Students List</span>
+            <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+            <span>Student Leaderboard (Excel Sheet View)</span>
           </h2>
           
           <div className="relative max-w-sm w-full font-sans">
@@ -298,104 +298,117 @@ export default function GlobalLeaderboard() {
             <p className="text-sm font-bold text-slate-400 font-sans">No students found.</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {top10.map((player, index) => {
-              const rank = index + 1;
-              const isCurrent = player.isCurrentUser;
+          /* Excel Sheet Style Grid Table */
+          <div className="overflow-x-auto rounded-2xl border-2 border-slate-300 shadow-xs bg-white font-sans">
+            <table className="w-full text-left border-collapse text-xs min-w-[700px]">
+              <thead>
+                <tr className="bg-slate-100/90 text-slate-700 border-b-2 border-slate-300 font-black text-[10px] uppercase tracking-wider divide-x divide-slate-300">
+                  <th className="py-2.5 px-3 text-center w-14 bg-emerald-700 text-white font-extrabold">Rank</th>
+                  <th className="py-2.5 px-3 bg-slate-200/80">Student Name</th>
+                  <th className="py-2.5 px-3 bg-slate-200/80">Email</th>
+                  <th className="py-2.5 px-3 text-center bg-slate-200/80">Known Words</th>
+                  <th className="py-2.5 px-3 text-center bg-slate-200/80">Quizzes Taken</th>
+                  <th className="py-2.5 px-3 text-center bg-slate-200/80">Quiz Score</th>
+                  <th className="py-2.5 px-3 text-center bg-slate-200/80">Streak</th>
+                  <th className="py-2.5 px-3 text-right bg-emerald-700 text-white font-extrabold">Total XP</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 text-slate-800">
+                {top10.map((player, index) => {
+                  const rank = index + 1;
+                  const isCurrent = player.isCurrentUser;
 
-              return (
-                <div 
-                  key={player.id}
-                  className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-                    isCurrent 
-                      ? 'bg-gradient-to-r from-indigo-50/50 to-indigo-100/10 border-indigo-200/80 shadow-xs ring-1 ring-indigo-100' 
-                      : 'bg-slate-50/40 hover:bg-slate-50/90 border-slate-200/60'
-                  }`}
-                >
-                  {/* Left Section: Rank, Avatar and Name */}
-                  <div className="flex items-center gap-4 min-w-0">
-                    {/* Rank Badge */}
-                    <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
-                      {rank === 1 ? (
-                        <Medal className="w-7 h-7 text-amber-500 fill-amber-100" />
-                      ) : rank === 2 ? (
-                        <Medal className="w-7 h-7 text-slate-400 fill-slate-50" />
-                      ) : rank === 3 ? (
-                        <Medal className="w-7 h-7 text-amber-700 fill-amber-50" />
-                      ) : (
-                        <span className="text-slate-400 font-black font-mono text-xs">#{rank}</span>
-                      )}
-                    </div>
-
-                    {/* Avatar */}
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs border flex-shrink-0 ${
-                      isCurrent 
-                        ? 'bg-indigo-600 border-indigo-400 text-white shadow-xs' 
-                        : 'bg-white border-slate-200 text-slate-600 font-mono'
-                    }`}>
-                      {player.displayName ? player.displayName[0].toUpperCase() : 'U'}
-                    </div>
-
-                    {/* Name & Email */}
-                    <div className="min-w-0">
-                      <p className="text-xs font-black text-slate-800 truncate flex items-center gap-1.5">
-                        {player.displayName}
-                        {isCurrent && (
-                          <span className="text-[8px] bg-indigo-600 text-white px-2 py-0.5 rounded-full font-black tracking-wider uppercase">YOU</span>
-                        )}
-                      </p>
-                      <p className="text-[10px] text-slate-400 font-semibold truncate">{player.email}</p>
-                    </div>
-                  </div>
-
-                  {/* Right Section: Stats Row */}
-                  <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 sm:gap-6 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100 sm:border-transparent">
-                    {/* Stats badges */}
-                    <div className="flex flex-wrap items-center gap-2 flex-1 sm:flex-initial">
-                      {/* Known words */}
-                      <div className="px-2.5 py-1 bg-white border border-slate-150 rounded-xl flex items-center gap-1 text-[11px] text-slate-500 font-semibold">
-                        <span className="text-slate-400 font-bold text-[9px] uppercase">Known Words:</span>
-                        <span className="font-mono font-black text-slate-700">{player.knowCount}</span>
-                      </div>
-
-                      {/* Quiz Count */}
-                      <div className="px-2.5 py-1 bg-white border border-slate-150 rounded-xl flex items-center gap-1 text-[11px] text-slate-500 font-semibold">
-                        <span className="text-slate-400 font-bold text-[9px] uppercase">Quizzes:</span>
-                        <span className="font-mono font-black text-slate-700">{player.quizTaken}</span>
-                      </div>
-
-                      {/* Quiz Score */}
-                      <div className="px-2.5 py-1 bg-white border border-slate-150 rounded-xl flex items-center gap-1 text-[11px] text-slate-500 font-semibold">
-                        <span className="text-slate-400 font-bold text-[9px] uppercase">Score:</span>
-                        <span className="font-mono font-black text-slate-700">{player.quizScore}</span>
-                      </div>
-
-                      {/* Streak */}
-                      <div className="px-2.5 py-1 bg-white border border-slate-150 rounded-xl flex items-center gap-1 text-[11px] text-slate-500 font-semibold">
-                        <span className="text-slate-400 font-bold text-[9px] uppercase">Streak:</span>
-                        {player.streak > 0 ? (
-                          <div className="flex items-center gap-0.5">
-                            <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                            <span className="font-mono text-xs text-amber-600 font-black">{player.streak}</span>
-                          </div>
+                  return (
+                    <tr 
+                      key={player.id}
+                      className={`divide-x divide-slate-200 transition-colors ${
+                        isCurrent 
+                          ? 'bg-indigo-50/90 hover:bg-indigo-100/90 font-bold text-indigo-950 border-l-4 border-l-indigo-600' 
+                          : index % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/70 hover:bg-slate-100/70'
+                      }`}
+                    >
+                      {/* Rank Cell */}
+                      <td className="py-2 px-3 text-center font-mono font-black text-xs text-slate-700 bg-slate-100/60">
+                        {rank === 1 ? (
+                          <span className="inline-flex items-center justify-center gap-1 text-amber-600 font-black">
+                            <Medal className="w-4 h-4 text-amber-500 fill-amber-100" />
+                            #1
+                          </span>
+                        ) : rank === 2 ? (
+                          <span className="inline-flex items-center justify-center gap-1 text-slate-500 font-black">
+                            <Medal className="w-4 h-4 text-slate-400 fill-slate-100" />
+                            #2
+                          </span>
+                        ) : rank === 3 ? (
+                          <span className="inline-flex items-center justify-center gap-1 text-amber-800 font-black">
+                            <Medal className="w-4 h-4 text-amber-700 fill-amber-100" />
+                            #3
+                          </span>
                         ) : (
-                          <span className="text-slate-400 font-bold font-mono">-</span>
+                          `#${rank}`
                         )}
-                      </div>
-                    </div>
+                      </td>
 
-                    {/* Total points */}
-                    <div className="text-right flex items-center gap-2 sm:flex-col sm:items-end justify-between w-full sm:w-auto bg-indigo-50/30 sm:bg-transparent px-2.5 py-1 sm:p-0 rounded-xl mt-1 sm:mt-0 min-w-[70px]">
-                      <span className="text-[9px] text-slate-400 font-bold uppercase block tracking-wider sm:hidden md:block">Points</span>
-                      <span className="text-xs font-black text-indigo-600 font-mono block">
+                      {/* Name + Avatar Cell */}
+                      <td className="py-2 px-3 font-bold">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black border shrink-0 ${
+                            isCurrent ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-200 border-slate-300 text-slate-700'
+                          }`}>
+                            {player.displayName ? player.displayName[0].toUpperCase() : 'U'}
+                          </div>
+                          <span className="truncate max-w-[160px]">
+                            {player.displayName}
+                          </span>
+                          {isCurrent && (
+                            <span className="text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-black uppercase tracking-wider">
+                              YOU
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Email Cell */}
+                      <td className="py-2 px-3 text-slate-500 font-mono text-[11px] truncate max-w-[180px]">
+                        {player.email || '-'}
+                      </td>
+
+                      {/* Known Words Cell */}
+                      <td className="py-2 px-3 text-center font-mono font-black text-emerald-700">
+                        {player.knowCount}
+                      </td>
+
+                      {/* Quizzes Taken Cell */}
+                      <td className="py-2 px-3 text-center font-mono font-bold text-slate-700">
+                        {player.quizTaken}
+                      </td>
+
+                      {/* Quiz Score Cell */}
+                      <td className="py-2 px-3 text-center font-mono font-bold text-slate-700">
+                        {player.quizScore}
+                      </td>
+
+                      {/* Streak Cell */}
+                      <td className="py-2 px-3 text-center">
+                        {player.streak > 0 ? (
+                          <span className="inline-flex items-center justify-center gap-1 text-amber-600 font-mono font-black">
+                            <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                            {player.streak}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-mono">-</span>
+                        )}
+                      </td>
+
+                      {/* Total XP Cell */}
+                      <td className="py-2 px-3 text-right font-mono font-black text-indigo-600 text-xs bg-indigo-50/30">
                         {player.points} XP
-                      </span>
-                    </div>
-                  </div>
-
-                </div>
-              );
-            })}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
 

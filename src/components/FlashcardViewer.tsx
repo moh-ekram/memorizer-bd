@@ -733,9 +733,17 @@ export default function FlashcardViewer({
             </div>
           </div>
 
-          {/* Center: Animated Stacked Flashcards Illustration with 3D Replacement Rotation */}
-          <div 
-            className="flex items-center justify-center group-hover:scale-105 transition-transform duration-300 my-1 sm:my-0"
+          {/* Center: Animated Stacked Flashcards Illustration with Right-to-Left Traveling Motion & 3D Replacement Rotation */}
+          <motion.div 
+            animate={{ 
+              x: [120, -100, 120],
+              y: [0, -8, 0, 8, 0]
+            }}
+            transition={{ 
+              x: { duration: 9, repeat: Infinity, repeatType: 'mirror', ease: 'easeInOut' },
+              y: { duration: 4.5, repeat: Infinity, repeatType: 'mirror', ease: 'easeInOut' }
+            }}
+            className="flex items-center justify-center group-hover:scale-105 transition-transform duration-300 my-1 sm:my-0 relative shrink-0"
             title="Click anywhere to start practice"
             style={{ perspective: '800px' }}
           >
@@ -771,12 +779,12 @@ export default function FlashcardViewer({
                     transition: { duration: 3.2, ease: [0.25, 1, 0.5, 1] }
                   };
                 } else {
-                  // Third / Bottom card (the former top card rotates out smoothly to back)
+                  // Third / Bottom card (the former top card rotates out smoothly from right to left to back)
                   animateProps = {
                     zIndex: 10,
-                    x: [0, 42, -16],
-                    rotateY: [0, 65, 0],
-                    rotate: [0, 16, -16],
+                    x: [0, 50, -20],
+                    rotateY: [0, 75, -15],
+                    rotate: [0, 20, -12],
                     scale: [1, 0.92, 0.84],
                     opacity: [1, 0.85, 0.65],
                     transition: { duration: 3.2, ease: [0.33, 1, 0.68, 1] }
@@ -803,7 +811,7 @@ export default function FlashcardViewer({
                 );
               })}
             </div>
-          </div>
+          </motion.div>
         </div>
 
         {/* Filter Configuration Controls (Compact Expanding Div) */}
