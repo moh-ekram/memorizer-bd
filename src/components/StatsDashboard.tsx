@@ -661,16 +661,6 @@ export default function StatsDashboard({
       >
         {/* Progress Representation */}
         <div className="flex flex-col gap-6 p-0 border-0 shadow-none bg-transparent">
-          {/* Header section with counts */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/60 pb-4 gap-4">
-            <div>
-              <h3 className="text-base md:text-lg font-black text-slate-800 flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-indigo-600" />
-                <span>Progress & Learning Distribution</span>
-              </h3>
-            </div>
-          </div>
-
           {/* Desktop Row, Mobile Centered Column container */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 md:gap-8 w-full border-b border-slate-100 pb-6 md:pb-4">
             {/* Large Beautiful English Numbers for Total Words & Unread */}
@@ -782,262 +772,6 @@ export default function StatsDashboard({
               </div>
             </div>
           </div>
-
-          {/* Daily Study Progress & Trend Line Chart */}
-          <div className="bg-white p-6 rounded-3xl border border-slate-200/60 shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div>
-                <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-indigo-600" />
-                  Last 7 Days Study Trend
-                </h4>
-                <p className="text-[10px] text-slate-400 font-bold font-sans">
-                  Visual history of learned words and estimated daily study time
-                </p>
-              </div>
-
-              {/* Chart Mode Switchers & Legends */}
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl font-sans text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setChartType('trend')}
-                    className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
-                      chartType === 'trend'
-                        ? 'bg-slate-900 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Area Trend
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setChartType('bar')}
-                    className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
-                      chartType === 'bar'
-                        ? 'bg-slate-900 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Bar Chart
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setChartType('time')}
-                    className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
-                      chartType === 'time'
-                        ? 'bg-slate-900 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Study Time (Mins)
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500 font-sans">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`w-2.5 h-2.5 rounded-sm ${chartType === 'time' ? 'bg-emerald-500' : 'bg-indigo-500'}`} />
-                    <span>{chartType === 'time' ? 'Study Minutes' : 'Words Studied'}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-0.5 bg-rose-400 border-t-2 border-dashed border-rose-400" />
-                    <span>Goal ({chartType === 'time' ? `${Math.round((goal.dailyTarget || 20) * 1.5)}m` : goal.dailyTarget})</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="h-64 w-full" id="daily-study-chart">
-              <ResponsiveContainer width="100%" height="100%">
-                {chartType === 'trend' ? (
-                  <AreaChart
-                    data={last7DaysData}
-                    margin={{ top: 15, right: 10, left: -25, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient id="colorWordsTrend" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis 
-                      dataKey="label" 
-                      tickLine={false} 
-                      axisLine={false} 
-                      tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} 
-                    />
-                    <YAxis 
-                      tickLine={false} 
-                      axisLine={false} 
-                      tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} 
-                    />
-                    <Tooltip 
-                      cursor={{ stroke: '#6366f1', strokeWidth: 1, strokeDasharray: '3 3' }}
-                      content={({ active, payload }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload;
-                          const completedTarget = data.count >= data.target;
-                          return (
-                            <div className="bg-slate-900 text-white p-3 rounded-xl border border-slate-800 shadow-lg text-xs font-sans space-y-1">
-                              <p className="font-extrabold text-slate-400">{data.label}</p>
-                              <p className="font-black text-sm flex items-center gap-1.5">
-                                <span className="text-indigo-400">{data.count} Words</span>
-                                <span className="text-slate-500">•</span>
-                                <span className="text-emerald-400">~{data.minutes} mins</span>
-                              </p>
-                              {completedTarget ? (
-                                <span className="inline-block text-emerald-400 text-[9px] bg-emerald-500/10 px-1.5 py-0.5 rounded font-black">Daily Goal Achieved 🔥</span>
-                              ) : (
-                                <span className="inline-block text-rose-400 text-[9px] bg-rose-50/10 px-1.5 py-0.5 rounded font-semibold">{Math.max(0, data.target - data.count)} words left</span>
-                              )}
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <ReferenceLine 
-                      y={goal.dailyTarget} 
-                      stroke="#f43f5e" 
-                      strokeDasharray="4 4" 
-                      strokeWidth={1.5}
-                    />
-                    <Area 
-                      type="monotone" 
-                      dataKey="count" 
-                      stroke="#4f46e5" 
-                      strokeWidth={3} 
-                      fillOpacity={1} 
-                      fill="url(#colorWordsTrend)" 
-                      dot={{ r: 4, fill: '#4f46e5', strokeWidth: 2, stroke: '#ffffff' }}
-                      activeDot={{ r: 6, fill: '#10b981', strokeWidth: 2, stroke: '#ffffff' }}
-                    />
-                  </AreaChart>
-                ) : chartType === 'time' ? (
-                  <AreaChart
-                    data={last7DaysData}
-                    margin={{ top: 15, right: 10, left: -25, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient id="colorTimeTrend" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.05}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis 
-                      dataKey="label" 
-                      tickLine={false} 
-                      axisLine={false} 
-                      tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} 
-                    />
-                    <YAxis 
-                      tickLine={false} 
-                      axisLine={false} 
-                      tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} 
-                    />
-                    <Tooltip 
-                      cursor={{ stroke: '#10b981', strokeWidth: 1, strokeDasharray: '3 3' }}
-                      content={({ active, payload }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload;
-                          return (
-                            <div className="bg-slate-900 text-white p-3 rounded-xl border border-slate-800 shadow-lg text-xs font-sans space-y-1">
-                              <p className="font-extrabold text-slate-400">{data.label}</p>
-                              <p className="font-black text-sm text-emerald-400">
-                                ~{data.minutes} Minutes Spent
-                              </p>
-                              <p className="text-[10px] text-slate-400">
-                                Total {data.count} words reviewed
-                              </p>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <ReferenceLine 
-                      y={Math.round((goal.dailyTarget || 20) * 1.5)} 
-                      stroke="#f43f5e" 
-                      strokeDasharray="4 4" 
-                      strokeWidth={1.5}
-                    />
-                    <Area 
-                      type="monotone" 
-                      dataKey="minutes" 
-                      stroke="#059669" 
-                      strokeWidth={3} 
-                      fillOpacity={1} 
-                      fill="url(#colorTimeTrend)" 
-                      dot={{ r: 4, fill: '#059669', strokeWidth: 2, stroke: '#ffffff' }}
-                      activeDot={{ r: 6, fill: '#6366f1', strokeWidth: 2, stroke: '#ffffff' }}
-                    />
-                  </AreaChart>
-                ) : (
-                  <BarChart
-                    data={last7DaysData}
-                    margin={{ top: 15, right: 10, left: -25, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient id="colorWords" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.95}/>
-                        <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.7}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis 
-                      dataKey="label" 
-                      tickLine={false} 
-                      axisLine={false} 
-                      tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} 
-                    />
-                    <YAxis 
-                      tickLine={false} 
-                      axisLine={false} 
-                      tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} 
-                    />
-                    <Tooltip 
-                      cursor={{ fill: '#f8fafc', radius: 4 }}
-                      content={({ active, payload }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload;
-                          const completedTarget = data.count >= data.target;
-                          return (
-                            <div className="bg-slate-900 text-white p-3 rounded-xl border border-slate-800 shadow-lg text-xs font-sans space-y-1">
-                              <p className="font-extrabold text-slate-400">{data.label}</p>
-                              <p className="font-black text-sm flex items-center gap-1">
-                                <span>{data.count} Words</span>
-                                {completedTarget ? (
-                                  <span className="text-emerald-400 text-[9px] bg-emerald-500/10 px-1.5 py-0.2 rounded font-black">Goal Achieved 🔥</span>
-                                ) : (
-                                  <span className="text-rose-400 text-[9px] bg-rose-50/10 px-1.5 py-0.2 rounded font-semibold font-sans">{Math.max(0, data.target - data.count)} Left</span>
-                                )}
-                              </p>
-                              <p className="text-[10px] text-slate-500">Daily Goal: {data.target} Words</p>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <ReferenceLine 
-                      y={goal.dailyTarget} 
-                      stroke="#f43f5e" 
-                      strokeDasharray="4 4" 
-                      strokeWidth={1.5}
-                    />
-                    <Bar 
-                      dataKey="count" 
-                      fill="url(#colorWords)" 
-                      radius={[6, 6, 0, 0]} 
-                      maxBarSize={32}
-                    />
-                  </BarChart>
-                )}
-              </ResponsiveContainer>
-            </div>
-          </div>
         </div>
       </motion.div>
 
@@ -1090,7 +824,7 @@ export default function StatsDashboard({
                    setGroupStatusFilter('all');
                  }}
                  className="w-full relative overflow-hidden rounded-2xl border border-slate-200 hover:border-emerald-400 hover:shadow-md bg-slate-50/50 hover:bg-white transition flex items-center justify-between pl-3 pr-8 py-2.5 h-11 cursor-pointer"
-                 title={`Group ${g.group}: Click to manage words & batch update status`}
+                 title={`G ${g.group}: Click to manage words & batch update status`}
               >
                 {/* Progress background fill */}
                 <div 
@@ -1100,13 +834,13 @@ export default function StatsDashboard({
                 
                 {/* Content */}
                 <div className="relative z-10 flex items-center justify-between w-full font-sans pr-1">
-                  <span className="font-extrabold text-xs text-slate-800 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                    Group {g.group}
+                  <span className="font-extrabold text-[8px] text-slate-800 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                    G {g.group}
                   </span>
                   <div className="flex items-center gap-1 font-sans">
-                    <span className="text-[10px] text-slate-400 font-semibold">({g.total})</span>
-                    <span className="text-[11px] font-black text-emerald-600 ml-0.5">{g.percent}%</span>
+                    <span className="text-[9px] text-slate-400 font-semibold">({g.total})</span>
+                    <span className="text-[10px] font-black text-emerald-600 ml-0.5">{g.percent}%</span>
                   </div>
                 </div>
               </motion.button>
@@ -1118,7 +852,7 @@ export default function StatsDashboard({
                   onSelectGroup(g.group);
                 }}
                 className="absolute right-1.5 z-20 p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white transition cursor-pointer"
-                title={`Start Flashcard Study for Group ${g.group}`}
+                title={`Start Flashcard Study for G ${g.group}`}
               >
                 <BookOpen className="w-3.5 h-3.5" />
               </button>
