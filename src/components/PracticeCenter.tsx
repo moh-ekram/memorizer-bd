@@ -11,7 +11,8 @@ import {
   ChevronUp,
   BookOpen,
   HelpCircle,
-  Shuffle
+  Shuffle,
+  Zap
 } from 'lucide-react';
 import SynonymCheck from './SynonymCheck';
 import PracticeQuiz from './PracticeQuiz';
@@ -19,6 +20,7 @@ import WordMatchGame from './WordMatchGame';
 import BlankFillingPractice from './BlankFillingPractice';
 import OddOneOutGame from './OddOneOutGame';
 import WordAnalogyGame from './WordAnalogyGame';
+import QuickShuffleModal from './QuickShuffleModal';
 import { VocabularyWord, WordStatus, CustomFolder, AppSettings, UserProgress } from '../types';
 
 interface PracticeCenterProps {
@@ -76,9 +78,12 @@ export default function PracticeCenter({
   googleSearchQuery
 }: PracticeCenterProps) {
   const [subTab, setSubTab] = useState<'hub' | 'quiz' | 'match' | 'synonym' | 'blank' | 'odd_one_out' | 'analogy'>('hub');
+  const [isQuickShuffleOpen, setIsQuickShuffleOpen] = useState<boolean>(false);
 
   const [mobileCollapsedState, setMobileCollapsedState] = useState<Record<string, boolean>>({});
   const [allCollapsedMobile, setAllCollapsedMobile] = useState<boolean>(false);
+
+  const confusionCount = words.filter(w => progress[w.id]?.status === 'confusion').length;
 
   const isQuizEnabled = !enabledGames || enabledGames.quiz !== false;
   const isMatchEnabled = !enabledGames || enabledGames.match !== false;
@@ -213,14 +218,42 @@ export default function PracticeCenter({
       {/* RENDER ACTIVE MODE */}
       {subTab === 'hub' && (
         <div className="space-y-6">
-          <div className="bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-8 rounded-3xl relative overflow-hidden shadow-md">
+          <div className="bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-8 rounded-3xl relative overflow-hidden shadow-md flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
             <div className="absolute right-0 top-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -z-10" />
-            <div className="max-w-2xl space-y-2">
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-indigo-500/20 text-indigo-200 text-[10px] font-bold rounded-full uppercase tracking-wider border border-indigo-500/30">
-                Practice Hub
-              </span>
+            <div className="max-w-xl space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-indigo-500/20 text-indigo-200 text-[10px] font-bold rounded-full uppercase tracking-wider border border-indigo-500/30">
+                  Practice Hub
+                </span>
+                {confusionCount > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-amber-500/20 text-amber-300 text-[10px] font-extrabold rounded-full border border-amber-500/30">
+                    <HelpCircle className="w-3 h-3 text-amber-400" />
+                    <span>{confusionCount} Confusion Words</span>
+                  </span>
+                )}
+              </div>
               <h2 className="text-2xl sm:text-3xl font-black tracking-tight">Practice & Games</h2>
+              <p className="text-xs text-indigo-200/80 font-medium">
+                মক টেস্ট, গেম ও অটো কুইজ দিয়ে ভোকাবুলারি দ্রুত রিভিশন দিন
+              </p>
             </div>
+
+            <button
+              type="button"
+              onClick={() => setIsQuickShuffleOpen(true)}
+              className="px-5 py-3.5 bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-slate-950 rounded-2xl font-black text-sm shadow-xl shadow-amber-500/20 hover:shadow-amber-500/30 transition-all flex items-center justify-center gap-3 shrink-0 cursor-pointer active:scale-95 group border border-amber-300/40"
+            >
+              <div className="w-8 h-8 rounded-xl bg-slate-950/10 flex items-center justify-center text-slate-950 group-hover:rotate-180 transition-transform duration-500">
+                <Shuffle className="w-4 h-4" />
+              </div>
+              <div className="text-left leading-tight">
+                <div className="text-xs font-black tracking-wide uppercase">Quick Shuffle</div>
+                <div className="text-[10px] font-bold opacity-80 flex items-center gap-1">
+                  <Zap className="w-3 h-3 fill-slate-950" />
+                  <span>5 Qs Confusion Quiz</span>
+                </div>
+              </div>
+            </button>
           </div>
 
           {/* Mobile Collapse / Expand Control Header */}
@@ -409,6 +442,17 @@ export default function PracticeCenter({
           onBack={() => setSubTab('hub')}
         />
       )}
+
+      {/* Quick Shuffle Pop-up Quiz Modal */}
+      <QuickShuffleModal
+        isOpen={isQuickShuffleOpen}
+        onClose={() => setIsQuickShuffleOpen(false)}
+        words={words}
+        progress={progress}
+        onRateWord={onRateWord}
+        onQuizComplete={onQuizComplete}
+        placeLabels={placeLabels}
+      />
     </div>
   );
 }
