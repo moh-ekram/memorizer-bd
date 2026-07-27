@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { VocabularyWord, WordStatus, UserProgress, CustomFolder, AppSettings } from '../types';
 import { getGoogleSearchUrl } from '../lib/searchUtils';
 import sentencesDataRaw from '../data/sentences.json';
@@ -223,62 +223,9 @@ export default function FlashcardViewer({
   };
 
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() => {
-    if (activeWordsList && activeWordsList.length > 0) {
-      let hasUnrated = false;
-      let hasStrugglingOrConfusion = false;
-
-      activeWordsList.forEach(w => {
-        const status = progress[w.id]?.status || 'unrated';
-        if (status === 'unrated') {
-          hasUnrated = true;
-        } else if (status === 'dont_know' || status === 'confusion') {
-          hasStrugglingOrConfusion = true;
-        }
-      });
-
-      if (hasUnrated) {
-        return ['unrated'];
-      } else if (hasStrugglingOrConfusion) {
-        return ['dont_know', 'confusion'];
-      } else {
-        return ['know'];
-      }
-    }
     return settings?.defaultFlashcardTags || ['know', 'confusion', 'dont_know', 'unrated'];
   });
 
-  // Automatically adapt selectedStatuses to progress changes if user has not manually modified it
-  useEffect(() => {
-    if (userHasManuallyChangedStatuses) return;
-    if (!activeWordsList || activeWordsList.length === 0) return;
-
-    let hasUnrated = false;
-    let hasStrugglingOrConfusion = false;
-
-    activeWordsList.forEach(w => {
-      const status = progress[w.id]?.status || 'unrated';
-      if (status === 'unrated') {
-        hasUnrated = true;
-      } else if (status === 'dont_know' || status === 'confusion') {
-        hasStrugglingOrConfusion = true;
-      }
-    });
-
-    let targetStatuses: string[];
-    if (hasUnrated) {
-      targetStatuses = ['unrated'];
-    } else if (hasStrugglingOrConfusion) {
-      targetStatuses = ['dont_know', 'confusion'];
-    } else {
-      targetStatuses = ['know'];
-    }
-
-    const currentSorted = [...selectedStatuses].sort().join(',');
-    const targetSorted = [...targetStatuses].sort().join(',');
-    if (currentSorted !== targetSorted) {
-      setSelectedStatuses(targetStatuses);
-    }
-  }, [activeWordsList, progress, userHasManuallyChangedStatuses, selectedStatuses]);
 
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
@@ -297,6 +244,18 @@ export default function FlashcardViewer({
 
   // Random animation state for shuffle option
   const [currentRandomAnim, setCurrentRandomAnim] = useState<'flip-h' | 'flip-v' | 'slide' | 'fade' | 'zoom'>('flip-h');
+
+  // Banner header card rotation & title toggle states
+  const [bannerRotationStep, setBannerRotationStep] = useState(0);
+  const [showStartText, setShowStartText] = useState(false);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setBannerRotationStep(prev => (prev + 1) % 3);
+      setShowStartText(prev => !prev);
+    }, 4400); // 3.2s swap animation duration + 1.2s pause = 4.4s interval
+    return () => clearInterval(timer);
+  }, []);
 
   // Effective animation setting
   const effectiveAnimSetting: FlipAnimationKey = settings?.flashcardAnimation || localAnimation;
@@ -725,81 +684,124 @@ export default function FlashcardViewer({
 
         {/* Header Hero Banner / Start Flashcard Button */}
         <div
-          className="w-full bg-gradient-to-r from-indigo-950 via-indigo-900 to-slate-950 text-white rounded-2xl p-4 sm:p-5 shadow-lg border border-indigo-700/50 flex flex-col sm:flex-row items-center justify-between gap-4 transition relative overflow-hidden group"
+          onClick={() => {
+            if (filteredWords.length > 0) {
+              setIsSessionActive(true);
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if ((e.key === 'Enter' || e.key === ' ') && filteredWords.length > 0) {
+              setIsSessionActive(true);
+            }
+          }}
+          className={`w-full bg-gradient-to-r from-indigo-950 via-indigo-900 to-slate-950 text-white rounded-2xl p-4 sm:p-5 shadow-lg border border-indigo-700/50 flex flex-col sm:flex-row items-center justify-between gap-4 transition relative overflow-hidden group select-none ${
+            filteredWords.length > 0
+              ? 'cursor-pointer hover:border-indigo-400/80 hover:shadow-indigo-900/40 active:scale-[0.995]'
+              : 'opacity-60 cursor-not-allowed'
+          }`}
         >
           {/* Background Glow Accents */}
           <div className="absolute -left-10 -top-10 w-36 h-36 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
           <div className="absolute -right-10 -bottom-10 w-36 h-36 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
 
           {/* Left Side: Flashcard Practice Title */}
-          <button
-            type="button"
-            onClick={() => setIsSessionActive(true)}
-            disabled={filteredWords.length === 0}
-            className="flex items-center gap-3.5 text-left transition cursor-pointer hover:opacity-90 disabled:opacity-50 shrink-0"
-          >
+          <div className="flex items-center gap-3.5 text-left transition shrink-0">
             <div>
-              <h1 className="text-base sm:text-lg font-black tracking-tight font-sans text-white flex items-center gap-2">
-                <span>{courseTitle || 'Flashcard Practice'}</span>
+              <h1 className="text-base sm:text-lg font-black tracking-tight font-sans text-white flex items-center gap-2 min-h-[28px]">
+                <AnimatePresence mode="wait">
+                  <motion.span
+                    key={showStartText ? 'start-text' : 'course-title'}
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -5 }}
+                    transition={{ duration: 0.35, ease: 'easeOut' }}
+                    className={`inline-block ${
+                      showStartText
+                        ? 'text-amber-300 font-extrabold tracking-wide'
+                        : 'text-white font-black'
+                    }`}
+                  >
+                    {showStartText ? 'Start Flashcard Now' : (courseTitle || 'GRE Master Vocab')}
+                  </motion.span>
+                </AnimatePresence>
               </h1>
-              <p className="text-xs text-indigo-200 font-medium">
+              <p className="text-xs text-indigo-200 font-medium mt-0.5">
                 Flashcard Practice • {filteredWords.length} words selected in current deck
               </p>
             </div>
-          </button>
+          </div>
 
-          {/* Center: Animated Stacked Flashcards Illustration with 3D Sequential Vertical Rotation */}
+          {/* Center: Animated Stacked Flashcards Illustration with 3D Replacement Rotation */}
           <div 
-            onClick={() => setIsSessionActive(true)}
-            className="flex items-center justify-center cursor-pointer group-hover:scale-105 transition-transform duration-300 my-1 sm:my-0"
-            title="Click to start practice"
+            className="flex items-center justify-center group-hover:scale-105 transition-transform duration-300 my-1 sm:my-0"
+            title="Click anywhere to start practice"
             style={{ perspective: '800px' }}
           >
             <div className="relative w-16 h-20 sm:w-20 sm:h-24 flex items-center justify-center">
-              {/* Card 1 (Back - Rotates vertically first) */}
-              <motion.div 
-                animate={{
-                  rotateX: [0, 360, 360, 360]
-                }}
-                transition={{
-                  duration: 4.5,
-                  repeat: Infinity,
-                  times: [0, 0.33, 0.66, 1],
-                  ease: "easeInOut"
-                }}
-                className="absolute inset-0 bg-indigo-400/35 border border-indigo-300/40 rounded-xl shadow-xs transform -rotate-22 -translate-x-3.5 transition-transform duration-500 group-hover:-rotate-26 group-hover:-translate-x-5 transform-gpu origin-center"
-              />
-              {/* Card 2 (Middle - Rotates vertically second) */}
-              <motion.div 
-                animate={{
-                  rotateX: [0, 0, 360, 360]
-                }}
-                transition={{
-                  duration: 4.5,
-                  repeat: Infinity,
-                  times: [0, 0.33, 0.66, 1],
-                  ease: "easeInOut"
-                }}
-                className="absolute inset-0 bg-indigo-300/55 border border-indigo-200/50 rounded-xl shadow-xs transform -rotate-11 -translate-x-2 transition-transform duration-500 group-hover:-rotate-14 group-hover:-translate-x-3 transform-gpu origin-center"
-              />
-              {/* Card 3 (Front - Rotates vertically third) */}
-              <motion.div 
-                animate={{
-                  rotateX: [0, 0, 0, 360]
-                }}
-                transition={{
-                  duration: 4.5,
-                  repeat: Infinity,
-                  times: [0, 0.33, 0.66, 1],
-                  ease: "easeInOut"
-                }}
-                className="relative w-full h-full bg-white rounded-xl shadow-xl p-2.5 sm:p-3 flex flex-col justify-center gap-1.5 border border-indigo-100 transition-transform duration-500 group-hover:scale-105 transform-gpu origin-center"
-              >
-                <div className="w-[60%] h-1.5 bg-indigo-500 rounded-full" />
-                <div className="w-[40%] h-1.5 bg-indigo-300 rounded-full" />
-                <div className="w-[80%] h-1.5 bg-indigo-500 rounded-full" />
-                <div className="w-[50%] h-1.5 bg-indigo-300 rounded-full" />
-              </motion.div>
+              {[0, 1, 2].map((cardId) => {
+                const pos = (cardId - bannerRotationStep + 3) % 3;
+                const isTop = pos === 0;
+                const isMiddle = pos === 1;
+
+                let animateProps: any;
+                if (pos === 0) {
+                  // Top card (front)
+                  animateProps = {
+                    zIndex: 30,
+                    x: 0,
+                    y: 0,
+                    rotate: 0,
+                    rotateY: 0,
+                    scale: 1,
+                    opacity: 1,
+                    transition: { duration: 3.2, ease: [0.25, 1, 0.5, 1] }
+                  };
+                } else if (pos === 1) {
+                  // Second card (middle)
+                  animateProps = {
+                    zIndex: 20,
+                    x: -8,
+                    y: 2,
+                    rotate: -8,
+                    rotateY: 0,
+                    scale: 0.92,
+                    opacity: 0.85,
+                    transition: { duration: 3.2, ease: [0.25, 1, 0.5, 1] }
+                  };
+                } else {
+                  // Third / Bottom card (the former top card rotates out smoothly to back)
+                  animateProps = {
+                    zIndex: 10,
+                    x: [0, 42, -16],
+                    rotateY: [0, 65, 0],
+                    rotate: [0, 16, -16],
+                    scale: [1, 0.92, 0.84],
+                    opacity: [1, 0.85, 0.65],
+                    transition: { duration: 3.2, ease: [0.33, 1, 0.68, 1] }
+                  };
+                }
+
+                return (
+                  <motion.div
+                    key={cardId}
+                    animate={animateProps}
+                    className={`absolute inset-0 rounded-xl p-2.5 sm:p-3 flex flex-col justify-center gap-1.5 transform-gpu origin-center border transition-colors ${
+                      isTop
+                        ? 'bg-white border-indigo-100 shadow-xl'
+                        : isMiddle
+                        ? 'bg-indigo-300/60 border-indigo-200/50 shadow-md'
+                        : 'bg-indigo-400/40 border-indigo-300/40 shadow-sm'
+                    }`}
+                  >
+                    <div className={`h-1.5 rounded-full ${isTop ? 'w-[60%] bg-indigo-500' : 'w-[50%] bg-white/70'}`} />
+                    <div className={`h-1.5 rounded-full ${isTop ? 'w-[40%] bg-indigo-300' : 'w-[30%] bg-white/50'}`} />
+                    <div className={`h-1.5 rounded-full ${isTop ? 'w-[80%] bg-indigo-500' : 'w-[70%] bg-white/70'}`} />
+                    <div className={`h-1.5 rounded-full ${isTop ? 'w-[50%] bg-indigo-300' : 'w-[40%] bg-white/50'}`} />
+                  </motion.div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -1446,6 +1448,7 @@ export default function FlashcardViewer({
                 const place5Label = placeLabels?.place5?.trim() || 'Synonyms';
                 const place6Label = placeLabels?.place6?.trim() || 'Mnemonic / Note';
 
+                const place1Val = currentActiveWord.word?.trim();
                 const place2Val = currentActiveWord.meaning?.trim();
                 const hasPlace2 = Boolean(place2Val);
                 const place3Val = currentActiveWord.example?.trim();
@@ -1456,6 +1459,27 @@ export default function FlashcardViewer({
                 const hasPlace5 = Boolean(place5Val);
                 const place6Val = (currentActiveWord.mnemonic || progress[currentActiveWord.id]?.notes)?.trim();
                 const hasPlace6 = Boolean(place6Val);
+
+                const formatLineWithRedPlace1 = (val: string) => {
+                  if (!val) return null;
+                  if (!place1Val) return <span className="text-black">{val}</span>;
+                  const escaped = place1Val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                  const regex = new RegExp(`(${escaped})`, 'gi');
+                  const parts = val.split(regex);
+                  return (
+                    <span className="text-black">
+                      {parts.map((part, index) =>
+                        part.toLowerCase() === place1Val.toLowerCase() ? (
+                          <span key={index} className="text-red-600 font-bold">
+                            {part}
+                          </span>
+                        ) : (
+                          part
+                        )
+                      )}
+                    </span>
+                  );
+                };
 
                 const placeLabelStyle: React.CSSProperties = {
                   fontFamily: 'Poppins, Inter, ui-sans-serif, system-ui, sans-serif',
@@ -1493,7 +1517,7 @@ export default function FlashcardViewer({
                           {place3Label}
                         </span>
                       )}
-                      <p className="text-xs sm:text-sm font-semibold text-slate-700 text-center">
+                      <p className="text-[18px] font-semibold text-slate-800 text-center leading-snug" style={{ fontSize: '18px' }}>
                         {place3Val}
                       </p>
                     </div>
@@ -1509,8 +1533,8 @@ export default function FlashcardViewer({
                           {place4Label}
                         </span>
                       )}
-                      <p className="text-xs sm:text-sm font-semibold text-slate-800 text-center">
-                        {place4Val}
+                      <p className="text-xs sm:text-sm font-semibold text-black text-center">
+                        {formatLineWithRedPlace1(place4Val)}
                       </p>
                     </div>
                   );
@@ -1525,8 +1549,8 @@ export default function FlashcardViewer({
                           {place5Label}
                         </span>
                       )}
-                      <p className="text-xs font-bold text-emerald-700 text-center">
-                        {place5Val}
+                      <p className="text-xs sm:text-sm font-semibold text-black text-center">
+                        {formatLineWithRedPlace1(place5Val)}
                       </p>
                     </div>
                   );

@@ -900,14 +900,14 @@ export default function MyCoursesView({
             setTimeout(() => setActiveCourseToast(null), 2500);
           }
         }}
-        className={`group relative transition-all duration-300 flex flex-col justify-between overflow-hidden ${
+        className={`group relative transition-all duration-300 flex flex-col justify-between overflow-hidden p-3.5 sm:p-4 ${
           isUserAllowed ? 'cursor-pointer' : ''
         } ${
           isActive 
-            ? 'bg-gradient-to-br from-emerald-600/95 via-emerald-700/95 to-teal-800/95 backdrop-blur-md text-white border-2 border-emerald-400/60 shadow-xl shadow-emerald-950/20 ring-4 ring-emerald-500/20 rounded-2xl p-4 sm:p-5' 
+            ? 'bg-gradient-to-br from-emerald-600/95 via-emerald-700/95 to-teal-800/95 backdrop-blur-md text-white border-2 border-emerald-400/60 shadow-xl shadow-emerald-950/20 ring-4 ring-emerald-500/20 rounded-2xl' 
             : isUserAllowed
-            ? 'bg-white text-slate-900 border-0 border-b-4 border-b-indigo-600 shadow-sm hover:shadow-md rounded-xl'
-            : 'bg-white text-slate-900 border-0 border-b-4 border-b-slate-400 shadow-sm hover:shadow-md rounded-xl'
+            ? 'bg-white text-slate-900 border-0 border-b-4 border-b-indigo-600 shadow-sm hover:shadow-md rounded-2xl'
+            : 'bg-white text-slate-900 border-0 border-b-4 border-b-slate-400 shadow-sm hover:shadow-md rounded-2xl'
         }`}
         style={{ fontFamily: "'Poppins', sans-serif" }}
       >
@@ -921,7 +921,7 @@ export default function MyCoursesView({
         )}
 
         {/* Card Body */}
-        <div className={isActive ? "flex-1 flex flex-col justify-between space-y-3" : "p-2.5 sm:p-3 flex-1 flex flex-col justify-between space-y-2"}>
+        <div className="flex-1 flex flex-col justify-between space-y-2.5">
           <div>
             {/* Header: Title & Clean Word Count */}
             <div className="flex items-start justify-between gap-2">

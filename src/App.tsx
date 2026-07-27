@@ -1094,7 +1094,10 @@ export default function App() {
   const isRestrictedLocked = !isCourseFullyAccessible;
 
   const activeCourse = rawActiveCourse;
-  const activeWords = activeCourse.words || [];
+  const effectiveFreeLimit = activeCourse.freeFlashcardsCount || 100;
+  const activeWords = isRestrictedLocked
+    ? (activeCourse.words || []).slice(0, effectiveFreeLimit)
+    : (activeCourse.words || []);
 
   // --- DATABASE STATE HANDLERS ---
 
