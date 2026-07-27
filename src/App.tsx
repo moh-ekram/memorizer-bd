@@ -1428,15 +1428,6 @@ export default function App() {
 
         {/* User Stats & Auth (Unified Header UI) */}
         <div className="flex items-center gap-1.5 md:gap-3.5 flex-shrink-0">
-          {/* Connection Status Badge (Visible for both logged in and anonymous users) */}
-          <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 py-1 md:px-2.5 md:py-1.5 rounded-xl text-[9px] md:text-[10px] font-bold">
-            <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400 animate-pulse'}`} />
-            <span className={isOnline ? 'text-emerald-300' : 'text-amber-300'}>
-              {isOnline ? 'Online' : 'Offline'}
-              {!isOnline && pendingSyncCount > 0 && ` (${pendingSyncCount} pending)`}
-            </span>
-          </div>
-
           {/* Dark Mode Toggle */}
           <button
             onClick={() => setDarkMode(prev => !prev)}
