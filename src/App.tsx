@@ -58,7 +58,8 @@ import {
   getQueuedSyncItems, 
   clearSyncQueue,
   saveMetaValue,
-  getMetaValue
+  getMetaValue,
+  clearIndexedDBCache
 } from './lib/offlineDb';
 
 const LOCAL_STORAGE_PROGRESS_KEY = 'vocab_memorizer_progress_v2';
@@ -741,145 +742,73 @@ export default function App() {
           if (docSnap.exists()) {
             const data = docSnap.data();
 
-            // Merge cloud progress with local progress safely (timestamp-based conflict resolution)
-            if (data.progress) {
-              setProgress(prev => {
-                const merged = { ...data.progress };
-                Object.keys(prev).forEach(key => {
-                  const localItem = prev[key];
-                  const cloudItem = data.progress[key];
-                  if (!cloudItem) {
-                    merged[key] = localItem;
-                  } else {
-                    const localTime = new Date(localItem.updatedAt || 0).getTime();
-                    const cloudTime = new Date(cloudItem.updatedAt || 0).getTime();
-                    if (localTime > cloudTime) {
-                      merged[key] = localItem;
-                    }
-                  }
-                });
-                return merged;
-              });
-            }
-            if (data.folders && Array.isArray(data.folders)) {
-              setFolders(data.folders);
-            }
-            if (data.goal) {
-              setGoal(prev => ({
-                ...prev,
-                ...data.goal,
-                dailyTarget: data.goal.dailyTarget || prev.dailyTarget,
-                streak: Math.max(prev.streak || 1, data.goal.streak || 1)
-              }));
-            }
-            if (data.synonymProgress) {
-              setSynonymProgress(prev => {
-                const merged = { ...data.synonymProgress };
-                Object.keys(prev).forEach(key => {
-                  const localItem = prev[key];
-                  const cloudItem = data.synonymProgress[key];
-                  if (!cloudItem) {
-                    merged[key] = localItem;
-                  } else {
-                    const localTime = new Date(localItem.updatedAt || 0).getTime();
-                    const cloudTime = new Date(cloudItem.updatedAt || 0).getTime();
-                    if (localTime > cloudTime) {
-                      merged[key] = localItem;
-                    }
-                  }
-                });
-                return merged;
-              });
-            }
-            if (data.blankProgress) {
-              setBlankProgress(prev => {
-                const merged = { ...data.blankProgress };
-                Object.keys(prev).forEach(key => {
-                  const localItem = prev[key];
-                  const cloudItem = data.blankProgress[key];
-                  if (!cloudItem) {
-                    merged[key] = localItem;
-                  } else {
-                    const localTime = new Date(localItem.updatedAt || 0).getTime();
-                    const cloudTime = new Date(cloudItem.updatedAt || 0).getTime();
-                    if (localTime > cloudTime) {
-                      merged[key] = localItem;
-                    }
-                  }
-                });
-                return merged;
-              });
-            }
-            if (data.oooProgress) {
-              setOooProgress(prev => {
-                const merged = { ...data.oooProgress };
-                Object.keys(prev).forEach(key => {
-                  const localItem = prev[key];
-                  const cloudItem = data.oooProgress[key];
-                  if (!cloudItem) {
-                    merged[key] = localItem;
-                  } else {
-                    const localTime = new Date(localItem.updatedAt || 0).getTime();
-                    const cloudTime = new Date(cloudItem.updatedAt || 0).getTime();
-                    if (localTime > cloudTime) {
-                      merged[key] = localItem;
-                    }
-                  }
-                });
-                return merged;
-              });
-            }
-            if (data.analogyProgress) {
-              setAnalogyProgress(prev => {
-                const merged = { ...data.analogyProgress };
-                Object.keys(prev).forEach(key => {
-                  const localItem = prev[key];
-                  const cloudItem = data.analogyProgress[key];
-                  if (!cloudItem) {
-                    merged[key] = localItem;
-                  } else {
-                    const localTime = new Date(localItem.updatedAt || 0).getTime();
-                    const cloudTime = new Date(cloudItem.updatedAt || 0).getTime();
-                    if (localTime > cloudTime) {
-                      merged[key] = localItem;
-                    }
-                  }
-                });
-                return merged;
-              });
-            }
+            // Set state directly from cloud data (isolated per user)
+            setProgress(data.progress || {});
+            setFolders(Array.isArray(data.folders) && data.folders.length > 0 ? data.folders : [
+              { id: '1', name: 'Important Words (High Priority)', color: '#ef4444' },
+              { id: '2', name: 'Hard Synonyms', color: '#f59e0b' }
+            ]);
+            setGoal(data.goal || {
+              dailyTarget: 15,
+              streak: 1,
+              lastStudyDate: new Date().toISOString().split('T')[0],
+              history: {}
+            });
+            setSynonymProgress(data.synonymProgress || {});
+            setBlankProgress(data.blankProgress || {});
+            setOooProgress(data.oooProgress || {});
+            setAnalogyProgress(data.analogyProgress || {});
             if (data.settings) {
               setSettings(prev => ({ ...prev, ...data.settings }));
             }
-            if (data.enrolledCourseIds && Array.isArray(data.enrolledCourseIds)) {
-              setEnrolledCourseIds(data.enrolledCourseIds);
-            }
-            if (data.activeCourseId) {
-              setActiveCourseId(data.activeCourseId);
-            }
-            if (data.quizScore !== undefined) {
-              setQuizScore(data.quizScore);
-            }
-            if (data.quizTaken !== undefined) {
-              setQuizTaken(data.quizTaken);
-            }
+            setEnrolledCourseIds(Array.isArray(data.enrolledCourseIds) && data.enrolledCourseIds.length > 0 ? data.enrolledCourseIds : ['gre']);
+            setActiveCourseId(data.activeCourseId || 'gre');
+            setQuizScore(data.quizScore !== undefined ? data.quizScore : 0);
+            setQuizTaken(data.quizTaken !== undefined ? data.quizTaken : 0);
+            
             setSyncStatus('synced');
             setHasLoadedFromCloud(true);
           } else {
-            // New user signup: back up current local state to cloud immediately
+            // New user signup: create clean user record
+            const cleanProgress = {};
+            const cleanFolders = [
+              { id: '1', name: 'Important Words (High Priority)', color: '#ef4444' },
+              { id: '2', name: 'Hard Synonyms', color: '#f59e0b' }
+            ];
+            const cleanGoal = {
+              dailyTarget: 15,
+              streak: 1,
+              lastStudyDate: new Date().toISOString().split('T')[0],
+              history: {}
+            };
+            const cleanEnrolled = ['gre'];
+            const cleanActive = 'gre';
+
+            setProgress(cleanProgress);
+            setFolders(cleanFolders);
+            setGoal(cleanGoal);
+            setSynonymProgress({});
+            setBlankProgress({});
+            setOooProgress({});
+            setAnalogyProgress({});
+            setEnrolledCourseIds(cleanEnrolled);
+            setActiveCourseId(cleanActive);
+            setQuizScore(0);
+            setQuizTaken(0);
+
             await setDoc(userDocRef, {
-              progress,
-              folders,
-              goal,
-              synonymProgress,
-              blankProgress,
-              oooProgress,
-              analogyProgress,
+              progress: cleanProgress,
+              folders: cleanFolders,
+              goal: cleanGoal,
+              synonymProgress: {},
+              blankProgress: {},
+              oooProgress: {},
+              analogyProgress: {},
               settings,
-              enrolledCourseIds,
-              activeCourseId,
-              quizScore,
-              quizTaken,
+              enrolledCourseIds: cleanEnrolled,
+              activeCourseId: cleanActive,
+              quizScore: 0,
+              quizTaken: 0,
               email: currentUser.email,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString()
@@ -989,45 +918,53 @@ export default function App() {
       try {
         await signOut(auth);
         
-        // Reset to local Storage values
-        const savedProgress = localStorage.getItem(LOCAL_STORAGE_PROGRESS_KEY);
-        setProgress(savedProgress ? JSON.parse(savedProgress) : {});
+        // Remove all local storage items associated with the previous account
+        localStorage.removeItem(LOCAL_STORAGE_PROGRESS_KEY);
+        localStorage.removeItem(LOCAL_STORAGE_FOLDERS_KEY);
+        localStorage.removeItem(LOCAL_STORAGE_GOALS_KEY);
+        localStorage.removeItem(LOCAL_STORAGE_SYNONYM_PROGRESS_KEY);
+        localStorage.removeItem(LOCAL_STORAGE_BLANK_PROGRESS_KEY);
+        localStorage.removeItem('vocab_memorizer_ooo_progress');
+        localStorage.removeItem('vocab_memorizer_analogy_progress');
+        localStorage.removeItem(LOCAL_STORAGE_ENROLLED_COURSES_KEY);
+        localStorage.removeItem(LOCAL_STORAGE_ACTIVE_COURSE_KEY);
+        localStorage.removeItem('vocab_memorizer_quiz_score');
+        localStorage.removeItem('vocab_memorizer_quiz_taken');
+        localStorage.removeItem('memorizer_sync_logs');
 
-        const savedFolders = localStorage.getItem(LOCAL_STORAGE_FOLDERS_KEY);
-        setFolders(savedFolders ? JSON.parse(savedFolders) : [
+        // Clear offline IndexedDB cache
+        await clearIndexedDBCache();
+
+        // Reset state to clean defaults
+        setProgress({});
+        setFolders([
           { id: '1', name: 'Important Words (High Priority)', color: '#ef4444' },
           { id: '2', name: 'Hard Synonyms', color: '#f59e0b' }
         ]);
-
-        const savedGoal = localStorage.getItem(LOCAL_STORAGE_GOALS_KEY);
-        setGoal(savedGoal ? JSON.parse(savedGoal) : {
+        setGoal({
           dailyTarget: 15,
           streak: 1,
           lastStudyDate: new Date().toISOString().split('T')[0],
           history: {}
         });
-
-        const savedSynonymProgress = localStorage.getItem(LOCAL_STORAGE_SYNONYM_PROGRESS_KEY);
-        setSynonymProgress(savedSynonymProgress ? JSON.parse(savedSynonymProgress) : {});
-
-        const savedBlankProgress = localStorage.getItem(LOCAL_STORAGE_BLANK_PROGRESS_KEY);
-        setBlankProgress(savedBlankProgress ? JSON.parse(savedBlankProgress) : {});
-
-        const savedSettings = localStorage.getItem(LOCAL_STORAGE_SETTINGS_KEY);
-        setSettings(savedSettings ? JSON.parse(savedSettings) : {
+        setSynonymProgress({});
+        setBlankProgress({});
+        setOooProgress({});
+        setAnalogyProgress({});
+        setSettings({
           defaultFlashcardTags: ['dont_know'],
           defaultFlashcardOrder: 'random',
           autoPlayAudio: false,
           quizLength: 10
         });
-
-        const savedEnrolled = localStorage.getItem(LOCAL_STORAGE_ENROLLED_COURSES_KEY);
-        setEnrolledCourseIds(savedEnrolled ? JSON.parse(savedEnrolled) : ['gre']);
-
-        const savedActive = localStorage.getItem(LOCAL_STORAGE_ACTIVE_COURSE_KEY);
-        setActiveCourseId(savedActive ? savedActive : 'gre');
+        setEnrolledCourseIds(['gre']);
+        setActiveCourseId('gre');
+        setQuizScore(0);
+        setQuizTaken(0);
 
         setUser(null);
+        setHasLoadedFromCloud(false);
+        setSyncStatus('idle');
       } catch (err) {
         console.error('Log out failed:', err);
       }

@@ -130,6 +130,22 @@ export async function clearSyncQueue(): Promise<void> {
   }
 }
 
+export async function clearIndexedDBCache(): Promise<void> {
+  try {
+    const db = await initIndexedDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['progress', 'syncQueue', 'meta'], 'readwrite');
+      transaction.objectStore('progress').clear();
+      transaction.objectStore('syncQueue').clear();
+      transaction.objectStore('meta').clear();
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } catch (error) {
+    console.error('IndexedDB clearIndexedDBCache error:', error);
+  }
+}
+
 export async function saveMetaValue(key: string, value: any): Promise<void> {
   try {
     const db = await initIndexedDB();

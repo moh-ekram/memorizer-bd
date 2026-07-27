@@ -948,24 +948,8 @@ export default function MyCoursesView({
               </div>
             </div>
 
-            {/* Mobile Expand / Collapse Toggle Header */}
-            <div className={`block sm:hidden mt-1.5 pt-1.5 border-t ${
-              isActive ? 'border-emerald-500/40' : 'border-slate-100'
-            }`}>
-              <button
-                type="button"
-                onClick={(e) => toggleCourseExpand(course.id, e)}
-                className={`w-full text-left flex items-center justify-between text-[10px] font-semibold py-0.5 ${
-                  isActive ? 'text-emerald-200' : 'text-indigo-600'
-                }`}
-              >
-                <span>{isExpanded ? 'Hide Details' : 'Includes'}</span>
-                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-              </button>
-            </div>
-
-            {/* Includes Section (Desktop or Mobile Expanded) */}
-            <div className={`mt-2 ${isExpanded ? 'block' : 'hidden sm:block'}`}>
+            {/* Includes Section */}
+            <div className="mt-2">
               <div className={`border-t pt-1.5 ${
                 isActive ? 'border-emerald-500/40' : 'border-slate-100'
               }`}>
@@ -985,30 +969,6 @@ export default function MyCoursesView({
                     </div>
                     <span><strong className={isActive ? 'text-white' : 'text-slate-900'}>{wordsCount} W</strong> (Vocabulary Words)</span>
                   </li>
-                  {enabledPracticeList.length > 0 && (
-                    <li className={`flex items-start gap-1 font-medium ${
-                      isActive ? 'text-emerald-50' : 'text-slate-600'
-                    }`}>
-                      <div className={`w-3 h-3 rounded-full flex items-center justify-center font-bold text-[6px] shrink-0 mt-0.5 ${
-                        isActive ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'
-                      }`}>
-                        ✓
-                      </div>
-                      <span className="line-clamp-1"><strong className={isActive ? 'text-white' : ''}>Practice:</strong> {enabledPracticeList.join(', ')}</span>
-                    </li>
-                  )}
-                  {enabledStudyList.length > 0 && (
-                    <li className={`flex items-start gap-1 font-medium ${
-                      isActive ? 'text-emerald-50' : 'text-slate-600'
-                    }`}>
-                      <div className={`w-3 h-3 rounded-full flex items-center justify-center font-bold text-[6px] shrink-0 mt-0.5 ${
-                        isActive ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'
-                      }`}>
-                        ✓
-                      </div>
-                      <span className="line-clamp-1"><strong className={isActive ? 'text-white' : ''}>Study Tools:</strong> {enabledStudyList.join(', ')}</span>
-                    </li>
-                  )}
                   <li className={`flex items-center gap-1 font-medium ${
                     isActive ? 'text-emerald-50' : 'text-slate-600'
                   }`}>
@@ -1123,9 +1083,9 @@ export default function MyCoursesView({
         </div>
 
         {/* Bottom Main Action Button */}
-        <div className={isActive ? "w-full flex items-center mt-3" : "w-full flex items-center mt-2.5"}>
+        <div className={isActive ? "w-full flex items-center mt-2" : "w-full flex items-center mt-2"}>
           {isActive ? (
-            <div className="w-full flex items-center divide-x divide-white/20 bg-emerald-950/40 rounded-xl overflow-hidden border border-white/20 shadow-xs">
+            <div className="w-full flex items-center divide-x divide-white/20 bg-emerald-950/40 rounded-lg overflow-hidden border border-white/20 shadow-2xs">
               <button
                 type="button"
                 onClick={(e) => {
@@ -1134,9 +1094,9 @@ export default function MyCoursesView({
                   setActiveCourseToast(`"${course.title}" is currently active.`);
                   setTimeout(() => setActiveCourseToast(null), 2500);
                 }}
-                className="flex-1 py-2 px-2 font-bold text-[10px] sm:text-xs text-white flex items-center justify-center gap-1 transition hover:bg-white/10 cursor-pointer font-poppins min-w-0"
+                className="flex-1 py-1 px-1.5 font-bold text-[9px] sm:text-[10px] text-white flex items-center justify-center gap-1 transition hover:bg-white/10 cursor-pointer font-poppins min-w-0"
               >
-                <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-300 shrink-0" />
+                <Check className="w-3 h-3 stroke-[3] text-emerald-300 shrink-0" />
                 <span className="whitespace-nowrap truncate">Active Course</span>
               </button>
               <button
@@ -1148,15 +1108,15 @@ export default function MyCoursesView({
                     onSelectTab('flashcard');
                   }
                 }}
-                className="py-2 px-2.5 sm:px-3.5 font-bold text-[10px] sm:text-xs bg-white text-emerald-900 hover:bg-emerald-50 flex items-center justify-center gap-1 transition cursor-pointer font-poppins shrink-0"
+                className="py-1 px-2 font-bold text-[9px] sm:text-[10px] bg-white text-emerald-900 hover:bg-emerald-50 flex items-center justify-center gap-1 transition cursor-pointer font-poppins shrink-0"
                 title="Open Flashcards"
               >
                 <span className="whitespace-nowrap">Study</span>
-                <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                <ArrowRight className="w-3 h-3 shrink-0" />
               </button>
             </div>
           ) : isUserAllowed ? (
-            <div className="w-full flex items-center divide-x divide-indigo-700/80 bg-indigo-600 rounded-xl overflow-hidden shadow-xs">
+            <div className="w-full flex items-center divide-x divide-indigo-700/80 bg-indigo-600 rounded-lg overflow-hidden shadow-2xs">
               <button
                 type="button"
                 onClick={(e) => {
@@ -1165,9 +1125,9 @@ export default function MyCoursesView({
                   setActiveCourseToast(`Activated "${course.title}" course!`);
                   setTimeout(() => setActiveCourseToast(null), 2500);
                 }}
-                className="flex-1 py-2 px-2 font-bold text-[10px] sm:text-xs text-white flex items-center justify-center gap-1 transition hover:bg-indigo-700 cursor-pointer font-poppins min-w-0"
+                className="flex-1 py-1 px-1.5 font-bold text-[9px] sm:text-[10px] text-white flex items-center justify-center gap-1 transition hover:bg-indigo-700 cursor-pointer font-poppins min-w-0"
               >
-                <Check className="w-3.5 h-3.5 shrink-0" />
+                <Check className="w-3 h-3 shrink-0" />
                 <span className="whitespace-nowrap truncate">Set Active</span>
               </button>
               <button
@@ -1179,11 +1139,11 @@ export default function MyCoursesView({
                     onSelectTab('flashcard');
                   }
                 }}
-                className="py-2 px-2.5 sm:px-3.5 font-bold text-[10px] sm:text-xs bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center gap-1 transition cursor-pointer font-poppins shrink-0"
+                className="py-1 px-2 font-bold text-[9px] sm:text-[10px] bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center gap-1 transition cursor-pointer font-poppins shrink-0"
                 title="Study Flashcards"
               >
                 <span className="whitespace-nowrap">Study</span>
-                <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                <ArrowRight className="w-3 h-3 shrink-0" />
               </button>
             </div>
           ) : (
@@ -1194,10 +1154,10 @@ export default function MyCoursesView({
                 setIsCartCheckoutMode(false);
                 setSelectedBuyCourse(course);
               }}
-              className="w-full py-2 px-3 font-bold text-[10px] sm:text-xs bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white flex items-center justify-center gap-1.5 transition cursor-pointer font-poppins rounded-xl shadow-xs"
+              className="w-full py-1.5 px-2.5 font-bold text-[9px] sm:text-[10px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white flex items-center justify-center gap-1 transition cursor-pointer font-poppins rounded-lg shadow-2xs"
             >
               <span className="whitespace-nowrap">Unlock Course (৳{(course.price && course.price > 0) ? course.price : 30})</span>
-              <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+              <ArrowRight className="w-3 h-3 shrink-0" />
             </button>
           )}
         </div>

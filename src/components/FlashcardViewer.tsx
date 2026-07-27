@@ -400,7 +400,13 @@ export default function FlashcardViewer({
     autoAdvance: boolean;
   } | null>(null);
 
+  const lastActionTimeRef = useRef<number>(0);
+
   const rateAndMaybeConfirm = (newStatus: WordStatus, autoAdvance = true) => {
+    const now = Date.now();
+    if (now - lastActionTimeRef.current < 200) return;
+    lastActionTimeRef.current = now;
+
     if (!currentActiveWord.id) return;
     onRateWord(currentActiveWord.id, newStatus);
     if (autoAdvance) {
@@ -957,7 +963,9 @@ export default function FlashcardViewer({
                         <button
                           key={st.key}
                           type="button"
-                          onClick={() => {
+                          style={{ touchAction: 'manipulation' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setSelectedStatuses(prev => 
                               prev.includes(st.key)
                                 ? prev.filter(x => x !== st.key)
@@ -965,7 +973,7 @@ export default function FlashcardViewer({
                             );
                             setUserHasManuallyChangedStatuses(true);
                           }}
-                          className={`p-2 rounded-xl text-[11px] font-semibold flex items-center justify-between transition cursor-pointer border ${
+                          className={`p-2 rounded-xl text-[11px] font-semibold flex items-center justify-between transition cursor-pointer select-none border active:scale-95 ${
                             isSelected ? 'bg-indigo-50 border-indigo-200 text-indigo-900' : 'bg-slate-50 border-slate-200/60 text-slate-600 hover:bg-slate-100'
                           }`}
                         >
@@ -1284,11 +1292,23 @@ export default function FlashcardViewer({
               </div>
 
               {/* Card Footer Response Controls */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-around w-full" onClick={(e) => e.stopPropagation()}>
+              <div 
+                className="pt-3 border-t border-slate-100 flex items-center justify-around w-full" 
+                onClick={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchEnd={(e) => e.stopPropagation()}
+              >
                 <div className="flex flex-col items-center gap-1">
                   <button
-                    onClick={() => rateAndMaybeConfirm('dont_know', true)}
-                    className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition cursor-pointer border ${
+                    type="button"
+                    style={{ touchAction: 'manipulation' }}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      rateAndMaybeConfirm('dont_know', true);
+                    }}
+                    className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition cursor-pointer select-none border active:scale-95 ${
                       activeStatus === 'dont_know'
                         ? 'bg-rose-500 text-white border-rose-600 shadow-md scale-105'
                         : 'bg-rose-50 text-rose-600 hover:bg-rose-100 border-rose-200'
@@ -1304,8 +1324,15 @@ export default function FlashcardViewer({
 
                 <div className="flex flex-col items-center gap-1">
                   <button
-                    onClick={() => rateAndMaybeConfirm('confusion', true)}
-                    className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition cursor-pointer border ${
+                    type="button"
+                    style={{ touchAction: 'manipulation' }}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      rateAndMaybeConfirm('confusion', true);
+                    }}
+                    className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition cursor-pointer select-none border active:scale-95 ${
                       activeStatus === 'confusion'
                         ? 'bg-amber-500 text-white border-amber-600 shadow-md scale-105'
                         : 'bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-200'
@@ -1321,8 +1348,15 @@ export default function FlashcardViewer({
 
                 <div className="flex flex-col items-center gap-1">
                   <button
-                    onClick={handleNext}
-                    className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 flex items-center justify-center transition cursor-pointer"
+                    type="button"
+                    style={{ touchAction: 'manipulation' }}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleNext();
+                    }}
+                    className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 flex items-center justify-center transition cursor-pointer select-none active:scale-95"
                     title="Skip Card"
                   >
                     <SkipForward className="w-5 h-5" />
@@ -1334,8 +1368,15 @@ export default function FlashcardViewer({
 
                 <div className="flex flex-col items-center gap-1">
                   <button
-                    onClick={() => rateAndMaybeConfirm('know', true)}
-                    className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition cursor-pointer border ${
+                    type="button"
+                    style={{ touchAction: 'manipulation' }}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      rateAndMaybeConfirm('know', true);
+                    }}
+                    className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition cursor-pointer select-none border active:scale-95 ${
                       activeStatus === 'know'
                         ? 'bg-emerald-500 text-white border-emerald-600 shadow-md scale-105'
                         : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200'
@@ -1532,11 +1573,23 @@ export default function FlashcardViewer({
               })()}
 
               {/* Card Footer Response Controls */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-around w-full" onClick={(e) => e.stopPropagation()}>
+              <div 
+                className="pt-3 border-t border-slate-100 flex items-center justify-around w-full" 
+                onClick={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchEnd={(e) => e.stopPropagation()}
+              >
                 <div className="flex flex-col items-center gap-1">
                   <button
-                    onClick={() => rateAndMaybeConfirm('dont_know', true)}
-                    className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition cursor-pointer border ${
+                    type="button"
+                    style={{ touchAction: 'manipulation' }}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      rateAndMaybeConfirm('dont_know', true);
+                    }}
+                    className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition cursor-pointer select-none border active:scale-95 ${
                       activeStatus === 'dont_know'
                         ? 'bg-rose-500 text-white border-rose-600 shadow-md scale-105'
                         : 'bg-rose-50 text-rose-600 hover:bg-rose-100 border-rose-200'
@@ -1552,8 +1605,15 @@ export default function FlashcardViewer({
 
                 <div className="flex flex-col items-center gap-1">
                   <button
-                    onClick={() => rateAndMaybeConfirm('confusion', true)}
-                    className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition cursor-pointer border ${
+                    type="button"
+                    style={{ touchAction: 'manipulation' }}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      rateAndMaybeConfirm('confusion', true);
+                    }}
+                    className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition cursor-pointer select-none border active:scale-95 ${
                       activeStatus === 'confusion'
                         ? 'bg-amber-500 text-white border-amber-600 shadow-md scale-105'
                         : 'bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-200'
@@ -1569,8 +1629,15 @@ export default function FlashcardViewer({
 
                 <div className="flex flex-col items-center gap-1">
                   <button
-                    onClick={handleNext}
-                    className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 flex items-center justify-center transition cursor-pointer"
+                    type="button"
+                    style={{ touchAction: 'manipulation' }}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleNext();
+                    }}
+                    className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 flex items-center justify-center transition cursor-pointer select-none active:scale-95"
                     title="Skip Card"
                   >
                     <SkipForward className="w-5 h-5" />
@@ -1582,8 +1649,15 @@ export default function FlashcardViewer({
 
                 <div className="flex flex-col items-center gap-1">
                   <button
-                    onClick={() => rateAndMaybeConfirm('know', true)}
-                    className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition cursor-pointer border ${
+                    type="button"
+                    style={{ touchAction: 'manipulation' }}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      rateAndMaybeConfirm('know', true);
+                    }}
+                    className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition cursor-pointer select-none border active:scale-95 ${
                       activeStatus === 'know'
                         ? 'bg-emerald-500 text-white border-emerald-600 shadow-md scale-105'
                         : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200'
