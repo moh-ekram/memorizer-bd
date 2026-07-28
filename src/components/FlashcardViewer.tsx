@@ -446,6 +446,57 @@ export default function FlashcardViewer({
     extraMeaning: ''
   };
 
+  // Calculate progress stats for the currently filtered set of words
+  const filterProgressStats = React.useMemo(() => {
+    const total = filteredWords.length;
+    if (total === 0) {
+      return {
+        total: 0,
+        know: 0,
+        confusion: 0,
+        dontKnow: 0,
+        unrated: 0,
+        knowPct: 0,
+        confusionPct: 0,
+        dontKnowPct: 0,
+        unratedPct: 0,
+        completedPct: 0
+      };
+    }
+
+    let know = 0;
+    let confusion = 0;
+    let dontKnow = 0;
+    let unrated = 0;
+
+    filteredWords.forEach(w => {
+      const st = progress[w.id]?.status || 'unrated';
+      if (st === 'know') know++;
+      else if (st === 'confusion') confusion++;
+      else if (st === 'dont_know') dontKnow++;
+      else unrated++;
+    });
+
+    const knowPct = Math.round((know / total) * 100);
+    const confusionPct = Math.round((confusion / total) * 100);
+    const dontKnowPct = Math.round((dontKnow / total) * 100);
+    const unratedPct = Math.round((unrated / total) * 100);
+    const completedPct = Math.round(((know + confusion + dontKnow) / total) * 100);
+
+    return {
+      total,
+      know,
+      confusion,
+      dontKnow,
+      unrated,
+      knowPct,
+      confusionPct,
+      dontKnowPct,
+      unratedPct,
+      completedPct
+    };
+  }, [filteredWords, progress]);
+
   // Helper to parse double asterisks and render bold words
   const renderSentence = (text: string) => {
     if (!text) return null;
@@ -812,6 +863,118 @@ export default function FlashcardViewer({
               })}
             </div>
           </motion.div>
+        </div>
+
+        {/* Filtered Flashcard Progress Line Card */}
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-amber-50 border border-amber-200/80 text-amber-600 rounded-xl shrink-0">
+                <Flame className="w-4.5 h-4.5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-extrabold text-slate-900 text-xs sm:text-sm">
+                    Filtered Flashcard Progress
+                  </h3>
+                  <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-extrabold text-[10px] rounded-full border border-emerald-200">
+                    {filterProgressStats.knowPct}% Learned
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5 font-medium">
+                  {filterProgressStats.know} of {filterProgressStats.total} words mastered based on current filters
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/60">
+              <Layers className="w-3.5 h-3.5 text-indigo-600" />
+              <span>{filterProgressStats.total} Selected Words</span>
+            </div>
+          </div>
+
+          {/* Multi-segmented Progress Line Bar */}
+          <div className="space-y-1.5">
+            <div className="relative w-full h-3 bg-slate-100 rounded-full overflow-hidden flex shadow-inner border border-slate-200/60">
+              {filterProgressStats.total > 0 ? (
+                <>
+                  {filterProgressStats.know > 0 && (
+                    <div
+                      className="bg-emerald-500 h-full transition-all duration-300"
+                      style={{ width: `${(filterProgressStats.know / filterProgressStats.total) * 100}%` }}
+                      title={`Learned: ${filterProgressStats.know} (${filterProgressStats.knowPct}%)`}
+                    />
+                  )}
+                  {filterProgressStats.confusion > 0 && (
+                    <div
+                      className="bg-amber-400 h-full transition-all duration-300"
+                      style={{ width: `${(filterProgressStats.confusion / filterProgressStats.total) * 100}%` }}
+                      title={`Confused: ${filterProgressStats.confusion} (${filterProgressStats.confusionPct}%)`}
+                    />
+                  )}
+                  {filterProgressStats.dontKnow > 0 && (
+                    <div
+                      className="bg-rose-500 h-full transition-all duration-300"
+                      style={{ width: `${(filterProgressStats.dontKnow / filterProgressStats.total) * 100}%` }}
+                      title={`Not Learned: ${filterProgressStats.dontKnow} (${filterProgressStats.dontKnowPct}%)`}
+                    />
+                  )}
+                  {filterProgressStats.unrated > 0 && (
+                    <div
+                      className="bg-slate-300 h-full transition-all duration-300"
+                      style={{ width: `${(filterProgressStats.unrated / filterProgressStats.total) * 100}%` }}
+                      title={`Unrated: ${filterProgressStats.unrated} (${filterProgressStats.unratedPct}%)`}
+                    />
+                  )}
+                </>
+              ) : (
+                <div className="w-full h-full bg-slate-200" />
+              )}
+            </div>
+
+            {/* Status Breakdown Badges */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+              <div className="flex items-center justify-between p-2 rounded-xl bg-emerald-50/70 border border-emerald-100 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                  <span className="font-bold text-emerald-950">Learned</span>
+                </div>
+                <span className="font-extrabold text-emerald-800">
+                  {filterProgressStats.know} <span className="text-[10px] text-emerald-600 font-semibold">({filterProgressStats.knowPct}%)</span>
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between p-2 rounded-xl bg-amber-50/70 border border-amber-100 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0" />
+                  <span className="font-bold text-amber-950">Confused</span>
+                </div>
+                <span className="font-extrabold text-amber-800">
+                  {filterProgressStats.confusion} <span className="text-[10px] text-amber-600 font-semibold">({filterProgressStats.confusionPct}%)</span>
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between p-2 rounded-xl bg-rose-50/70 border border-rose-100 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
+                  <span className="font-bold text-rose-950">Not Learned</span>
+                </div>
+                <span className="font-extrabold text-rose-800">
+                  {filterProgressStats.dontKnow} <span className="text-[10px] text-rose-600 font-semibold">({filterProgressStats.dontKnowPct}%)</span>
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-slate-400 shrink-0" />
+                  <span className="font-bold text-slate-700">Unrated</span>
+                </div>
+                <span className="font-extrabold text-slate-700">
+                  {filterProgressStats.unrated} <span className="text-[10px] text-slate-500 font-semibold">({filterProgressStats.unratedPct}%)</span>
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Filter Configuration Controls (Compact Expanding Div) */}
@@ -1213,6 +1376,48 @@ export default function FlashcardViewer({
       {/* 2. Main Flashcard Canvas Area */}
       <main className="flex-1 overflow-y-auto px-4 py-4 sm:py-6 flex flex-col items-center justify-between max-w-xl mx-auto w-full gap-4">
         
+        {/* Filtered Flashcard Progress Line - Single line, zero space occupancy */}
+        <div className="w-full shrink-0 space-y-1 my-0.5">
+          <div className="flex items-center justify-between text-[11px] font-bold text-slate-300 px-0.5">
+            <span>Card {currentIndex + 1} of {filteredWords.length}</span>
+            <span className="text-emerald-400 font-bold">{filterProgressStats.knowPct}% Learned <span className="text-slate-400 font-normal">({filterProgressStats.know}/{filterProgressStats.total})</span></span>
+          </div>
+          <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden flex">
+            {filterProgressStats.total > 0 && (
+              <>
+                {filterProgressStats.know > 0 && (
+                  <div
+                    className="bg-emerald-500 h-full transition-all duration-300"
+                    style={{ width: `${(filterProgressStats.know / filterProgressStats.total) * 100}%` }}
+                    title={`Learned: ${filterProgressStats.know} (${filterProgressStats.knowPct}%)`}
+                  />
+                )}
+                {filterProgressStats.confusion > 0 && (
+                  <div
+                    className="bg-amber-400 h-full transition-all duration-300"
+                    style={{ width: `${(filterProgressStats.confusion / filterProgressStats.total) * 100}%` }}
+                    title={`Confused: ${filterProgressStats.confusion} (${filterProgressStats.confusionPct}%)`}
+                  />
+                )}
+                {filterProgressStats.dontKnow > 0 && (
+                  <div
+                    className="bg-rose-500 h-full transition-all duration-300"
+                    style={{ width: `${(filterProgressStats.dontKnow / filterProgressStats.total) * 100}%` }}
+                    title={`Not Learned: ${filterProgressStats.dontKnow} (${filterProgressStats.dontKnowPct}%)`}
+                  />
+                )}
+                {filterProgressStats.unrated > 0 && (
+                  <div
+                    className="bg-slate-500/50 h-full transition-all duration-300"
+                    style={{ width: `${(filterProgressStats.unrated / filterProgressStats.total) * 100}%` }}
+                    title={`Unrated: ${filterProgressStats.unrated} (${filterProgressStats.unratedPct}%)`}
+                  />
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
         {/* Flashcard Stage */}
         <div className="w-full relative my-auto perspective">
 

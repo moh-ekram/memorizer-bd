@@ -703,6 +703,93 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // Continuous real-time enrollment auto-sync whenever user email, customCourses or access_requests change
+  useEffect(() => {
+    const cleanUserEmail = (user?.email || '').trim().toLowerCase();
+    if (!cleanUserEmail) return;
+
+    // 1. Scan customCourses allowedUsers for matching email
+    const allowedCourseIds = customCourses
+      .filter(c => Array.isArray(c.allowedUsers) && c.allowedUsers.some(u => typeof u === 'string' && u.trim().toLowerCase() === cleanUserEmail))
+      .map(c => c.id.trim().toLowerCase());
+
+    if (allowedCourseIds.length > 0) {
+      setEnrolledCourseIds(prev => {
+        const existingSet = new Set(prev.map(id => id.trim().toLowerCase()));
+        let updated = false;
+        const newArr = [...prev];
+        allowedCourseIds.forEach(id => {
+          if (!existingSet.has(id)) {
+            existingSet.add(id);
+            newArr.push(id);
+            updated = true;
+          }
+        });
+        if (updated) {
+          localStorage.setItem(LOCAL_STORAGE_ENROLLED_COURSES_KEY, JSON.stringify(newArr));
+          if (user) {
+            setDoc(doc(db, 'users', user.uid), { enrolledCourseIds: newArr }, { merge: true }).catch(console.error);
+          }
+        }
+        return updated ? newArr : prev;
+      });
+    }
+
+    // 2. Real-time snapshot on access_requests for approved requests matching email
+    let unsubscribeReqs = () => {};
+    try {
+      const q = query(
+        collection(db, 'access_requests'),
+        where('email', '==', cleanUserEmail),
+        where('status', '==', 'approved')
+      );
+      unsubscribeReqs = onSnapshot(q, (snapshot) => {
+        const approvedIds = new Set<string>();
+        snapshot.docs.forEach(docSnap => {
+          const rd = docSnap.data() as any;
+          if (rd.courseId && rd.courseId !== 'wallet_recharge' && rd.courseId !== 'multi_cart') {
+            approvedIds.add(rd.courseId.trim().toLowerCase());
+          }
+          if (Array.isArray(rd.courseIds)) {
+            rd.courseIds.forEach((cid: string) => {
+              if (cid && cid !== 'wallet_recharge' && cid !== 'multi_cart') {
+                approvedIds.add(cid.trim().toLowerCase());
+              }
+            });
+          }
+        });
+
+        if (approvedIds.size > 0) {
+          setEnrolledCourseIds(prev => {
+            const existingSet = new Set(prev.map(id => id.trim().toLowerCase()));
+            let updated = false;
+            const newArr = [...prev];
+            approvedIds.forEach(id => {
+              if (!existingSet.has(id)) {
+                existingSet.add(id);
+                newArr.push(id);
+                updated = true;
+              }
+            });
+            if (updated) {
+              localStorage.setItem(LOCAL_STORAGE_ENROLLED_COURSES_KEY, JSON.stringify(newArr));
+              if (user) {
+                setDoc(doc(db, 'users', user.uid), { enrolledCourseIds: newArr }, { merge: true }).catch(console.error);
+              }
+            }
+            return updated ? newArr : prev;
+          });
+        }
+      }, (err) => {
+        console.warn("access_requests snapshot notice:", err);
+      });
+    } catch (err) {
+      console.warn("Error setting up access_requests snapshot:", err);
+    }
+
+    return () => unsubscribeReqs();
+  }, [customCourses, user]);
+
   // Filter custom courses based on strictly enforced permissions
   const filteredCustomCourses = customCourses.filter(c => 
     isCourseAccessible(c, enrolledCourseIds, user?.email)

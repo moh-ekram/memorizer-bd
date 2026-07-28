@@ -547,8 +547,36 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         }
       }
 
-      // Update local requests state and mark spent in DB
-      await updateDoc(doc(db, 'access_requests', req.id), { spent: true, spentAt: nowISO, price: finalPrice, totalPrice: finalPrice });
+      // Sync directly to the user's document in 'users' collection if registered
+      try {
+        const cleanUserEmail = userEmail.toLowerCase().trim();
+        const usersQuery = query(collection(db, 'users'), where('email', '==', cleanUserEmail));
+        const usersSnap = await getDocs(usersQuery);
+        for (const uDoc of usersSnap.docs) {
+          const uData = uDoc.data();
+          const existingEnrolled: string[] = Array.isArray(uData.enrolledCourseIds) ? uData.enrolledCourseIds : [];
+          const existingSet = new Set(existingEnrolled.map(id => typeof id === 'string' ? id.trim().toLowerCase() : ''));
+          let updated = false;
+          const updatedEnrolled = [...existingEnrolled];
+
+          for (const cid of targetCourseIds) {
+            if (cid && cid !== 'wallet_recharge' && !existingSet.has(cid.trim().toLowerCase())) {
+              updatedEnrolled.push(cid);
+              existingSet.add(cid.trim().toLowerCase());
+              updated = true;
+            }
+          }
+
+          if (updated) {
+            await updateDoc(uDoc.ref, { enrolledCourseIds: updatedEnrolled, updatedAt: nowISO });
+          }
+        }
+      } catch (uSyncErr) {
+        console.warn('Notice: Could not sync enrolledCourseIds to user document:', uSyncErr);
+      }
+
+      // Update local requests state and mark approved & spent in DB
+      await updateDoc(doc(db, 'access_requests', req.id), { status: 'approved', spent: true, spentAt: nowISO, price: finalPrice, totalPrice: finalPrice });
       setAccessRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved', spent: true, price: finalPrice, totalPrice: finalPrice } : r));
       alert(`Access request approved successfully! User ${userEmail} granted access for 1 Year.`);
     } catch (err) {

@@ -294,14 +294,18 @@ export default function MyCoursesView({
       }
 
       // Update local enrolledCourseIds state immediately
+      const newClaimedIds = unpurchasedCourses.map(c => c.id.trim().toLowerCase());
       setEnrolledCourseIds(prev => {
-        const newIds = unpurchasedCourses.map(c => c.id.trim().toLowerCase());
         const updated = [...prev];
-        newIds.forEach(id => {
+        newClaimedIds.forEach(id => {
           if (!updated.some(existing => existing.trim().toLowerCase() === id)) {
             updated.push(id);
           }
         });
+        localStorage.setItem('vocab_memorizer_enrolled_courses', JSON.stringify(updated));
+        if (user) {
+          setDoc(doc(db, 'users', user.uid), { enrolledCourseIds: updated }, { merge: true }).catch(console.error);
+        }
         return updated;
       });
 
@@ -756,6 +760,21 @@ export default function MyCoursesView({
 
       // Automatically activate approved courses
       if (approvedCourses.length > 0) {
+        const newlyApprovedIds = approvedCourses.map(c => c.id.trim().toLowerCase());
+        setEnrolledCourseIds(prev => {
+          const updated = [...prev];
+          newlyApprovedIds.forEach(id => {
+            if (!updated.some(existing => existing.trim().toLowerCase() === id)) {
+              updated.push(id);
+            }
+          });
+          localStorage.setItem('vocab_memorizer_enrolled_courses', JSON.stringify(updated));
+          if (user) {
+            setDoc(doc(db, 'users', user.uid), { enrolledCourseIds: updated }, { merge: true }).catch(console.error);
+          }
+          return updated;
+        });
+
         for (const appCourse of approvedCourses) {
           try {
             const courseRef = doc(db, 'courses', appCourse.id);
