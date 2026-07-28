@@ -34,7 +34,8 @@ import {
   Sun,
   Moon,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Lock
 } from 'lucide-react';
 
 import {
@@ -76,6 +77,23 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('profile');
   const [profileSubTab, setProfileSubTab] = useState<'flashcard' | 'dashboard' | 'my_courses'>('flashcard');
   const [selectedGroupFromDash, setSelectedGroupFromDash] = useState<number | string | null>(null);
+  const [noCourseToast, setNoCourseToast] = useState<string | null>(null);
+
+  const handleNavigateTab = (tab: string) => {
+    if (enrolledCourseIds.length === 0 && !['my_courses', 'admin', 'settings'].includes(tab)) {
+      setNoCourseToast("You don't have any enrolled courses yet. Please enroll in a course to start learning!");
+      setActiveTab('profile');
+      setProfileSubTab('my_courses');
+      setTimeout(() => setNoCourseToast(null), 5000);
+      return;
+    }
+    if (['flashcard', 'dashboard', 'my_courses'].includes(tab)) {
+      setActiveTab('profile');
+      setProfileSubTab(tab as any);
+    } else {
+      setActiveTab(tab as ActiveTab);
+    }
+  };
 
   // --- MOBILE SWIPE NAVIGATION SETUP ---
   const navContainerRef = useRef<HTMLDivElement>(null);
@@ -1637,7 +1655,7 @@ export default function App() {
         </button>
 
         <button
-          onClick={() => setActiveTab('leaderboard')}
+          onClick={() => handleNavigateTab('leaderboard')}
           data-active={activeTab === 'leaderboard'}
           className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 p-2 md:px-4 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 text-xs font-bold ${
             activeTab === 'leaderboard'
@@ -1650,7 +1668,7 @@ export default function App() {
         </button>
 
         <button
-          onClick={() => setActiveTab('practice')}
+          onClick={() => handleNavigateTab('practice')}
           data-active={['practice', 'synonym', 'quiz', 'match'].includes(activeTab)}
           className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 p-2 md:px-4 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 text-xs font-bold ${
             ['practice', 'synonym', 'quiz', 'match'].includes(activeTab)
@@ -1663,7 +1681,7 @@ export default function App() {
         </button>
 
         <button
-          onClick={() => setActiveTab('study_tools')}
+          onClick={() => handleNavigateTab('study_tools')}
           data-active={['study_tools', 'dictionary', 'lists', 'planner', 'story'].includes(activeTab)}
           className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 p-2 md:px-4 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 text-xs font-bold ${
             ['study_tools', 'dictionary', 'lists', 'planner', 'story'].includes(activeTab)
@@ -1723,6 +1741,29 @@ export default function App() {
         </div>
       )}
 
+      {/* No Course Toast Warning Banner */}
+      {noCourseToast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-auto max-w-md w-[92vw] animate-in fade-in slide-in-from-top-4 duration-300" style={{ fontFamily: "'Poppins', sans-serif" }}>
+          <div className="bg-slate-900/95 text-white border-2 border-amber-500/60 p-3.5 rounded-2xl shadow-2xl flex items-center justify-between gap-3 backdrop-blur-md">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl shrink-0 border border-amber-500/30">
+                <Lock className="w-5 h-5" />
+              </div>
+              <p className="text-xs font-semibold text-amber-100 leading-snug">
+                {noCourseToast}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setNoCourseToast(null)}
+              className="text-slate-400 hover:text-white p-1 rounded-lg text-xs font-bold cursor-pointer shrink-0"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 2. Main Workspace Layout */}
       <main 
         className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 md:p-8 w-full max-w-full touch-pan-y" 
@@ -1739,8 +1780,14 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => {
-                    setActiveTab('profile');
-                    setProfileSubTab('flashcard');
+                    if (enrolledCourseIds.length === 0) {
+                      setNoCourseToast("You don't have any enrolled courses yet. Please enroll in a course to start learning!");
+                      setActiveTab('profile');
+                      setProfileSubTab('my_courses');
+                    } else {
+                      setActiveTab('profile');
+                      setProfileSubTab('flashcard');
+                    }
                   }}
                   className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl font-extrabold text-xs transition cursor-pointer ${
                     profileSubTab === 'flashcard'
@@ -1771,30 +1818,54 @@ export default function App() {
 
               {/* Flashcard Sub-View with StatsDashboard underneath */}
               {profileSubTab === 'flashcard' && (
-                <div className="space-y-8">
-                  <FlashcardViewer
-                    words={activeWords}
-                    progress={progress}
-                    folders={folders}
-                    streak={goal.streak}
-                    onRateWord={handleRateWord}
-                    onUpdateNotes={handleUpdateNotes}
-                    onToggleBookmark={handleToggleBookmark}
-                    initialGroup={selectedGroupFromDash}
-                    settings={settings}
-                    onUpdateSettings={setSettings}
-                    placeLabels={activeCourse?.placeLabels}
-                    googleSearchQuery={activeCourse?.googleSearchQuery}
-                    isRestrictedLocked={isRestrictedLocked}
-                    freeFlashcardsCount={activeCourse?.freeFlashcardsCount}
-                    coursePrice={activeCourse?.price}
-                    courseTitle={activeCourse?.title}
-                    onUnlockCourse={() => setProfileSubTab('my_courses')}
-                  />
+                enrolledCourseIds.length === 0 ? (
+                  <div className="bg-slate-900/90 text-white border-2 border-amber-500/40 rounded-3xl p-8 text-center space-y-4 max-w-md mx-auto shadow-2xl my-6" style={{ fontFamily: "'Poppins', sans-serif" }}>
+                    <div className="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto shadow-inner">
+                      <Lock className="w-7 h-7" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <h3 className="text-lg font-extrabold text-white">You don't have any enrolled courses yet!</h3>
+                      <p className="text-xs text-slate-300 font-medium leading-relaxed">
+                        Please enroll in or purchase a course from "My Courses" to access flashcards, vocabulary lists, and practice tools.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('profile');
+                        setProfileSubTab('my_courses');
+                      }}
+                      className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-lg shadow-indigo-500/25 border border-indigo-400/30 uppercase tracking-wider inline-flex items-center gap-2"
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      <span>Go to My Courses & Enroll</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-8">
+                    <FlashcardViewer
+                      words={activeWords}
+                      progress={progress}
+                      folders={folders}
+                      streak={goal.streak}
+                      onRateWord={handleRateWord}
+                      onUpdateNotes={handleUpdateNotes}
+                      onToggleBookmark={handleToggleBookmark}
+                      initialGroup={selectedGroupFromDash}
+                      settings={settings}
+                      onUpdateSettings={setSettings}
+                      placeLabels={activeCourse?.placeLabels}
+                      googleSearchQuery={activeCourse?.googleSearchQuery}
+                      isRestrictedLocked={isRestrictedLocked}
+                      freeFlashcardsCount={activeCourse?.freeFlashcardsCount}
+                      coursePrice={activeCourse?.price}
+                      courseTitle={activeCourse?.title}
+                      onUnlockCourse={() => setProfileSubTab('my_courses')}
+                    />
 
-                  {/* Dashboard shown directly below Flashcard Setup */}
-                  <div className="pt-4 border-t border-slate-200/60">
-                    <StatsDashboard
+                    {/* Dashboard shown directly below Flashcard Setup */}
+                    <div className="pt-4 border-t border-slate-200/60">
+                      <StatsDashboard
                       user={user}
                       words={activeWords}
                       progress={progress}
@@ -1823,7 +1894,7 @@ export default function App() {
                     />
                   </div>
                 </div>
-              )}
+              ))}
 
               {/* Dashboard Sub-View */}
               {profileSubTab === 'dashboard' && (

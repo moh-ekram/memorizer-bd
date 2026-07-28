@@ -5,7 +5,7 @@ import {
   FileSpreadsheet, HelpCircle, Shuffle, GraduationCap, Trophy, 
   Gamepad2, Search, CheckCircle, AlertCircle, ShoppingBag, X, 
   Copy, ArrowRight, Star, Heart, Calendar, ShieldAlert, Layers, Play,
-  ChevronDown, ChevronUp, Info, Eye
+  ChevronDown, ChevronUp, Info, Eye, Wallet
 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { doc, setDoc, getDoc, getDocs, query, collection, where } from 'firebase/firestore';
@@ -904,18 +904,18 @@ export default function MyCoursesView({
           isUserAllowed ? 'cursor-pointer' : ''
         } ${
           isActive 
-            ? 'bg-gradient-to-br from-emerald-600/95 via-emerald-700/95 to-teal-800/95 backdrop-blur-md text-white border-2 border-emerald-400/60 shadow-xl shadow-emerald-950/20 ring-4 ring-emerald-500/20 rounded-2xl' 
+            ? 'bg-gradient-to-br from-emerald-900 via-teal-900 to-slate-900 text-white border-2 border-emerald-400 shadow-xl shadow-emerald-950/40 ring-4 ring-emerald-500/20 rounded-2xl' 
             : isUserAllowed
-            ? 'bg-white text-slate-900 border-0 border-b-4 border-b-indigo-600 shadow-sm hover:shadow-md rounded-2xl'
-            : 'bg-white text-slate-900 border-0 border-b-4 border-b-slate-400 shadow-sm hover:shadow-md rounded-2xl'
+            ? 'bg-gradient-to-br from-slate-900 via-indigo-950/90 to-slate-900 text-white border-2 border-indigo-500/40 border-b-4 border-b-indigo-500 shadow-lg hover:border-indigo-400 rounded-2xl'
+            : 'bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/80 text-white border-2 border-amber-500/35 border-b-4 border-b-amber-500 shadow-lg hover:border-amber-400 rounded-2xl'
         }`}
         style={{ fontFamily: "'Poppins', sans-serif" }}
       >
         {/* Top Active Course Banner */}
         {isActive && (
-          <div className="bg-white/20 backdrop-blur-md text-white text-[9.5px] font-black uppercase tracking-wider py-1 px-3 rounded-full text-center flex items-center justify-center gap-1.5 shadow-xs border border-white/30 font-poppins mb-3 w-fit">
-            <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping" />
-            <Check className="w-3 h-3 stroke-[3] text-emerald-200" />
+          <div className="bg-emerald-500/20 backdrop-blur-md text-emerald-200 text-[9.5px] font-black uppercase tracking-wider py-1 px-3 rounded-full text-center flex items-center justify-center gap-1.5 shadow-xs border border-emerald-400/40 font-poppins mb-3 w-fit">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            <Check className="w-3 h-3 stroke-[3] text-emerald-300" />
             <span>Active Course</span>
           </div>
         )}
@@ -926,13 +926,11 @@ export default function MyCoursesView({
             {/* Header: Title & Clean Word Count */}
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <h3 className={`text-xs sm:text-sm font-extrabold tracking-tight leading-tight line-clamp-1 font-poppins ${
-                  isActive ? 'text-white' : 'text-slate-900'
-                }`}>
+                <h3 className="text-xs sm:text-sm font-extrabold tracking-tight leading-tight line-clamp-1 font-poppins text-white">
                   {course.title}
                 </h3>
                 <p className={`text-[9px] font-medium mt-0.5 ${
-                  isActive ? 'text-emerald-100/90' : 'text-slate-400'
+                  isActive ? 'text-emerald-300' : isUserAllowed ? 'text-indigo-300' : 'text-amber-300/80'
                 }`}>
                   #{course.id} • Lifetime
                 </p>
@@ -940,8 +938,12 @@ export default function MyCoursesView({
 
               {/* Word Count Display (14px font size, no star, W suffix) */}
               <div className="shrink-0 pt-0.5">
-                <span className={`text-xs sm:text-sm font-extrabold font-poppins tracking-tight ${
-                  isActive ? 'text-emerald-100 bg-white/10 px-2 py-0.5 rounded-lg border border-white/20' : 'text-slate-800'
+                <span className={`text-xs sm:text-sm font-extrabold font-poppins tracking-tight px-2 py-0.5 rounded-lg border ${
+                  isActive 
+                    ? 'text-emerald-200 bg-emerald-500/20 border-emerald-400/30' 
+                    : isUserAllowed
+                    ? 'text-indigo-200 bg-indigo-500/20 border-indigo-400/30'
+                    : 'text-amber-200 bg-amber-500/20 border-amber-400/30'
                 }`}>
                   {wordsCount} W
                 </span>
@@ -951,33 +953,29 @@ export default function MyCoursesView({
             {/* Includes Section */}
             <div className="mt-2">
               <div className={`border-t pt-1.5 ${
-                isActive ? 'border-emerald-500/40' : 'border-slate-100'
+                isActive ? 'border-emerald-500/30' : isUserAllowed ? 'border-indigo-500/30' : 'border-amber-500/30'
               }`}>
                 <p className={`text-[9px] font-bold tracking-wider uppercase mb-1 font-poppins ${
-                  isActive ? 'text-emerald-100' : 'text-slate-900'
+                  isActive ? 'text-emerald-300' : isUserAllowed ? 'text-indigo-300' : 'text-amber-300'
                 }`}>
                   Includes
                 </p>
                 <ul className="space-y-0.5 text-[7.5px] sm:text-[8px]">
-                  <li className={`flex items-center gap-1 font-medium ${
-                    isActive ? 'text-emerald-50' : 'text-slate-600'
-                  }`}>
+                  <li className="flex items-center gap-1 font-medium text-slate-300">
                     <div className={`w-3 h-3 rounded-full flex items-center justify-center font-bold text-[6px] shrink-0 ${
-                      isActive ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'
+                      isActive ? 'bg-emerald-500/30 text-emerald-300' : isUserAllowed ? 'bg-indigo-500/30 text-indigo-300' : 'bg-amber-500/30 text-amber-300'
                     }`}>
                       ✓
                     </div>
-                    <span><strong className={isActive ? 'text-white' : 'text-slate-900'}>{wordsCount} W</strong> (Vocabulary Words)</span>
+                    <span><strong className="text-white">{wordsCount} W</strong> (Vocabulary Words)</span>
                   </li>
-                  <li className={`flex items-center gap-1 font-medium ${
-                    isActive ? 'text-emerald-50' : 'text-slate-600'
-                  }`}>
+                  <li className="flex items-center gap-1 font-medium text-slate-300">
                     <div className={`w-3 h-3 rounded-full flex items-center justify-center font-bold text-[6px] shrink-0 ${
-                      isActive ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'
+                      isActive ? 'bg-emerald-500/30 text-emerald-300' : isUserAllowed ? 'bg-indigo-500/30 text-indigo-300' : 'bg-amber-500/30 text-amber-300'
                     }`}>
                       ✓
                     </div>
-                    <span>Mastered: <strong className={isActive ? 'text-white' : 'text-slate-900'}>{masteredCount}/{wordsCount}</strong> ({progressPercent}%)</span>
+                    <span>Mastered: <strong className="text-white">{masteredCount}/{wordsCount}</strong> ({progressPercent}%)</span>
                   </li>
                 </ul>
               </div>
@@ -986,18 +984,16 @@ export default function MyCoursesView({
 
           {/* Price & Action Options */}
           <div className={`pt-2 border-t flex items-center justify-between gap-1.5 ${
-            isActive ? 'border-emerald-500/40' : 'border-slate-100'
+            isActive ? 'border-emerald-500/30' : isUserAllowed ? 'border-indigo-500/30' : 'border-amber-500/30'
           }`}>
             <div>
               <div className="flex items-baseline gap-0.5">
                 <span className={`text-sm sm:text-base font-extrabold font-poppins tracking-tight ${
-                  isActive ? 'text-white' : 'text-slate-900'
+                  isActive ? 'text-emerald-400' : isUserAllowed ? 'text-indigo-300' : 'text-amber-400'
                 }`}>
                   ৳{(course.price && course.price > 0) ? course.price : 30}
                 </span>
-                <span className={`text-[9px] font-bold uppercase ${
-                  isActive ? 'text-emerald-200' : 'text-slate-400'
-                }`}>BDT</span>
+                <span className="text-[9px] font-bold uppercase text-slate-400">BDT</span>
               </div>
             </div>
 
@@ -1016,11 +1012,7 @@ export default function MyCoursesView({
                       }
                     }
                   }}
-                  className={`px-1.5 py-1 rounded-md text-[9px] font-semibold transition cursor-pointer flex items-center gap-1 ${
-                    isActive
-                      ? 'bg-rose-950/40 hover:bg-rose-900/60 text-rose-200 border border-rose-400/40'
-                      : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'
-                  }`}
+                  className="px-1.5 py-1 rounded-md text-[9px] font-semibold transition cursor-pointer flex items-center gap-1 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-500/40"
                   title="Cancel Enrollment"
                 >
                   <Trash2 className="w-2.5 h-2.5" />
@@ -1040,12 +1032,12 @@ export default function MyCoursesView({
                         onClick={(e) => handleOpenFreeSample(course, e)}
                         className={`px-1.5 py-1 rounded-md text-[9px] font-bold flex items-center gap-0.5 transition ${
                           sampleUsed
-                            ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
-                            : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 cursor-pointer'
+                            ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-60'
+                            : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 cursor-pointer'
                         }`}
                         title={sampleUsed ? "Free Sample Cards Already Viewed" : "View Free Sample Cards"}
                       >
-                        <Eye className={`w-2.5 h-2.5 ${sampleUsed ? 'text-slate-400' : 'text-amber-600'}`} />
+                        <Eye className={`w-2.5 h-2.5 ${sampleUsed ? 'text-slate-500' : 'text-amber-400'}`} />
                         <span className="hidden xs:inline">{sampleUsed ? 'Sample Used' : 'Free'}</span>
                       </button>
                     );
@@ -1056,8 +1048,8 @@ export default function MyCoursesView({
                     onClick={(e) => toggleCartCourse(course, e)}
                     className={`px-1.5 py-1 rounded-md text-[9px] font-bold flex items-center gap-0.5 transition cursor-pointer border ${
                       cart.some(c => c.id === course.id)
-                        ? 'bg-slate-900 text-white border-slate-900'
-                        : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                        ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-extrabold'
+                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
                     }`}
                     title={cart.some(c => c.id === course.id) ? "Remove from Cart" : "Add to Cart"}
                   >
@@ -1071,7 +1063,7 @@ export default function MyCoursesView({
                       e.stopPropagation();
                       setSelectedDetailCourse(course);
                     }}
-                    className="px-1 py-1 rounded-md text-[9px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center gap-0.5 transition cursor-pointer"
+                    className="px-1 py-1 rounded-md text-[9px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-0.5 transition cursor-pointer"
                     title="Details"
                   >
                     <Info className="w-2.5 h-2.5" />
@@ -1198,31 +1190,31 @@ export default function MyCoursesView({
         </div>
 
         {/* Right Section: Wallet Credit Balance */}
-        <div className="relative z-10 bg-white/10 backdrop-blur-md border border-white/15 rounded-xl p-2 sm:p-2.5 flex items-center justify-between sm:justify-end gap-2.5 shrink-0 max-w-full">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-emerald-500 text-white font-bold text-xs flex items-center justify-center shadow-xs shrink-0 font-poppins">
-              ৳
-            </div>
-            <div>
-              <div className="flex items-center gap-1">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-300 font-poppins">Wallet Balance</span>
-                <span className="px-1 py-0.2 bg-emerald-500/20 text-emerald-200 text-[7px] rounded font-bold">Active</span>
-              </div>
-              <div className="text-xs sm:text-sm font-extrabold text-white font-mono leading-none mt-0.5">
-                ৳{userWalletBalance} <span className="text-[9px] font-sans font-normal text-slate-300">BDT</span>
-              </div>
+        <div className="relative z-10 bg-slate-900/90 backdrop-blur-md border border-white/20 rounded-2xl p-2 sm:p-2.5 flex items-center justify-between sm:justify-end gap-2.5 shrink-0 max-w-full font-poppins shadow-xl" style={{ fontFamily: "'Poppins', sans-serif" }}>
+          
+          {/* Div 1: Minimal Wallet Icon */}
+          <div className="p-2 sm:p-2.5 bg-indigo-500/20 border border-indigo-400/30 rounded-xl text-indigo-300 flex items-center justify-center shrink-0 shadow-inner">
+            <Wallet className="w-5 h-5 text-emerald-400" />
+          </div>
+
+          {/* Div 2: Current Balance */}
+          <div className="bg-slate-950/80 border border-emerald-500/30 rounded-xl px-3 py-1.5 sm:px-3.5 sm:py-2 flex flex-col justify-center min-w-[125px] shadow-sm">
+            <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-400 font-poppins">Current Balance</span>
+            <div className="text-xs sm:text-sm font-extrabold text-white font-mono leading-tight mt-0.5">
+              ৳{userWalletBalance} <span className="text-[9px] font-sans font-normal text-slate-300">BDT</span>
             </div>
           </div>
 
+          {/* Div 3: Recharge Wallet Button */}
           <button
             type="button"
             onClick={() => {
               setIsRechargeModalOpen(true);
               setRechargeMessage(null);
             }}
-            className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[11px] rounded-lg shadow-2xs transition cursor-pointer flex items-center gap-1 border border-emerald-400/40 font-poppins shrink-0"
+            className="bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400/40 rounded-xl px-3 py-2 sm:px-3.5 sm:py-2.5 flex items-center gap-1.5 font-extrabold text-[11px] sm:text-xs shadow-md shadow-emerald-600/20 transition cursor-pointer shrink-0 font-poppins"
           >
-            <PlusCircle className="w-3 h-3" />
+            <PlusCircle className="w-3.5 h-3.5 text-emerald-200" />
             <span>Recharge Wallet</span>
           </button>
         </div>
