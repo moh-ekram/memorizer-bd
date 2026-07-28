@@ -956,7 +956,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
 
   // Pagination
   const [currentWordPage, setCurrentWordPage] = useState(1);
-  const wordsPerPage = 10;
+  const [wordsPerPage, setWordsPerPage] = useState<number>(50);
 
   // Form: Single word addition
   const [singleWordId, setSingleWordId] = useState('');
@@ -1733,16 +1733,18 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     });
   }, [localWords, wordSearchQuery, wordGroupFilter]);
 
-  // Reset pagination on search filter adjustments
+  // Reset pagination on search filter or page size adjustments
   useEffect(() => {
     setCurrentWordPage(1);
-  }, [wordSearchQuery, wordGroupFilter]);
+  }, [wordSearchQuery, wordGroupFilter, wordsPerPage]);
 
-  const totalWordPages = Math.max(1, Math.ceil(filteredWords.length / wordsPerPage));
+  const effectiveWordsPerPage = wordsPerPage === -1 ? (filteredWords.length || 1) : wordsPerPage;
+  const totalWordPages = wordsPerPage === -1 ? 1 : Math.max(1, Math.ceil(filteredWords.length / effectiveWordsPerPage));
   const paginatedWords = useMemo(() => {
-    const startIdx = (currentWordPage - 1) * wordsPerPage;
-    return filteredWords.slice(startIdx, startIdx + wordsPerPage);
-  }, [filteredWords, currentWordPage]);
+    if (wordsPerPage === -1) return filteredWords;
+    const startIdx = (currentWordPage - 1) * effectiveWordsPerPage;
+    return filteredWords.slice(startIdx, startIdx + effectiveWordsPerPage);
+  }, [filteredWords, currentWordPage, wordsPerPage, effectiveWordsPerPage]);
 
   // Get unique groups for the filters
   const uniqueLocalGroups = useMemo(() => {
@@ -3072,8 +3074,8 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                 </div>
 
                 {/* Filters */}
-                <div className="flex flex-col sm:flex-row gap-2.5">
-                  <div className="relative flex-1">
+                <div className="flex flex-col sm:flex-row gap-2.5 items-center justify-between">
+                  <div className="relative flex-1 w-full sm:w-auto">
                     <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="text"
@@ -3084,16 +3086,35 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                     />
                   </div>
 
-                  <select
-                    value={wordGroupFilter}
-                    onChange={(e) => setWordGroupFilter(e.target.value)}
-                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 font-black focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
-                  >
-                    <option value="all">All Groups</option>
-                    {uniqueLocalGroups.map(g => (
-                      <option key={g} value={String(g)}>Group {g}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                    <select
+                      value={wordGroupFilter}
+                      onChange={(e) => setWordGroupFilter(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 font-black focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                    >
+                      <option value="all">All Groups</option>
+                      {uniqueLocalGroups.map(g => (
+                        <option key={g} value={String(g)}>Group {g}</option>
+                      ))}
+                    </select>
+
+                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-700 font-extrabold shrink-0">
+                      <span className="text-[11px] text-slate-500 whitespace-nowrap">প্রতি পেজে:</span>
+                      <select
+                        value={wordsPerPage}
+                        onChange={(e) => setWordsPerPage(Number(e.target.value))}
+                        className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-800 font-black focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                      >
+                        <option value={20}>20 টি</option>
+                        <option value={50}>50 টি</option>
+                        <option value={100}>100 টি</option>
+                        <option value={250}>250 টি</option>
+                        <option value={500}>500 টি</option>
+                        <option value={1000}>1000 টি</option>
+                        <option value={-1}>সবকটি (All)</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Word list table */}
@@ -3181,34 +3202,44 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                   </div>
                 </div>
 
-                {/* Table Pagination */}
-                {totalWordPages > 1 && (
-                  <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-2xl border border-slate-100 text-xs font-semibold">
-                    <button
-                      type="button"
-                      disabled={currentWordPage === 1}
-                      onClick={() => setCurrentWordPage(prev => Math.max(1, prev - 1))}
-                      className="px-3 py-1.5 border border-slate-200 rounded-xl hover:bg-white disabled:opacity-50 disabled:hover:bg-transparent font-bold transition flex items-center gap-1 cursor-pointer"
-                    >
-                      <ArrowLeft className="w-3.5 h-3.5" />
-                      <span>Previous</span>
-                    </button>
-                    
-                    <span className="font-extrabold text-slate-500">
-                      Page {currentWordPage} of {totalWordPages}
-                    </span>
-
-                    <button
-                      type="button"
-                      disabled={currentWordPage === totalWordPages}
-                      onClick={() => setCurrentWordPage(prev => Math.min(totalWordPages, prev + 1))}
-                      className="px-3 py-1.5 border border-slate-200 rounded-xl hover:bg-white disabled:opacity-50 disabled:hover:bg-transparent font-bold transition flex items-center gap-1 cursor-pointer"
-                    >
-                      <span>Next</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
+                {/* Table Pagination & Summary Info */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100 text-xs font-semibold">
+                  <div className="text-slate-500 font-extrabold text-[11px] text-center sm:text-left">
+                    মোট <span className="text-indigo-600 font-black">{filteredWords.length}</span> টি ওয়ার্ডের মধ্যে {
+                      wordsPerPage === -1 ? `সবকটি একসাথে প্রদর্শিত হচ্ছে` : (
+                        `দেখাচ্ছে ${filteredWords.length === 0 ? 0 : (currentWordPage - 1) * effectiveWordsPerPage + 1} - ${Math.min(currentWordPage * effectiveWordsPerPage, filteredWords.length)} টি`
+                      )
+                    }
                   </div>
-                )}
+
+                  {totalWordPages > 1 && wordsPerPage !== -1 && (
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        disabled={currentWordPage === 1}
+                        onClick={() => setCurrentWordPage(prev => Math.max(1, prev - 1))}
+                        className="px-3 py-1.5 border border-slate-200 bg-white rounded-xl hover:bg-slate-100 disabled:opacity-50 disabled:hover:bg-white font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Previous</span>
+                      </button>
+                      
+                      <span className="font-extrabold text-slate-600 font-mono text-[11px]">
+                        Page {currentWordPage} of {totalWordPages}
+                      </span>
+
+                      <button
+                        type="button"
+                        disabled={currentWordPage === totalWordPages}
+                        onClick={() => setCurrentWordPage(prev => Math.min(totalWordPages, prev + 1))}
+                        className="px-3 py-1.5 border border-slate-200 bg-white rounded-xl hover:bg-slate-100 disabled:opacity-50 disabled:hover:bg-white font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                      >
+                        <span>Next</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
                   </div>
                 )}
 
