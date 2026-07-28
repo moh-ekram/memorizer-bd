@@ -1,0 +1,6 @@
+{
+  "appId": "com.memorizer.app",
+  "appName": "Memorizer",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
