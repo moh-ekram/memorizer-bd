@@ -1228,6 +1228,23 @@ export default function MyCoursesView({
         </div>
       </div>
 
+      {/* Zero Enrolled Course Prompt Banner */}
+      {enrolledCourseIds.length === 0 && (
+        <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-indigo-500/10 border border-amber-500/30 rounded-2xl p-4 sm:p-5 text-amber-200 flex items-start gap-3.5 shadow-md font-poppins">
+          <div className="p-2.5 bg-amber-500/20 rounded-xl text-amber-400 shrink-0">
+            <Sparkles className="w-5 h-5 animate-pulse" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-xs sm:text-sm font-extrabold text-amber-300">
+              স্বাগতম! আপনি এখনও কোনো কোর্সে ইনরোল করেননি।
+            </h3>
+            <p className="text-[11px] sm:text-xs text-amber-100/90 font-medium leading-relaxed">
+              পড়াশোনা শুরু করতে নিচের ক্যাটালগ থেকে আপনার পছন্দসই কোর্সে ইনরোল অথবা ক্রয় (Unlock Course) করে নিন।
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* 3. Multi-Layer Course Cards Layout */}
       <div className="space-y-8" id="courses-grid-container">
         {/* Layer 1: Enrolled / Active Courses */}

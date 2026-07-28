@@ -10,6 +10,7 @@ import AdminPanel from './components/AdminPanel';
 import GlobalLeaderboard from './components/GlobalLeaderboard';
 import MyCoursesView from './components/MyCoursesView';
 import AnnouncementBanner from './components/AnnouncementBanner';
+import LandingHomePage from './components/LandingHomePage';
 
 import {
   LayoutDashboard,
@@ -761,15 +762,22 @@ export default function App() {
             if (data.settings) {
               setSettings(prev => ({ ...prev, ...data.settings }));
             }
-            setEnrolledCourseIds(Array.isArray(data.enrolledCourseIds) && data.enrolledCourseIds.length > 0 ? data.enrolledCourseIds : ['gre']);
-            setActiveCourseId(data.activeCourseId || 'gre');
+            const userEnrolled = Array.isArray(data.enrolledCourseIds) ? data.enrolledCourseIds : [];
+            setEnrolledCourseIds(userEnrolled);
+            setActiveCourseId(data.activeCourseId || (userEnrolled[0] || 'gre'));
             setQuizScore(data.quizScore !== undefined ? data.quizScore : 0);
             setQuizTaken(data.quizTaken !== undefined ? data.quizTaken : 0);
+            
+            // If user has no enrolled course, direct them immediately to 'My Courses'
+            if (userEnrolled.length === 0) {
+              setActiveTab('profile');
+              setProfileSubTab('my_courses');
+            }
             
             setSyncStatus('synced');
             setHasLoadedFromCloud(true);
           } else {
-            // New user signup: create clean user record
+            // New user signup: create clean user record with no enrolled courses
             const cleanProgress = {};
             const cleanFolders = [
               { id: '1', name: 'Important Words (High Priority)', color: '#ef4444' },
@@ -781,7 +789,7 @@ export default function App() {
               lastStudyDate: new Date().toISOString().split('T')[0],
               history: {}
             };
-            const cleanEnrolled = ['gre'];
+            const cleanEnrolled: string[] = [];
             const cleanActive = 'gre';
 
             setProgress(cleanProgress);
@@ -795,6 +803,10 @@ export default function App() {
             setActiveCourseId(cleanActive);
             setQuizScore(0);
             setQuizTaken(0);
+
+            // Direct new user to 'My Courses' to select and enroll in a course
+            setActiveTab('profile');
+            setProfileSubTab('my_courses');
 
             await setDoc(userDocRef, {
               progress: cleanProgress,
@@ -957,7 +969,7 @@ export default function App() {
           autoPlayAudio: false,
           quizLength: 10
         });
-        setEnrolledCourseIds(['gre']);
+        setEnrolledCourseIds([]);
         setActiveCourseId('gre');
         setQuizScore(0);
         setQuizTaken(0);
@@ -1404,6 +1416,17 @@ export default function App() {
       alert('All progress has been successfully deleted.');
     }
   };
+
+  if (!user) {
+    return (
+      <LandingHomePage 
+        onAuthSuccess={() => {
+          setIsAuthModalOpen(false);
+        }} 
+        courses={allAvailableCourses} 
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col text-slate-800 w-full max-w-full overflow-x-hidden" id="main-layout-stage">
