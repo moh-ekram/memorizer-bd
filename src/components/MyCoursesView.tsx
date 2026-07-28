@@ -5,7 +5,7 @@ import {
   FileSpreadsheet, HelpCircle, Shuffle, GraduationCap, Trophy, 
   Gamepad2, Search, CheckCircle, AlertCircle, ShoppingBag, X, 
   Copy, ArrowRight, Star, Heart, Calendar, ShieldAlert, Layers, Play,
-  ChevronDown, ChevronUp, Info, Eye, Wallet
+  ChevronDown, ChevronUp, Info, Eye, Wallet, EyeOff, MoreHorizontal, ArrowUpRight
 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { doc, setDoc, getDoc, getDocs, query, collection, where } from 'firebase/firestore';
@@ -92,6 +92,7 @@ export default function MyCoursesView({
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   const [checkoutMessage, setCheckoutMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [userWalletBalance, setUserWalletBalance] = useState<number>(0);
+  const [showWalletBalance, setShowWalletBalance] = useState<boolean>(true);
 
   // Wallet Recharge states
   const [isRechargeModalOpen, setIsRechargeModalOpen] = useState(false);
@@ -900,258 +901,168 @@ export default function MyCoursesView({
             setTimeout(() => setActiveCourseToast(null), 2500);
           }
         }}
-        className={`group relative transition-all duration-300 flex flex-col justify-between overflow-hidden p-3.5 sm:p-4 ${
+        className={`group relative transition-all duration-300 flex flex-col justify-between overflow-hidden p-4 sm:p-5 rounded-3xl border-2 ${
           isUserAllowed ? 'cursor-pointer' : ''
         } ${
           isActive 
-            ? 'bg-gradient-to-br from-emerald-900 via-teal-900 to-slate-900 text-white border-2 border-emerald-400 shadow-xl shadow-emerald-950/40 ring-4 ring-emerald-500/20 rounded-2xl' 
+            ? 'bg-gradient-to-br from-[#189F82] via-[#158f75] to-[#10705c] text-white border-[#22c7a3] shadow-xl shadow-[#189F82]/25' 
             : isUserAllowed
-            ? 'bg-gradient-to-br from-slate-900 via-indigo-950/90 to-slate-900 text-white border-2 border-indigo-500/40 border-b-4 border-b-indigo-500 shadow-lg hover:border-indigo-400 rounded-2xl'
-            : 'bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/80 text-white border-2 border-amber-500/35 border-b-4 border-b-amber-500 shadow-lg hover:border-amber-400 rounded-2xl'
+            ? 'bg-gradient-to-br from-[#4E53E2] via-[#4348c8] to-[#3539a3] text-white border-[#7276f7] shadow-xl shadow-[#4E53E2]/25 hover:border-[#8f92f9]'
+            : 'bg-gradient-to-br from-[#FCB415] via-[#f0a600] to-[#d49000] text-slate-950 border-[#ffe07d] shadow-xl shadow-[#FCB415]/25 hover:border-[#ffebaa]'
         }`}
         style={{ fontFamily: "'Poppins', sans-serif" }}
       >
-        {/* Top Active Course Banner */}
-        {isActive && (
-          <div className="bg-emerald-500/20 backdrop-blur-md text-emerald-200 text-[9.5px] font-black uppercase tracking-wider py-1 px-3 rounded-full text-center flex items-center justify-center gap-1.5 shadow-xs border border-emerald-400/40 font-poppins mb-3 w-fit">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            <Check className="w-3 h-3 stroke-[3] text-emerald-300" />
-            <span>Active Course</span>
-          </div>
-        )}
-
-        {/* Card Body */}
-        <div className="flex-1 flex flex-col justify-between space-y-2.5">
-          <div>
-            {/* Header: Title & Clean Word Count */}
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <h3 className="text-xs sm:text-sm font-extrabold tracking-tight leading-tight line-clamp-1 font-poppins text-white">
-                  {course.title}
-                </h3>
-                <p className={`text-[9px] font-medium mt-0.5 ${
-                  isActive ? 'text-emerald-300' : isUserAllowed ? 'text-indigo-300' : 'text-amber-300/80'
-                }`}>
-                  #{course.id} • Lifetime
-                </p>
-              </div>
-
-              {/* Word Count Display (14px font size, no star, W suffix) */}
-              <div className="shrink-0 pt-0.5">
-                <span className={`text-xs sm:text-sm font-extrabold font-poppins tracking-tight px-2 py-0.5 rounded-lg border ${
-                  isActive 
-                    ? 'text-emerald-200 bg-emerald-500/20 border-emerald-400/30' 
-                    : isUserAllowed
-                    ? 'text-indigo-200 bg-indigo-500/20 border-indigo-400/30'
-                    : 'text-amber-200 bg-amber-500/20 border-amber-400/30'
-                }`}>
-                  {wordsCount} W
-                </span>
-              </div>
+        <div>
+          {/* Top Active Badge */}
+          {isActive && (
+            <div className="flex items-center gap-1.5 mb-2.5 font-poppins">
+              <span className="w-2.5 h-2.5 rounded-full bg-white inline-block animate-pulse shadow-xs" />
+              <span className="text-[11px] font-black uppercase tracking-wider text-white bg-black/20 px-2.5 py-0.5 rounded-full border border-white/20">
+                ACTIVE
+              </span>
             </div>
+          )}
 
-            {/* Includes Section */}
-            <div className="mt-2">
-              <div className={`border-t pt-1.5 ${
-                isActive ? 'border-emerald-500/30' : isUserAllowed ? 'border-indigo-500/30' : 'border-amber-500/30'
-              }`}>
-                <p className={`text-[9px] font-bold tracking-wider uppercase mb-1 font-poppins ${
-                  isActive ? 'text-emerald-300' : isUserAllowed ? 'text-indigo-300' : 'text-amber-300'
-                }`}>
-                  Includes
-                </p>
-                <ul className="space-y-0.5 text-[7.5px] sm:text-[8px]">
-                  <li className="flex items-center gap-1 font-medium text-slate-300">
-                    <div className={`w-3 h-3 rounded-full flex items-center justify-center font-bold text-[6px] shrink-0 ${
-                      isActive ? 'bg-emerald-500/30 text-emerald-300' : isUserAllowed ? 'bg-indigo-500/30 text-indigo-300' : 'bg-amber-500/30 text-amber-300'
-                    }`}>
-                      ✓
-                    </div>
-                    <span><strong className="text-white">{wordsCount} W</strong> (Vocabulary Words)</span>
-                  </li>
-                  <li className="flex items-center gap-1 font-medium text-slate-300">
-                    <div className={`w-3 h-3 rounded-full flex items-center justify-center font-bold text-[6px] shrink-0 ${
-                      isActive ? 'bg-emerald-500/30 text-emerald-300' : isUserAllowed ? 'bg-indigo-500/30 text-indigo-300' : 'bg-amber-500/30 text-amber-300'
-                    }`}>
-                      ✓
-                    </div>
-                    <span>Mastered: <strong className="text-white">{masteredCount}/{wordsCount}</strong> ({progressPercent}%)</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          {/* Price & Action Options */}
-          <div className={`pt-2 border-t flex items-center justify-between gap-1.5 ${
-            isActive ? 'border-emerald-500/30' : isUserAllowed ? 'border-indigo-500/30' : 'border-amber-500/30'
+          {/* Course Title */}
+          <h3 className={`text-base sm:text-lg font-black tracking-tight leading-snug line-clamp-2 min-h-[44px] font-poppins ${
+            !isUserAllowed ? 'text-slate-950' : 'text-white'
           }`}>
-            <div>
-              <div className="flex items-baseline gap-0.5">
-                <span className={`text-sm sm:text-base font-extrabold font-poppins tracking-tight ${
-                  isActive ? 'text-emerald-400' : isUserAllowed ? 'text-indigo-300' : 'text-amber-400'
-                }`}>
-                  ৳{(course.price && course.price > 0) ? course.price : 30}
-                </span>
-                <span className="text-[9px] font-bold uppercase text-slate-400">BDT</span>
-              </div>
+            {course.title}
+          </h3>
+
+          {/* Tags / Pills Row */}
+          <div className="flex flex-wrap items-center gap-1.5 my-3">
+            <span className={`px-3 py-1 rounded-full text-[11px] font-bold font-poppins ${
+              !isUserAllowed ? 'bg-black/10 text-slate-900 border border-black/15' : 'bg-white/15 text-white border border-white/20'
+            }`}>
+              #{course.id}
+            </span>
+            <span className={`px-3 py-1 rounded-full text-[11px] font-bold font-poppins ${
+              !isUserAllowed ? 'bg-black/10 text-slate-900 border border-black/15' : 'bg-white/15 text-white border border-white/20'
+            }`}>
+              Lifetime access
+            </span>
+          </div>
+
+          {/* Progress Bar & Word Count Section */}
+          <div className="mt-4 space-y-1.5">
+            <div className={`flex justify-end text-xs font-black font-poppins ${
+              !isUserAllowed ? 'text-slate-900' : 'text-white/90'
+            }`}>
+              {progressPercent}%
             </div>
 
-            {/* Quick Action Buttons */}
-            <div className="flex items-center gap-1">
-              {/* Enrolled Course Option: Cancel Enrollment */}
-              {isUserAllowed && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (window.confirm(`Are you sure you want to cancel your enrollment for "${course.title}"?`)) {
-                      setEnrolledCourseIds(prev => prev.filter(id => id.trim().toLowerCase() !== course.id.trim().toLowerCase()));
-                      if (isActive) {
-                        setActiveCourseId('gre');
-                      }
-                    }
-                  }}
-                  className="px-1.5 py-1 rounded-md text-[9px] font-semibold transition cursor-pointer flex items-center gap-1 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-500/40"
-                  title="Cancel Enrollment"
-                >
-                  <Trash2 className="w-2.5 h-2.5" />
-                  <span className="hidden xs:inline">Cancel</span>
-                </button>
-              )}
+            {/* Track & Bar */}
+            <div className={`w-full h-2.5 rounded-full overflow-hidden ${
+              !isUserAllowed ? 'bg-black/15' : 'bg-black/20'
+            }`}>
+              <div 
+                className={`h-full rounded-full transition-all duration-500 ${
+                  !isUserAllowed ? 'bg-slate-950' : 'bg-white'
+                }`}
+                style={{ 
+                  width: `${progressPercent}%`
+                }} 
+              />
+            </div>
 
-              {/* Locked Course Options: Free Cards, Cart, Info */}
-              {!isUserAllowed && (
-                <>
-                  {(() => {
-                    const sampleUsed = isFreeSampleUsed(course.id);
-                    return (
-                      <button
-                        type="button"
-                        disabled={sampleUsed}
-                        onClick={(e) => handleOpenFreeSample(course, e)}
-                        className={`px-1.5 py-1 rounded-md text-[9px] font-bold flex items-center gap-0.5 transition ${
-                          sampleUsed
-                            ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-60'
-                            : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 cursor-pointer'
-                        }`}
-                        title={sampleUsed ? "Free Sample Cards Already Viewed" : "View Free Sample Cards"}
-                      >
-                        <Eye className={`w-2.5 h-2.5 ${sampleUsed ? 'text-slate-500' : 'text-amber-400'}`} />
-                        <span className="hidden xs:inline">{sampleUsed ? 'Sample Used' : 'Free'}</span>
-                      </button>
-                    );
-                  })()}
-
-                  <button
-                    type="button"
-                    onClick={(e) => toggleCartCourse(course, e)}
-                    className={`px-1.5 py-1 rounded-md text-[9px] font-bold flex items-center gap-0.5 transition cursor-pointer border ${
-                      cart.some(c => c.id === course.id)
-                        ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-extrabold'
-                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
-                    }`}
-                    title={cart.some(c => c.id === course.id) ? "Remove from Cart" : "Add to Cart"}
-                  >
-                    <ShoppingBag className="w-2.5 h-2.5" />
-                    <span>{cart.some(c => c.id === course.id) ? 'Cart' : '+ Cart'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedDetailCourse(course);
-                    }}
-                    className="px-1 py-1 rounded-md text-[9px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-0.5 transition cursor-pointer"
-                    title="Details"
-                  >
-                    <Info className="w-2.5 h-2.5" />
-                  </button>
-                </>
-              )}
+            {/* Word Count Label */}
+            <div className={`text-center text-xs sm:text-sm font-extrabold font-poppins pt-1.5 ${
+              !isUserAllowed ? 'text-slate-950' : 'text-white'
+            }`}>
+              {masteredCount > 0 ? `Mastered: ${masteredCount}/${wordsCount} words` : `${masteredCount}/${wordsCount} words`}
             </div>
           </div>
         </div>
 
-        {/* Bottom Main Action Button */}
-        <div className={isActive ? "w-full flex items-center mt-2" : "w-full flex items-center mt-2"}>
-          {isActive ? (
-            <div className="w-full flex items-center divide-x divide-white/20 bg-emerald-950/40 rounded-lg overflow-hidden border border-white/20 shadow-2xs">
+        {/* Divider */}
+        <div className={`border-t my-3.5 ${
+          !isUserAllowed ? 'border-black/15' : 'border-white/20'
+        }`} />
+
+        {/* Price & Action Buttons */}
+        <div className="flex items-center justify-between gap-2 pt-0.5">
+          {/* Price */}
+          <div className="flex items-baseline gap-0.5">
+            <span className={`text-xl sm:text-2xl font-black font-poppins tracking-tight ${
+              !isUserAllowed ? 'text-slate-950' : 'text-white'
+            }`}>
+              ৳{(course.price && course.price > 0) ? course.price : 30}
+            </span>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-1.5">
+            {isActive ? (
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   setActiveCourseId(course.id);
-                  setActiveCourseToast(`"${course.title}" is currently active.`);
-                  setTimeout(() => setActiveCourseToast(null), 2500);
+                  if (onSelectTab) onSelectTab('flashcard');
                 }}
-                className="flex-1 py-1 px-1.5 font-bold text-[9px] sm:text-[10px] text-white flex items-center justify-center gap-1 transition hover:bg-white/10 cursor-pointer font-poppins min-w-0"
+                className="bg-white hover:bg-slate-100 text-[#10705c] font-black text-xs sm:text-sm px-4 py-2.5 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition cursor-pointer font-poppins"
               >
-                <Check className="w-3 h-3 stroke-[3] text-emerald-300 shrink-0" />
-                <span className="whitespace-nowrap truncate">Active Course</span>
+                <span>Study Now</span>
+                <ArrowRight className="w-3.5 h-3.5 stroke-[3]" />
               </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveCourseId(course.id);
-                  if (onSelectTab) {
-                    onSelectTab('flashcard');
-                  }
-                }}
-                className="py-1 px-2 font-bold text-[9px] sm:text-[10px] bg-white text-emerald-900 hover:bg-emerald-50 flex items-center justify-center gap-1 transition cursor-pointer font-poppins shrink-0"
-                title="Open Flashcards"
-              >
-                <span className="whitespace-nowrap">Study</span>
-                <ArrowRight className="w-3 h-3 shrink-0" />
-              </button>
-            </div>
-          ) : isUserAllowed ? (
-            <div className="w-full flex items-center divide-x divide-indigo-700/80 bg-indigo-600 rounded-lg overflow-hidden shadow-2xs">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveCourseId(course.id);
-                  setActiveCourseToast(`Activated "${course.title}" course!`);
-                  setTimeout(() => setActiveCourseToast(null), 2500);
-                }}
-                className="flex-1 py-1 px-1.5 font-bold text-[9px] sm:text-[10px] text-white flex items-center justify-center gap-1 transition hover:bg-indigo-700 cursor-pointer font-poppins min-w-0"
-              >
-                <Check className="w-3 h-3 shrink-0" />
-                <span className="whitespace-nowrap truncate">Set Active</span>
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveCourseId(course.id);
-                  if (onSelectTab) {
-                    onSelectTab('flashcard');
-                  }
-                }}
-                className="py-1 px-2 font-bold text-[9px] sm:text-[10px] bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center gap-1 transition cursor-pointer font-poppins shrink-0"
-                title="Study Flashcards"
-              >
-                <span className="whitespace-nowrap">Study</span>
-                <ArrowRight className="w-3 h-3 shrink-0" />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsCartCheckoutMode(false);
-                setSelectedBuyCourse(course);
-              }}
-              className="w-full py-1.5 px-2.5 font-bold text-[9px] sm:text-[10px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white flex items-center justify-center gap-1 transition cursor-pointer font-poppins rounded-lg shadow-2xs"
-            >
-              <span className="whitespace-nowrap">Unlock Course (৳{(course.price && course.price > 0) ? course.price : 30})</span>
-              <ArrowRight className="w-3 h-3 shrink-0" />
-            </button>
-          )}
+            ) : isUserAllowed ? (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveCourseId(course.id);
+                    if (onSelectTab) onSelectTab('flashcard');
+                  }}
+                  className="bg-white hover:bg-slate-100 text-[#3539a3] font-black text-xs sm:text-sm px-3.5 py-2 rounded-xl shadow-md transition cursor-pointer font-poppins"
+                >
+                  Study Now
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveCourseId(course.id);
+                    setActiveCourseToast(`Activated "${course.title}" course!`);
+                    setTimeout(() => setActiveCourseToast(null), 2500);
+                  }}
+                  className="bg-white/15 hover:bg-white/25 border border-white/25 text-white font-bold text-xs sm:text-sm px-2.5 py-2 rounded-xl flex items-center gap-1 transition cursor-pointer font-poppins"
+                  title="Set Active Course"
+                >
+                  <span>Set Active</span>
+                  <ChevronDown className="w-3 h-3 text-white" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsCartCheckoutMode(false);
+                    setSelectedBuyCourse(course);
+                  }}
+                  className="bg-slate-950 hover:bg-slate-800 text-white font-black text-xs sm:text-sm px-3.5 py-2 rounded-xl shadow-md flex items-center gap-1.5 transition cursor-pointer font-poppins"
+                >
+                  <span>Unlock Course</span>
+                  <ArrowRight className="w-3.5 h-3.5 stroke-[3]" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => toggleCartCourse(course, e)}
+                  className={`p-2 rounded-xl text-xs font-bold transition border shadow-2xs ${
+                    cart.some(c => c.id === course.id)
+                      ? 'bg-slate-950 text-white border-slate-900'
+                      : 'bg-black/10 text-slate-950 border-black/15 hover:bg-black/20'
+                  }`}
+                  title={cart.some(c => c.id === course.id) ? "Remove from Cart" : "Add to Cart"}
+                >
+                  <ShoppingBag className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </motion.div>
     );
@@ -1174,49 +1085,65 @@ export default function MyCoursesView({
         )}
       </AnimatePresence>
 
-      {/* 1. Merged Course Directory Header & Wallet Balance Banner */}
-      <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 rounded-xl p-3 sm:p-4 text-white relative overflow-hidden shadow-sm border border-indigo-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-poppins">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -ml-20 -mb-20 pointer-events-none" />
-        
-        {/* Left Section: Course & Syllabus Hub */}
-        <div className="relative z-10 space-y-0.5">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-200 text-[9px] font-bold uppercase tracking-widest font-poppins">
-            <Trophy className="w-2.5 h-2.5 text-amber-400" /> Course & Syllabus Hub
-          </span>
-          <h2 className="text-sm sm:text-base font-bold tracking-tight leading-tight text-white font-poppins">
-            My Courses & Syllabus Directory
-          </h2>
-        </div>
-
-        {/* Right Section: Wallet Credit Balance */}
-        <div className="relative z-10 bg-slate-900/90 backdrop-blur-md border border-white/20 rounded-2xl p-2 sm:p-2.5 flex items-center justify-between sm:justify-end gap-2.5 shrink-0 max-w-full font-poppins shadow-xl" style={{ fontFamily: "'Poppins', sans-serif" }}>
+      {/* Minimalist Wallet Balance Card */}
+      <div className="flex justify-start sm:justify-start font-poppins">
+        <div className="bg-[#f4f4f7] border border-slate-200/80 rounded-[28px] p-5 sm:p-6 text-slate-900 shadow-sm flex flex-col justify-between shrink-0 min-w-[280px] sm:min-w-[340px] font-poppins transition-all hover:shadow-md" style={{ fontFamily: "'Poppins', sans-serif" }}>
           
-          {/* Div 1: Minimal Wallet Icon */}
-          <div className="p-2 sm:p-2.5 bg-indigo-500/20 border border-indigo-400/30 rounded-xl text-indigo-300 flex items-center justify-center shrink-0 shadow-inner">
-            <Wallet className="w-5 h-5 text-emerald-400" />
-          </div>
+          {/* Top Label & Balance Row */}
+          <div>
+            <span className="text-[10px] sm:text-[10.5px] font-bold tracking-widest text-slate-400 uppercase font-poppins block mb-1">
+              ACCOUNT BALANCE:
+            </span>
 
-          {/* Div 2: Current Balance */}
-          <div className="bg-slate-950/80 border border-emerald-500/30 rounded-xl px-3 py-1.5 sm:px-3.5 sm:py-2 flex flex-col justify-center min-w-[125px] shadow-sm">
-            <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-400 font-poppins">Current Balance</span>
-            <div className="text-xs sm:text-sm font-extrabold text-white font-mono leading-tight mt-0.5">
-              ৳{userWalletBalance} <span className="text-[9px] font-sans font-normal text-slate-300">BDT</span>
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight font-poppins">
+                {showWalletBalance ? `৳${userWalletBalance.toLocaleString('en-BD')}` : '••••••'}
+              </div>
+
+              {/* Eye Toggle Button */}
+              <button
+                type="button"
+                onClick={() => setShowWalletBalance(!showWalletBalance)}
+                className="w-9 h-9 rounded-full bg-white hover:bg-slate-50 text-slate-600 border border-slate-200/80 shadow-2xs flex items-center justify-center transition cursor-pointer shrink-0"
+                title={showWalletBalance ? "Hide Balance" : "Show Balance"}
+              >
+                {showWalletBalance ? (
+                  <Eye className="w-4 h-4 text-slate-600" />
+                ) : (
+                  <EyeOff className="w-4 h-4 text-slate-600" />
+                )}
+              </button>
             </div>
           </div>
 
-          {/* Div 3: Recharge Wallet Button */}
-          <button
-            type="button"
-            onClick={() => {
-              setIsRechargeModalOpen(true);
-              setRechargeMessage(null);
-            }}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400/40 rounded-xl px-3 py-2 sm:px-3.5 sm:py-2.5 flex items-center gap-1.5 font-extrabold text-[11px] sm:text-xs shadow-md shadow-emerald-600/20 transition cursor-pointer shrink-0 font-poppins"
-          >
-            <PlusCircle className="w-3.5 h-3.5 text-emerald-200" />
-            <span>Recharge Wallet</span>
-          </button>
+          {/* Action Buttons Row: Recharge */}
+          <div className="flex items-center gap-2.5 mt-5">
+            <button
+              type="button"
+              onClick={() => {
+                setIsRechargeModalOpen(true);
+                setRechargeMessage(null);
+              }}
+              className="bg-[#1c1c1e] hover:bg-slate-800 active:scale-98 text-white rounded-full px-5 py-2.5 text-xs font-extrabold flex items-center gap-1.5 shadow-md transition cursor-pointer font-poppins"
+            >
+              <ArrowUpRight className="w-4 h-4 stroke-[2.5]" />
+              <span>Recharge</span>
+            </button>
+
+            {/* More Options Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsRechargeModalOpen(true);
+                setRechargeMessage(null);
+              }}
+              className="w-10 h-10 rounded-full bg-white hover:bg-slate-50 border border-slate-200/80 text-slate-700 font-black flex items-center justify-center shadow-2xs transition cursor-pointer shrink-0"
+              title="More Wallet Options"
+            >
+              <MoreHorizontal className="w-4 h-4 text-slate-600" />
+            </button>
+          </div>
+
         </div>
       </div>
 
