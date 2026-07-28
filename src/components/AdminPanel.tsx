@@ -2055,8 +2055,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               </div>
             </div>
           ) : (
-            <div className="overflow-hidden border border-slate-200 rounded-xl bg-white shadow-xs">
-              <table className="w-full text-left border-collapse">
+            <div className="overflow-x-auto w-full border border-slate-200/80 rounded-2xl bg-white shadow-2xs">
+              <table className="w-full text-left border-collapse min-w-[650px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-400 font-mono uppercase h-10">
                     <th className="px-4 py-2">Word Details</th>
@@ -2226,69 +2226,69 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 </div>
               </div>
             ) : (
-              <div className="overflow-hidden border border-slate-200 rounded-xl bg-white shadow-xs">
-                <table className="w-full text-left border-collapse">
+              <div className="overflow-x-auto w-full border border-slate-200/80 rounded-2xl bg-white shadow-2xs">
+                <table className="w-full text-left border-collapse min-w-[800px]">
                   <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-400 font-mono uppercase h-10">
-                      <th className="px-4 py-2">Course Details</th>
-                      <th className="px-4 py-2">Course Code</th>
-                      <th className="px-4 py-2">Student Email</th>
-                      <th className="px-4 py-2">bKash Number</th>
-                      <th className="px-4 py-2">Transaction ID</th>
-                      <th className="px-4 py-2">Access Expiration</th>
-                      <th className="px-4 py-2">Status</th>
-                      <th className="px-4 py-2 text-right">Action</th>
+                    <tr className="bg-slate-50/80 border-b border-slate-200 text-[10px] font-bold text-slate-400 font-mono uppercase h-9">
+                      <th className="px-3 py-2">Course Details</th>
+                      <th className="px-3 py-2">Code</th>
+                      <th className="px-3 py-2">Student Email</th>
+                      <th className="px-3 py-2">bKash Number</th>
+                      <th className="px-3 py-2">Trx ID</th>
+                      <th className="px-3 py-2">Access</th>
+                      <th className="px-3 py-2">Status</th>
+                      <th className="px-3 py-2 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-150 font-sans text-xs">
                     {accessRequests.map((req) => (
-                      <tr key={req.id} className="hover:bg-slate-50/50 transition">
-                        <td className="px-4 py-3">
+                      <tr key={req.id} className="hover:bg-slate-50/60 transition">
+                        <td className="px-3 py-2.5">
                           {req.courseIds && req.courseIds.length > 1 ? (
-                            <div className="space-y-1">
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-800 font-extrabold text-[10px] rounded-full border border-indigo-200">
-                                🛒 Multi-Course Cart Bundle ({req.courseIds.length} Courses)
+                            <div className="space-y-0.5">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 font-bold text-[10px] rounded-md border border-indigo-200/60">
+                                🛒 Bundle ({req.courseIds.length})
                               </span>
-                              <div className="text-[11px] font-bold text-slate-800 pl-1 space-y-0.5">
+                              <div className="text-[11px] font-bold text-slate-800 space-y-0.5">
                                 {req.courseTitles && req.courseTitles.length > 0 ? (
                                   req.courseTitles.map((t, idx) => (
-                                    <div key={idx} className="flex items-center gap-1 text-slate-700">
-                                      <span className="text-indigo-500 font-black">•</span> {t}
+                                    <div key={idx} className="truncate max-w-[180px] text-slate-700" title={t}>
+                                      • {t}
                                     </div>
                                   ))
                                 ) : (
-                                  <div>{req.courseTitle}</div>
+                                  <div className="truncate max-w-[180px]">{req.courseTitle}</div>
                                 )}
                               </div>
-                              <div className="text-[10px] text-emerald-700 font-black font-mono mt-1">
-                                Total Paid Amount: ৳{req.totalPrice || req.price} BDT
+                              <div className="text-[10px] text-emerald-700 font-bold font-mono">
+                                ৳{req.totalPrice || req.price} BDT
                               </div>
                             </div>
                           ) : (
                             <div>
-                              <div className="font-extrabold text-slate-800 text-sm">{req.courseTitle}</div>
-                              <div className="text-[10px] text-indigo-600 font-bold font-mono uppercase tracking-wide mt-0.5">
-                                Price: ৳{req.totalPrice || req.price || 30} BDT
+                              <div className="font-extrabold text-slate-800 text-xs truncate max-w-[180px]" title={req.courseTitle}>{req.courseTitle}</div>
+                              <div className="text-[10px] text-indigo-600 font-bold font-mono mt-0.5">
+                                ৳{req.totalPrice || req.price || 30} BDT
                               </div>
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 font-bold rounded-lg text-xs font-mono tracking-wide border border-indigo-200/60 uppercase">
+                        <td className="px-3 py-2.5">
+                          <span className="inline-flex items-center px-2 py-0.5 bg-indigo-50 text-indigo-700 font-bold rounded text-[10px] font-mono border border-indigo-200/50 uppercase">
                             {req.courseCode || (req.courseIds && req.courseIds.join(', ')) || req.courseId}
                           </span>
                         </td>
-                        <td className="px-4 py-3 font-semibold text-slate-700">
+                        <td className="px-3 py-2.5 font-medium text-slate-700 max-w-[160px] truncate" title={req.email}>
                           {req.email}
                         </td>
-                        <td className="px-4 py-3">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-pink-50 text-pink-700 font-bold rounded-full text-[10px] font-mono tracking-wider border border-pink-200/50">
+                        <td className="px-3 py-2.5">
+                          <span className="inline-flex items-center px-2 py-0.5 bg-pink-50 text-pink-700 font-bold rounded-full text-[10px] font-mono border border-pink-200/50">
                             {req.bkashNumber}
                           </span>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2.5">
                           <div className="flex items-center gap-1">
-                            <span className="font-mono bg-slate-50 border border-slate-200 text-slate-650 px-2 py-0.5 rounded text-xs select-all">
+                            <span className="font-mono bg-slate-50 border border-slate-200 text-slate-700 px-1.5 py-0.5 rounded text-[11px] select-all">
                               {req.trxId}
                             </span>
                             <button
@@ -2303,46 +2303,46 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                             </button>
                           </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2.5">
                           {req.courseId === 'wallet_recharge' ? (
-                            <span className="text-slate-400 font-mono text-[11px] font-semibold">
-                              N/A (Recharge)
+                            <span className="text-slate-400 font-mono text-[10px] font-semibold">
+                              Recharge
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50/80 text-indigo-700 font-bold rounded-lg text-[11px] border border-indigo-100">
-                              <Clock className="w-3 h-3 text-indigo-500" />
-                              1 Year Access
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50/80 text-indigo-700 font-bold rounded text-[10px] border border-indigo-100/80">
+                              <Clock className="w-2.5 h-2.5 text-indigo-500" />
+                              1 Yr Access
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2.5">
                           {req.status === 'approved' ? (
                             <div className="space-y-0.5">
-                              <span className="inline-block px-2 py-0.5 bg-emerald-50 text-emerald-700 font-black rounded-full text-[10px] uppercase font-mono tracking-wider border border-emerald-200/50">
+                              <span className="inline-block px-2 py-0.5 bg-emerald-50 text-emerald-700 font-extrabold rounded-md text-[10px] uppercase font-mono border border-emerald-200/50">
                                 Approved
                               </span>
                               <div className="text-[9px] font-bold font-mono">
                                 {req.verificationMethod === 'auto' ? (
-                                  <span className="text-amber-600">⚡ Auto Verified</span>
+                                  <span className="text-amber-600">Auto</span>
                                 ) : req.verificationMethod === 'wallet_balance' ? (
-                                  <span className="text-indigo-600">💳 Wallet Balance</span>
+                                  <span className="text-indigo-600">Wallet</span>
                                 ) : (
-                                  <span className="text-slate-400">👤 Manual Admin</span>
+                                  <span className="text-slate-400">Manual</span>
                                 )}
                               </div>
                             </div>
                           ) : req.status === 'rejected' ? (
-                            <span className="inline-block px-2 py-0.5 bg-rose-50 text-rose-700 font-black rounded-full text-[10px] uppercase font-mono tracking-wider border border-rose-200/50">
+                            <span className="inline-block px-2 py-0.5 bg-rose-50 text-rose-700 font-extrabold rounded-md text-[10px] uppercase font-mono border border-rose-200/50">
                               Rejected
                             </span>
                           ) : (
-                            <span className="inline-block px-2 py-0.5 bg-amber-50 text-amber-700 font-black rounded-full text-[10px] uppercase font-mono tracking-wider border border-amber-200/50">
+                            <span className="inline-block px-2 py-0.5 bg-amber-50 text-amber-700 font-extrabold rounded-md text-[10px] uppercase font-mono border border-amber-200/50">
                               Pending
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-2">
+                        <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1.5">
                             {req.status === 'pending' ? (
                               <button
                                 type="button"
@@ -2350,13 +2350,13 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                                   setSelectedActionRequest(req);
                                   setActionBalanceInput(String(req.totalPrice || req.price || ''));
                                 }}
-                                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-xs transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                                className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-lg text-xs transition cursor-pointer flex items-center gap-1 shadow-2xs whitespace-nowrap"
                               >
                                 <ShieldCheck className="w-3.5 h-3.5" />
-                                <span>Action / Process</span>
+                                <span>Action</span>
                               </button>
                             ) : (
-                              <span className="text-slate-400 font-extrabold text-[11px] bg-slate-100 px-2.5 py-1 rounded-lg">
+                              <span className="text-slate-400 font-bold text-[10px] bg-slate-100 px-2 py-0.5 rounded">
                                 Processed
                               </span>
                             )}
