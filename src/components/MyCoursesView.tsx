@@ -911,7 +911,7 @@ export default function MyCoursesView({
       <motion.div
         key={course.id}
         layout
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         onClick={() => {
           if (isUserAllowed) {
@@ -920,78 +920,53 @@ export default function MyCoursesView({
             setTimeout(() => setActiveCourseToast(null), 2500);
           }
         }}
-        className={`group relative transition-all duration-300 flex flex-col justify-between overflow-hidden p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border-2 ${
+        className={`group relative transition-all duration-300 flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 sm:p-5 rounded-2xl sm:rounded-3xl border-2 gap-3.5 overflow-hidden ${
           isUserAllowed ? 'cursor-pointer' : ''
         } ${
           isActive 
-            ? 'bg-gradient-to-br from-[#189F82] via-[#158f75] to-[#10705c] text-white border-[#22c7a3] shadow-xl shadow-[#189F82]/25' 
+            ? 'bg-gradient-to-r from-[#189F82] via-[#158f75] to-[#10705c] text-white border-[#22c7a3] shadow-lg shadow-[#189F82]/20' 
             : isUserAllowed
-            ? 'bg-gradient-to-br from-[#4E53E2] via-[#4348c8] to-[#3539a3] text-white border-[#7276f7] shadow-xl shadow-[#4E53E2]/25 hover:border-[#8f92f9]'
-            : 'bg-gradient-to-br from-[#FCB415] via-[#f0a600] to-[#d49000] text-slate-950 border-[#ffe07d] shadow-xl shadow-[#FCB415]/25 hover:border-[#ffebaa]'
+            ? 'bg-gradient-to-r from-[#4E53E2] via-[#4348c8] to-[#3539a3] text-white border-[#7276f7] shadow-lg shadow-[#4E53E2]/20 hover:border-[#8f92f9]'
+            : 'bg-gradient-to-r from-[#FCB415] via-[#f0a600] to-[#d49000] text-slate-950 border-[#ffe07d] shadow-lg shadow-[#FCB415]/20 hover:border-[#ffebaa]'
         }`}
         style={{ fontFamily: "'Poppins', sans-serif" }}
       >
-        {/* Top Header Badge & Actions */}
-        <div>
-          <div className="flex items-center justify-between gap-1.5 mb-2 font-poppins">
+        {/* Left Side: Course Info & Title & Progress */}
+        <div className="flex-1 min-w-0 space-y-2 w-full">
+          {/* Active / Status Badge Header */}
+          <div className="flex items-center gap-2">
             {isActive ? (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider text-white bg-black/20 border border-white/20 shadow-2xs">
                 <span className="w-2 h-2 rounded-full bg-white inline-block animate-pulse" />
-                ACTIVE
+                ACTIVE COURSE
               </span>
             ) : isUserAllowed ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveCourseId(course.id);
-                  setActiveCourseToast(`Activated "${course.title}" course!`);
-                  setTimeout(() => setActiveCourseToast(null), 2500);
-                }}
-                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-white bg-white/15 hover:bg-white/25 active:scale-95 border border-white/25 transition cursor-pointer font-poppins shadow-2xs"
-                title="Click to set as Active Course"
-              >
-                <span>Set Active</span>
-                <ChevronDown className="w-3 h-3 text-white/80" />
-              </button>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-white bg-white/15 border border-white/25">
+                ENROLLED
+              </span>
             ) : (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-slate-900 bg-black/10 border border-black/10 font-poppins">
-                Catalog
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-slate-900 bg-black/10 border border-black/10">
+                AVAILABLE
               </span>
             )}
           </div>
 
           {/* Course Title */}
-          <h3 className={`text-sm sm:text-base font-extrabold tracking-tight leading-snug line-clamp-2 min-h-[36px] font-poppins ${
+          <h3 className={`text-base sm:text-lg font-extrabold tracking-tight leading-snug font-poppins ${
             !isUserAllowed ? 'text-slate-950' : 'text-white'
           }`}>
             {course.title}
           </h3>
 
-          {/* Tags Row */}
-          <div className="flex flex-wrap items-center gap-1 my-2.5">
-            <span className={`px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold font-poppins ${
-              !isUserAllowed ? 'bg-black/10 text-slate-900 border border-black/10' : 'bg-white/15 text-white border border-white/20'
-            }`}>
-              #{course.id}
-            </span>
-            <span className={`px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold font-poppins ${
-              !isUserAllowed ? 'bg-black/10 text-slate-900 border border-black/10' : 'bg-white/15 text-white border border-white/20'
-            }`}>
-              Lifetime access
-            </span>
-          </div>
-
-          {/* Progress Bar & Word Count */}
-          <div className="mt-3 space-y-1">
-            <div className={`flex items-center justify-between text-[10px] sm:text-xs font-bold font-poppins ${
+          {/* Progress Bar & Word Count (No tags, no lifetime access badge) */}
+          <div className="space-y-1 max-w-md">
+            <div className={`flex items-center justify-between text-xs font-bold font-poppins ${
               !isUserAllowed ? 'text-slate-900' : 'text-white/90'
             }`}>
               <span>{masteredCount > 0 ? `Mastered: ${masteredCount}/${wordsCount}` : `${wordsCount} words`}</span>
               <span className="font-black">{progressPercent}%</span>
             </div>
 
-            {/* Progress Track */}
             <div className={`w-full h-2 rounded-full overflow-hidden ${
               !isUserAllowed ? 'bg-black/15' : 'bg-black/20'
             }`}>
@@ -1005,74 +980,93 @@ export default function MyCoursesView({
           </div>
         </div>
 
-        {/* Divider */}
-        <div className={`border-t my-2.5 ${
-          !isUserAllowed ? 'border-black/15' : 'border-white/20'
-        }`} />
+        {/* Right / Bottom Side: Price (without front icon) & Action Buttons */}
+        <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center w-full sm:w-auto pt-2.5 sm:pt-0 border-t sm:border-t-0 border-white/20 gap-3 shrink-0">
+          {/* Price display without front currency icon */}
+          <div className="flex items-baseline gap-1 font-poppins">
+            <span className={`text-xl sm:text-2xl font-black tracking-tight ${
+              !isUserAllowed ? 'text-slate-950' : 'text-white'
+            }`}>
+              {(course.price && course.price > 0) ? course.price : 30}
+            </span>
+            <span className={`text-xs font-extrabold ${
+              !isUserAllowed ? 'text-slate-900/80' : 'text-white/80'
+            }`}>
+              Tk
+            </span>
+          </div>
 
-        {/* Price & Action Button */}
-        <div className="flex items-center justify-between gap-1.5 pt-0.5">
-          <span className={`text-lg sm:text-xl font-black font-poppins tracking-tight ${
-            !isUserAllowed ? 'text-slate-950' : 'text-white'
-          }`}>
-            ৳{(course.price && course.price > 0) ? course.price : 30}
-          </span>
-
-          {/* Single Clear Action Button */}
-          {isActive ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setActiveCourseId(course.id);
-                if (onSelectTab) onSelectTab('flashcard');
-              }}
-              className="bg-white hover:bg-slate-100 active:scale-98 text-[#10705c] font-black text-xs sm:text-sm px-3.5 sm:px-4 py-2 rounded-xl flex items-center gap-1 shadow-md transition cursor-pointer font-poppins shrink-0"
-            >
-              <span>Study Now</span>
-              <ArrowRight className="w-3.5 h-3.5 stroke-[3]" />
-            </button>
-          ) : isUserAllowed ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setActiveCourseId(course.id);
-                if (onSelectTab) onSelectTab('flashcard');
-              }}
-              className="bg-white hover:bg-slate-100 active:scale-98 text-[#3539a3] font-black text-xs sm:text-sm px-3.5 sm:px-4 py-2 rounded-xl flex items-center gap-1 shadow-md transition cursor-pointer font-poppins shrink-0"
-            >
-              <span>Study Now</span>
-              <ArrowRight className="w-3.5 h-3.5 stroke-[3]" />
-            </button>
-          ) : (
-            <div className="flex items-center gap-1 shrink-0">
+          {/* Action Buttons Row */}
+          <div className="flex items-center gap-2">
+            {isActive ? (
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setIsCartCheckoutMode(false);
-                  setSelectedBuyCourse(course);
+                  setActiveCourseId(course.id);
+                  if (onSelectTab) onSelectTab('flashcard');
                 }}
-                className="bg-slate-950 hover:bg-slate-800 active:scale-98 text-white font-black text-xs sm:text-sm px-3 py-2 rounded-xl shadow-md flex items-center gap-1 transition cursor-pointer font-poppins"
+                className="bg-white hover:bg-slate-100 active:scale-98 text-[#10705c] font-black text-xs sm:text-sm px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-md transition cursor-pointer font-poppins shrink-0"
               >
-                <span>Unlock</span>
-                <ArrowRight className="w-3 h-3 stroke-[3]" />
+                <span>Study Now</span>
+                <ArrowRight className="w-4 h-4 stroke-[3]" />
               </button>
-              <button
-                type="button"
-                onClick={(e) => toggleCartCourse(course, e)}
-                className={`p-2 rounded-xl text-xs font-bold transition border shadow-2xs ${
-                  cart.some(c => c.id === course.id)
-                    ? 'bg-slate-950 text-white border-slate-900'
-                    : 'bg-black/10 text-slate-950 border-black/15 hover:bg-black/20'
-                }`}
-                title={cart.some(c => c.id === course.id) ? "Remove from Cart" : "Add to Cart"}
-              >
-                <ShoppingBag className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
+            ) : isUserAllowed ? (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveCourseId(course.id);
+                    setActiveCourseToast(`Activated "${course.title}" course!`);
+                    setTimeout(() => setActiveCourseToast(null), 2500);
+                  }}
+                  className="bg-white/20 hover:bg-white/30 text-white font-black text-xs sm:text-sm px-3 py-2 rounded-xl border border-white/30 transition cursor-pointer font-poppins shrink-0"
+                >
+                  Set Active
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveCourseId(course.id);
+                    if (onSelectTab) onSelectTab('flashcard');
+                  }}
+                  className="bg-white hover:bg-slate-100 active:scale-98 text-[#3539a3] font-black text-xs sm:text-sm px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-md transition cursor-pointer font-poppins shrink-0"
+                >
+                  <span>Study</span>
+                  <ArrowRight className="w-4 h-4 stroke-[3]" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsCartCheckoutMode(false);
+                    setSelectedBuyCourse(course);
+                  }}
+                  className="bg-slate-950 hover:bg-slate-800 active:scale-98 text-white font-black text-xs sm:text-sm px-4 py-2 rounded-xl shadow-md flex items-center gap-1.5 transition cursor-pointer font-poppins"
+                >
+                  <span>Buy Now</span>
+                  <ArrowRight className="w-4 h-4 stroke-[3]" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => toggleCartCourse(course, e)}
+                  className={`p-2.5 rounded-xl text-xs font-bold transition border shadow-2xs ${
+                    cart.some(c => c.id === course.id)
+                      ? 'bg-slate-950 text-white border-slate-900'
+                      : 'bg-black/10 text-slate-950 border-black/15 hover:bg-black/20'
+                  }`}
+                  title={cart.some(c => c.id === course.id) ? "Remove from Cart" : "Add to Cart"}
+                >
+                  <ShoppingBag className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </motion.div>
     );
@@ -1187,7 +1181,7 @@ export default function MyCoursesView({
             </div>
 
             {sortedEnrolledCourses.length > 0 ? (
-              <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5">
+              <div className="grid grid-cols-1 gap-3">
                 {sortedEnrolledCourses.map(course => renderCourseCard(course))}
               </div>
             ) : (
@@ -1236,7 +1230,7 @@ export default function MyCoursesView({
             </div>
 
             {lockedCoursesList.length > 0 ? (
-              <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5">
+              <div className="grid grid-cols-1 gap-3">
                 {lockedCoursesList.map(course => renderCourseCard(course))}
               </div>
             ) : (
