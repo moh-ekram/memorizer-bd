@@ -47,7 +47,7 @@ import {
   signOut,
   User as FirebaseUser
 } from './lib/firebase';
-import { collection, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, getDocs, query, where } from 'firebase/firestore';
 import { Course } from './types';
 import { isCourseEnrolled, isCourseAccessible } from './lib/courseAccess';
 import AuthModal from './components/AuthModal';
@@ -763,13 +763,63 @@ export default function App() {
               setSettings(prev => ({ ...prev, ...data.settings }));
             }
             const userEnrolled = Array.isArray(data.enrolledCourseIds) ? data.enrolledCourseIds : [];
-            setEnrolledCourseIds(userEnrolled);
-            setActiveCourseId(data.activeCourseId || (userEnrolled[0] || 'gre'));
+
+            // Auto-sync any course access requests or allowedUsers entries matching currentUser.email
+            let autoSyncedPurchased: string[] = [];
+            try {
+              const cleanUserEmail = (currentUser.email || '').trim().toLowerCase();
+              if (cleanUserEmail) {
+                const foundIds = new Set<string>();
+                const reqsQuery = query(
+                  collection(db, 'access_requests'),
+                  where('email', '==', cleanUserEmail),
+                  where('status', '==', 'approved')
+                );
+                const reqsSnap = await getDocs(reqsQuery);
+                reqsSnap.docs.forEach(docSnap => {
+                  const rd = docSnap.data() as any;
+                  if (rd.courseId && rd.courseId !== 'wallet_recharge' && rd.courseId !== 'multi_cart') {
+                    foundIds.add(rd.courseId.trim().toLowerCase());
+                  }
+                  if (Array.isArray(rd.courseIds)) {
+                    rd.courseIds.forEach((cid: string) => {
+                      if (cid && cid !== 'wallet_recharge' && cid !== 'multi_cart') {
+                        foundIds.add(cid.trim().toLowerCase());
+                      }
+                    });
+                  }
+                });
+
+                const coursesSnap = await getDocs(collection(db, 'courses'));
+                coursesSnap.docs.forEach(cSnap => {
+                  const cData = cSnap.data();
+                  if (Array.isArray(cData.allowedUsers)) {
+                    const isAllowed = cData.allowedUsers.some(
+                      (u: string) => typeof u === 'string' && u.trim().toLowerCase() === cleanUserEmail
+                    );
+                    if (isAllowed) {
+                      foundIds.add(cSnap.id.trim().toLowerCase());
+                    }
+                  }
+                });
+                autoSyncedPurchased = Array.from(foundIds);
+              }
+            } catch (syncErr) {
+              console.warn("Auto-sync course purchases error:", syncErr);
+            }
+
+            const mergedEnrolled = Array.from(new Set([...userEnrolled, ...autoSyncedPurchased]));
+            setEnrolledCourseIds(mergedEnrolled);
+            setActiveCourseId(data.activeCourseId || (mergedEnrolled[0] || 'gre'));
             setQuizScore(data.quizScore !== undefined ? data.quizScore : 0);
             setQuizTaken(data.quizTaken !== undefined ? data.quizTaken : 0);
             
+            if (mergedEnrolled.length > userEnrolled.length) {
+              await setDoc(userDocRef, { enrolledCourseIds: mergedEnrolled }, { merge: true });
+            }
+
             // If user has no enrolled course, direct them immediately to 'My Courses'
-            if (userEnrolled.length === 0) {
+            if (mergedEnrolled.length === 0) {
               setActiveTab('profile');
               setProfileSubTab('my_courses');
             }
@@ -777,7 +827,7 @@ export default function App() {
             setSyncStatus('synced');
             setHasLoadedFromCloud(true);
           } else {
-            // New user signup: create clean user record with no enrolled courses
+            // New user signup: create clean user record with auto-synced purchases if any
             const cleanProgress = {};
             const cleanFolders = [
               { id: '1', name: 'Important Words (High Priority)', color: '#ef4444' },
@@ -789,8 +839,51 @@ export default function App() {
               lastStudyDate: new Date().toISOString().split('T')[0],
               history: {}
             };
-            const cleanEnrolled: string[] = [];
-            const cleanActive = 'gre';
+
+            let cleanEnrolled: string[] = [];
+            try {
+              const cleanUserEmail = (currentUser.email || '').trim().toLowerCase();
+              if (cleanUserEmail) {
+                const foundIds = new Set<string>();
+                const reqsQuery = query(
+                  collection(db, 'access_requests'),
+                  where('email', '==', cleanUserEmail),
+                  where('status', '==', 'approved')
+                );
+                const reqsSnap = await getDocs(reqsQuery);
+                reqsSnap.docs.forEach(docSnap => {
+                  const rd = docSnap.data() as any;
+                  if (rd.courseId && rd.courseId !== 'wallet_recharge' && rd.courseId !== 'multi_cart') {
+                    foundIds.add(rd.courseId.trim().toLowerCase());
+                  }
+                  if (Array.isArray(rd.courseIds)) {
+                    rd.courseIds.forEach((cid: string) => {
+                      if (cid && cid !== 'wallet_recharge' && cid !== 'multi_cart') {
+                        foundIds.add(cid.trim().toLowerCase());
+                      }
+                    });
+                  }
+                });
+
+                const coursesSnap = await getDocs(collection(db, 'courses'));
+                coursesSnap.docs.forEach(cSnap => {
+                  const cData = cSnap.data();
+                  if (Array.isArray(cData.allowedUsers)) {
+                    const isAllowed = cData.allowedUsers.some(
+                      (u: string) => typeof u === 'string' && u.trim().toLowerCase() === cleanUserEmail
+                    );
+                    if (isAllowed) {
+                      foundIds.add(cSnap.id.trim().toLowerCase());
+                    }
+                  }
+                });
+                cleanEnrolled = Array.from(foundIds);
+              }
+            } catch (syncErr) {
+              console.warn("Auto-sync course purchases error on signup:", syncErr);
+            }
+
+            const cleanActive = cleanEnrolled[0] || 'gre';
 
             setProgress(cleanProgress);
             setFolders(cleanFolders);
@@ -804,9 +897,11 @@ export default function App() {
             setQuizScore(0);
             setQuizTaken(0);
 
-            // Direct new user to 'My Courses' to select and enroll in a course
-            setActiveTab('profile');
-            setProfileSubTab('my_courses');
+            // Direct new user to 'My Courses' if they have no enrolled courses
+            if (cleanEnrolled.length === 0) {
+              setActiveTab('profile');
+              setProfileSubTab('my_courses');
+            }
 
             await setDoc(userDocRef, {
               progress: cleanProgress,
@@ -1424,6 +1519,7 @@ export default function App() {
           setIsAuthModalOpen(false);
         }} 
         courses={allAvailableCourses} 
+        onImportCourse={handleImportCourse}
       />
     );
   }

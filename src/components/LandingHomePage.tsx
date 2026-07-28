@@ -14,13 +14,15 @@ import {
   signInWithPopup 
 } from '../lib/firebase';
 import { Course } from '../types';
+import MyCoursesView from './MyCoursesView';
 
 interface LandingHomePageProps {
   onAuthSuccess: () => void;
   courses: Course[];
+  onImportCourse?: (course: Course) => void;
 }
 
-export default function LandingHomePage({ onAuthSuccess, courses }: LandingHomePageProps) {
+export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse }: LandingHomePageProps) {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -444,65 +446,44 @@ export default function LandingHomePage({ onAuthSuccess, courses }: LandingHomeP
         </div>
       </section>
 
-      {/* Course Showcase Preview */}
-      {courses && courses.length > 0 && (
-        <section className="py-16 px-4 md:px-8 max-w-7xl mx-auto space-y-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-2xl md:text-3xl font-black text-white">
-                জনপ্রিয় কোর্সসমূহ
-              </h2>
-              <p className="text-xs text-slate-400 font-medium">
-                লগইন করার পর 'My Courses' সেকশন থেকে যেকোনো কোর্সে ইনরোল করতে পারবেন
-              </p>
+      {/* Course Showcase & Direct Buy System (MyCoursesView) */}
+      <section className="py-12 px-4 md:px-8 max-w-7xl mx-auto space-y-6" id="landing-courses-catalog">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-bold mb-2">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+              <span>উপলব্ধ সকল কোর্স ক্যাটালগ</span>
             </div>
-
-            <button
-              onClick={scrollToAuth}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-extrabold transition cursor-pointer self-start sm:self-auto"
-            >
-              সকল কোর্স দেখুন
-            </button>
+            <h2 className="text-2xl md:text-3xl font-black text-white">
+              পছন্দের কোর্স আনলক ও ইনরোল করুন
+            </h2>
+            <p className="text-xs text-slate-300 font-medium">
+              লগইন না করেও বিকাশ দিয়ে ওয়ালেট রিচার্জ কিংবা যেকোনো কোর্স কিনতে পারবেন। পেমেন্টের সাথে আপনার জিমেইল এড্রেস প্রদান করুন।
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {courses.slice(0, 3).map((c) => (
-              <div 
-                key={c.id} 
-                className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 space-y-4 flex flex-col justify-between hover:border-indigo-500/60 transition"
-              >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="px-2.5 py-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-lg text-[10px] font-black uppercase">
-                      {c.category || 'Vocabulary Course'}
-                    </span>
-                    <span className="text-sm font-black text-emerald-400 font-mono">
-                      {c.price && c.price > 0 ? `৳${c.price}` : 'ফ্রি (Free)'}
-                    </span>
-                  </div>
+          <button
+            onClick={scrollToAuth}
+            className="px-4 py-2 bg-indigo-600/80 hover:bg-indigo-600 text-white rounded-xl text-xs font-extrabold transition cursor-pointer self-start sm:self-auto flex items-center gap-2 border border-indigo-500/30"
+          >
+            <LogIn className="w-4 h-4" />
+            <span>লগইন / একাউন্ট খুলুন</span>
+          </button>
+        </div>
 
-                  <h3 className="text-lg font-black text-white line-clamp-1">{c.title}</h3>
-                  <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">{c.description}</p>
-                </div>
-
-                <div className="pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs font-bold text-slate-300">
-                  <span className="flex items-center gap-1">
-                    <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>{c.words ? c.words.length : 0} টি শব্দ</span>
-                  </span>
-
-                  <button
-                    onClick={scrollToAuth}
-                    className="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 text-white rounded-lg text-[11px] font-black transition cursor-pointer"
-                  >
-                    ইনরোল করুন
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+        <div className="bg-slate-900/90 border border-slate-800/90 rounded-3xl p-3 sm:p-6 shadow-2xl">
+          <MyCoursesView
+            user={null}
+            allCourses={courses}
+            enrolledCourseIds={[]}
+            activeCourseId={'gre'}
+            setActiveCourseId={() => {}}
+            setEnrolledCourseIds={() => {}}
+            progress={{}}
+            onImportCourse={onImportCourse || (() => {})}
+          />
+        </div>
+      </section>
 
       {/* Footer */}
       <footer className="py-8 px-4 border-t border-slate-800 text-center text-xs text-slate-500 space-y-2">
