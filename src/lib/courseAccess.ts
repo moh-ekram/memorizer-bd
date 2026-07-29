@@ -28,55 +28,59 @@ export function isCourseAccessible(
   const normCourseId = course.id.trim().toLowerCase();
   const cleanUserEmail = userEmail?.trim().toLowerCase() || '';
 
-  // 1. Enrolled courses are always accessible immediately
+  // 1. Default free course, price === 0, or 'gre' is always accessible
+  if (course.isDefault || course.price === 0 || normCourseId === 'gre') {
+    return true;
+  }
+
+  // 2. Enrolled courses are always accessible immediately
   if (isCourseEnrolled(normCourseId, enrolledIds)) {
     return true;
   }
 
-  // 2. Admin user email bypasses all restrictions
+  // 3. Admin user email bypasses all restrictions
   if (cleanUserEmail === 'mohammad.001ekram@gmail.com') {
     return true;
   }
 
-  // 3. Course creator bypasses restrictions
+  // 4. Course creator bypasses restrictions
   if (course.createdBy && course.createdBy.trim().toLowerCase() === cleanUserEmail) {
     return true;
   }
 
-  // 4. Allowed users check for restricted courses
-  if (course.isRestricted) {
-    if (!cleanUserEmail) return false;
+  // 5. Allowed users check for restricted courses
+  if (course.allowedUsers && Array.isArray(course.allowedUsers)) {
+    const isAllowed = course.allowedUsers.some(
+      allowed => typeof allowed === 'string' && allowed.trim().toLowerCase() === cleanUserEmail
+    );
 
-    if (course.allowedUsers && Array.isArray(course.allowedUsers)) {
-      const isAllowed = course.allowedUsers.some(
-        allowed => typeof allowed === 'string' && allowed.trim().toLowerCase() === cleanUserEmail
-      );
-
-      if (isAllowed) {
-        // Check expiry date if specified
-        if (course.allowedUsersExpiry && typeof course.allowedUsersExpiry === 'object') {
-          const matchingKey = Object.keys(course.allowedUsersExpiry).find(
-            k => k.trim().toLowerCase() === cleanUserEmail
-          );
-          if (matchingKey) {
-            const expiryStr = course.allowedUsersExpiry[matchingKey];
-            if (expiryStr) {
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              const expiryDate = new Date(expiryStr);
-              expiryDate.setHours(23, 59, 59, 999);
-              if (today > expiryDate) {
-                return false; // Access expired
-              }
+    if (isAllowed) {
+      // Check expiry date if specified
+      if (course.allowedUsersExpiry && typeof course.allowedUsersExpiry === 'object') {
+        const matchingKey = Object.keys(course.allowedUsersExpiry).find(
+          k => k.trim().toLowerCase() === cleanUserEmail
+        );
+        if (matchingKey) {
+          const expiryStr = course.allowedUsersExpiry[matchingKey];
+          if (expiryStr) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const expiryDate = new Date(expiryStr);
+            expiryDate.setHours(23, 59, 59, 999);
+            if (today > expiryDate) {
+              return false; // Access expired
             }
           }
         }
-        return true;
       }
+      return true;
     }
+  }
+
+  // 6. Paid or restricted courses require enrollment/purchase
+  if (course.isRestricted || (course.price !== undefined && course.price > 0)) {
     return false;
   }
 
-  // 5. Public courses (isRestricted is false or undefined) are accessible to anyone
   return true;
 }

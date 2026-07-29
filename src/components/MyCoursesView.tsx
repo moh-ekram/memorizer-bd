@@ -871,17 +871,25 @@ export default function MyCoursesView({
            c.description.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  const enrolledCoursesList = matchingSearchCourses.filter(c => isCourseAccessible(c, enrolledCourseIds, user?.email));
-  const lockedCoursesList = matchingSearchCourses.filter(c => !isCourseAccessible(c, enrolledCourseIds, user?.email));
+  const enrolledCoursesList = matchingSearchCourses.filter(c => {
+    const normId = c.id.trim().toLowerCase();
+    const isActive = normId === activeCourseId?.trim().toLowerCase();
+    const isEnrolled = isCourseEnrolled(c.id, enrolledCourseIds);
+    const isAccessible = isCourseAccessible(c, enrolledCourseIds, user?.email);
+    return isActive || isEnrolled || isAccessible;
+  });
 
-  // Sort enrolled courses so active course is ALWAYS FIRST at the top left position
+  const enrolledCourseIdSet = new Set(enrolledCoursesList.map(c => c.id.trim().toLowerCase()));
+  const lockedCoursesList = matchingSearchCourses.filter(c => !enrolledCourseIdSet.has(c.id.trim().toLowerCase()));
+
+  // Sort enrolled courses so active course is ALWAYS FIRST at the top position
   const activeCourseObj = enrolledCoursesList.find(c => c.id.trim().toLowerCase() === activeCourseId?.trim().toLowerCase());
   const otherEnrolledCourses = enrolledCoursesList.filter(c => c.id.trim().toLowerCase() !== activeCourseId?.trim().toLowerCase());
   const sortedEnrolledCourses = activeCourseObj ? [activeCourseObj, ...otherEnrolledCourses] : enrolledCoursesList;
 
   const renderCourseCard = (course: Course) => {
     const isActive = course.id.trim().toLowerCase() === activeCourseId?.trim().toLowerCase();
-    const isUserAllowed = isCourseAccessible(course, enrolledCourseIds, user?.email);
+    const isUserAllowed = isCourseAccessible(course, enrolledCourseIds, user?.email) || isActive;
     const wordsCount = course.words?.length || 0;
 
     const courseWords = course.words || [];
@@ -931,142 +939,95 @@ export default function MyCoursesView({
         }`}
         style={{ fontFamily: "'Poppins', sans-serif" }}
       >
-        {/* Left Side: Course Info & Title & Progress */}
-        <div className="flex-1 min-w-0 space-y-2 w-full">
-          {/* Active / Status Badge Header */}
-          <div className="flex items-center gap-2">
-            {isActive ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider text-white bg-black/20 border border-white/20 shadow-2xs">
-                <span className="w-2 h-2 rounded-full bg-white inline-block animate-pulse" />
-                ACTIVE COURSE
-              </span>
-            ) : isUserAllowed ? (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-white bg-white/15 border border-white/25">
-                ENROLLED
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-slate-900 bg-black/10 border border-black/10">
-                AVAILABLE
-              </span>
-            )}
-          </div>
-
-          {/* Course Title */}
-          <h3 className={`text-base sm:text-lg font-extrabold tracking-tight leading-snug font-poppins ${
-            !isUserAllowed ? 'text-slate-950' : 'text-white'
-          }`}>
-            {course.title}
-          </h3>
-
-          {/* Progress Bar & Word Count (No tags, no lifetime access badge) */}
-          <div className="space-y-1 max-w-md">
-            <div className={`flex items-center justify-between text-xs font-bold font-poppins ${
-              !isUserAllowed ? 'text-slate-900' : 'text-white/90'
-            }`}>
-              <span>{masteredCount > 0 ? `Mastered: ${masteredCount}/${wordsCount}` : `${wordsCount} words`}</span>
-              <span className="font-black">{progressPercent}%</span>
-            </div>
-
-            <div className={`w-full h-2 rounded-full overflow-hidden ${
-              !isUserAllowed ? 'bg-black/15' : 'bg-black/20'
-            }`}>
-              <div 
-                className={`h-full rounded-full transition-all duration-500 ${
-                  !isUserAllowed ? 'bg-slate-950' : 'bg-white'
-                }`}
-                style={{ width: `${progressPercent}%` }} 
-              />
-            </div>
+        {/* Left Side: Badge Box (30 Tk) */}
+        <div className={`w-16 sm:w-20 h-16 sm:h-20 rounded-2xl flex flex-col items-center justify-center shrink-0 shadow-xs text-center font-poppins px-1 ${
+          isActive 
+            ? 'bg-[#E2F297] text-[#2B5232]' 
+            : isUserAllowed 
+            ? 'bg-[#F8C6D8] text-[#582E4B]' 
+            : 'bg-[#F8F29A] text-[#822B0C]'
+        }`}>
+          <div className="flex items-baseline justify-center gap-0.5 font-poppins leading-none">
+            <span className="text-2xl sm:text-3xl font-black tracking-tight leading-none">
+              {(course.price !== undefined && course.price >= 0) ? course.price : 30}
+            </span>
+            <span className="text-[10px] sm:text-xs font-black uppercase leading-none">
+              TK
+            </span>
           </div>
         </div>
 
-        {/* Right / Bottom Side: Price (without front icon) & Action Buttons */}
-        <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center w-full sm:w-auto pt-2.5 sm:pt-0 border-t sm:border-t-0 border-white/20 gap-3 shrink-0">
-          {/* Price display without front currency icon */}
-          <div className="flex items-baseline gap-1 font-poppins">
-            <span className={`text-xl sm:text-2xl font-black tracking-tight ${
-              !isUserAllowed ? 'text-slate-950' : 'text-white'
-            }`}>
-              {(course.price && course.price > 0) ? course.price : 30}
-            </span>
-            <span className={`text-xs font-extrabold ${
-              !isUserAllowed ? 'text-slate-900/80' : 'text-white/80'
-            }`}>
-              Tk
-            </span>
+        {/* Middle Side: Course Info & Title */}
+        <div className="flex-1 min-w-0 space-y-1 w-full font-poppins">
+          <h3 className="text-base sm:text-lg font-extrabold text-white leading-tight font-poppins truncate max-w-[220px] sm:max-w-md" title={course.title}>
+            {course.title}
+          </h3>
+
+          <div className="text-xs font-bold text-white/95 font-poppins">
+            Total {wordsCount} Words
           </div>
 
-          {/* Action Buttons Row */}
-          <div className="flex items-center gap-2">
-            {isActive ? (
+          <div className="text-[10.5px] font-medium text-white/85 font-poppins tracking-wide">
+            Flashcard-PDF-Story-Games
+          </div>
+        </div>
+
+        {/* Right Side: Divider Line & Action Button */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0 self-center">
+          <div className="h-10 sm:h-12 w-[1.5px] bg-white/25 shrink-0" />
+
+          {isActive ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveCourseId(course.id);
+                if (onSelectTab) onSelectTab('flashcard');
+              }}
+              className="font-black italic text-xs sm:text-sm text-white tracking-wider hover:scale-105 active:scale-95 transition cursor-pointer shrink-0 uppercase px-1 py-2"
+            >
+              STUDY NOW
+            </button>
+          ) : isUserAllowed ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveCourseId(course.id);
+                setActiveCourseToast(`Activated "${course.title}" course!`);
+                setTimeout(() => setActiveCourseToast(null), 2500);
+              }}
+              className="font-black italic text-xs sm:text-sm text-white tracking-wider hover:scale-105 active:scale-95 transition cursor-pointer shrink-0 uppercase px-1 py-2"
+            >
+              SET ACTIVE
+            </button>
+          ) : (
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setActiveCourseId(course.id);
-                  if (onSelectTab) onSelectTab('flashcard');
+                  setIsCartCheckoutMode(false);
+                  setSelectedBuyCourse(course);
                 }}
-                className="bg-white hover:bg-slate-100 active:scale-98 text-[#10705c] font-black text-xs sm:text-sm px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-md transition cursor-pointer font-poppins shrink-0"
+                className="font-black italic text-xs sm:text-sm text-white tracking-wider hover:scale-105 active:scale-95 transition cursor-pointer shrink-0 uppercase px-1 py-2"
               >
-                <span>Study Now</span>
-                <ArrowRight className="w-4 h-4 stroke-[3]" />
+                BUY NOW
               </button>
-            ) : isUserAllowed ? (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveCourseId(course.id);
-                    setActiveCourseToast(`Activated "${course.title}" course!`);
-                    setTimeout(() => setActiveCourseToast(null), 2500);
-                  }}
-                  className="bg-white/20 hover:bg-white/30 text-white font-black text-xs sm:text-sm px-3 py-2 rounded-xl border border-white/30 transition cursor-pointer font-poppins shrink-0"
-                >
-                  Set Active
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveCourseId(course.id);
-                    if (onSelectTab) onSelectTab('flashcard');
-                  }}
-                  className="bg-white hover:bg-slate-100 active:scale-98 text-[#3539a3] font-black text-xs sm:text-sm px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-md transition cursor-pointer font-poppins shrink-0"
-                >
-                  <span>Study</span>
-                  <ArrowRight className="w-4 h-4 stroke-[3]" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsCartCheckoutMode(false);
-                    setSelectedBuyCourse(course);
-                  }}
-                  className="bg-slate-950 hover:bg-slate-800 active:scale-98 text-white font-black text-xs sm:text-sm px-4 py-2 rounded-xl shadow-md flex items-center gap-1.5 transition cursor-pointer font-poppins"
-                >
-                  <span>Buy Now</span>
-                  <ArrowRight className="w-4 h-4 stroke-[3]" />
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => toggleCartCourse(course, e)}
-                  className={`p-2.5 rounded-xl text-xs font-bold transition border shadow-2xs ${
-                    cart.some(c => c.id === course.id)
-                      ? 'bg-slate-950 text-white border-slate-900'
-                      : 'bg-black/10 text-slate-950 border-black/15 hover:bg-black/20'
-                  }`}
-                  title={cart.some(c => c.id === course.id) ? "Remove from Cart" : "Add to Cart"}
-                >
-                  <ShoppingBag className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-          </div>
+              <button
+                type="button"
+                onClick={(e) => toggleCartCourse(course, e)}
+                className={`p-1.5 rounded-lg text-xs font-bold transition ${
+                  cart.some(c => c.id === course.id)
+                    ? 'bg-white text-orange-600'
+                    : 'bg-white/15 text-white hover:bg-white/25'
+                }`}
+                title={cart.some(c => c.id === course.id) ? "Remove from Cart" : "Add to Cart"}
+              >
+                <ShoppingBag className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       </motion.div>
     );
@@ -1089,64 +1050,48 @@ export default function MyCoursesView({
         )}
       </AnimatePresence>
 
-      {/* Minimalist Wallet Balance Card */}
+      {/* Account Balance Wallet Card */}
       <div className="flex justify-start sm:justify-start font-poppins">
-        <div className="bg-[#f4f4f7] border border-slate-200/80 rounded-[28px] p-5 sm:p-6 text-slate-900 shadow-sm flex flex-col justify-between shrink-0 min-w-[280px] sm:min-w-[340px] font-poppins transition-all hover:shadow-md" style={{ fontFamily: "'Poppins', sans-serif" }}>
+        <div className="bg-gradient-to-r from-[#5C53E4] via-[#675DE8] to-[#7B71F3] rounded-[24px] p-5 sm:p-6 text-white shadow-md flex items-center justify-between max-w-md w-full font-poppins">
           
-          {/* Top Label & Balance Row */}
-          <div>
-            <span className="text-[10px] sm:text-[10.5px] font-bold tracking-widest text-slate-400 uppercase font-poppins block mb-1">
-              ACCOUNT BALANCE:
-            </span>
+          <div className="space-y-1">
+            <div className="text-xs sm:text-sm font-semibold text-white/95 font-poppins">
+              Account Balance
+            </div>
 
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight font-poppins">
-                {showWalletBalance ? `৳${userWalletBalance.toLocaleString('en-BD')}` : '••••••'}
-              </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl sm:text-4xl font-black italic tracking-tight text-white font-poppins">
+                {showWalletBalance ? userWalletBalance.toLocaleString('en-BD') : '••••'}
+              </span>
+              <span className="text-base sm:text-lg font-black italic text-white/95 font-poppins">
+                Tk
+              </span>
 
-              {/* Eye Toggle Button */}
               <button
                 type="button"
                 onClick={() => setShowWalletBalance(!showWalletBalance)}
-                className="w-9 h-9 rounded-full bg-white hover:bg-slate-50 text-slate-600 border border-slate-200/80 shadow-2xs flex items-center justify-center transition cursor-pointer shrink-0"
+                className="ml-2.5 text-white/70 hover:text-white transition cursor-pointer p-0.5 inline-flex items-center"
                 title={showWalletBalance ? "Hide Balance" : "Show Balance"}
               >
                 {showWalletBalance ? (
-                  <Eye className="w-4 h-4 text-slate-600" />
+                  <Eye className="w-4 h-4 text-white/80" />
                 ) : (
-                  <EyeOff className="w-4 h-4 text-slate-600" />
+                  <EyeOff className="w-4 h-4 text-white/80" />
                 )}
               </button>
             </div>
           </div>
 
-          {/* Action Buttons Row: Recharge */}
-          <div className="flex items-center gap-2.5 mt-5">
-            <button
-              type="button"
-              onClick={() => {
-                setIsRechargeModalOpen(true);
-                setRechargeMessage(null);
-              }}
-              className="bg-[#1c1c1e] hover:bg-slate-800 active:scale-98 text-white rounded-full px-5 py-2.5 text-xs font-extrabold flex items-center gap-1.5 shadow-md transition cursor-pointer font-poppins"
-            >
-              <ArrowUpRight className="w-4 h-4 stroke-[2.5]" />
-              <span>Recharge</span>
-            </button>
-
-            {/* More Options Button */}
-            <button
-              type="button"
-              onClick={() => {
-                setIsRechargeModalOpen(true);
-                setRechargeMessage(null);
-              }}
-              className="w-10 h-10 rounded-full bg-white hover:bg-slate-50 border border-slate-200/80 text-slate-700 font-black flex items-center justify-center shadow-2xs transition cursor-pointer shrink-0"
-              title="More Wallet Options"
-            >
-              <MoreHorizontal className="w-4 h-4 text-slate-600" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setIsRechargeModalOpen(true);
+              setRechargeMessage(null);
+            }}
+            className="bg-[#2B2251] hover:bg-[#211942] active:scale-95 text-white font-extrabold text-xs sm:text-sm px-6 py-2.5 rounded-2xl shadow-md transition cursor-pointer font-poppins shrink-0"
+          >
+            Recharge
+          </button>
 
         </div>
       </div>
@@ -1168,78 +1113,46 @@ export default function MyCoursesView({
         </div>
       )}
 
-      {/* 3. Multi-Layer Course Cards Layout */}
-      <div className="space-y-8" id="courses-grid-container">
-        {/* Layer 1: Enrolled / Active Courses */}
-        {(filter === 'all' || filter === 'enrolled') && (
+      {/* 3. Multi-Layer Course Cards Layout matching Screenshot */}
+      <div className="space-y-6" id="courses-grid-container">
+        
+        {/* Top Active Course Card (Green) */}
+        {activeCourseObj && (
+          <div className="space-y-3" id="active-course-section">
+            {renderCourseCard(activeCourseObj)}
+          </div>
+        )}
+
+        {/* Middle Enrolled Courses Section (Purple) */}
+        {otherEnrolledCourses.length > 0 && (
           <div className="space-y-3" id="enrolled-courses-section">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-black uppercase tracking-wider text-emerald-900 flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span>My Active & Enrolled Courses ({sortedEnrolledCourses.length})</span>
-              </h3>
+            <div className="flex justify-center my-3">
+              <span className="bg-[#784968] text-white font-extrabold text-xs px-6 py-1.5 rounded-full shadow-xs border border-white/20 tracking-wide font-poppins">
+                Enrolled Courses
+              </span>
             </div>
 
-            {sortedEnrolledCourses.length > 0 ? (
-              <div className="grid grid-cols-1 gap-3">
-                {sortedEnrolledCourses.map(course => renderCourseCard(course))}
-              </div>
-            ) : (
-              <div className="p-6 bg-emerald-50/50 rounded-2xl border border-dashed border-emerald-200 text-center text-xs text-emerald-800 font-medium">
-                No active/enrolled courses found.
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Divider with "Buy New Course" Button */}
-        {filter === 'all' && (
-          <div className="relative my-8 py-2 flex items-center justify-center">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t-2 border-slate-300/80" />
-            </div>
-            <div className="relative bg-slate-50 px-4 rounded-full">
-              <button
-                type="button"
-                onClick={() => {
-                  const el = document.getElementById('locked-courses-section');
-                  if (el) {
-                    el.scrollIntoView({ behavior: 'smooth' });
-                  } else {
-                    setIsCartOpen(true);
-                  }
-                }}
-                className="px-6 py-2.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white font-black text-xs sm:text-sm rounded-full shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 flex items-center gap-2 cursor-pointer border-2 border-white uppercase tracking-wider"
-              >
-                <ShoppingBag className="w-4 h-4" />
-                <span>Buy New Course</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+            <div className="grid grid-cols-1 gap-3">
+              {otherEnrolledCourses.map(course => renderCourseCard(course))}
             </div>
           </div>
         )}
 
-        {/* Layer 2: Locked Courses (Orange Theme) */}
-        {(filter === 'all' || filter === 'locked') && (
+        {/* Bottom Buy New Course Section (Orange) */}
+        {lockedCoursesList.length > 0 && (
           <div className="space-y-3" id="locked-courses-section">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-black uppercase tracking-wider text-orange-950 flex items-center gap-2">
-                <Lock className="w-3.5 h-3.5 text-orange-600" />
-                <span>Locked / Available Courses ({lockedCoursesList.length})</span>
-              </h3>
+            <div className="flex justify-center my-5">
+              <span className="bg-[#EF5826] text-white font-extrabold text-xs px-7 py-2 rounded-full shadow-xs border border-white/20 tracking-wide font-poppins uppercase">
+                Buy New Course
+              </span>
             </div>
 
-            {lockedCoursesList.length > 0 ? (
-              <div className="grid grid-cols-1 gap-3">
-                {lockedCoursesList.map(course => renderCourseCard(course))}
-              </div>
-            ) : (
-              <div className="p-6 bg-orange-50/50 rounded-2xl border border-dashed border-orange-200 text-center text-xs text-orange-800 font-medium">
-                No locked courses found.
-              </div>
-            )}
+            <div className="grid grid-cols-1 gap-3">
+              {lockedCoursesList.map(course => renderCourseCard(course))}
+            </div>
           </div>
         )}
+
       </div>
 
       {/* Global Empty State */}

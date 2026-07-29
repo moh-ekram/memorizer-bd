@@ -1223,16 +1223,16 @@ export default function App() {
   const defaultGreCourse: Course = {
     ...(dbGreCourse || {}),
     id: dbGreCourse?.id || 'gre',
-    title: dbGreCourse?.title || 'BARC Vocabulary Book',
-    description: dbGreCourse?.description || '38 Groups containing 1100 Barron\'s Word Preparation Course (Default)',
+    title: dbGreCourse?.title || 'Free Vocabularies',
+    description: dbGreCourse?.description || 'Core 1100 Vocabulary Preparation Course (Free & Unlocked)',
     totalGroups: dbGreCourse?.totalGroups || (dbGreCourse?.words && dbGreCourse.words.length > 0 ? new Set(dbGreCourse.words.map(w => w.group)).size : 37),
     words: (dbGreCourse?.words && dbGreCourse.words.length > 0) ? dbGreCourse.words : vocabulary,
     stories: dbGreCourse?.stories || [],
     enabledGames: dbGreCourse?.enabledGames || { quiz: true, match: true, synonym: true, blank: true, story: true },
-    isDefault: dbGreCourse !== undefined ? dbGreCourse.isDefault : true,
-    isRestricted: dbGreCourse?.isRestricted || false,
+    isDefault: true,
+    isRestricted: false,
     allowedUsers: dbGreCourse?.allowedUsers || [],
-    price: (dbGreCourse?.price && dbGreCourse.price > 0) ? dbGreCourse.price : 30,
+    price: 0,
     bkashNumber: (dbGreCourse?.bkashNumber && dbGreCourse.bkashNumber !== '01700000000' && dbGreCourse.bkashNumber.trim() !== '') ? dbGreCourse.bkashNumber : '01581624202',
     googleSearchQuery: dbGreCourse?.googleSearchQuery || '',
     createdAt: dbGreCourse?.createdAt || new Date('2026-01-01').toISOString(),
@@ -1250,9 +1250,10 @@ export default function App() {
     const cIdLower = c.id.trim().toLowerCase();
     if (!seenCourseIds.has(cIdLower)) {
       seenCourseIds.add(cIdLower);
+      const isFreeCourse = c.isDefault || cIdLower === 'gre' || c.price === 0;
       allCourses.push({
         ...c,
-        price: (c.price && c.price > 0) ? c.price : 30,
+        price: isFreeCourse ? 0 : (c.price !== undefined ? c.price : 30),
         bkashNumber: (c.bkashNumber && c.bkashNumber !== '01700000000' && c.bkashNumber.trim() !== '') ? c.bkashNumber : '01581624202'
       });
     }
@@ -1261,19 +1262,30 @@ export default function App() {
   allCourses.sort((a, b) => (a.order !== undefined ? a.order : 999) - (b.order !== undefined ? b.order : 999));
   const allAvailableCourses: Course[] = allCourses;
 
-  // Keep users active in a valid course by default so it does not remain empty
+  // Keep users enrolled and active in default free course if no courses are enrolled
   useEffect(() => {
     if (!allCourses || allCourses.length === 0) return;
-    const normActiveId = activeCourseId?.trim().toLowerCase();
-    const selectedCourse = allCourses.find(c => c.id.trim().toLowerCase() === normActiveId);
 
-    if (!activeCourseId || !selectedCourse) {
-      const fallbackId = enrolledCourseIds[0] || allCourses[0]?.id || 'gre';
-      if (fallbackId !== activeCourseId) {
-        setActiveCourseId(fallbackId);
+    const defaultCourseObj = allCourses.find(c => c.isDefault || c.id.trim().toLowerCase() === 'gre') || allCourses[0];
+    const defaultCourseId = defaultCourseObj.id;
+
+    setEnrolledCourseIds(prev => {
+      if (!prev || prev.length === 0) {
+        return [defaultCourseId];
       }
+      if (!prev.some(id => id.trim().toLowerCase() === defaultCourseId.trim().toLowerCase())) {
+        return [defaultCourseId, ...prev];
+      }
+      return prev;
+    });
+
+    const normActiveId = activeCourseId?.trim().toLowerCase();
+    const activeCourseObj = allCourses.find(c => c.id.trim().toLowerCase() === normActiveId);
+
+    if (!activeCourseId || !activeCourseObj) {
+      setActiveCourseId(defaultCourseId);
     }
-  }, [enrolledCourseIds, activeCourseId, allCourses]);
+  }, [allCourses]);
 
   const handleImportCourse = (course: Course) => {
     setImportedCourses(prev => {
