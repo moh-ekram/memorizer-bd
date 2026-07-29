@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   BookOpen, Sparkles, GraduationCap, Trophy, ShieldCheck, 
   CheckCircle2, LogIn, UserPlus, Mail, Lock, ArrowRight, 
@@ -13,21 +13,40 @@ import {
   GoogleAuthProvider, 
   signInWithPopup 
 } from '../lib/firebase';
-import { Course } from '../types';
+import { Course, AppSettings } from '../types';
 import MyCoursesView from './MyCoursesView';
 
 interface LandingHomePageProps {
   onAuthSuccess: () => void;
   courses: Course[];
   onImportCourse?: (course: Course) => void;
+  settings?: AppSettings;
 }
 
-export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse }: LandingHomePageProps) {
+export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse, settings }: LandingHomePageProps) {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Course Displayer 2-Second Rotation logic
+  const displayerCoursesList = (settings?.landingDisplayCourses && settings.landingDisplayCourses.length > 0)
+    ? settings.landingDisplayCourses
+    : ['BCS', 'GRE', 'IELTS', 'Bank Job', 'Primary Teacher', 'Basic Vocab'];
+
+  const [currentCourseIdx, setCurrentCourseIdx] = useState(0);
+
+  useEffect(() => {
+    if (displayerCoursesList.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentCourseIdx((prev) => (prev + 1) % displayerCoursesList.length);
+    }, 2000); // 2 seconds per course display switch
+
+    return () => clearInterval(interval);
+  }, [displayerCoursesList]);
+
+  const activeCourseName = displayerCoursesList[currentCourseIdx % displayerCoursesList.length] || '';
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,18 +168,36 @@ export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse
           <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-bold">
               <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
-              <span>স্মার্ট ৩ডি ফ্ল্যাশকার্ড ও গেমিফাইড ভোকেবুলারি লার্নিং</span>
+              <span>{settings?.landingBadgeText || "স্মার্ট ৩ডি ফ্ল্যাশকার্ড ও গেমিফাইড ভোকেবুলারি লার্নিং"}</span>
             </div>
 
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-white leading-tight tracking-tight">
-              সহজে শব্দ মনে রাখুন, <br />
-              <span className="bg-gradient-to-r from-indigo-400 via-emerald-300 to-teal-400 bg-clip-text text-transparent">
-                কোর্স ইনরোল করে প্রস্তুতি নিন
+              {settings?.landingHeadlineMain || "সহজে শব্দ মনে রাখুন,"} <br />
+              <span className="flex flex-wrap items-center gap-2">
+                {activeCourseName && (
+                  <span className="inline-block relative overflow-hidden bg-gradient-to-r from-indigo-400 via-emerald-300 to-teal-300 bg-clip-text text-transparent transition-all duration-300">
+                    <AnimatePresence mode="wait">
+                      <motion.span
+                        key={activeCourseName}
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                        transition={{ duration: 0.3, ease: "easeOut" }}
+                        className="inline-block"
+                      >
+                        {activeCourseName}
+                      </motion.span>
+                    </AnimatePresence>
+                  </span>
+                )}
+                <span className="bg-gradient-to-r from-indigo-300 via-teal-200 to-emerald-400 bg-clip-text text-transparent">
+                  {settings?.landingCourseSuffix || "কোর্স ইনরোল করে প্রস্তুতি নিন"}
+                </span>
               </span>
             </h1>
 
             <p className="text-sm md:text-base text-slate-300 font-medium max-w-2xl mx-auto lg:mx-0 leading-relaxed">
-              GRE, BCS, IELTS, Bank Job কিংবা সাধারণ ইংরেজি শব্দভাণ্ডার সমৃদ্ধ করতে নিয়ে এলাম অল-ইন-ওয়ান মেমোরাইজার প্ল্যাটফর্ম। ফ্ল্যাশকার্ড, কুইজ, ভয়েস প্রোনাউনসিয়েশন এবং বিভিন্ন গেমের মাধ্যমে শব্দ শিখুন আনন্দ নিয়ে।
+              {settings?.landingDescription || "GRE, BCS, IELTS, Bank Job কিংবা সাধারণ ইংরেজি শব্দভাণ্ডার সমৃদ্ধ করতে নিয়ে এলাম অল-ইন-ওয়ান মেমোরাইজার প্ল্যাটফর্ম। ফ্ল্যাশকার্ড, কুইজ, ভয়েস প্রোনাউনসিয়েশন এবং বিভিন্ন গেমের মাধ্যমে শব্দ শিখুন আনন্দ নিয়ে।"}
             </p>
 
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-2">
@@ -168,18 +205,18 @@ export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse
                 onClick={scrollToAuth}
                 className="px-6 py-3.5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-black text-sm rounded-2xl shadow-xl shadow-indigo-600/25 flex items-center gap-2 transition cursor-pointer"
               >
-                <span>পড়াশোনা শুরু করুন</span>
+                <span>{settings?.landingStartBtnText || "পড়াশোনা শুরু করুন"}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
 
               <div className="flex items-center gap-4 text-xs font-bold text-slate-400 px-4 py-2 bg-slate-800/60 border border-slate-700/60 rounded-2xl">
                 <div className="flex items-center gap-1.5 text-emerald-400">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>অফলাইন সাপোর্ট</span>
+                  <span>{settings?.landingFeature1 || "অফলাইন সাপোর্ট"}</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-amber-400">
                   <Flame className="w-4 h-4" />
-                  <span>লাইভ লিডারবোর্ড</span>
+                  <span>{settings?.landingFeature2 || "লাইভ লিডারবোর্ড"}</span>
                 </div>
               </div>
             </div>
@@ -187,16 +224,16 @@ export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse
             {/* Platform Stats Row */}
             <div className="grid grid-cols-3 gap-4 pt-6 border-t border-slate-800/80">
               <div>
-                <p className="text-xl sm:text-2xl font-black text-white font-mono">৩,০০০+</p>
-                <p className="text-[11px] text-slate-400 font-bold">গুরুত্বপূর্ণ ভোকাব</p>
+                <p className="text-xl sm:text-2xl font-black text-white font-mono">{settings?.landingStat1Num || "৩,০০০+"}</p>
+                <p className="text-[11px] text-slate-400 font-bold">{settings?.landingStat1Label || "গুরুত্বপূর্ণ ভোকাব"}</p>
               </div>
               <div>
-                <p className="text-xl sm:text-2xl font-black text-emerald-400 font-mono">৬টি+</p>
-                <p className="text-[11px] text-slate-400 font-bold">ইন্টারঅ্যাক্টিভ গেম</p>
+                <p className="text-xl sm:text-2xl font-black text-emerald-400 font-mono">{settings?.landingStat2Num || "৬টি+"}</p>
+                <p className="text-[11px] text-slate-400 font-bold">{settings?.landingStat2Label || "ইন্টারঅ্যাক্টিভ গেম"}</p>
               </div>
               <div>
-                <p className="text-xl sm:text-2xl font-black text-indigo-400 font-mono">১০০%</p>
-                <p className="text-[11px] text-slate-400 font-bold">ক্লাউড সিঙ্ক</p>
+                <p className="text-xl sm:text-2xl font-black text-indigo-400 font-mono">{settings?.landingStat3Num || "১০০%"}</p>
+                <p className="text-[11px] text-slate-400 font-bold">{settings?.landingStat3Label || "ক্লাউড সিঙ্ক"}</p>
               </div>
             </div>
           </div>

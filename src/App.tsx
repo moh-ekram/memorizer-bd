@@ -359,7 +359,25 @@ export default function App() {
 
       // Item Position & Order Defaults
       practiceItemsOrder: parsed.practiceItemsOrder || ['quiz', 'match', 'synonym', 'blank', 'odd_one_out', 'analogy'],
-      studyToolsItemsOrder: parsed.studyToolsItemsOrder || ['lists', 'dictionary', 'planner', 'story']
+      studyToolsItemsOrder: parsed.studyToolsItemsOrder || ['lists', 'dictionary', 'planner', 'story'],
+
+      // Starting Page Customization & Course Displayer
+      landingBadgeText: parsed.landingBadgeText || 'স্মার্ট ৩ডি ফ্ল্যাশকার্ড ও গেমিফাইড ভোকেবুলারি লার্নিং',
+      landingHeadlineMain: parsed.landingHeadlineMain || 'সহজে শব্দ মনে রাখুন,',
+      landingCourseSuffix: parsed.landingCourseSuffix || 'কোর্স ইনরোল করে প্রস্তুতি নিন',
+      landingDescription: parsed.landingDescription || 'GRE, BCS, IELTS, Bank Job কিংবা সাধারণ ইংরেজি শব্দভাণ্ডার সমৃদ্ধ করতে নিয়ে এলাম অল-ইন-ওয়ান মেমোরাইজার প্ল্যাটফর্ম। ফ্ল্যাশকার্ড, কুইজ, ভয়েস প্রোনাউনসিয়েশন এবং বিভিন্ন গেমের মাধ্যমে শব্দ শিখুন আনন্দ নিয়ে।',
+      landingStartBtnText: parsed.landingStartBtnText || 'পড়াশোনা শুরু করুন',
+      landingFeature1: parsed.landingFeature1 || 'অফলাইন সাপোর্ট',
+      landingFeature2: parsed.landingFeature2 || 'লাইভ লিডারবোর্ড',
+      landingStat1Num: parsed.landingStat1Num || '৩,০০০+',
+      landingStat1Label: parsed.landingStat1Label || 'গুরুত্বপূর্ণ ভোকাব',
+      landingStat2Num: parsed.landingStat2Num || '৬টি+',
+      landingStat2Label: parsed.landingStat2Label || 'ইন্টারঅ্যাক্টিভ গেম',
+      landingStat3Num: parsed.landingStat3Num || '১০০%',
+      landingStat3Label: parsed.landingStat3Label || 'ক্লাউড সিঙ্ক',
+      landingDisplayCourses: Array.isArray(parsed.landingDisplayCourses) && parsed.landingDisplayCourses.length > 0 
+        ? parsed.landingDisplayCourses 
+        : ['BCS', 'GRE', 'IELTS', 'Bank Job', 'Primary Teacher', 'Basic Vocab']
     };
   });
 
@@ -1637,6 +1655,7 @@ export default function App() {
         }} 
         courses={allAvailableCourses} 
         onImportCourse={handleImportCourse}
+        settings={settings}
       />
     );
   }

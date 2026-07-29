@@ -81,6 +81,22 @@ export interface AppSettings {
   // Item Position & Ordering Settings
   practiceItemsOrder?: string[];
   studyToolsItemsOrder?: string[];
+
+  // Starting Page / Landing Customization & Course Displayer
+  landingBadgeText?: string;
+  landingHeadlineMain?: string;
+  landingCourseSuffix?: string;
+  landingDescription?: string;
+  landingStartBtnText?: string;
+  landingFeature1?: string;
+  landingFeature2?: string;
+  landingStat1Num?: string;
+  landingStat1Label?: string;
+  landingStat2Num?: string;
+  landingStat2Label?: string;
+  landingStat3Num?: string;
+  landingStat3Label?: string;
+  landingDisplayCourses?: string[];
 }
 
 export interface SyncLogEntry {
