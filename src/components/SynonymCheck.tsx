@@ -230,30 +230,59 @@ export default function SynonymCheck({
     extraMeaning: ''
   };
 
-  // Generate options (2 correct synonyms + 4 distractors) whenever active word shifts
+  // Generate options (2 correct answers + 4 distractors) whenever active word shifts
   useEffect(() => {
     if (!currentActiveWord || !currentActiveWord.id) return;
 
     clearAutoAdvanceTimer();
 
-    const correct = getSynonymsList(currentActiveWord);
+    // Extract place3 and place2 from word
+    const p3Raw = (currentActiveWord as any).place3 || currentActiveWord.synonyms || currentActiveWord.example || '';
+    const p2Raw = (currentActiveWord as any).place2 || currentActiveWord.meaning || '';
+
+    const p3List = p3Raw.split(/[,;|]/).map((s: string) => s.trim()).filter(Boolean);
+    const p2List = p2Raw.split(/[,;|]/).map((s: string) => s.trim()).filter(Boolean);
+
+    let correct: string[] = [];
+    if (p3List.length >= 2) {
+      correct = [p3List[0], p3List[1]];
+    } else if (p3List.length === 1) {
+      const p2Word = p2List[0] || 'meaning';
+      correct = [p2Word, p3List[0]];
+    } else {
+      const w1 = p2List[0] || currentActiveWord.word;
+      const w2 = p2List[1] || 'synonym';
+      correct = [w1, w2];
+    }
+
     setCorrectAnswers(correct);
     setSelectedAnswers([]);
     setIsSubmitted(false);
 
-    // Generate options pool
-    const allSynonyms = getAllSynonymsPool();
+    // Build distractor pool from place3 and place2 of all other words
+    const distractorPool: string[] = [];
+    words.forEach(w => {
+      if (w.id === currentActiveWord.id) return;
+      const wP3 = (w as any).place3 || w.synonyms || w.example || '';
+      const wP2 = (w as any).place2 || w.meaning || '';
+      wP3.split(/[,;|]/).map((s: string) => s.trim()).filter(Boolean).forEach((s: string) => {
+        if (s && !distractorPool.includes(s)) distractorPool.push(s);
+      });
+      wP2.split(/[,;|]/).map((s: string) => s.trim()).filter(Boolean).forEach((s: string) => {
+        if (s && !distractorPool.includes(s)) distractorPool.push(s);
+      });
+    });
+
     const lowercaseCorrect = correct.map(c => c.toLowerCase());
-    const possibleDistractors = allSynonyms.filter(syn => 
-      !lowercaseCorrect.includes(syn.toLowerCase()) && 
-      syn.toLowerCase() !== currentActiveWord.word.toLowerCase()
+    const possibleDistractors = distractorPool.filter(item => 
+      !lowercaseCorrect.includes(item.toLowerCase()) && 
+      item.toLowerCase() !== currentActiveWord.word.toLowerCase()
     );
 
     // Pick 4 random unique distractors
     const shuffledDistractors = [...possibleDistractors].sort(() => Math.random() - 0.5);
     const distractors = shuffledDistractors.slice(0, 4);
 
-    // Emergency fallbacks if not enough distractors (e.g. at least 4 are needed)
     const emergencyDistractors = ['beneficial', 'harmful', 'persistent', 'elated', 'abundant', 'surpass', 'diligent', 'adversity', 'profound', 'vivid'];
     while (distractors.length < 4) {
       const item = emergencyDistractors[Math.floor(Math.random() * emergencyDistractors.length)];
@@ -262,14 +291,14 @@ export default function SynonymCheck({
       }
     }
 
-    // Combine and shuffle options
+    // Combine 2 correct answers + 4 distractors into 6 total options and shuffle
     const options = [...correct, ...distractors].sort(() => Math.random() - 0.5);
     setCurrentOptions(options);
 
     return () => {
       clearAutoAdvanceTimer();
     };
-  }, [currentActiveWord?.id]);
+  }, [currentActiveWord?.id, words]);
 
   // Autoplay voice pronunciation if enabled
   useEffect(() => {
@@ -756,6 +785,32 @@ export default function SynonymCheck({
           </div>
         </div>
       )}
+
+      {/* Overall Quiz Progress Card */}
+      {(() => {
+        const totalWordsCount = words.length;
+        const completedWordsCount = words.filter(w => synonymProgress[w.id]?.correct).length;
+        const overallProgressPercent = totalWordsCount > 0 ? Math.round((completedWordsCount / totalWordsCount) * 100) : 0;
+
+        return (
+          <div className="bg-indigo-950 text-white rounded-2xl p-4 sm:p-5 shadow-md space-y-3 relative overflow-hidden font-sans">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4.5 h-4.5 text-amber-400" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Overall Quiz Progress</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4 border-t border-indigo-900 pt-3">
+              <div>
+                <span className="text-xl sm:text-2xl font-black font-sans">{completedWordsCount} / {totalWordsCount}</span>
+                <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider mt-0.5">Total Completed Words</p>
+              </div>
+              <div>
+                <span className="text-xl sm:text-2xl font-black font-sans text-emerald-400">{overallProgressPercent}%</span>
+                <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider mt-0.5">Progress Achieved</p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Empty State Guard */}
       {filteredWords.length === 0 ? (

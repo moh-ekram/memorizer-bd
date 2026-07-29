@@ -29,6 +29,7 @@ import {
   User,
   AlertCircle,
   Trophy,
+  Gamepad2,
   Settings,
   CreditCard,
   Sun,
@@ -115,7 +116,7 @@ export default function App() {
     my_courses: 'My Courses',
     flashcard: 'Flashcard',
     leaderboard: 'Leaderboard',
-    practice: 'Practice & Games',
+    practice: 'Games',
     study_tools: 'Study Tools',
     settings: 'Settings',
     admin: 'Admin Panel'
@@ -1794,8 +1795,8 @@ export default function App() {
               : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
           }`}
         >
-          <GraduationCap className="w-4 h-4" />
-          <span className="hidden md:inline">Practice & Games</span>
+          <Gamepad2 className="w-4 h-4" />
+          <span className="hidden md:inline">Games</span>
         </button>
 
         <button

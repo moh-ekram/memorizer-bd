@@ -223,7 +223,7 @@ export default function PracticeCenter({
             <div className="max-w-xl space-y-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-indigo-500/20 text-indigo-200 text-[10px] font-bold rounded-full uppercase tracking-wider border border-indigo-500/30">
-                  Practice Hub
+                  Games Hub
                 </span>
                 {confusionCount > 0 && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-amber-500/20 text-amber-300 text-[10px] font-extrabold rounded-full border border-amber-500/30">
@@ -232,7 +232,7 @@ export default function PracticeCenter({
                   </span>
                 )}
               </div>
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight">Practice & Games</h2>
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tight">Games</h2>
               <p className="text-xs text-indigo-200/80 font-medium">
                 মক টেস্ট, গেম ও অটো কুইজ দিয়ে ভোকাবুলারি দ্রুত রিভিশন দিন
               </p>

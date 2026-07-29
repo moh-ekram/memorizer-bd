@@ -297,6 +297,32 @@ export default function WordAnalogyGame({
         </div>
       </div>
 
+      {/* Overall Quiz Progress Card */}
+      {(() => {
+        const totalCount = (words && words.length > 0) ? words.length : allQuestions.length;
+        const completedCount = counts.done;
+        const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+        return (
+          <div className="bg-indigo-950 text-white rounded-2xl p-4 sm:p-5 shadow-md space-y-3 relative overflow-hidden">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4.5 h-4.5 text-amber-400" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Overall Quiz Progress</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4 border-t border-indigo-900 pt-3">
+              <div>
+                <span className="text-xl sm:text-2xl font-black font-sans">{completedCount} / {totalCount}</span>
+                <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider mt-0.5">Total Completed Words</p>
+              </div>
+              <div>
+                <span className="text-xl sm:text-2xl font-black font-sans text-emerald-400">{progressPercent}%</span>
+                <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider mt-0.5">Progress Achieved</p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {questions.length === 0 ? (
         <div className="bg-white p-12 rounded-3xl border border-slate-200/60 shadow-xs text-center space-y-4">
           <HelpCircle className="w-12 h-12 text-slate-300 mx-auto" />
@@ -375,7 +401,7 @@ export default function WordAnalogyGame({
               let btnClass = "bg-slate-50 hover:bg-slate-100/70 border-slate-200 text-slate-700 hover:border-indigo-200";
               if (isAnswered) {
                 if (isCorrect) {
-                  btnClass = "bg-emerald-50 border-emerald-300 text-emerald-700 font-black";
+                  btnClass = "bg-emerald-100 border-emerald-500 text-emerald-950 font-black";
                 } else if (isSelected) {
                   btnClass = "bg-rose-50 border-rose-300 text-rose-700 font-black";
                 } else {

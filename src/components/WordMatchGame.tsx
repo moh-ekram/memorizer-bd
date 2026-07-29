@@ -179,6 +179,32 @@ export default function WordMatchGame({ words, activeGroup, settings, onBack, pl
         <span className="text-xs font-black text-slate-600 font-sans">Practice Match Game</span>
       </div>
 
+      {/* Overall Quiz Progress Card */}
+      {(() => {
+        const totalWordsCount = words.length;
+        const completedWordsCount = matchesCount;
+        const overallProgressPercent = totalWordsCount > 0 ? Math.round((completedWordsCount / totalWordsCount) * 100) : 0;
+
+        return (
+          <div className="bg-indigo-950 text-white rounded-2xl p-4 sm:p-5 shadow-md space-y-3 relative overflow-hidden">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4.5 h-4.5 text-amber-400" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Overall Quiz Progress</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4 border-t border-indigo-900 pt-3">
+              <div>
+                <span className="text-xl sm:text-2xl font-black font-sans">{completedWordsCount} / {totalWordsCount}</span>
+                <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider mt-0.5">Total Completed Words</p>
+              </div>
+              <div>
+                <span className="text-xl sm:text-2xl font-black font-sans text-emerald-400">{overallProgressPercent}%</span>
+                <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider mt-0.5">Progress Achieved</p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* 1. SETUP GAME */}
       {!isPlaying ? (
         <div className="text-center space-y-6 py-6 animate-fadeIn">
@@ -228,7 +254,7 @@ export default function WordMatchGame({ words, activeGroup, settings, onBack, pl
                   let borderStyle = 'border-slate-200/60 bg-white text-slate-700 hover:border-indigo-200 hover:shadow-xs';
 
                   if (card.isMatched) {
-                    borderStyle = 'border-indigo-500 bg-indigo-50/40 text-indigo-800 opacity-60';
+                    borderStyle = 'border-emerald-500 bg-emerald-100 text-emerald-950 font-bold';
                   } else if (isSelected) {
                     borderStyle = 'border-indigo-500 bg-indigo-50/60 text-indigo-950 font-bold shadow-xs';
                   }
@@ -241,7 +267,7 @@ export default function WordMatchGame({ words, activeGroup, settings, onBack, pl
                       className={`w-full py-4 px-4 rounded-xl border text-sm font-semibold transition text-left h-16 flex items-center justify-between ${borderStyle}`}
                     >
                       <span>{card.text}</span>
-                      {card.isMatched && <Check className="w-4 h-4 text-indigo-600 flex-shrink-0" />}
+                      {card.isMatched && <Check className="w-4 h-4 text-emerald-600 flex-shrink-0 stroke-[3]" />}
                     </button>
                   );
                 })}
@@ -255,7 +281,7 @@ export default function WordMatchGame({ words, activeGroup, settings, onBack, pl
                   let borderStyle = 'border-slate-200/60 bg-white text-slate-700 hover:border-indigo-200 hover:shadow-xs';
 
                   if (card.isMatched) {
-                    borderStyle = 'border-indigo-500 bg-indigo-50/40 text-indigo-800 opacity-60';
+                    borderStyle = 'border-emerald-500 bg-emerald-100 text-emerald-950 font-bold';
                   } else if (isSelected) {
                     borderStyle = 'border-indigo-500 bg-indigo-50/60 text-indigo-950 font-bold shadow-xs';
                   }
@@ -268,7 +294,7 @@ export default function WordMatchGame({ words, activeGroup, settings, onBack, pl
                       className={`w-full py-4 px-4 rounded-xl border text-xs sm:text-sm font-semibold transition text-left h-16 flex items-center justify-between font-sans ${borderStyle}`}
                     >
                       <span>{card.text}</span>
-                      {card.isMatched && <Check className="w-4 h-4 text-indigo-600 flex-shrink-0" />}
+                      {card.isMatched && <Check className="w-4 h-4 text-emerald-600 flex-shrink-0 stroke-[3]" />}
                     </button>
                   );
                 })}

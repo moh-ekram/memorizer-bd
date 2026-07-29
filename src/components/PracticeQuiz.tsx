@@ -255,9 +255,32 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
       )}
 
       {/* 1. SETUP GAME */}
-      {gameState === 'setup' && (
-        <div className="space-y-8 animate-fadeIn">
-          <div className="text-center space-y-2">
+      {gameState === 'setup' && (() => {
+        const totalWordsCount = words.length;
+        const completedWordsCount = words.filter(w => progress[w.id]?.status === 'know').length;
+        const overallProgressPercent = totalWordsCount > 0 ? Math.round((completedWordsCount / totalWordsCount) * 100) : 0;
+
+        return (
+          <div className="space-y-8 animate-fadeIn">
+            {/* Overall Quiz Progress Card */}
+            <div className="bg-indigo-950 text-white rounded-2xl p-5 shadow-md space-y-3 relative overflow-hidden">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4.5 h-4.5 text-amber-400" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Overall Quiz Progress</span>
+              </div>
+              <div className="grid grid-cols-2 gap-4 border-t border-indigo-900 pt-3">
+                <div>
+                  <span className="text-2xl font-black font-sans">{completedWordsCount} / {totalWordsCount}</span>
+                  <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider mt-0.5">Total Completed Words</p>
+                </div>
+                <div>
+                  <span className="text-2xl font-black font-sans text-emerald-400">{overallProgressPercent}%</span>
+                  <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider mt-0.5">Progress Achieved</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-center space-y-2">
             <div className="inline-flex p-3 bg-indigo-50 text-indigo-600 rounded-2xl mb-2">
               <Award className="w-8 h-8" />
             </div>
@@ -532,7 +555,8 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
             Start Quiz
           </button>
         </div>
-      )}
+        );
+      })()}
 
       {/* 2. PLAYING GAME */}
       {gameState === 'playing' && questions[currentQuestionIndex] && (
@@ -573,7 +597,7 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
                 let btnStyle = 'border-slate-200/60 hover:border-indigo-300 hover:bg-indigo-50/10 text-slate-700 bg-white';
                 if (answerSubmitted) {
                   if (isCorrectOpt) {
-                    btnStyle = 'border-indigo-500 bg-indigo-50/60 text-indigo-900 font-bold';
+                    btnStyle = 'border-emerald-500 bg-emerald-100 text-emerald-950 font-black';
                   } else if (isSelected) {
                     btnStyle = 'border-rose-500 bg-rose-50 text-rose-800';
                   } else {
@@ -591,7 +615,7 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
                     className={`p-4 text-left rounded-xl border text-sm transition flex items-center justify-between min-h-14 ${btnStyle}`}
                   >
                     <span>{option}</span>
-                    {answerSubmitted && isCorrectOpt && <CheckCircle2 className="w-5 h-5 text-indigo-600 flex-shrink-0" />}
+                    {answerSubmitted && isCorrectOpt && <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />}
                     {answerSubmitted && isSelected && !isCorrectOpt && <XCircle className="w-5 h-5 text-rose-500 flex-shrink-0" />}
                   </button>
                 );
