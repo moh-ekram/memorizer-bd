@@ -175,7 +175,14 @@ export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse
               {settings?.landingHeadlineMain || "সহজে শব্দ মনে রাখুন,"} <br />
               <span className="flex flex-wrap items-center gap-2">
                 {activeCourseName && (
-                  <span className="inline-block relative overflow-hidden bg-gradient-to-r from-indigo-400 via-emerald-300 to-teal-300 bg-clip-text text-transparent transition-all duration-300">
+                  <span 
+                    onClick={() => {
+                      const el = document.getElementById('landing-courses-catalog');
+                      if (el) el.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    title="কোর্স দেখতে ক্লিক করুন"
+                    className="inline-block relative overflow-hidden bg-gradient-to-r from-indigo-400 via-emerald-300 to-teal-300 bg-clip-text text-transparent transition-all duration-300 cursor-pointer hover:opacity-90 underline decoration-indigo-400/40 underline-offset-4"
+                  >
                     <AnimatePresence mode="wait">
                       <motion.span
                         key={activeCourseName}

@@ -3199,6 +3199,59 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               </div>
             </div>
 
+            {/* Start Page & Course Displayer Settings */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-4 col-span-1 md:col-span-2">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-indigo-600" />
+                    <span>Start Page & 2-Second Course Rotator Settings (স্টার্ট পেইজ সেটিং)</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                    Select which courses from Buy New Courses or custom courses cycle every 2 seconds on the Start Page hero headline
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 font-extrabold text-[10px] rounded-lg uppercase">
+                  Start Page Rotator
+                </span>
+              </div>
+
+              {/* Course Toggles */}
+              <div className="space-y-3 pt-1">
+                <label className="block text-xs font-bold text-slate-700">
+                  Select Courses to Display in 2-Second Rotation on Start Page Hero Section:
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {Array.from(new Set([
+                    ...customCourses.map(c => (c.title || c.id).trim()).filter(Boolean),
+                    'BCS', 'GRE', 'IELTS', 'Bank Job', 'Primary Teacher', 'Basic Vocab', 'Spoken English', 'Duolingo DET', 'TOEFL'
+                  ])).map(cName => {
+                    const currentList = settings?.landingDisplayCourses || ['BCS', 'GRE', 'IELTS', 'Bank Job'];
+                    const isSel = currentList.includes(cName);
+                    return (
+                      <button
+                        key={cName}
+                        type="button"
+                        onClick={() => {
+                          const updatedList = isSel
+                            ? currentList.filter(x => x !== cName)
+                            : [...currentList, cName];
+                          const updated = { ...settings, landingDisplayCourses: updatedList };
+                          if (onUpdateSettings) onUpdateSettings(updated);
+                          try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (e) {}
+                        }}
+                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer ${
+                          isSel ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {isSel ? `✓ ${cName}` : `+ ${cName}`}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
             {/* Restricted Course Free Flashcards Limit */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">

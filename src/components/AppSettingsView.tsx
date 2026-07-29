@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { AppSettings, WordStatus, SyncLogEntry } from '../types';
+import { AppSettings, WordStatus, SyncLogEntry, Course } from '../types';
 import { 
   Settings, 
   Layers, 
@@ -50,6 +50,7 @@ interface AppSettingsViewProps {
   syncStatus: string;
   onForceSync?: () => void;
   syncLogs?: SyncLogEntry[];
+  allCourses?: Course[];
 }
 
 export default function AppSettingsView({
@@ -59,7 +60,8 @@ export default function AppSettingsView({
   userEmail,
   syncStatus,
   onForceSync,
-  syncLogs = []
+  syncLogs = [],
+  allCourses = []
 }: AppSettingsViewProps) {
 
   const [activeTab, setActiveTab] = useState<'landing' | 'flashcards' | 'quiz' | 'modules' | 'synonyms' | 'shortcuts' | 'account'>('landing');
@@ -438,13 +440,16 @@ export default function AppSettingsView({
                 ))}
               </div>
 
-              {/* Quick Select Preset Courses */}
+              {/* Quick Select Preset & Created Courses */}
               <div className="pt-2 border-t border-slate-100 space-y-2">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase">
-                  দ্রুত সিলেক্ট করুন / টগল করুন:
+                  উপলব্ধ কোর্স সিলেক্ট করুন / টগল করুন (Buy New Courses ক্যাটালগের কোর্সসহ):
                 </label>
                 <div className="flex flex-wrap gap-1.5">
-                  {['BCS', 'GRE', 'IELTS', 'Bank Job', 'Primary Teacher', 'Basic Vocab', 'Spoken English', 'Duolingo DET', 'TOEFL'].map((preset) => {
+                  {Array.from(new Set([
+                    ...allCourses.map(c => (c.title || c.id).trim()).filter(Boolean),
+                    'BCS', 'GRE', 'IELTS', 'Bank Job', 'Primary Teacher', 'Basic Vocab', 'Spoken English', 'Duolingo DET', 'TOEFL'
+                  ])).map((preset) => {
                     const isSelected = (settings.landingDisplayCourses || ['BCS', 'GRE', 'IELTS', 'Bank Job']).includes(preset);
                     return (
                       <button

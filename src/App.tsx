@@ -2138,6 +2138,7 @@ export default function App() {
               syncStatus={syncStatus}
               onForceSync={forceSyncToCloud}
               syncLogs={syncLogs}
+              allCourses={customCourses}
             />
           )}
 

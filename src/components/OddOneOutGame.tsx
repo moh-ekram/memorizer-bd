@@ -10,7 +10,8 @@ import {
   X,
   HelpCircle,
   ChevronRight,
-  ArrowLeft
+  ArrowLeft,
+  Sparkles
 } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -343,7 +344,7 @@ export default function OddOneOutGame({
         return (
           <div className="bg-indigo-950 text-white rounded-2xl p-4 sm:p-5 shadow-md space-y-3 relative overflow-hidden">
             <div className="flex items-center gap-2">
-              <HelpCircle className="w-4 h-4 text-amber-400" />
+              <Sparkles className="w-4 h-4 text-amber-400" />
               <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Overall Quiz Progress</span>
             </div>
             <div className="grid grid-cols-2 gap-4 border-t border-indigo-900 pt-3">

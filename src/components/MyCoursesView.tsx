@@ -927,16 +927,16 @@ export default function MyCoursesView({
             setActiveCourseId(course.id);
             setActiveCourseToast(`Activated "${course.title}" course!`);
             setTimeout(() => setActiveCourseToast(null), 2500);
+          } else {
+            setSelectedDetailCourse(course);
           }
         }}
-        className={`group relative transition-all duration-300 flex flex-row items-center justify-between p-2.5 sm:p-3.5 px-3 sm:px-4 rounded-2xl sm:rounded-3xl gap-2.5 sm:gap-4 overflow-hidden ${
-          isUserAllowed ? 'cursor-pointer' : ''
-        } ${
+        className={`group relative transition-all duration-300 flex flex-row items-center justify-between p-2.5 sm:p-3.5 px-3 sm:px-4 rounded-2xl sm:rounded-3xl gap-2.5 sm:gap-4 overflow-hidden cursor-pointer ${
           isActive 
-            ? 'bg-gradient-to-r from-[#3C7B58] via-[#32694a] to-[#28573d] text-white shadow-md shadow-[#3C7B58]/15' 
+            ? 'bg-gradient-to-r from-[#3C7B58] via-[#32694a] to-[#28573d] text-white shadow-md shadow-[#3C7B58]/15 hover:brightness-105' 
             : isUserAllowed
-            ? 'bg-gradient-to-r from-[#704261] via-[#603551] to-[#502942] text-white shadow-md shadow-[#704261]/15'
-            : 'bg-gradient-to-r from-[#EF5426] via-[#e24415] to-[#ce3508] text-white shadow-md shadow-[#EF5426]/15'
+            ? 'bg-gradient-to-r from-[#704261] via-[#603551] to-[#502942] text-white shadow-md shadow-[#704261]/15 hover:brightness-105'
+            : 'bg-gradient-to-r from-[#EF5426] via-[#e24415] to-[#ce3508] text-white shadow-md shadow-[#EF5426]/15 hover:brightness-105 ring-2 ring-orange-400/30'
         }`}
         style={{ fontFamily: "'Poppins', sans-serif" }}
       >
@@ -960,16 +960,35 @@ export default function MyCoursesView({
 
         {/* Middle Side: Course Info & Title */}
         <div className="flex-1 min-w-0 space-y-0.5 font-poppins">
-          <h3 className="text-sm sm:text-base font-extrabold text-white leading-tight font-poppins truncate max-w-[160px] sm:max-w-md" title={course.title}>
-            {course.title}
+          <h3 
+            onClick={(e) => {
+              if (!isUserAllowed) {
+                e.stopPropagation();
+                setSelectedDetailCourse(course);
+              }
+            }}
+            className={`text-sm sm:text-base font-extrabold text-white leading-tight font-poppins truncate max-w-[180px] sm:max-w-md ${
+              !isUserAllowed ? 'hover:underline cursor-pointer flex items-center gap-1' : ''
+            }`} 
+            title={course.title}
+          >
+            <span>{course.title}</span>
+            {!isUserAllowed && (
+              <Eye className="w-3.5 h-3.5 text-amber-200 shrink-0 inline ml-1 opacity-90" />
+            )}
           </h3>
 
           <div className="text-[11px] sm:text-xs font-bold text-white/95 font-poppins leading-none">
             Total {wordsCount} Words
           </div>
 
-          <div className="text-[9px] sm:text-[10px] font-medium text-white/80 font-poppins tracking-tight truncate">
-            Flashcard-PDF-Story-Games
+          <div className="text-[9px] sm:text-[10px] font-medium text-white/80 font-poppins tracking-tight truncate flex items-center gap-1.5">
+            <span>Flashcard-PDF-Story-Games</span>
+            {!isUserAllowed && (
+              <span className="bg-amber-300/30 text-amber-100 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider shrink-0 border border-amber-300/30">
+                Click Preview
+              </span>
+            )}
           </div>
         </div>
 
