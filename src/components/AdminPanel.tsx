@@ -172,6 +172,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const [newCourseIsDefault, setNewCourseIsDefault] = useState(false);
   const [newCourseIsRestricted, setNewCourseIsRestricted] = useState(false);
   const [newCourseAllowedUsersText, setNewCourseAllowedUsersText] = useState('');
+  const [newCourseOrder, setNewCourseOrder] = useState<number>(1);
 
   // Editing course states
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
@@ -1116,6 +1117,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         isRestricted: newCourseIsRestricted,
         allowedUsers: allowedUsers,
         price: 30,
+        order: Number(newCourseOrder) || 1,
         bkashNumber: '01581624202',
         createdAt: new Date().toISOString(),
         createdBy: auth.currentUser?.email || 'admin@gmail.com',
@@ -1133,6 +1135,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       setNewCourseIsDefault(false);
       setNewCourseIsRestricted(false);
       setNewCourseAllowedUsersText('');
+      setNewCourseOrder(1);
       setIsSlugTouched(false);
       fetchCustomCourses();
     } catch (err) {
@@ -1153,6 +1156,16 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     } catch (err) {
       console.error('Error deleting course:', err);
       alert('Failed to delete course.');
+    }
+  };
+
+  const handleUpdateSingleCourseOrder = async (courseId: string, newOrder: number) => {
+    try {
+      await setDoc(doc(db, 'courses', courseId), { order: newOrder }, { merge: true });
+      setCustomCourses(prev => prev.map(c => c.id === courseId ? { ...c, order: newOrder } : c));
+      fetchCustomCourses();
+    } catch (e) {
+      console.error("Error updating course order:", e);
     }
   };
 
@@ -1569,6 +1582,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     isRestricted: false,
     allowedUsers: dbGreCourse?.allowedUsers || [],
     price: 0,
+    order: dbGreCourse?.order !== undefined ? dbGreCourse.order : 0,
     bkashNumber: (dbGreCourse?.bkashNumber && dbGreCourse.bkashNumber !== '01700000000' && dbGreCourse.bkashNumber.trim() !== '') ? dbGreCourse.bkashNumber : '01581624202',
     googleSearchQuery: dbGreCourse?.googleSearchQuery || '',
     createdAt: dbGreCourse?.createdAt || new Date('2026-01-01').toISOString(),
@@ -1576,6 +1590,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   };
 
   const filteredCustomCoursesList = customCourses.filter(c => c.id.trim().toLowerCase() !== 'gre');
+  const allAdminCoursesList = [defaultGreCourse, ...filteredCustomCoursesList].sort(
+    (a, b) => (a.order !== undefined ? a.order : 999) - (b.order !== undefined ? b.order : 999)
+  );
 
   const getCourseUserCount = (courseId: string) => {
     return users.filter(u => {
@@ -1894,7 +1911,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   <span>Create New Course</span>
                 </button>
                 <span className="text-xs font-bold px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full font-mono">
-                  {1 + filteredCustomCoursesList.length} Courses
+                  {allAdminCoursesList.length} Courses
                 </span>
               </div>
             </div>
@@ -1910,12 +1927,12 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     <th className="py-2.5 px-3 border-r border-slate-300 text-center w-20">Users</th>
                     <th className="py-2.5 px-3 border-r border-slate-300 text-center w-20">Price</th>
                     <th className="py-2.5 px-3 border-r border-slate-300 text-center w-16">Access</th>
-                    <th className="py-2.5 px-3 border-r border-slate-300 text-center w-24">Order</th>
+                    <th className="py-2.5 px-3 border-r border-slate-300 text-center w-28">Order</th>
                     <th className="py-2.5 px-3 text-center w-36">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white">
-                  {[defaultGreCourse, ...filteredCustomCoursesList].map((c) => {
+                  {allAdminCoursesList.map((c) => {
                     const isDefault = c.id.trim().toLowerCase() === 'gre';
                     const wordCount = c.words?.length || (isDefault ? 1110 : 0);
                     const userCount = getCourseUserCount(c.id);
@@ -1969,23 +1986,34 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                           )}
                         </td>
 
-                        {/* Column 7: Minimal Order Controls */}
+                        {/* Column 7: Editable Order Field & Re-order Controls */}
                         <td className="py-2.5 px-3 border-r border-slate-200 text-center">
-                          <div className="inline-flex items-center justify-center gap-0.5 font-mono text-xs">
+                          <div className="inline-flex items-center justify-center gap-1 font-mono text-xs">
                             <button
                               type="button"
-                              onClick={() => handleMoveCourseOrder(c.id, -1, [defaultGreCourse, ...filteredCustomCoursesList])}
+                              onClick={() => handleMoveCourseOrder(c.id, -1, allAdminCoursesList)}
                               className="p-1 hover:bg-slate-100 text-slate-700 hover:text-slate-950 rounded transition cursor-pointer"
                               title="Move Up"
                             >
                               <ChevronUp className="w-3.5 h-3.5" />
                             </button>
-                            <span className="font-mono font-bold text-slate-900 px-0.5 text-xs">
-                              #{c.order !== undefined ? c.order : '0'}
-                            </span>
+                            <div className="relative flex items-center">
+                              <span className="text-slate-400 font-bold text-[10px] mr-0.5">#</span>
+                              <input
+                                type="number"
+                                value={c.order !== undefined ? c.order : 0}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value, 10);
+                                  const newOrder = isNaN(val) ? 0 : val;
+                                  handleUpdateSingleCourseOrder(c.id, newOrder);
+                                }}
+                                className="w-12 px-1 py-0.5 text-center font-mono font-extrabold text-indigo-950 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:border-indigo-500 focus:bg-white text-xs shadow-2xs"
+                                title="Type order index number to re-order course globally"
+                              />
+                            </div>
                             <button
                               type="button"
-                              onClick={() => handleMoveCourseOrder(c.id, 1, [defaultGreCourse, ...filteredCustomCoursesList])}
+                              onClick={() => handleMoveCourseOrder(c.id, 1, allAdminCoursesList)}
                               className="p-1 hover:bg-slate-100 text-slate-700 hover:text-slate-950 rounded transition cursor-pointer"
                               title="Move Down"
                             >
@@ -4071,8 +4099,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
             {/* Modal Content */}
             <div className="p-6 overflow-y-auto space-y-6">
-              {/* Title, Slug & Description */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Title, Slug & Order */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="text-xs font-extrabold text-slate-700 block mb-1">Course Title *</label>
                   <input
@@ -4095,6 +4123,17 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     }}
                     placeholder="bcs-special-wordlist"
                     className="w-full text-xs font-bold font-mono text-indigo-900 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-extrabold text-slate-700 block mb-1">Order Index (Sort Position)</label>
+                  <input
+                    type="number"
+                    value={newCourseOrder}
+                    onChange={(e) => setNewCourseOrder(Number(e.target.value))}
+                    placeholder="1"
+                    className="w-full text-xs font-bold font-mono text-slate-900 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none"
                   />
                 </div>
               </div>
