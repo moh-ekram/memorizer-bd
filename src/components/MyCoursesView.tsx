@@ -928,53 +928,53 @@ export default function MyCoursesView({
             setTimeout(() => setActiveCourseToast(null), 2500);
           }
         }}
-        className={`group relative transition-all duration-300 flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 sm:p-5 rounded-2xl sm:rounded-3xl border-2 gap-3.5 overflow-hidden ${
+        className={`group relative transition-all duration-300 flex flex-row items-center justify-between p-2.5 sm:p-3.5 px-3 sm:px-4 rounded-2xl sm:rounded-3xl gap-2.5 sm:gap-4 overflow-hidden ${
           isUserAllowed ? 'cursor-pointer' : ''
         } ${
           isActive 
-            ? 'bg-gradient-to-r from-[#189F82] via-[#158f75] to-[#10705c] text-white border-[#22c7a3] shadow-lg shadow-[#189F82]/20' 
+            ? 'bg-gradient-to-r from-[#3C7B58] via-[#32694a] to-[#28573d] text-white shadow-md shadow-[#3C7B58]/15' 
             : isUserAllowed
-            ? 'bg-gradient-to-r from-[#4E53E2] via-[#4348c8] to-[#3539a3] text-white border-[#7276f7] shadow-lg shadow-[#4E53E2]/20 hover:border-[#8f92f9]'
-            : 'bg-gradient-to-r from-[#FCB415] via-[#f0a600] to-[#d49000] text-slate-950 border-[#ffe07d] shadow-lg shadow-[#FCB415]/20 hover:border-[#ffebaa]'
+            ? 'bg-gradient-to-r from-[#704261] via-[#603551] to-[#502942] text-white shadow-md shadow-[#704261]/15'
+            : 'bg-gradient-to-r from-[#EF5426] via-[#e24415] to-[#ce3508] text-white shadow-md shadow-[#EF5426]/15'
         }`}
         style={{ fontFamily: "'Poppins', sans-serif" }}
       >
         {/* Left Side: Badge Box (30 Tk) */}
-        <div className={`w-16 sm:w-20 h-16 sm:h-20 rounded-2xl flex flex-col items-center justify-center shrink-0 shadow-xs text-center font-poppins px-1 ${
+        <div className={`w-12 sm:w-16 h-12 sm:h-16 rounded-xl sm:rounded-2xl flex flex-col items-center justify-center shrink-0 shadow-xs text-center font-poppins px-1 ${
           isActive 
-            ? 'bg-[#E2F297] text-[#2B5232]' 
+            ? 'bg-[#E3F297] text-[#24422A]' 
             : isUserAllowed 
-            ? 'bg-[#F8C6D8] text-[#582E4B]' 
-            : 'bg-[#F8F29A] text-[#822B0C]'
+            ? 'bg-[#F7C6D7] text-[#542B47]' 
+            : 'bg-[#F8F299] text-[#7E2809]'
         }`}>
           <div className="flex items-baseline justify-center gap-0.5 font-poppins leading-none">
-            <span className="text-2xl sm:text-3xl font-black tracking-tight leading-none">
+            <span className="text-xl sm:text-2xl font-black tracking-tight leading-none">
               {(course.price !== undefined && course.price >= 0) ? course.price : 30}
             </span>
-            <span className="text-[10px] sm:text-xs font-black uppercase leading-none">
+            <span className="text-[9px] sm:text-[10px] font-black uppercase leading-none">
               TK
             </span>
           </div>
         </div>
 
         {/* Middle Side: Course Info & Title */}
-        <div className="flex-1 min-w-0 space-y-1 w-full font-poppins">
-          <h3 className="text-base sm:text-lg font-extrabold text-white leading-tight font-poppins truncate max-w-[220px] sm:max-w-md" title={course.title}>
+        <div className="flex-1 min-w-0 space-y-0.5 font-poppins">
+          <h3 className="text-sm sm:text-base font-extrabold text-white leading-tight font-poppins truncate max-w-[160px] sm:max-w-md" title={course.title}>
             {course.title}
           </h3>
 
-          <div className="text-xs font-bold text-white/95 font-poppins">
+          <div className="text-[11px] sm:text-xs font-bold text-white/95 font-poppins leading-none">
             Total {wordsCount} Words
           </div>
 
-          <div className="text-[10.5px] font-medium text-white/85 font-poppins tracking-wide">
+          <div className="text-[9px] sm:text-[10px] font-medium text-white/80 font-poppins tracking-tight truncate">
             Flashcard-PDF-Story-Games
           </div>
         </div>
 
         {/* Right Side: Divider Line & Action Button */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0 self-center">
-          <div className="h-10 sm:h-12 w-[1.5px] bg-white/25 shrink-0" />
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 self-center">
+          <div className="h-8 sm:h-10 w-[1.5px] bg-white/25 shrink-0" />
 
           {isActive ? (
             <button
@@ -984,7 +984,7 @@ export default function MyCoursesView({
                 setActiveCourseId(course.id);
                 if (onSelectTab) onSelectTab('flashcard');
               }}
-              className="font-black italic text-xs sm:text-sm text-white tracking-wider hover:scale-105 active:scale-95 transition cursor-pointer shrink-0 uppercase px-1 py-2"
+              className="font-black italic text-[11px] sm:text-xs text-white tracking-wider hover:scale-105 active:scale-95 transition cursor-pointer shrink-0 uppercase px-0.5 py-1"
             >
               STUDY NOW
             </button>
@@ -997,12 +997,12 @@ export default function MyCoursesView({
                 setActiveCourseToast(`Activated "${course.title}" course!`);
                 setTimeout(() => setActiveCourseToast(null), 2500);
               }}
-              className="font-black italic text-xs sm:text-sm text-white tracking-wider hover:scale-105 active:scale-95 transition cursor-pointer shrink-0 uppercase px-1 py-2"
+              className="font-black italic text-[11px] sm:text-xs text-white tracking-wider hover:scale-105 active:scale-95 transition cursor-pointer shrink-0 uppercase px-0.5 py-1"
             >
               SET ACTIVE
             </button>
           ) : (
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
               <button
                 type="button"
                 onClick={(e) => {
@@ -1010,21 +1010,21 @@ export default function MyCoursesView({
                   setIsCartCheckoutMode(false);
                   setSelectedBuyCourse(course);
                 }}
-                className="font-black italic text-xs sm:text-sm text-white tracking-wider hover:scale-105 active:scale-95 transition cursor-pointer shrink-0 uppercase px-1 py-2"
+                className="font-black italic text-[11px] sm:text-xs text-white tracking-wider hover:scale-105 active:scale-95 transition cursor-pointer shrink-0 uppercase px-0.5 py-1"
               >
                 BUY NOW
               </button>
               <button
                 type="button"
                 onClick={(e) => toggleCartCourse(course, e)}
-                className={`p-1.5 rounded-lg text-xs font-bold transition ${
+                className={`p-1 rounded-md text-xs font-bold transition ${
                   cart.some(c => c.id === course.id)
                     ? 'bg-white text-orange-600'
                     : 'bg-white/15 text-white hover:bg-white/25'
                 }`}
                 title={cart.some(c => c.id === course.id) ? "Remove from Cart" : "Add to Cart"}
               >
-                <ShoppingBag className="w-3.5 h-3.5" />
+                <ShoppingBag className="w-3 h-3" />
               </button>
             </div>
           )}
@@ -1206,7 +1206,7 @@ export default function MyCoursesView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl relative max-h-[90vh] flex flex-col border border-slate-100"
-                style={{ fontFamily: "'Poppins', 'Kalpurush', 'SutonnyMJ', sans-serif" }}
+                style={{ fontFamily: "'Poppins', 'Hind Siliguri', 'Noto Sans Bengali', sans-serif" }}
               >
                 {/* Modal Header */}
                 <div className="p-5 border-b border-slate-100 bg-slate-50/80 flex justify-between items-start gap-3">
