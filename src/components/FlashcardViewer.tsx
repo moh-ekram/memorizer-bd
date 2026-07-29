@@ -1332,9 +1332,7 @@ export default function FlashcardViewer({
             }`}>
               {/* Top Row: Google Search, Speaker Icon & Word Meta */}
               <div className="flex items-center justify-between w-full">
-                <span className="text-[11px] font-bold uppercase tracking-widest text-indigo-500 bg-indigo-50 px-3 py-1 rounded-full">
-                  Group {currentActiveWord.group}
-                </span>
+                <div />
 
                 <div className="flex items-center gap-2">
                   <button
