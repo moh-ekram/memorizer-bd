@@ -237,13 +237,14 @@ export default function FlashcardViewer({
   const [shuffleKey, setShuffleKey] = useState(0);
 
   // Card orientation and flip animation styles
-  type FlipAnimationKey = 'flip-h' | 'flip-v' | 'slide' | 'fade' | 'zoom' | 'shuffle';
+  type FlipAnimationKey = 'flip-h' | 'flip-v' | 'diagonal' | 'shuffle';
   const [isFlipped, setIsFlipped] = useState(false);
   const [localAnimation, setLocalAnimation] = useState<FlipAnimationKey>('shuffle');
   const [isAnimPickerOpen, setIsAnimPickerOpen] = useState(false);
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   // Random animation state for shuffle option
-  const [currentRandomAnim, setCurrentRandomAnim] = useState<'flip-h' | 'flip-v' | 'slide' | 'fade' | 'zoom'>('flip-h');
+  const [currentRandomAnim, setCurrentRandomAnim] = useState<'flip-h' | 'flip-v' | 'diagonal'>('flip-h');
 
   // Banner header card rotation & title toggle states
   const [bannerRotationStep, setBannerRotationStep] = useState(0);
@@ -258,10 +259,13 @@ export default function FlashcardViewer({
   }, []);
 
   // Effective animation setting
-  const effectiveAnimSetting: FlipAnimationKey = settings?.flashcardAnimation || localAnimation;
+  const effectiveAnimSetting: FlipAnimationKey = 
+    (settings?.flashcardAnimation && ['flip-h', 'flip-v', 'diagonal', 'shuffle'].includes(settings.flashcardAnimation))
+      ? settings.flashcardAnimation
+      : localAnimation;
 
   // Active animation key applied to CSS
-  const activeAnimKey: 'flip-h' | 'flip-v' | 'slide' | 'fade' | 'zoom' =
+  const activeAnimKey: 'flip-h' | 'flip-v' | 'diagonal' =
     effectiveAnimSetting === 'shuffle' ? currentRandomAnim : effectiveAnimSetting;
 
   const handleSelectAnimation = (anim: FlipAnimationKey) => {
@@ -636,7 +640,7 @@ export default function FlashcardViewer({
 
   useEffect(() => {
     if (effectiveAnimSetting === 'shuffle') {
-      const animations = ['flip-h', 'flip-v', 'slide', 'fade', 'zoom'] as const;
+      const animations = ['flip-h', 'flip-v', 'diagonal'] as const;
       const randomIdx = Math.floor(Math.random() * animations.length);
       setCurrentRandomAnim(animations[randomIdx]);
     }
@@ -1124,14 +1128,12 @@ export default function FlashcardViewer({
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                     Card Flip Animation
                   </label>
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                     {[
-                      { id: 'flip-h', label: 'Flip (H)', icon: '🔄' },
-                      { id: 'flip-v', label: 'Flip (V)', icon: '↕️' },
-                      { id: 'slide', label: 'Slide', icon: '↔️' },
-                      { id: 'fade', label: 'Fade', icon: '👁️' },
-                      { id: 'zoom', label: 'Zoom', icon: '🔍' },
                       { id: 'shuffle', label: 'Shuffle', icon: '🔀' },
+                      { id: 'flip-h', label: 'Horizontal (H)', icon: '🔄' },
+                      { id: 'flip-v', label: 'Vertical (V)', icon: '↕️' },
+                      { id: 'diagonal', label: 'Diagonal 3D', icon: '✨' },
                     ].map((anim) => (
                       <button
                         key={anim.id}
@@ -1217,12 +1219,10 @@ export default function FlashcardViewer({
                   Flip Animation
                 </div>
                 {[
-                  { id: 'flip-h', label: '1. Horizontal (3D)', desc: 'Horizontal 3D Flip' },
-                  { id: 'flip-v', label: '2. Vertical (3D)', desc: 'Vertical 3D Flip' },
-                  { id: 'slide', label: '3. Slide & Flip', desc: 'Slide 3D Flip' },
-                  { id: 'fade', label: '4. Fade & Flip', desc: 'Fade & Flip' },
-                  { id: 'zoom', label: '5. Zoom & Flip', desc: 'Zoom 3D Flip' },
-                  { id: 'shuffle', label: '6. Random Shuffle', desc: 'Random per card' },
+                  { id: 'shuffle', label: '1. Random Shuffle', desc: 'Random per card' },
+                  { id: 'flip-h', label: '2. Horizontal (3D)', desc: 'Left to Right 3D Flip' },
+                  { id: 'flip-v', label: '3. Vertical (3D)', desc: 'Top to Bottom 3D Flip' },
+                  { id: 'diagonal', label: '4. Diagonal (3D)', desc: '45° Diagonal Axis 3D' },
                 ].map(anim => (
                   <button
                     key={anim.id}
@@ -1245,6 +1245,16 @@ export default function FlashcardViewer({
             )}
           </div>
 
+          {/* Deck Filter Quick Button */}
+          <button
+            onClick={() => setIsFilterModalOpen(true)}
+            className="p-2 bg-indigo-500/20 text-indigo-200 hover:bg-indigo-500/30 hover:text-white rounded-full transition cursor-pointer border border-indigo-400/20 flex items-center gap-1.5 px-2.5 sm:px-3 text-xs font-semibold"
+            title="Deck Filters"
+          >
+            <Filter className="w-3.5 h-3.5 text-indigo-300" />
+            <span className="hidden sm:inline">Filter</span>
+          </button>
+
           <button
             onClick={() => handleOpenReportModal(currentActiveWord)}
             className="p-2 bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 rounded-full transition cursor-pointer"
@@ -1263,8 +1273,216 @@ export default function FlashcardViewer({
         </div>
       </header>
 
+      {/* Deck Filter Pop-up Modal */}
+      {isFilterModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-white/15 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[85vh] text-white">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-slate-950/50">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-500/20 rounded-xl text-indigo-300">
+                  <Filter className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base text-white leading-tight">
+                    Study Deck Filters
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Filter by vocabulary groups, tag statuses & order
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsFilterModalOpen(false)}
+                className="p-2 text-slate-400 hover:text-white bg-white/5 hover:bg-white/15 rounded-full transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 sm:p-5 overflow-y-auto space-y-5 text-xs">
+              {/* Groups Filter */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300">
+                    Vocabulary Groups ({selectedGroups.length}/{uniqueGroups.length})
+                  </label>
+                  <div className="flex gap-2 text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedGroups(uniqueGroups)}
+                      className="text-indigo-400 font-bold hover:underline cursor-pointer"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-slate-600">|</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedGroups([])}
+                      className="text-rose-400 font-bold hover:underline cursor-pointer"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-5 sm:grid-cols-6 gap-1.5 max-h-36 overflow-y-auto p-1.5 bg-slate-950/60 border border-white/10 rounded-2xl scrollbar-thin">
+                  {uniqueGroups.map((gVal) => {
+                    const isSelected = selectedGroups.includes(gVal);
+                    return (
+                      <button
+                        key={gVal}
+                        type="button"
+                        onClick={() => {
+                          setSelectedGroups(prev =>
+                            prev.includes(gVal) ? prev.filter(x => x !== gVal) : [...prev, gVal]
+                          );
+                        }}
+                        className={`py-1.5 text-[11px] font-bold rounded-xl transition cursor-pointer ${
+                          isSelected
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10'
+                        }`}
+                      >
+                        {gVal}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Tag Status Filter */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300">
+                    Tag Status Filter
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedStatuses(['know', 'dont_know', 'confusion', 'unrated']);
+                      setUserHasManuallyChangedStatuses(true);
+                    }}
+                    className="text-[10px] text-indigo-400 font-bold hover:underline cursor-pointer"
+                  >
+                    All Tags
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { key: 'unrated', label: 'Unrated (Gray)', color: 'bg-slate-400' },
+                    { key: 'dont_know', label: 'Not Learned (Red)', color: 'bg-rose-500' },
+                    { key: 'confusion', label: 'Confused (Yellow)', color: 'bg-amber-500' },
+                    { key: 'know', label: 'Learned (Green)', color: 'bg-emerald-500' }
+                  ].map(st => {
+                    const isSelected = selectedStatuses.includes(st.key);
+                    return (
+                      <button
+                        key={st.key}
+                        type="button"
+                        onClick={() => {
+                          setSelectedStatuses(prev =>
+                            prev.includes(st.key)
+                              ? prev.filter(x => x !== st.key)
+                              : [...prev, st.key]
+                          );
+                          setUserHasManuallyChangedStatuses(true);
+                        }}
+                        className={`p-2.5 rounded-xl text-[11px] font-bold flex items-center justify-between transition cursor-pointer border ${
+                          isSelected
+                            ? 'bg-indigo-600/30 border-indigo-500 text-white'
+                            : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2.5 h-2.5 rounded-full ${st.color}`} />
+                          <span>{st.label}</span>
+                        </div>
+                        {isSelected && <Check className="w-3.5 h-3.5 text-indigo-400" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Bookmark Collection Filter (if available) */}
+              {folders.length > 0 && (
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block">
+                    Bookmark Collection
+                  </label>
+                  <select
+                    value={selectedFolder}
+                    onChange={(e) => setSelectedFolder(e.target.value)}
+                    className="w-full bg-slate-950/60 border border-white/10 rounded-xl p-2.5 text-xs font-semibold text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                  >
+                    <option value="all">All Words (No Folder Limit)</option>
+                    {folders.map(f => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Study Sequence Order */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block">
+                  Study Sequence
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'random', label: 'Shuffle' },
+                    { id: 'alphabetical', label: 'A - Z' },
+                    { id: 'serial', label: 'Serial' }
+                  ].map(ord => (
+                    <button
+                      key={ord.id}
+                      type="button"
+                      onClick={() => setStudyOrder(ord.id as any)}
+                      className={`py-2 px-3 rounded-xl text-xs font-bold transition cursor-pointer border text-center ${
+                        studyOrder === ord.id
+                          ? 'bg-indigo-600 border-indigo-500 text-white'
+                          : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                      }`}
+                    >
+                      {ord.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-white/10 bg-slate-950/50 flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedGroups(uniqueGroups);
+                  setSelectedStatuses(['know', 'dont_know', 'confusion', 'unrated']);
+                  setSelectedFolder('all');
+                  setStudyOrder('random');
+                }}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 transition cursor-pointer"
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsFilterModalOpen(false)}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition cursor-pointer shadow-lg shadow-indigo-600/30"
+              >
+                Apply & Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 2. Main Flashcard Canvas Area */}
-      <main className="flex-1 overflow-y-auto px-4 py-4 sm:py-6 flex flex-col items-center justify-between max-w-xl mx-auto w-full gap-4">
+      <main className="flex-1 overflow-x-hidden overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden px-4 py-4 sm:py-6 flex flex-col items-center justify-between max-w-xl mx-auto w-full gap-4">
         
         {/* Filtered Flashcard Progress Line - Single line, zero space occupancy */}
         <div className="w-full shrink-0 space-y-1 my-0.5">
@@ -1309,7 +1527,7 @@ export default function FlashcardViewer({
         </div>
 
         {/* Flashcard Stage */}
-        <div className="w-full relative my-auto perspective">
+        <div className="w-full relative my-auto perspective overflow-hidden p-0.5">
 
           {/* Active Card Container - 3D Inner Wrapper */}
           <div

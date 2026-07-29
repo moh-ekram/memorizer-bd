@@ -24,11 +24,13 @@ html, body, #root {
 .perspective {
   perspective: 1200px;
   -webkit-perspective: 1200px;
+  overflow: hidden;
 }
 
 .transform-style-3d {
   transform-style: preserve-3d;
   -webkit-transform-style: preserve-3d;
+  will-change: transform;
 }
 
 .backface-hidden {

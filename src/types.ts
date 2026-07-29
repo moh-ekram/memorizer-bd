@@ -46,7 +46,7 @@ export interface AppSettings {
   shortcuts?: Record<string, string>;
 
   // Flashcard rotation animation
-  flashcardAnimation?: 'flip-h' | 'flip-v' | 'slide' | 'fade' | 'zoom' | 'shuffle';
+  flashcardAnimation?: 'flip-h' | 'flip-v' | 'diagonal' | 'shuffle';
 
   // Option to colorize main words on flashcards based on their status (Green for Learned/know, Red for Unlearned/dont_know, Amber for Confused/confusion)
   colorizeMainWord?: boolean;

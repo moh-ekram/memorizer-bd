@@ -205,7 +205,7 @@ export default function AppSettingsView({
     });
   };
 
-  const handleAnimationChange = (anim: 'flip-h' | 'flip-v' | 'slide' | 'fade' | 'zoom' | 'shuffle') => {
+  const handleAnimationChange = (anim: 'flip-h' | 'flip-v' | 'diagonal' | 'shuffle') => {
     onUpdateSettings({
       ...settings,
       flashcardAnimation: anim
@@ -256,7 +256,7 @@ export default function AppSettingsView({
           'ArrowDown': 'skip',
           'Enter': 'audio'
         },
-        flashcardAnimation: 'shuffle',
+        flashcardAnimation: 'flip-h',
         colorizeMainWord: true,
         flashcardBannerAnim: 'twice_daily'
       });
@@ -389,14 +389,12 @@ export default function AppSettingsView({
               {/* Card Flip Animation */}
               <div className="space-y-2 pt-3.5 border-t border-slate-100">
                 <label className="block text-[11px] font-bold text-slate-700 tracking-wider uppercase">Card Flip Animation</label>
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
-                    { key: 'flip-h' as const, icon: MoveHorizontal, label: 'Flip (H)' },
-                    { key: 'flip-v' as const, icon: MoveVertical, label: 'Flip (V)' },
-                    { key: 'slide' as const, icon: ArrowLeftRight, label: 'Slide' },
-                    { key: 'fade' as const, icon: Eye, label: 'Fade' },
-                    { key: 'zoom' as const, icon: ZoomIn, label: 'Zoom' },
-                    { key: 'shuffle' as const, icon: Shuffle, label: 'Shuffle' }
+                    { key: 'shuffle' as const, icon: Shuffle, label: 'Random Shuffle' },
+                    { key: 'flip-h' as const, icon: MoveHorizontal, label: 'Horizontal (H)' },
+                    { key: 'flip-v' as const, icon: MoveVertical, label: 'Vertical (V)' },
+                    { key: 'diagonal' as const, icon: Sparkles, label: 'Diagonal 3D' }
                   ].map(item => {
                     const currentAnim = settings.flashcardAnimation || 'shuffle';
                     const isSelected = currentAnim === item.key;
@@ -406,14 +404,14 @@ export default function AppSettingsView({
                         key={item.key}
                         type="button"
                         onClick={() => handleAnimationChange(item.key)}
-                        className={`flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg border transition-all duration-150 cursor-pointer ${
+                        className={`flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-all duration-150 cursor-pointer ${
                           isSelected
                             ? 'bg-slate-900 border-slate-900 text-white shadow-2xs font-semibold'
-                            : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-500'
+                            : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-600'
                         }`}
                       >
-                        <Icon className={`w-3 h-3 ${isSelected ? 'text-white' : 'text-slate-400'}`} />
-                        <span className="text-[10px] tracking-tight">
+                        <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-slate-400'}`} />
+                        <span className="text-[11px] font-medium tracking-tight">
                           {item.label}
                         </span>
                       </button>

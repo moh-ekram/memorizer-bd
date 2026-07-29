@@ -334,7 +334,7 @@ export default function App() {
       },
 
       // Default flashcard rotation animation
-      flashcardAnimation: (parsed.flashcardAnimation && parsed.flashcardAnimation !== 'flip-h') ? parsed.flashcardAnimation : 'shuffle',
+      flashcardAnimation: ['flip-h', 'flip-v', 'diagonal', 'shuffle'].includes(parsed.flashcardAnimation) ? parsed.flashcardAnimation : 'shuffle',
 
       // Default colorize main word setting
       colorizeMainWord: parsed.colorizeMainWord !== undefined ? !!parsed.colorizeMainWord : true,
