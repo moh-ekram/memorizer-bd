@@ -11,6 +11,7 @@ import { db } from '../lib/firebase';
 import { doc, setDoc, getDoc, getDocs, query, collection, where } from 'firebase/firestore';
 import { Course, UserProgress, ActiveTab } from '../types';
 import { isCourseEnrolled, isCourseAccessible } from '../lib/courseAccess';
+import CoursePreviewModal from './CoursePreviewModal';
 
 const getEnglishFeatureLabel = (key: string, placeLabels?: Record<string, string>) => {
   switch (key) {
@@ -1168,281 +1169,55 @@ export default function MyCoursesView({
         </div>
       )}
 
-      {/* 4. Course Detail Pop-Up Modal */}
+      {/* 4. Large Course Preview Modal */}
       <AnimatePresence>
         {selectedDetailCourse && (() => {
           const course = selectedDetailCourse;
           const isActive = course.id.trim().toLowerCase() === activeCourseId?.trim().toLowerCase();
           const isEnrolled = isCourseEnrolled(course.id, enrolledCourseIds);
           const isUserAllowed = isCourseAccessible(course, enrolledCourseIds, user?.email);
-          const wordsCount = course.words?.length || 0;
-
-          const courseWords = course.words || [];
-          const progressCount = courseWords.filter(w => progress[w.id]?.status === 'know').length;
-          const progressPercent = wordsCount > 0 ? Math.round((progressCount / wordsCount) * 100) : 0;
-
-          const variables = [
-            { key: 'meaning', label: 'Word Meaning', icon: BookOpen },
-            { key: 'synonyms', label: 'Synonyms', icon: Sparkles },
-            { key: 'extraWord', label: 'Derivatives', icon: PlusCircle },
-            { key: 'extraMeaning', label: 'Derivative Meaning', icon: HelpCircle },
-            { key: 'example', label: 'Example Sentences', icon: FileSpreadsheet },
-            { key: 'audio', label: 'Voice Pronunciation', icon: Volume2 }
-          ];
-
-          const games = [
-            { key: 'quiz', label: 'Practice Quiz', icon: GraduationCap },
-            { key: 'match', label: 'Word Match', icon: Gamepad2 },
-            { key: 'synonym', label: 'Synonym Check', icon: Sparkles },
-            { key: 'blank', label: 'Fill in the Blank', icon: BookOpen },
-            { key: 'odd_one_out', label: 'Odd One Out', icon: HelpCircle },
-            { key: 'analogy', label: 'Word Analogy', icon: Shuffle }
-          ];
+          const sampleUsed = isFreeSampleUsed(course.id);
 
           return (
-            <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" id="course-detail-modal-container">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 15 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl relative max-h-[90vh] flex flex-col border border-slate-100"
-                style={{ fontFamily: "'Poppins', 'Hind Siliguri', 'Noto Sans Bengali', sans-serif" }}
-              >
-                {/* Modal Header */}
-                <div className="p-5 border-b border-slate-100 bg-slate-50/80 flex justify-between items-start gap-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {isActive ? (
-                        <span className="px-2.5 py-0.5 bg-emerald-500 text-white font-black text-[9px] rounded-full uppercase tracking-wider flex items-center gap-1">
-                          <Check className="w-3 h-3" /> Active Course
-                        </span>
-                      ) : !isUserAllowed ? (
-                        <span className="px-2 py-0.5 bg-rose-500 text-white font-black text-[9px] rounded-full uppercase tracking-wider flex items-center gap-1">
-                          <Lock className="w-3 h-3" /> Restricted (৳{(course.price && course.price > 0) ? course.price : 30})
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-extrabold text-[9px] rounded-full uppercase tracking-wider border border-indigo-100">
-                          Enrolled
-                        </span>
-                      )}
-                      <span className="text-[10px] text-slate-400 font-mono font-bold">Code: {course.id}</span>
-                    </div>
-                    <h3 className="text-xl font-black text-slate-900 tracking-tight leading-snug">
-                      {course.title}
-                    </h3>
-                  </div>
-                  <button 
-                    onClick={() => setSelectedDetailCourse(null)}
-                    className="p-1.5 hover:bg-slate-200 rounded-full text-slate-400 hover:text-slate-600 transition cursor-pointer flex-shrink-0"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                {/* Modal Content */}
-                <div className="p-6 overflow-y-auto space-y-5 flex-1 text-slate-800">
-                  {/* Course Description */}
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Description</span>
-                    <p className="text-xs text-slate-650 leading-relaxed font-medium bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                      {course.description || 'No description specified for this course.'}
-                    </p>
-                  </div>
-
-                  {/* Quick Stats Grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-                    <div className="p-3 bg-indigo-50/60 rounded-2xl border border-indigo-100/60">
-                      <span className="text-[9px] font-extrabold text-indigo-500 uppercase tracking-wider block">Total Words</span>
-                      <span className="text-lg font-black text-indigo-900">{wordsCount}</span>
-                    </div>
-                    <div className="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-100/60">
-                      <span className="text-[9px] font-extrabold text-emerald-600 uppercase tracking-wider block">Mastered Words</span>
-                      <span className="text-lg font-black text-emerald-900">{progressCount} ({progressPercent}%)</span>
-                    </div>
-                    <div className="p-3 bg-teal-50/60 rounded-2xl border border-teal-100/60">
-                      <span className="text-[9px] font-extrabold text-teal-600 uppercase tracking-wider block">Total Groups</span>
-                      <span className="text-lg font-black text-teal-900">{course.totalGroups || 1}</span>
-                    </div>
-                    <div className="p-3 bg-amber-50/60 rounded-2xl border border-amber-100/60">
-                      <span className="text-[9px] font-extrabold text-amber-600 uppercase tracking-wider block">Course Price</span>
-                      <span className="text-lg font-black text-amber-900">৳{(course.price && course.price > 0) ? course.price : 30}</span>
-                    </div>
-                  </div>
-
-                  {/* Course Mastered Visual Progress Bar */}
-                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-extrabold text-slate-700 flex items-center gap-1.5">
-                        <Trophy className="w-4 h-4 text-amber-500" />
-                        <span>Course Mastery Progress</span>
-                      </span>
-                      <span className="font-mono font-black text-emerald-700 text-xs bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-200">
-                        {progressCount} / {wordsCount} words ({progressPercent}%)
-                      </span>
-                    </div>
-                    <div className="w-full h-2.5 bg-slate-200/80 rounded-full overflow-hidden p-0.5 border border-slate-300/40">
-                      <motion.div 
-                        initial={{ width: 0 }}
-                        animate={{ width: `${progressPercent}%` }}
-                        transition={{ duration: 0.5, ease: 'easeOut' }}
-                        className="h-full bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full shadow-2xs" 
-                      />
-                    </div>
-                  </div>
-
-                  {/* Active Features & Games */}
-                  <div className="grid grid-cols-2 gap-4 pt-2">
-                    {/* Features */}
-                    <div className="space-y-1.5">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Features</span>
-                      <ul className="space-y-1 text-xs">
-                        {variables.map(v => {
-                          const isEnabled = course.variableToggles ? course.variableToggles[v.key] !== false : true;
-                          if (!isEnabled) return null;
-                          const label = getEnglishFeatureLabel(v.key, course.placeLabels);
-                          return (
-                            <li key={v.key} className="flex items-center gap-1.5 text-slate-700 font-semibold">
-                              <span className="text-indigo-500 font-black">•</span>
-                              <span>{label}</span>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-
-                    {/* Games */}
-                    <div className="space-y-1.5">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Practice Games</span>
-                      <ul className="space-y-1 text-xs">
-                        {games.map(g => {
-                          const isEnabled = course.enabledGames ? course.enabledGames[g.key] !== false : true;
-                          if (!isEnabled) return null;
-                          const label = getEnglishGameLabel(g.key, course.placeLabels);
-                          return (
-                            <li key={g.key} className="flex items-center gap-1.5 text-slate-700 font-semibold">
-                              <span className="text-emerald-500 font-black">•</span>
-                              <span>{label}</span>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="space-y-1.5 pt-3 border-t border-slate-100">
-                    <div className="flex justify-between items-center text-[10px] font-black">
-                      <span className="text-slate-400 uppercase tracking-wider">Syllabus Progress</span>
-                      <span className="text-emerald-600 font-mono">{progressPercent}%</span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div 
-                        className="bg-emerald-500 h-full rounded-full transition-all duration-300"
-                        style={{ width: `${progressPercent}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Modal Footer Actions */}
-                <div className="p-4 bg-slate-50 border-t border-slate-150 flex flex-wrap items-center gap-2">
-                  {!isUserAllowed ? (
-                    <div className="w-full flex flex-col sm:flex-row items-center gap-2">
-                      {(() => {
-                        const sampleUsed = isFreeSampleUsed(course.id);
-                        return (
-                          <button
-                            disabled={sampleUsed}
-                            onClick={() => handleOpenFreeSample(course)}
-                            className={`flex-1 w-full py-2.5 text-xs font-black rounded-xl transition flex items-center justify-center gap-1.5 shadow-md ${
-                              sampleUsed
-                                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
-                                : 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer shadow-indigo-600/10 active:scale-98'
-                            }`}
-                            title={sampleUsed ? "Free Sample Cards Already Viewed" : "View Free Sample Cards"}
-                          >
-                            <Play className={`w-4 h-4 fill-current ${sampleUsed ? 'text-slate-400' : 'text-amber-300'}`} />
-                            <span>
-                              {sampleUsed 
-                                ? 'Free Sample Used' 
-                                : `ফ্রি কার্ডস দেখুন (${course.freeFlashcardsCount || 10}টি ফ্রি)`}
-                            </span>
-                          </button>
-                        );
-                      })()}
-
-                      <button
-                        onClick={() => {
-                          setSelectedDetailCourse(null);
-                          setSelectedBuyCourse(course);
-                        }}
-                        className="flex-1 w-full py-2.5 bg-pink-600 hover:bg-pink-700 text-white text-xs font-black rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-pink-600/10 active:scale-98"
-                      >
-                        <ShoppingBag className="w-4 h-4" />
-                        <span>Buy Course (৳{(course.price && course.price > 0) ? course.price : 30})</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => {
-                          if (!isEnrolled) {
-                            handleFreeEnroll(course);
-                          }
-                          setActiveCourseId(course.id);
-                          if (onSelectTab) {
-                            onSelectTab('flashcard');
-                          }
-                          setSelectedDetailCourse(null);
-                        }}
-                        className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/10"
-                      >
-                        <Play className="w-4 h-4 fill-current" />
-                        <span>Start Flashcards</span>
-                      </button>
-
-                      {!isActive && (
-                        <button
-                          onClick={() => {
-                            if (!isEnrolled) {
-                              handleFreeEnroll(course);
-                            } else {
-                              setActiveCourseId(course.id);
-                            }
-                            setSelectedDetailCourse(null);
-                          }}
-                          className="py-2.5 px-3.5 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-black rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
-                        >
-                          <ArrowRight className="w-4 h-4" />
-                          <span>Set Active</span>
-                        </button>
-                      )}
-                    </>
-                  )}
-
-                  {isUserAllowed && isEnrolled && !course.isDefault && (
-                    <button
-                      onClick={() => {
-                        if (confirm(`Are you sure you want to delete "${course.title}"?`)) {
-                          setEnrolledCourseIds(prev => {
-                            const updated = prev.filter(id => id !== course.id);
-                            if (isActive && updated.length > 0) {
-                              setActiveCourseId(updated[0]);
-                            }
-                            return updated;
-                          });
-                          setSelectedDetailCourse(null);
-                        }
-                      }}
-                      className="p-2.5 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl transition cursor-pointer flex-shrink-0"
-                      title="Delete Course"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </motion.div>
-            </div>
+            <CoursePreviewModal
+              key={course.id}
+              course={course}
+              isOpen={Boolean(selectedDetailCourse)}
+              onClose={() => setSelectedDetailCourse(null)}
+              isEnrolled={isEnrolled}
+              isUserAllowed={isUserAllowed}
+              isActive={isActive}
+              progress={progress}
+              sampleUsed={sampleUsed}
+              onStartFlashcards={() => {
+                if (!isEnrolled) {
+                  handleFreeEnroll(course);
+                }
+                setActiveCourseId(course.id);
+                if (onSelectTab) {
+                  onSelectTab('flashcard');
+                }
+                setSelectedDetailCourse(null);
+              }}
+              onBuyCourse={() => {
+                setSelectedDetailCourse(null);
+                setSelectedBuyCourse(course);
+              }}
+              onFreeEnroll={() => {
+                handleFreeEnroll(course);
+              }}
+              onOpenFreeSample={() => {
+                handleOpenFreeSample(course);
+              }}
+              onSetActive={() => {
+                if (!isEnrolled) {
+                  handleFreeEnroll(course);
+                } else {
+                  setActiveCourseId(course.id);
+                }
+                setSelectedDetailCourse(null);
+              }}
+            />
           );
         })()}
       </AnimatePresence>

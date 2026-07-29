@@ -8,6 +8,7 @@ export interface VocabularyWord {
   extraMeaning: string; // Meaning from extra column
   example?: string; // Optional usage sentence/example
   mnemonic?: string; // Mnemonic / memory aid note
+  pronunciation?: string; // Voice pronunciation string
 }
 
 export type WordStatus = 'know' | 'dont_know' | 'confusion' | 'unrated'; // 'know', 'dont_know', 'confusion', 'unrated'
