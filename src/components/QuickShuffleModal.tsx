@@ -225,8 +225,8 @@ export default function QuickShuffleModal({
                 </div>
                 <p className="text-[11px] font-medium text-slate-900/90 mt-1">
                   {usingFallbackWords 
-                    ? 'প্র্যাকটিস করার জন্য ৫টি প্রশ্ন কুইজ'
-                    : 'কনফিউশন ওয়ার্ডস (Confusion Words) কুইজ'
+                    ? '5 Questions Practice Quiz'
+                    : 'Confusion Words Quiz'
                   }
                 </p>
               </div>
@@ -435,7 +435,7 @@ export default function QuickShuffleModal({
                     Quick Shuffle Complete!
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                    {score === totalQs ? '🎉 অসাধারণ সাফল্য! সবকটি প্রশ্নের সঠিক উত্তর দিয়েছেন।' : 'দারুণ প্রচেষ্টা! নিয়মিত অনুশীলনে শব্দগুলো সহজে মনে থাকবে।'}
+                    {score === totalQs ? '🎉 Outstanding! You answered all questions correctly.' : 'Great effort! Regular practice keeps words fresh in memory.'}
                   </p>
                 </div>
 

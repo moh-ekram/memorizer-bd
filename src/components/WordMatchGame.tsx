@@ -179,32 +179,6 @@ export default function WordMatchGame({ words, activeGroup, settings, onBack, pl
         <span className="text-xs font-black text-slate-600 font-sans">Practice Match Game</span>
       </div>
 
-      {/* Overall Quiz Progress Card */}
-      {(() => {
-        const totalWordsCount = words.length;
-        const completedWordsCount = matchesCount;
-        const overallProgressPercent = totalWordsCount > 0 ? Math.round((completedWordsCount / totalWordsCount) * 100) : 0;
-
-        return (
-          <div className="bg-indigo-950 text-white rounded-2xl p-4 sm:p-5 shadow-md space-y-3 relative overflow-hidden">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4.5 h-4.5 text-amber-400" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Overall Quiz Progress</span>
-            </div>
-            <div className="grid grid-cols-2 gap-4 border-t border-indigo-900 pt-3">
-              <div>
-                <span className="text-xl sm:text-2xl font-black font-sans">{completedWordsCount} / {totalWordsCount}</span>
-                <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider mt-0.5">Total Completed Words</p>
-              </div>
-              <div>
-                <span className="text-xl sm:text-2xl font-black font-sans text-emerald-400">{overallProgressPercent}%</span>
-                <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider mt-0.5">Progress Achieved</p>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
       {/* 1. SETUP GAME */}
       {!isPlaying ? (
         <div className="text-center space-y-6 py-6 animate-fadeIn">

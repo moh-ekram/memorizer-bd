@@ -335,32 +335,6 @@ export default function OddOneOutGame({
         </div>
       </div>
 
-      {/* Overall Quiz Progress Card */}
-      {(() => {
-        const totalCount = (words && words.length > 0) ? words.length : allQuestions.length;
-        const completedCount = counts.done;
-        const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-
-        return (
-          <div className="bg-indigo-950 text-white rounded-2xl p-4 sm:p-5 shadow-md space-y-3 relative overflow-hidden">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Overall Quiz Progress</span>
-            </div>
-            <div className="grid grid-cols-2 gap-4 border-t border-indigo-900 pt-3">
-              <div>
-                <span className="text-xl sm:text-2xl font-black font-sans">{completedCount} / {totalCount}</span>
-                <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider mt-0.5">Total Completed Words</p>
-              </div>
-              <div>
-                <span className="text-xl sm:text-2xl font-black font-sans text-emerald-400">{progressPercent}%</span>
-                <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider mt-0.5">Progress Achieved</p>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
       {questions.length === 0 ? (
         <div className="bg-white p-12 rounded-3xl border border-slate-200/60 shadow-xs text-center space-y-4">
           <HelpCircle className="w-12 h-12 text-slate-300 mx-auto" />
@@ -550,9 +524,9 @@ export default function OddOneOutGame({
 
               {/* Middle Explanation */}
               <div className="p-6 space-y-3">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">ব্যাখ্যা (Explanation)</span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Explanation</span>
                 <div className="bg-slate-50 border border-slate-200/60 p-4 rounded-2xl text-xs font-semibold text-slate-600 leading-relaxed max-h-[200px] overflow-y-auto">
-                  {currentQuestion.reason ? currentQuestion.reason : "এই প্রশ্নের জন্য কোনো ব্যাখ্যা পাওয়া যায়নি।"}
+                  {currentQuestion.reason ? currentQuestion.reason : "No explanation available for this question."}
                 </div>
               </div>
 
@@ -565,7 +539,7 @@ export default function OddOneOutGame({
                   }}
                   className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-sm rounded-xl transition cursor-pointer shadow-sm shadow-indigo-500/10 flex items-center justify-center gap-2"
                 >
-                  <span>{currentIndex === questions.length - 1 ? 'সব শেষ (Finish)' : 'পরবর্তী প্রশ্ন (Next Question)'}</span>
+                  <span>{currentIndex === questions.length - 1 ? 'Finish' : 'Next Question'}</span>
                   <ChevronRight className="w-4 h-4 stroke-[3]" />
                 </button>
               </div>

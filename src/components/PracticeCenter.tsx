@@ -302,8 +302,6 @@ export default function PracticeCenter({
     {
       key: 'quiz',
       title: 'MCQ Quiz',
-      banglaTitle: 'এমসিকিউ কুইজ',
-      desc: 'মক টেস্ট ও ৪ বিকল্প কুইজ দিয়ে স্মৃতি শক্তি যাচাই করুন',
       tag: 'Test Recall',
       btnText: 'Start Now',
       iconBg: 'bg-indigo-50 text-indigo-600 border-indigo-100',
@@ -319,8 +317,6 @@ export default function PracticeCenter({
     {
       key: 'match',
       title: 'Word Match',
-      banglaTitle: 'ওয়ার্ড ম্যাচ গেম',
-      desc: 'শব্দ ও অর্থের দ্রুত মিলকরণ চ্যালেঞ্জ খেলুন',
       tag: 'Play Game',
       btnText: 'Start Play',
       iconBg: 'bg-pink-50 text-pink-600 border-pink-100',
@@ -336,8 +332,6 @@ export default function PracticeCenter({
     {
       key: 'synonym',
       title: 'Synonym Check',
-      banglaTitle: 'সমার্থক শব্দ চেক',
-      desc: 'শব্দের সমার্থক রূপ যাচাই ও অনুশীলন করুন',
       tag: 'AI Verification',
       btnText: 'Verify Now',
       iconBg: 'bg-amber-50 text-amber-600 border-amber-100',
@@ -353,8 +347,6 @@ export default function PracticeCenter({
     {
       key: 'blank',
       title: 'Blank Filling',
-      banglaTitle: 'শূন্যস্থান পূরণ',
-      desc: 'বাক্যে সঠিক শব্দ বসিয়ে ব্যাকরণ ও অর্থ ঝালাই করুন',
       tag: 'Sentence Quiz',
       btnText: 'Practice Now',
       iconBg: 'bg-emerald-50 text-emerald-600 border-emerald-100',
@@ -370,8 +362,6 @@ export default function PracticeCenter({
     {
       key: 'odd_one_out',
       title: 'Odd One Out',
-      banglaTitle: 'ব্যতিক্রমী শব্দ সনাক্তকরণ',
-      desc: 'চারটি শব্দের মধ্যে বেমানান শব্দটি খুঁজে বের করুন',
       tag: 'Word Selection',
       btnText: 'Play Now',
       iconBg: 'bg-sky-50 text-sky-600 border-sky-100',
@@ -387,8 +377,6 @@ export default function PracticeCenter({
     {
       key: 'analogy',
       title: 'Word Analogy',
-      banglaTitle: 'শব্দের এনালজি',
-      desc: 'শব্দের পারস্পরিক যৌক্তিক সম্পর্ক সমাধান করুন',
       tag: 'Logic Challenge',
       btnText: 'Solve Now',
       iconBg: 'bg-purple-50 text-purple-650 border-purple-100',
@@ -454,9 +442,6 @@ export default function PracticeCenter({
                 )}
               </div>
               <h2 className="text-2xl sm:text-3xl font-black tracking-tight">Games</h2>
-              <p className="text-xs text-indigo-200/80 font-medium">
-                মক টেস্ট, গেম ও অটো কুইজ দিয়ে ভোকাবুলারি দ্রুত রিভিশন দিন
-              </p>
             </div>
 
             <button
@@ -481,7 +466,7 @@ export default function PracticeCenter({
           <div className="sm:hidden flex items-center justify-between p-3.5 bg-slate-100/90 rounded-2xl border border-slate-200">
             <span className="text-xs font-extrabold text-slate-800 flex items-center gap-2">
               <Gamepad2 className="w-4 h-4 text-indigo-600" />
-              <span>প্র্যাকটিস আইটেমস ({orderedItems.filter(i => i.enabled).length})</span>
+              <span>Practice Items ({orderedItems.filter(i => i.enabled).length})</span>
             </span>
             <button
               type="button"
@@ -538,7 +523,6 @@ export default function PracticeCenter({
                       </div>
                       <div className="min-w-0">
                         <h3 className="font-extrabold text-slate-800 text-base leading-tight truncate">{item.title}</h3>
-                        <span className="text-[11px] font-semibold text-slate-400 block mt-0.5 truncate">{item.banglaTitle}</span>
                       </div>
                     </div>
 
@@ -562,13 +546,9 @@ export default function PracticeCenter({
                   </div>
 
                   {/* Card Body & Footer */}
-                  <div className={`${isCollapsedMobile ? 'hidden sm:block' : 'block'} px-5 pb-5 space-y-4 pt-0 border-t border-slate-100/60 sm:border-t-0`}>
-                    <p className="text-xs text-slate-500 font-medium leading-relaxed pt-1">
-                      {item.desc}
-                    </p>
-
+                  <div className={`${isCollapsedMobile ? 'hidden sm:block' : 'block'} px-5 pb-5 space-y-3 pt-0 border-t border-slate-100/60 sm:border-t-0`}>
                     {/* Game Progress Bar & Question Counter */}
-                    <div className="space-y-1.5 pt-1 bg-slate-50/80 p-2.5 rounded-xl border border-slate-100">
+                    <div className="space-y-1.5 bg-slate-50/80 p-2.5 rounded-xl border border-slate-100">
                       <div className="flex items-center justify-between text-[11px] font-bold">
                         <span className="text-slate-700 font-mono flex items-center gap-1.5 truncate">
                           <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${item.ringColorClass}`} />

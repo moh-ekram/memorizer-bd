@@ -262,24 +262,6 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
 
         return (
           <div className="space-y-8 animate-fadeIn">
-            {/* Overall Quiz Progress Card */}
-            <div className="bg-indigo-950 text-white rounded-2xl p-5 shadow-md space-y-3 relative overflow-hidden">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4.5 h-4.5 text-amber-400" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Overall Quiz Progress</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4 border-t border-indigo-900 pt-3">
-                <div>
-                  <span className="text-2xl font-black font-sans">{completedWordsCount} / {totalWordsCount}</span>
-                  <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider mt-0.5">Total Completed Words</p>
-                </div>
-                <div>
-                  <span className="text-2xl font-black font-sans text-emerald-400">{overallProgressPercent}%</span>
-                  <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider mt-0.5">Progress Achieved</p>
-                </div>
-              </div>
-            </div>
-
             <div className="text-center space-y-2">
             <div className="inline-flex p-3 bg-indigo-50 text-indigo-600 rounded-2xl mb-2">
               <Award className="w-8 h-8" />

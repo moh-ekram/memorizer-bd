@@ -786,32 +786,6 @@ export default function SynonymCheck({
         </div>
       )}
 
-      {/* Overall Quiz Progress Card */}
-      {(() => {
-        const totalWordsCount = words.length;
-        const completedWordsCount = words.filter(w => synonymProgress[w.id]?.correct).length;
-        const overallProgressPercent = totalWordsCount > 0 ? Math.round((completedWordsCount / totalWordsCount) * 100) : 0;
-
-        return (
-          <div className="bg-indigo-950 text-white rounded-2xl p-4 sm:p-5 shadow-md space-y-3 relative overflow-hidden font-sans">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4.5 h-4.5 text-amber-400" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Overall Quiz Progress</span>
-            </div>
-            <div className="grid grid-cols-2 gap-4 border-t border-indigo-900 pt-3">
-              <div>
-                <span className="text-xl sm:text-2xl font-black font-sans">{completedWordsCount} / {totalWordsCount}</span>
-                <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider mt-0.5">Total Completed Words</p>
-              </div>
-              <div>
-                <span className="text-xl sm:text-2xl font-black font-sans text-emerald-400">{overallProgressPercent}%</span>
-                <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider mt-0.5">Progress Achieved</p>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
       {/* Empty State Guard */}
       {filteredWords.length === 0 ? (
         <div className="bg-white border border-gray-100 rounded-3xl p-12 text-center max-w-xl mx-auto space-y-4" id="synonym-empty-state">
@@ -991,40 +965,6 @@ export default function SynonymCheck({
           {/* Right Column: Global Stats, Bookmark integration & Groupwise Progress Scroll */}
           <div className="space-y-6">
             
-            {/* Accuracy and Synonym stats overview card */}
-            <div className="bg-indigo-950/95 text-white rounded-2xl p-5 space-y-4 shadow-md relative overflow-hidden">
-              <div className="absolute top-0 right-0 transform translate-x-4 -translate-y-4 opacity-5">
-                <Award className="w-36 h-36" />
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4.5 h-4.5 text-amber-400" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Overall Quiz Progress</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 border-b border-indigo-900 pb-3 z-10 relative">
-                <div>
-                  <span className="text-[10px] text-indigo-300 block font-bold">Total Completed Words</span>
-                  <p className="text-xl font-black font-sans">{overallStats.completed} / {overallStats.total}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] text-indigo-300 block font-bold">Progress Achieved</span>
-                  <p className="text-xl font-black font-sans text-emerald-400">{overallStats.percent}%</p>
-                </div>
-              </div>
-
-              <div className="w-full bg-indigo-900 h-1.5 rounded-full overflow-hidden">
-                <div 
-                  className="bg-emerald-400 h-full rounded-full transition-all duration-500" 
-                  style={{ width: `${overallStats.percent}%` }}
-                />
-              </div>
-
-              <p className="text-[11px] text-indigo-200 font-sans leading-relaxed">
-                Your progress rate increases when you answer synonyms correctly across all vocabulary groups.
-              </p>
-            </div>
-
             {/* Word details and progress status replacing bookmarks block */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-xs space-y-3.5">
               <h3 className="font-bold text-slate-800 flex items-center gap-2 pb-2.5 border-b border-slate-100 text-xs">

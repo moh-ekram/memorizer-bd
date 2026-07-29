@@ -450,9 +450,9 @@ export default function FlashcardViewer({
     extraMeaning: ''
   };
 
-  // Calculate progress stats for the currently filtered set of words
+  // Calculate progress stats for ALL words in the course (activeWordsList)
   const filterProgressStats = React.useMemo(() => {
-    const total = filteredWords.length;
+    const total = activeWordsList.length;
     if (total === 0) {
       return {
         total: 0,
@@ -473,7 +473,7 @@ export default function FlashcardViewer({
     let dontKnow = 0;
     let unrated = 0;
 
-    filteredWords.forEach(w => {
+    activeWordsList.forEach(w => {
       const st = progress[w.id]?.status || 'unrated';
       if (st === 'know') know++;
       else if (st === 'confusion') confusion++;
@@ -499,7 +499,7 @@ export default function FlashcardViewer({
       unratedPct,
       completedPct
     };
-  }, [filteredWords, progress]);
+  }, [activeWordsList, progress]);
 
   // Helper to parse double asterisks and render bold words
   const renderSentence = (text: string) => {
