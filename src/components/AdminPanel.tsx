@@ -3,9 +3,15 @@ import {
   db, 
   auth,
   doc,
-  setDoc
+  setDoc,
+  collection,
+  getDocs,
+  deleteDoc,
+  updateDoc,
+  getDoc,
+  query,
+  where
 } from '../lib/firebase';
-import { collection, getDocs, deleteDoc, updateDoc, getDoc, query, where } from 'firebase/firestore';
 import { VocabularyWord, UserProgress, Course, AccessRequest, BlankQuestion, AppSettings, VerifiedPayment } from '../types';
 import { read, utils } from 'xlsx';
 import { CourseSettings } from './CourseSettings';

@@ -4,8 +4,7 @@ import { isCourseEnrolled } from '../lib/courseAccess';
 import { Award, BookOpen, Flame, CheckCircle, AlertTriangle, XCircle, HelpCircle, Trophy, TrendingUp, Search, Plus, Sparkles, Check, ChevronRight, X, Crown, RefreshCw, KeyRound, Copy, CreditCard, Trash2, Lock, CheckCircle2, Circle, CheckSquare, Square, Filter, Layers } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, AreaChart, Area, LineChart, Line, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Legend } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
-import { auth, db } from '../lib/firebase';
-import { collection, getDocs, limit, query, doc, getDoc, setDoc } from 'firebase/firestore';
+import { auth, db, collection, getDocs, doc, getDoc, setDoc, query } from '../lib/firebase';
 
 interface StatsDashboardProps {
   user: any;

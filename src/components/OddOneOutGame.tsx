@@ -13,8 +13,7 @@ import {
   ArrowLeft,
   Sparkles
 } from 'lucide-react';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, collection, getDocs } from '../lib/firebase';
 import { OddOneOutQuestion, VocabularyWord } from '../types';
 
 interface OddOneOutGameProps {

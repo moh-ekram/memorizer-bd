@@ -7,8 +7,7 @@ import {
   Copy, ArrowRight, Star, Heart, Calendar, ShieldAlert, Layers, Play,
   ChevronDown, ChevronUp, Info, Eye, Wallet, EyeOff, MoreHorizontal, ArrowUpRight
 } from 'lucide-react';
-import { db } from '../lib/firebase';
-import { doc, setDoc, getDoc, getDocs, query, collection, where } from 'firebase/firestore';
+import { db, doc, setDoc, getDoc, getDocs, query, collection, where } from '../lib/firebase';
 import { Course, UserProgress, ActiveTab } from '../types';
 import { isCourseEnrolled, isCourseAccessible } from '../lib/courseAccess';
 import CoursePreviewModal from './CoursePreviewModal';

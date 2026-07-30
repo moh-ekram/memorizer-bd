@@ -47,9 +47,13 @@ import {
   setDoc,
   onAuthStateChanged,
   signOut,
+  collection,
+  onSnapshot,
+  getDocs,
+  query,
+  where,
   User as FirebaseUser
 } from './lib/firebase';
-import { collection, onSnapshot, getDocs, query, where } from 'firebase/firestore';
 import { Course } from './types';
 import { isCourseEnrolled, isCourseAccessible } from './lib/courseAccess';
 import AuthModal from './components/AuthModal';

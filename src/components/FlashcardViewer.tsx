@@ -4,8 +4,7 @@ import { VocabularyWord, WordStatus, UserProgress, CustomFolder, AppSettings } f
 import { getGoogleSearchUrl } from '../lib/searchUtils';
 import sentencesDataRaw from '../data/sentences.json';
 const sentencesData = sentencesDataRaw as Record<string, string[]>;
-import { auth, db } from '../lib/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { auth, db, doc, setDoc } from '../lib/firebase';
 
 import { 
   ChevronLeft, 

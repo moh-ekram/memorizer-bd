@@ -16,8 +16,7 @@ import {
   CheckCircle2,
   CheckCircle
 } from 'lucide-react';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, collection, getDocs } from '../lib/firebase';
 import SynonymCheck from './SynonymCheck';
 import PracticeQuiz from './PracticeQuiz';
 import WordMatchGame from './WordMatchGame';
