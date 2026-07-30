@@ -20,7 +20,8 @@ const firebaseConfig = {
 };
 
 const fbApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-const rawFbDb = getFirestore(fbApp);
+const firebaseDatabaseId = "ai-studio-vocabularymemori-82d2e4c7-2d1e-4297-8ae1-0701377b48e6";
+const rawFbDb = getFirestore(fbApp, firebaseDatabaseId);
 
 export interface User {
   uid: string;
