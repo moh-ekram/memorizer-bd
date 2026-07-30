@@ -692,21 +692,49 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     const path = 'users';
     try {
       const querySnapshot = await getDocs(collection(db, path));
-      const fetchedUsers: FirestoreUserDoc[] = [];
+      const fetchedUsersMap = new Map<string, FirestoreUserDoc>();
+
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        fetchedUsers.push({
-          id: doc.id,
-          email: data.email || 'unknown@user.com',
-          createdAt: data.createdAt,
-          updatedAt: data.updatedAt,
-          progress: data.progress || {},
-          goal: data.goal || {},
-          synonymProgress: data.synonymProgress || {},
-          settings: data.settings || {}
-        });
+        const userEmail = (data.email || '').trim().toLowerCase();
+        if (data.email || doc.id) {
+          fetchedUsersMap.set(userEmail || doc.id, {
+            id: doc.id,
+            email: data.email || 'unknown@user.com',
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+            progress: data.progress || {},
+            goal: data.goal || {},
+            synonymProgress: data.synonymProgress || {},
+            settings: data.settings || {}
+          });
+        }
       });
-      setUsers(fetchedUsers);
+
+      // Also check access_requests for any users who submitted requests
+      try {
+        const reqsSnap = await getDocs(collection(db, 'access_requests'));
+        reqsSnap.forEach((rDoc) => {
+          const rData = rDoc.data();
+          const rEmail = (rData.userEmail || '').trim().toLowerCase();
+          if (rEmail && !fetchedUsersMap.has(rEmail)) {
+            fetchedUsersMap.set(rEmail, {
+              id: `req-${rDoc.id}`,
+              email: rData.userEmail,
+              createdAt: rData.timestamp || rData.createdAt || new Date().toISOString(),
+              updatedAt: rData.timestamp || new Date().toISOString(),
+              progress: {},
+              goal: {},
+              synonymProgress: {},
+              settings: {}
+            });
+          }
+        });
+      } catch (e) {
+        console.warn('Could not supplement users from access_requests:', e);
+      }
+
+      setUsers(Array.from(fetchedUsersMap.values()));
     } catch (err) {
       setError('Failed to load users data from Firestore. Please verify Firestore Security Rules.');
       try {

@@ -22,7 +22,9 @@ const firebaseConfig = {
 
 const fbApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const firebaseDatabaseId = "ai-studio-vocabularymemori-82d2e4c7-2d1e-4297-8ae1-0701377b48e6";
-const rawFbDb = getFirestore(fbApp, firebaseDatabaseId);
+const rawFbCustomDb = getFirestore(fbApp, firebaseDatabaseId);
+const rawFbDefaultDb = getFirestore(fbApp);
+const rawFbDb = rawFbCustomDb;
 
 export interface User {
   uid: string;
@@ -250,29 +252,32 @@ export async function getDocs(queryOrCollectionRef: any) {
       console.warn(`Supabase getDocs error for ${collectionName}:`, sbErr);
     }
 
-    // 2. Fetch from Firebase Firestore to catch any missing docs or empty fields
-    try {
-      const fbRef = fbCollection(rawFbDb, collectionName);
-      const fbSnap = await fbGetDocs(fbRef);
-      if (!fbSnap.empty) {
-        fbSnap.docs.forEach(docSnap => {
-          const docId = docSnap.id;
-          const dData = docSnap.data();
-          const existingInSB = docsMap.get(docId);
-          if (!existingInSB) {
-            const merged = { id: docId, ...dData };
-            docsMap.set(docId, merged);
-            // Sync to Supabase in background
-            setDoc({ collectionName, docId }, dData).catch(() => {});
-          } else if (collectionName === 'courses' && dData?.words && Array.isArray(dData.words) && dData.words.length > 0 && (!existingInSB.words || existingInSB.words.length === 0)) {
-            const merged = { ...existingInSB, ...dData, words: dData.words };
-            docsMap.set(docId, merged);
-            setDoc({ collectionName, docId }, merged).catch(() => {});
-          }
-        });
+    // 2. Fetch from Firebase Firestore (both custom and default DBs) to catch any missing docs
+    const fbDbs = [rawFbCustomDb, rawFbDefaultDb];
+    for (const d of fbDbs) {
+      try {
+        const fbRef = fbCollection(d, collectionName);
+        const fbSnap = await fbGetDocs(fbRef);
+        if (!fbSnap.empty) {
+          fbSnap.docs.forEach(docSnap => {
+            const docId = docSnap.id;
+            const dData = docSnap.data();
+            const existingInSB = docsMap.get(docId);
+            if (!existingInSB) {
+              const merged = { id: docId, ...dData };
+              docsMap.set(docId, merged);
+              // Sync to Supabase in background
+              setDoc({ collectionName, docId }, dData).catch(() => {});
+            } else if (collectionName === 'courses' && dData?.words && Array.isArray(dData.words) && dData.words.length > 0 && (!existingInSB.words || existingInSB.words.length === 0)) {
+              const merged = { ...existingInSB, ...dData, words: dData.words };
+              docsMap.set(docId, merged);
+              setDoc({ collectionName, docId }, merged).catch(() => {});
+            }
+          });
+        }
+      } catch (fbErr) {
+        console.warn(`Firebase getDocs fallback error for ${collectionName}:`, fbErr);
       }
-    } catch (fbErr) {
-      console.warn(`Firebase getDocs fallback error for ${collectionName}:`, fbErr);
     }
 
     const docs = Array.from(docsMap.entries()).map(([id, docData]) => ({
@@ -415,35 +420,38 @@ export async function findAndMigrateUserProgressByEmail(currentUser: { uid: stri
     console.warn('Search Supabase users by email error:', e);
   }
 
-  // 3. Search Firebase Firestore raw 'users' collection directly by email or doc id
-  try {
-    const fbRef = fbCollection(rawFbDb, 'users');
-    const fbSnap = await fbGetDocs(fbRef);
-    for (const uDoc of fbSnap.docs) {
-      const uData = uDoc.data();
-      const uEmail = (uData?.email || '').trim().toLowerCase();
-      if (uEmail === cleanEmail || uDoc.id.trim().toLowerCase() === cleanEmail) {
-        const count = Object.keys(uData?.progress || {}).length;
-        if (count > bestCount) {
-          bestCount = count;
-          bestData = uData;
-        } else if (bestData && count > 0) {
-          bestData = {
-            ...bestData,
-            ...uData,
-            progress: { ...(bestData.progress || {}), ...(uData.progress || {}) },
-            analogyProgress: { ...(bestData.analogyProgress || {}), ...(uData.analogyProgress || {}) },
-            blankProgress: { ...(bestData.blankProgress || {}), ...(uData.blankProgress || {}) },
-            oooProgress: { ...(bestData.oooProgress || {}), ...(uData.oooProgress || {}) },
-            synonymProgress: { ...(bestData.synonymProgress || {}), ...(uData.synonymProgress || {}) },
-            history: { ...(bestData.history || {}), ...(uData.history || {}) },
-            enrolledCourseIds: Array.from(new Set([...(bestData.enrolledCourseIds || []), ...(uData.enrolledCourseIds || [])]))
-          };
+  // 3. Search Firebase Firestore raw 'users' collection across both databases directly by email or doc id
+  const rawDbs = [rawFbCustomDb, rawFbDefaultDb];
+  for (const rDb of rawDbs) {
+    try {
+      const fbRef = fbCollection(rDb, 'users');
+      const fbSnap = await fbGetDocs(fbRef);
+      for (const uDoc of fbSnap.docs) {
+        const uData = uDoc.data();
+        const uEmail = (uData?.email || '').trim().toLowerCase();
+        if (uEmail === cleanEmail || uDoc.id.trim().toLowerCase() === cleanEmail) {
+          const count = Object.keys(uData?.progress || {}).length;
+          if (count > bestCount) {
+            bestCount = count;
+            bestData = uData;
+          } else if (bestData && count > 0) {
+            bestData = {
+              ...bestData,
+              ...uData,
+              progress: { ...(bestData.progress || {}), ...(uData.progress || {}) },
+              analogyProgress: { ...(bestData.analogyProgress || {}), ...(uData.analogyProgress || {}) },
+              blankProgress: { ...(bestData.blankProgress || {}), ...(uData.blankProgress || {}) },
+              oooProgress: { ...(bestData.oooProgress || {}), ...(uData.oooProgress || {}) },
+              synonymProgress: { ...(bestData.synonymProgress || {}), ...(uData.synonymProgress || {}) },
+              history: { ...(bestData.history || {}), ...(uData.history || {}) },
+              enrolledCourseIds: Array.from(new Set([...(bestData.enrolledCourseIds || []), ...(uData.enrolledCourseIds || [])]))
+            };
+          }
         }
       }
+    } catch (e) {
+      console.warn('Search raw Firebase users by email error:', e);
     }
-  } catch (e) {
-    console.warn('Search raw Firebase users by email error:', e);
   }
 
   // 4. Save merged data to both Supabase and raw Firebase Firestore
