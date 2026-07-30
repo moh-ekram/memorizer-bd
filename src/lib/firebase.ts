@@ -290,26 +290,44 @@ export async function getDocs(queryOrCollectionRef: any) {
       docs,
       empty: docs.length === 0,
       size: docs.length,
-      forEach: (callback: (doc: any) => void) => docs.forEach(callback)
+      forEach: (callback: (doc: any) => void) => docs.forEach(callback),
+      exists: () => docs.length > 0
     };
   } catch (err) {
-    return { docs: [], empty: true, size: 0, forEach: () => {} };
+    return { docs: [], empty: true, size: 0, forEach: () => {}, exists: () => false };
   }
 }
 
 export function onSnapshot(_ref: any, callback: (snap: any) => void) {
-  getDocs(_ref).then(snap => callback(snap));
-  
-  const collectionName = _ref.collectionName || 'users';
-  const channel = supabase.channel(`public:${collectionName}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: collectionName }, () => {
-      getDocs(_ref).then(snap => callback(snap));
-    })
-    .subscribe();
+  const isDoc = _ref && typeof _ref.docId === 'string' && _ref.docId.length > 0;
 
-  return () => {
-    supabase.removeChannel(channel);
-  };
+  if (isDoc) {
+    getDoc(_ref).then(snap => callback(snap));
+
+    const collectionName = _ref.collectionName || 'users';
+    const channel = supabase.channel(`public:${collectionName}:${_ref.docId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: collectionName }, () => {
+        getDoc(_ref).then(snap => callback(snap));
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  } else {
+    getDocs(_ref).then(snap => callback(snap));
+    
+    const collectionName = _ref?.collectionName || 'users';
+    const channel = supabase.channel(`public:${collectionName}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: collectionName }, () => {
+        getDocs(_ref).then(snap => callback(snap));
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }
 }
 
 export async function syncAllFirebaseToSupabase() {
@@ -478,6 +496,85 @@ export async function findAndMigrateUserProgressByEmail(currentUser: { uid: stri
 
   return null;
 }
+
+/**
+ * Utility function to fetch user data from the Firebase 'users' collection 
+ * based on email address and migrate it directly into the Supabase database schema.
+ */
+export async function fetchAndMigrateUserDataByEmail(email: string, targetUid?: string) {
+  if (!email || typeof email !== 'string') return null;
+  const cleanEmail = email.trim().toLowerCase();
+
+  let compiledData: any = null;
+  let maxProgressCount = -1;
+
+  // 1. Check RECOVERED_USER_DATA
+  if (RECOVERED_USER_DATA && RECOVERED_USER_DATA.email && RECOVERED_USER_DATA.email.trim().toLowerCase() === cleanEmail) {
+    compiledData = JSON.parse(JSON.stringify(RECOVERED_USER_DATA));
+    maxProgressCount = Object.keys(compiledData.progress || {}).length;
+  }
+
+  // 2. Query Firebase Firestore raw 'users' collection across databases
+  const rawDbs = [rawFbCustomDb, rawFbDefaultDb];
+  for (const rDb of rawDbs) {
+    try {
+      const fbRef = fbCollection(rDb, 'users');
+      const fbSnap = await fbGetDocs(fbRef);
+      for (const uDoc of fbSnap.docs) {
+        const uData = uDoc.data();
+        const uEmail = (uData?.email || '').trim().toLowerCase();
+        
+        if (uEmail === cleanEmail || uDoc.id.trim().toLowerCase() === cleanEmail) {
+          const progCount = Object.keys(uData?.progress || {}).length;
+          if (progCount > maxProgressCount || !compiledData) {
+            maxProgressCount = progCount;
+            if (!compiledData) {
+              compiledData = uData;
+            } else {
+              compiledData = {
+                ...compiledData,
+                ...uData,
+                progress: { ...(compiledData.progress || {}), ...(uData.progress || {}) },
+                analogyProgress: { ...(compiledData.analogyProgress || {}), ...(uData.analogyProgress || {}) },
+                blankProgress: { ...(compiledData.blankProgress || {}), ...(uData.blankProgress || {}) },
+                oooProgress: { ...(compiledData.oooProgress || {}), ...(uData.oooProgress || {}) },
+                synonymProgress: { ...(compiledData.synonymProgress || {}), ...(uData.synonymProgress || {}) },
+                history: { ...(compiledData.history || {}), ...(uData.history || {}) },
+                enrolledCourseIds: Array.from(new Set([...(compiledData.enrolledCourseIds || []), ...(uData.enrolledCourseIds || [])]))
+              };
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`Error fetching user ${cleanEmail} from Firebase:`, e);
+    }
+  }
+
+  // 3. Migrate / save compiled user data to Supabase
+  if (compiledData) {
+    const finalUid = targetUid || compiledData.uid || compiledData.id || `migrated-${cleanEmail}`;
+    const payloadToMigrate = {
+      ...compiledData,
+      id: finalUid,
+      email: cleanEmail,
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      // Store in Supabase 'users' collection/table
+      await setDoc(doc(db, 'users', finalUid), payloadToMigrate, { merge: true });
+      console.log(`Successfully migrated user data for ${cleanEmail} to Supabase with UID ${finalUid}`);
+    } catch (sbErr) {
+      console.error(`Failed to save migrated user data to Supabase:`, sbErr);
+    }
+
+    return payloadToMigrate;
+  }
+
+  return null;
+}
+
 
 
 
