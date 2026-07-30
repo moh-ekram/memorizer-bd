@@ -27,8 +27,8 @@ export default function DailyPlanner({ words, progress, goal, setGoal, onLaunchP
   }
 
   const todayStr = getTodayString();
-  const wordsStudiedToday = goal.history[todayStr] || 0;
-  const progressPercent = Math.min(100, Math.round((wordsStudiedToday / (goal.dailyTarget || 1)) * 100));
+  const wordsStudiedToday = goal?.history?.[todayStr] || 0;
+  const progressPercent = Math.min(100, Math.round((wordsStudiedToday / (goal?.dailyTarget || 1)) * 100));
 
   // Calendar visualization helper (last 7 days)
   const last7Days = Array.from({ length: 7 }, (_, i) => {
@@ -37,8 +37,8 @@ export default function DailyPlanner({ words, progress, goal, setGoal, onLaunchP
     const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const weekday = d.toLocaleDateString('bn-BD', { weekday: 'short' });
     const dayNum = d.getDate();
-    const active = (goal.history[dStr] || 0) > 0;
-    const studiedCount = goal.history[dStr] || 0;
+    const active = (goal?.history?.[dStr] || 0) > 0;
+    const studiedCount = goal?.history?.[dStr] || 0;
 
     return {
       dateStr: dStr,

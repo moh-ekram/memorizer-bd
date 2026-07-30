@@ -131,6 +131,10 @@ export function where(field: string, opStr: string, value: any) {
   return { type: 'where', field, opStr, value };
 }
 
+export function limit(n: number) {
+  return { type: 'limit', value: n };
+}
+
 export async function getDoc(docRef: any) {
   try {
     const { collectionName, docId } = docRef;
@@ -223,7 +227,7 @@ export async function getDocs(queryOrCollectionRef: any) {
 
     // 1. Fetch from Supabase
     try {
-      let builder = supabase.from(collectionName).select('*');
+      let builder: any = supabase.from(collectionName).select('*');
 
       if (queryOrCollectionRef.constraints && Array.isArray(queryOrCollectionRef.constraints)) {
         for (const c of queryOrCollectionRef.constraints) {
@@ -298,7 +302,7 @@ export async function getDocs(queryOrCollectionRef: any) {
   }
 }
 
-export function onSnapshot(_ref: any, callback: (snap: any) => void) {
+export function onSnapshot(_ref: any, callback: (snap: any) => void, onError?: (error: any) => void) {
   const isDoc = _ref && typeof _ref.docId === 'string' && _ref.docId.length > 0;
 
   if (isDoc) {
@@ -364,6 +368,13 @@ export async function syncAllFirebaseToSupabase() {
   return syncedCount;
 }
 
+function toArray(val: any): any[] {
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string' && val.trim()) return [val.trim()];
+  if (val && typeof val === 'object') return Object.values(val).filter(x => typeof x === 'string');
+  return [];
+}
+
 export async function findAndMigrateUserProgressByEmail(currentUser: { uid: string; email: string | null }) {
   if (!currentUser || !currentUser.email) return null;
   const cleanEmail = currentUser.email.trim().toLowerCase();
@@ -401,7 +412,7 @@ export async function findAndMigrateUserProgressByEmail(currentUser: { uid: stri
           oooProgress: { ...(bestData.oooProgress || {}), ...(curData.oooProgress || {}) },
           synonymProgress: { ...(bestData.synonymProgress || {}), ...(curData.synonymProgress || {}) },
           history: { ...(bestData.history || {}), ...(curData.history || {}) },
-          enrolledCourseIds: Array.from(new Set([...(bestData.enrolledCourseIds || []), ...(curData.enrolledCourseIds || [])]))
+          enrolledCourseIds: Array.from(new Set([...toArray(bestData.enrolledCourseIds), ...toArray(curData.enrolledCourseIds)]))
         };
       }
     }
@@ -429,7 +440,7 @@ export async function findAndMigrateUserProgressByEmail(currentUser: { uid: stri
             oooProgress: { ...(bestData.oooProgress || {}), ...(uData.oooProgress || {}) },
             synonymProgress: { ...(bestData.synonymProgress || {}), ...(uData.synonymProgress || {}) },
             history: { ...(bestData.history || {}), ...(uData.history || {}) },
-            enrolledCourseIds: Array.from(new Set([...(bestData.enrolledCourseIds || []), ...(uData.enrolledCourseIds || [])]))
+            enrolledCourseIds: Array.from(new Set([...toArray(bestData.enrolledCourseIds), ...toArray(uData.enrolledCourseIds)]))
           };
         }
       }
@@ -462,7 +473,7 @@ export async function findAndMigrateUserProgressByEmail(currentUser: { uid: stri
               oooProgress: { ...(bestData.oooProgress || {}), ...(uData.oooProgress || {}) },
               synonymProgress: { ...(bestData.synonymProgress || {}), ...(uData.synonymProgress || {}) },
               history: { ...(bestData.history || {}), ...(uData.history || {}) },
-              enrolledCourseIds: Array.from(new Set([...(bestData.enrolledCourseIds || []), ...(uData.enrolledCourseIds || [])]))
+              enrolledCourseIds: Array.from(new Set([...toArray(bestData.enrolledCourseIds), ...toArray(uData.enrolledCourseIds)]))
             };
           }
         }
@@ -479,7 +490,11 @@ export async function findAndMigrateUserProgressByEmail(currentUser: { uid: stri
       email: currentUser.email,
       updatedAt: new Date().toISOString()
     };
-    await setDoc(currentDocRef, dataToSave, { merge: true });
+    try {
+      await setDoc(currentDocRef, dataToSave, { merge: true });
+    } catch (saveErr) {
+      console.warn('Save current user doc notice:', saveErr);
+    }
     
     // Also save under user's original UID and current UID in Supabase and raw Firebase
     try {
@@ -540,7 +555,7 @@ export async function fetchAndMigrateUserDataByEmail(email: string, targetUid?: 
                 oooProgress: { ...(compiledData.oooProgress || {}), ...(uData.oooProgress || {}) },
                 synonymProgress: { ...(compiledData.synonymProgress || {}), ...(uData.synonymProgress || {}) },
                 history: { ...(compiledData.history || {}), ...(uData.history || {}) },
-                enrolledCourseIds: Array.from(new Set([...(compiledData.enrolledCourseIds || []), ...(uData.enrolledCourseIds || [])]))
+                enrolledCourseIds: Array.from(new Set([...toArray(compiledData.enrolledCourseIds), ...toArray(uData.enrolledCourseIds)]))
               };
             }
           }

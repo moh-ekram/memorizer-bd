@@ -889,23 +889,32 @@ export default function App() {
           if (data) {
 
             // Set state directly from cloud data (isolated per user)
-            setProgress(data.progress || {});
+            setProgress(data.progress && typeof data.progress === 'object' ? data.progress : {});
             setFolders(Array.isArray(data.folders) && data.folders.length > 0 ? data.folders : [
               { id: '1', name: 'Important Words (High Priority)', color: '#ef4444' },
               { id: '2', name: 'Hard Synonyms', color: '#f59e0b' }
             ]);
-            setGoal(data.goal || {
-              dailyTarget: 15,
-              streak: 1,
-              lastStudyDate: new Date().toISOString().split('T')[0],
-              history: {}
+
+            const rawGoal = data.goal && typeof data.goal === 'object' ? data.goal : {};
+            setGoal({
+              dailyTarget: typeof rawGoal.dailyTarget === 'number' ? rawGoal.dailyTarget : 15,
+              streak: typeof rawGoal.streak === 'number' ? rawGoal.streak : 1,
+              lastStudyDate: typeof rawGoal.lastStudyDate === 'string' ? rawGoal.lastStudyDate : new Date().toISOString().split('T')[0],
+              history: rawGoal.history && typeof rawGoal.history === 'object' ? rawGoal.history : {}
             });
-            setSynonymProgress(data.synonymProgress || {});
-            setBlankProgress(data.blankProgress || {});
-            setOooProgress(data.oooProgress || {});
-            setAnalogyProgress(data.analogyProgress || {});
-            if (data.settings) {
-              setSettings(prev => ({ ...prev, ...data.settings }));
+
+            setSynonymProgress(data.synonymProgress && typeof data.synonymProgress === 'object' ? data.synonymProgress : {});
+            setBlankProgress(data.blankProgress && typeof data.blankProgress === 'object' ? data.blankProgress : {});
+            setOooProgress(data.oooProgress && typeof data.oooProgress === 'object' ? data.oooProgress : {});
+            setAnalogyProgress(data.analogyProgress && typeof data.analogyProgress === 'object' ? data.analogyProgress : {});
+            if (data.settings && typeof data.settings === 'object') {
+              setSettings(prev => ({
+                ...prev,
+                ...data.settings,
+                practiceItemsOrder: Array.isArray(data.settings?.practiceItemsOrder) ? data.settings.practiceItemsOrder : prev.practiceItemsOrder,
+                studyToolsItemsOrder: Array.isArray(data.settings?.studyToolsItemsOrder) ? data.settings.studyToolsItemsOrder : prev.studyToolsItemsOrder,
+                landingDisplayCourses: Array.isArray(data.settings?.landingDisplayCourses) ? data.settings.landingDisplayCourses : prev.landingDisplayCourses
+              }));
             }
             const userEnrolled = Array.isArray(data.enrolledCourseIds) ? data.enrolledCourseIds : [];
 
@@ -956,11 +965,15 @@ export default function App() {
             const mergedEnrolled = Array.from(new Set([...userEnrolled, ...autoSyncedPurchased]));
             setEnrolledCourseIds(mergedEnrolled);
             setActiveCourseId(data.activeCourseId || (mergedEnrolled[0] || 'gre'));
-            setQuizScore(data.quizScore !== undefined ? data.quizScore : 0);
-            setQuizTaken(data.quizTaken !== undefined ? data.quizTaken : 0);
+            setQuizScore(typeof data.quizScore === 'number' ? data.quizScore : 0);
+            setQuizTaken(typeof data.quizTaken === 'number' ? data.quizTaken : 0);
             
             if (mergedEnrolled.length > userEnrolled.length) {
-              await setDoc(userDocRef, { enrolledCourseIds: mergedEnrolled }, { merge: true });
+              try {
+                await setDoc(userDocRef, { enrolledCourseIds: mergedEnrolled }, { merge: true });
+              } catch (setErr) {
+                console.warn("Failed to update user enrolledCourseIds in cloud:", setErr);
+              }
             }
 
             // If user has no enrolled course, direct them immediately to 'My Courses'

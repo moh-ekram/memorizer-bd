@@ -104,7 +104,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
+      emailVerified: (auth.currentUser as any)?.emailVerified,
     },
     operationType,
     path
@@ -575,7 +575,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           }
 
           if (updated) {
-            await updateDoc(uDoc.ref, { enrolledCourseIds: updatedEnrolled, updatedAt: nowISO });
+            await updateDoc(doc(db, 'users', uDoc.id), { enrolledCourseIds: updatedEnrolled, updatedAt: nowISO });
           }
         }
       } catch (uSyncErr) {

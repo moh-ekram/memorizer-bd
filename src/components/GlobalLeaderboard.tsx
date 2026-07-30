@@ -125,10 +125,12 @@ export default function GlobalLeaderboard() {
     fetchLeaderboardData(false);
   }, []);
 
-  const filteredLeaderboard = leaderboard.filter(user => 
-    user.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredLeaderboard = leaderboard.filter(user => {
+    const name = (user?.displayName || '').toLowerCase();
+    const mail = (user?.email || '').toLowerCase();
+    const query = (searchTerm || '').toLowerCase();
+    return name.includes(query) || mail.includes(query);
+  });
 
   const top10 = filteredLeaderboard.slice(0, 10);
   const podium = top10.slice(0, 3);

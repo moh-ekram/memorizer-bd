@@ -391,7 +391,7 @@ export default function PracticeCenter({
   ];
 
   // Sort items according to settings.practiceItemsOrder
-  const practiceOrder = settings?.practiceItemsOrder && settings.practiceItemsOrder.length > 0
+  const practiceOrder = Array.isArray(settings?.practiceItemsOrder) && settings.practiceItemsOrder.length > 0
     ? settings.practiceItemsOrder
     : ['quiz', 'match', 'synonym', 'blank', 'odd_one_out', 'analogy'];
 

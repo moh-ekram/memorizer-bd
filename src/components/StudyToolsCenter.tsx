@@ -103,7 +103,7 @@ export default function StudyToolsCenter({
       title: 'Daily Planner',
       banglaTitle: 'দৈনিক পড়ার লক্ষ্য',
       desc: 'দৈনিক পড়ার টার্গেট সেট করুন এবং ধারাবাহিকতা বজায় রেখে অগ্রগতি ট্র্যাক করুন।',
-      tag: `Goal: ${goal.dailyTarget} Words`,
+      tag: `Goal: ${goal?.dailyTarget || 15} Words`,
       btnText: 'Open Planner',
       iconBg: 'bg-amber-50 text-amber-600 border-amber-100',
       borderHover: 'hover:border-amber-200',
@@ -129,7 +129,7 @@ export default function StudyToolsCenter({
   ];
 
   // Sort tools according to settings.studyToolsItemsOrder
-  const studyOrder = settings?.studyToolsItemsOrder && settings.studyToolsItemsOrder.length > 0
+  const studyOrder = Array.isArray(settings?.studyToolsItemsOrder) && settings.studyToolsItemsOrder.length > 0
     ? settings.studyToolsItemsOrder
     : ['lists', 'dictionary', 'planner', 'story'];
 
