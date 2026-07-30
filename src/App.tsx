@@ -52,6 +52,7 @@ import {
   getDocs,
   query,
   where,
+  syncAllFirebaseToSupabase,
   User as FirebaseUser
 } from './lib/firebase';
 import { Course } from './types';
@@ -79,6 +80,12 @@ const LOCAL_STORAGE_ENROLLED_COURSES_KEY = 'vocab_memorizer_enrolled_courses_v2'
 const LOCAL_STORAGE_ACTIVE_COURSE_KEY = 'vocab_memorizer_active_course_v2';
 
 export default function App() {
+  useEffect(() => {
+    syncAllFirebaseToSupabase().catch(err => {
+      console.warn('Auto sync Firebase to Supabase error:', err);
+    });
+  }, []);
+
   const [activeTab, setActiveTab] = useState<ActiveTab>('profile');
   const [profileSubTab, setProfileSubTab] = useState<'flashcard' | 'dashboard' | 'my_courses'>('flashcard');
   const [selectedGroupFromDash, setSelectedGroupFromDash] = useState<number | string | null>(null);

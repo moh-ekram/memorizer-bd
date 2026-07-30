@@ -1,6 +1,26 @@
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { 
+  getFirestore, 
+  collection as fbCollection, 
+  getDocs as fbGetDocs, 
+  doc as fbDoc, 
+  getDoc as fbGetDoc 
+} from 'firebase/firestore';
 import { supabase } from './supabase';
 
 export { supabase };
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCYIkpASqZD6R2bOOi9F3hvQMl_iTLsjBI",
+  authDomain: "myvocab-13ebc.firebaseapp.com",
+  projectId: "myvocab-13ebc",
+  storageBucket: "myvocab-13ebc.firebasestorage.app",
+  messagingSenderId: "531149838847",
+  appId: "1:531149838847:web:a4577c60628b9c4c6b2fca"
+};
+
+const fbApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+const rawFbDb = getFirestore(fbApp);
 
 export interface User {
   uid: string;
@@ -116,20 +136,34 @@ export async function getDoc(docRef: any) {
       .eq('id', docId)
       .maybeSingle();
 
-    if (error) {
-      return { exists: () => false, data: () => null };
+    if (!error && data) {
+      const docData = data.data ? { id: data.id, ...data.data } : data;
+      return {
+        exists: () => true,
+        data: () => docData,
+        id: docId
+      };
     }
 
-    if (!data) {
-      return { exists: () => false, data: () => null };
+    // Fallback to Firebase Firestore if not in Supabase
+    try {
+      const fbRef = fbDoc(rawFbDb, collectionName, docId);
+      const fbSnap = await fbGetDoc(fbRef);
+      if (fbSnap.exists()) {
+        const dData = fbSnap.data();
+        // Sync to Supabase in background
+        setDoc(docRef, dData).catch(() => {});
+        return {
+          exists: () => true,
+          data: () => ({ id: docId, ...dData }),
+          id: docId
+        };
+      }
+    } catch (fbErr) {
+      console.warn('Firebase getDoc fallback error:', fbErr);
     }
 
-    const docData = data.data ? { id: data.id, ...data.data } : data;
-    return {
-      exists: () => true,
-      data: () => docData,
-      id: docId
-    };
+    return { exists: () => false, data: () => null };
   } catch (err) {
     return { exists: () => false, data: () => null };
   }
@@ -197,18 +231,40 @@ export async function getDocs(queryOrCollectionRef: any) {
 
     const { data, error } = await builder;
 
-    if (error) {
-      return { docs: [], empty: true, size: 0 };
+    let docs: any[] = [];
+    if (!error && data && data.length > 0) {
+      docs = data.map((row: any) => {
+        const rowData = row.data ? { id: row.id, ...row.data } : row;
+        return {
+          id: row.id || rowData.id,
+          data: () => rowData,
+          exists: () => true
+        };
+      });
     }
 
-    const docs = (data || []).map((row: any) => {
-      const rowData = row.data ? { id: row.id, ...row.data } : row;
-      return {
-        id: row.id || rowData.id,
-        data: () => rowData,
-        exists: () => true
-      };
-    });
+    // Fallback to Firebase Firestore if Supabase returned 0 docs or errored
+    if (docs.length === 0) {
+      try {
+        const fbRef = fbCollection(rawFbDb, collectionName);
+        const fbSnap = await fbGetDocs(fbRef);
+        if (!fbSnap.empty) {
+          docs = fbSnap.docs.map(docSnap => {
+            const dData = docSnap.data();
+            const docObj = { id: docSnap.id, ...dData };
+            // Sync to Supabase in background
+            setDoc({ collectionName, docId: docSnap.id }, dData).catch(() => {});
+            return {
+              id: docSnap.id,
+              data: () => docObj,
+              exists: () => true
+            };
+          });
+        }
+      } catch (fbErr) {
+        console.warn('Firebase getDocs fallback error:', fbErr);
+      }
+    }
 
     return {
       docs,
@@ -234,4 +290,33 @@ export function onSnapshot(_ref: any, callback: (snap: any) => void) {
     supabase.removeChannel(channel);
   };
 }
+
+export async function syncAllFirebaseToSupabase() {
+  const collectionsToSync = [
+    'users', 
+    'courses', 
+    'access_requests', 
+    'verified_payments', 
+    'app_settings', 
+    'blank_questions', 
+    'analogy_questions', 
+    'odd_questions'
+  ];
+
+  let syncedCount = 0;
+  for (const colName of collectionsToSync) {
+    try {
+      const fbRef = fbCollection(rawFbDb, colName);
+      const snap = await fbGetDocs(fbRef);
+      for (const d of snap.docs) {
+        await setDoc({ collectionName: colName, docId: d.id }, d.data());
+        syncedCount++;
+      }
+    } catch (e) {
+      console.warn(`Error syncing collection ${colName}:`, e);
+    }
+  }
+  return syncedCount;
+}
+
 
