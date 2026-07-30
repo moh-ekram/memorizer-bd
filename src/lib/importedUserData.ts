@@ -339,3 +339,36 @@ export const RECOVERED_USER_DATA: any = {
   },
   "synonymProgress": {}
 };
+
+export interface RestoredUserRecord {
+  email: string;
+  uid: string;
+  createdAt?: string;
+  updatedAt?: string;
+  enrolledCourseIds?: string[];
+  goal?: any;
+  progress?: any;
+}
+
+export const RESTORED_AUTH_USERS: RestoredUserRecord[] = [
+  { email: "yousuf.001bhuiyan@gmail.com", uid: "NPxSj36P6AWlhkLToxcDfuoUwmG2", createdAt: "2026-07-29T00:00:00.000Z" },
+  { email: "marofahmed2005@gmail.com", uid: "uRXbW2BwExb300Er1HdLNlIdI7u2", createdAt: "2026-07-26T00:00:00.000Z" },
+  { email: "397nayem@gmail.com", uid: "np2UsHcXixPFutN0VgNbKdlaz112", createdAt: "2026-07-24T00:00:00.000Z" },
+  { email: "arpitadu87@gmail.com", uid: "MZ6hOb5xuxVmDXdJ2iGXp6jCsqF2", createdAt: "2026-07-23T00:00:00.000Z" },
+  { email: "397rabiul@gmail.com", uid: "MO4XrkXllMOigZCNC2KwCwCXisi1", createdAt: "2026-07-22T00:00:00.000Z" },
+  { email: "mahossainbd3@gmail.com", uid: "QGEkTCHPujWfm4hnri4QJU7JeYp2", createdAt: "2026-07-19T00:00:00.000Z" },
+  { email: "photooo.1ekram@gmail.com", uid: "oDaR23e6BTXINN8KMeiFycMaqfQ2", createdAt: "2026-07-19T00:00:00.000Z" },
+  { email: "puse7353@gmail.com", uid: "3Ao2rvyaBDZilzSVxV9trKYHS643", createdAt: "2026-07-18T00:00:00.000Z" },
+  { email: "mdsakibspondon@gmail.com", uid: "etDQcZlgBnTrFwWLJDwKYEPXCv1", createdAt: "2026-07-17T00:00:00.000Z" },
+  { email: "whappekram@gmail.com", uid: "tT1zplcBeDYqnlOjtJpwzgeuKD83", createdAt: "2026-07-16T00:00:00.000Z" },
+  { email: "ekram.bhuiyan110@gmail.com", uid: "5Rw228twb6MDUxGuGxcryrCRBcy2", createdAt: "2026-07-14T00:00:00.000Z" },
+  { email: "universityapparel8@gmail.com", uid: "2ooPLB4LlwPySfxwqwbjWXRxuAg1", createdAt: "2026-07-14T00:00:00.000Z" },
+  { email: "ryanekram001@gmail.com", uid: "go7OM9kWaLfnWizXPhym4HTwKSq2", createdAt: "2026-07-12T00:00:00.000Z" },
+  { email: "jewelrifat316718@gmail.com", uid: "6I0I17LU4yaSxbnUfKOmfKqxfuk1", createdAt: "2026-07-12T00:00:00.000Z" },
+  { email: "omarbelal465@gmail.com", uid: "r31JFWF8dgOWbXkN8E2GOK0NQS63", createdAt: "2026-07-11T00:00:00.000Z" },
+  { email: "farihaj891@gmail.com", uid: "LYRPF0VEpxZdruqL8BxYGDzbweu2", createdAt: "2026-07-10T00:00:00.000Z" },
+  { email: "dusahityaparishad@gmail.com", uid: "8NyVP8KCdvZpEFi6HWacatmPoQO2", createdAt: "2026-07-10T00:00:00.000Z" },
+  { email: "ten.billion.neu@gmail.com", uid: "JEzwFig9XFeKEh0FVPwahPOlld32", createdAt: "2026-07-10T00:00:00.000Z" },
+  { email: "mohammad.001ekram@gmail.com", uid: "7fkWXEmgUaVAVvgZn3jVMxMkqb62", createdAt: "2026-07-10T00:00:00.000Z" }
+];
+

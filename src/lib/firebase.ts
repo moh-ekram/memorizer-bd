@@ -7,7 +7,7 @@ import {
   getDoc as fbGetDoc 
 } from 'firebase/firestore';
 import { supabase } from './supabase';
-import { RECOVERED_USER_DATA } from './importedUserData';
+import { RECOVERED_USER_DATA, RESTORED_AUTH_USERS } from './importedUserData';
 
 export { supabase };
 
@@ -393,6 +393,18 @@ export async function findAndMigrateUserProgressByEmail(currentUser: { uid: stri
     }
   }
 
+  // Check RESTORED_AUTH_USERS list for default fallback
+  const matchedRestored = RESTORED_AUTH_USERS.find(u => u.email.trim().toLowerCase() === cleanEmail);
+  if (matchedRestored && !bestData) {
+    bestData = {
+      id: matchedRestored.uid,
+      email: matchedRestored.email,
+      createdAt: matchedRestored.createdAt,
+      progress: {},
+      goal: { dailyTarget: 15, streak: 1 }
+    };
+  }
+
   // 1. Check current Supabase doc for currentUser.uid
   try {
     const curSnap = await getDoc(currentDocRef);
@@ -527,6 +539,17 @@ export async function fetchAndMigrateUserDataByEmail(email: string, targetUid?: 
   if (RECOVERED_USER_DATA && RECOVERED_USER_DATA.email && RECOVERED_USER_DATA.email.trim().toLowerCase() === cleanEmail) {
     compiledData = JSON.parse(JSON.stringify(RECOVERED_USER_DATA));
     maxProgressCount = Object.keys(compiledData.progress || {}).length;
+  }
+
+  const matchedRestored = RESTORED_AUTH_USERS.find(u => u.email.trim().toLowerCase() === cleanEmail);
+  if (matchedRestored && !compiledData) {
+    compiledData = {
+      id: matchedRestored.uid,
+      email: matchedRestored.email,
+      createdAt: matchedRestored.createdAt,
+      progress: {},
+      goal: { dailyTarget: 15, streak: 1 }
+    };
   }
 
   // 2. Query Firebase Firestore raw 'users' collection across databases

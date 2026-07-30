@@ -13,6 +13,7 @@ import {
   where
 } from '../lib/firebase';
 import { VocabularyWord, UserProgress, Course, AccessRequest, BlankQuestion, AppSettings, VerifiedPayment } from '../types';
+import { RESTORED_AUTH_USERS, RECOVERED_USER_DATA } from '../lib/importedUserData';
 import { read, utils } from 'xlsx';
 import { CourseSettings } from './CourseSettings';
 import { 
@@ -733,6 +734,39 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       } catch (e) {
         console.warn('Could not supplement users from access_requests:', e);
       }
+
+      // Ensure all 19 restored auth accounts from uploaded screenshot are included
+      RESTORED_AUTH_USERS.forEach((resUser) => {
+        const resEmail = resUser.email.trim().toLowerCase();
+        const existing = fetchedUsersMap.get(resEmail);
+
+        if (!existing) {
+          const isEkram = resEmail === 'mohammad.001ekram@gmail.com';
+          const recData = isEkram && RECOVERED_USER_DATA ? RECOVERED_USER_DATA : {};
+
+          const restoredDoc: FirestoreUserDoc = {
+            id: resUser.uid,
+            email: resUser.email,
+            createdAt: resUser.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            progress: recData.progress || {},
+            goal: recData.goal || { dailyTarget: 15, streak: 1 },
+            synonymProgress: recData.synonymProgress || {},
+            settings: recData.settings || {}
+          };
+
+          fetchedUsersMap.set(resEmail, restoredDoc);
+
+          // Save to database in background
+          setDoc(doc(db, 'users', resUser.uid), {
+            ...recData,
+            id: resUser.uid,
+            email: resUser.email,
+            createdAt: resUser.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }, { merge: true }).catch(e => console.warn('Sync restored user error:', e));
+        }
+      });
 
       setUsers(Array.from(fetchedUsersMap.values()));
     } catch (err) {
