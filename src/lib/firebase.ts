@@ -7,6 +7,7 @@ import {
   getDoc as fbGetDoc 
 } from 'firebase/firestore';
 import { supabase } from './supabase';
+import { RECOVERED_USER_DATA } from './importedUserData';
 
 export { supabase };
 
@@ -349,6 +350,15 @@ export async function findAndMigrateUserProgressByEmail(currentUser: { uid: stri
   let bestData: any = null;
   let bestCount = -1;
 
+  // Check RECOVERED_USER_DATA if email matches
+  if (RECOVERED_USER_DATA && RECOVERED_USER_DATA.email && RECOVERED_USER_DATA.email.trim().toLowerCase() === cleanEmail) {
+    const recCount = Object.keys(RECOVERED_USER_DATA.progress || {}).length;
+    if (recCount > bestCount) {
+      bestCount = recCount;
+      bestData = RECOVERED_USER_DATA;
+    }
+  }
+
   // 1. Check current Supabase doc for currentUser.uid
   try {
     const curSnap = await getDoc(currentDocRef);
@@ -358,6 +368,18 @@ export async function findAndMigrateUserProgressByEmail(currentUser: { uid: stri
       if (count > bestCount) {
         bestCount = count;
         bestData = curData;
+      } else if (bestData && count > 0) {
+        bestData = {
+          ...bestData,
+          ...curData,
+          progress: { ...(bestData.progress || {}), ...(curData.progress || {}) },
+          analogyProgress: { ...(bestData.analogyProgress || {}), ...(curData.analogyProgress || {}) },
+          blankProgress: { ...(bestData.blankProgress || {}), ...(curData.blankProgress || {}) },
+          oooProgress: { ...(bestData.oooProgress || {}), ...(curData.oooProgress || {}) },
+          synonymProgress: { ...(bestData.synonymProgress || {}), ...(curData.synonymProgress || {}) },
+          history: { ...(bestData.history || {}), ...(curData.history || {}) },
+          enrolledCourseIds: Array.from(new Set([...(bestData.enrolledCourseIds || []), ...(curData.enrolledCourseIds || [])]))
+        };
       }
     }
   } catch (e) {
@@ -374,6 +396,18 @@ export async function findAndMigrateUserProgressByEmail(currentUser: { uid: stri
         if (count > bestCount) {
           bestCount = count;
           bestData = uData;
+        } else if (bestData && count > 0) {
+          bestData = {
+            ...bestData,
+            ...uData,
+            progress: { ...(bestData.progress || {}), ...(uData.progress || {}) },
+            analogyProgress: { ...(bestData.analogyProgress || {}), ...(uData.analogyProgress || {}) },
+            blankProgress: { ...(bestData.blankProgress || {}), ...(uData.blankProgress || {}) },
+            oooProgress: { ...(bestData.oooProgress || {}), ...(uData.oooProgress || {}) },
+            synonymProgress: { ...(bestData.synonymProgress || {}), ...(uData.synonymProgress || {}) },
+            history: { ...(bestData.history || {}), ...(uData.history || {}) },
+            enrolledCourseIds: Array.from(new Set([...(bestData.enrolledCourseIds || []), ...(uData.enrolledCourseIds || [])]))
+          };
         }
       }
     }
@@ -393,6 +427,18 @@ export async function findAndMigrateUserProgressByEmail(currentUser: { uid: stri
         if (count > bestCount) {
           bestCount = count;
           bestData = uData;
+        } else if (bestData && count > 0) {
+          bestData = {
+            ...bestData,
+            ...uData,
+            progress: { ...(bestData.progress || {}), ...(uData.progress || {}) },
+            analogyProgress: { ...(bestData.analogyProgress || {}), ...(uData.analogyProgress || {}) },
+            blankProgress: { ...(bestData.blankProgress || {}), ...(uData.blankProgress || {}) },
+            oooProgress: { ...(bestData.oooProgress || {}), ...(uData.oooProgress || {}) },
+            synonymProgress: { ...(bestData.synonymProgress || {}), ...(uData.synonymProgress || {}) },
+            history: { ...(bestData.history || {}), ...(uData.history || {}) },
+            enrolledCourseIds: Array.from(new Set([...(bestData.enrolledCourseIds || []), ...(uData.enrolledCourseIds || [])]))
+          };
         }
       }
     }
@@ -400,7 +446,7 @@ export async function findAndMigrateUserProgressByEmail(currentUser: { uid: stri
     console.warn('Search raw Firebase users by email error:', e);
   }
 
-  // 4. If we found a data object with more progress/data than current UID's doc, migrate it!
+  // 4. Save merged data to both Supabase and raw Firebase Firestore
   if (bestData) {
     const dataToSave = {
       ...bestData,
@@ -408,6 +454,17 @@ export async function findAndMigrateUserProgressByEmail(currentUser: { uid: stri
       updatedAt: new Date().toISOString()
     };
     await setDoc(currentDocRef, dataToSave, { merge: true });
+    
+    // Also save under user's original UID and current UID in Supabase and raw Firebase
+    try {
+      const userUids = Array.from(new Set([currentUser.uid, '7fkWXEmgUaVAVvgZn3jVMxMkqb62']));
+      for (const idToSave of userUids) {
+        await setDoc(doc(db, 'users', idToSave), dataToSave, { merge: true });
+      }
+    } catch (e) {
+      console.warn('Sync user data error:', e);
+    }
+
     return dataToSave;
   }
 
