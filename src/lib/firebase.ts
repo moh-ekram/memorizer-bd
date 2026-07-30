@@ -282,10 +282,11 @@ export async function getDocs(queryOrCollectionRef: any) {
     return {
       docs,
       empty: docs.length === 0,
-      size: docs.length
+      size: docs.length,
+      forEach: (callback: (doc: any) => void) => docs.forEach(callback)
     };
   } catch (err) {
-    return { docs: [], empty: true, size: 0 };
+    return { docs: [], empty: true, size: 0, forEach: () => {} };
   }
 }
 
