@@ -53,6 +53,7 @@ import {
   query,
   where,
   syncAllFirebaseToSupabase,
+  findAndMigrateUserProgressByEmail,
   User as FirebaseUser
 } from './lib/firebase';
 import { Course } from './types';
@@ -873,10 +874,19 @@ export default function App() {
         isSyncingFromCloud.current = true;
         try {
           const userDocRef = doc(db, 'users', currentUser.uid);
-          const docSnap = await getDoc(userDocRef);
+          
+          let data: any = null;
+          const migratedData = await findAndMigrateUserProgressByEmail(currentUser);
+          if (migratedData) {
+            data = migratedData;
+          } else {
+            const docSnap = await getDoc(userDocRef);
+            if (docSnap.exists()) {
+              data = docSnap.data();
+            }
+          }
 
-          if (docSnap.exists()) {
-            const data = docSnap.data();
+          if (data) {
 
             // Set state directly from cloud data (isolated per user)
             setProgress(data.progress || {});
@@ -1127,27 +1137,53 @@ export default function App() {
   }, [progress, folders, goal, synonymProgress, blankProgress, oooProgress, analogyProgress, settings, enrolledCourseIds, activeCourseId, quizScore, quizTaken, user, hasLoadedFromCloud]);
 
   const forceSyncToCloud = async () => {
-    if (!user || !hasLoadedFromCloud) return;
+    if (!user) return;
     setSyncStatus('syncing');
     try {
+      // Auto-recover any old progress from Firebase or Supabase matching user's email
+      const recoveredData = await findAndMigrateUserProgressByEmail(user);
+      
+      const currentProgressToSave = (recoveredData?.progress && Object.keys(recoveredData.progress).length > Object.keys(progress).length)
+        ? recoveredData.progress
+        : progress;
+
+      if (recoveredData) {
+        if (recoveredData.progress && Object.keys(recoveredData.progress).length > Object.keys(progress).length) {
+          setProgress(recoveredData.progress);
+        }
+        if (Array.isArray(recoveredData.folders) && recoveredData.folders.length > 0) {
+          setFolders(recoveredData.folders);
+        }
+        if (recoveredData.goal) setGoal(recoveredData.goal);
+        if (recoveredData.synonymProgress) setSynonymProgress(recoveredData.synonymProgress);
+        if (recoveredData.blankProgress) setBlankProgress(recoveredData.blankProgress);
+        if (recoveredData.oooProgress) setOooProgress(recoveredData.oooProgress);
+        if (recoveredData.analogyProgress) setAnalogyProgress(recoveredData.analogyProgress);
+        if (Array.isArray(recoveredData.enrolledCourseIds)) {
+          setEnrolledCourseIds(prev => Array.from(new Set([...prev, ...recoveredData.enrolledCourseIds])));
+        }
+      }
+
       await setDoc(doc(db, 'users', user.uid), {
-        progress,
-        folders,
-        goal,
-        synonymProgress,
-        blankProgress,
-        oooProgress,
-        analogyProgress,
+        progress: currentProgressToSave,
+        folders: (recoveredData?.folders && recoveredData.folders.length > 0) ? recoveredData.folders : folders,
+        goal: recoveredData?.goal || goal,
+        synonymProgress: recoveredData?.synonymProgress || synonymProgress,
+        blankProgress: recoveredData?.blankProgress || blankProgress,
+        oooProgress: recoveredData?.oooProgress || oooProgress,
+        analogyProgress: recoveredData?.analogyProgress || analogyProgress,
         settings,
-        enrolledCourseIds,
+        enrolledCourseIds: recoveredData?.enrolledCourseIds ? Array.from(new Set([...enrolledCourseIds, ...recoveredData.enrolledCourseIds])) : enrolledCourseIds,
         activeCourseId,
         quizScore,
         quizTaken,
         email: user.email,
         updatedAt: new Date().toISOString()
       }, { merge: true });
+
       setSyncStatus('synced');
-      addSyncLog('manual', 'Manual cloud backup completed successfully', 'success');
+      setHasLoadedFromCloud(true);
+      addSyncLog('manual', 'Cloud backup & Firebase data recovery completed successfully', 'success');
     } catch (err) {
       console.error('Manual sync failed:', err);
       setSyncStatus('error');

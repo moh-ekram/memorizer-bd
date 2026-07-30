@@ -319,4 +319,79 @@ export async function syncAllFirebaseToSupabase() {
   return syncedCount;
 }
 
+export async function findAndMigrateUserProgressByEmail(currentUser: { uid: string; email: string | null }) {
+  if (!currentUser || !currentUser.email) return null;
+  const cleanEmail = currentUser.email.trim().toLowerCase();
+
+  const currentDocRef = doc(db, 'users', currentUser.uid);
+
+  let bestData: any = null;
+  let bestCount = -1;
+
+  // 1. Check current Supabase doc for currentUser.uid
+  try {
+    const curSnap = await getDoc(currentDocRef);
+    if (curSnap.exists()) {
+      const curData = curSnap.data();
+      const count = Object.keys(curData?.progress || {}).length;
+      if (count > bestCount) {
+        bestCount = count;
+        bestData = curData;
+      }
+    }
+  } catch (e) {
+    console.warn('Check current doc error:', e);
+  }
+
+  // 2. Search Supabase 'users' table for any row with matching email
+  try {
+    const supabaseUsers = await getDocs(collection(db, 'users'));
+    for (const uDoc of supabaseUsers.docs) {
+      const uData = uDoc.data();
+      if (uData && uData.email && typeof uData.email === 'string' && uData.email.trim().toLowerCase() === cleanEmail) {
+        const count = Object.keys(uData?.progress || {}).length;
+        if (count > bestCount) {
+          bestCount = count;
+          bestData = uData;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Search Supabase users by email error:', e);
+  }
+
+  // 3. Search Firebase Firestore raw 'users' collection directly by email or doc id
+  try {
+    const fbRef = fbCollection(rawFbDb, 'users');
+    const fbSnap = await fbGetDocs(fbRef);
+    for (const uDoc of fbSnap.docs) {
+      const uData = uDoc.data();
+      const uEmail = (uData?.email || '').trim().toLowerCase();
+      if (uEmail === cleanEmail || uDoc.id.trim().toLowerCase() === cleanEmail) {
+        const count = Object.keys(uData?.progress || {}).length;
+        if (count > bestCount) {
+          bestCount = count;
+          bestData = uData;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Search raw Firebase users by email error:', e);
+  }
+
+  // 4. If we found a data object with more progress/data than current UID's doc, migrate it!
+  if (bestData) {
+    const dataToSave = {
+      ...bestData,
+      email: currentUser.email,
+      updatedAt: new Date().toISOString()
+    };
+    await setDoc(currentDocRef, dataToSave, { merge: true });
+    return dataToSave;
+  }
+
+  return null;
+}
+
+
 
