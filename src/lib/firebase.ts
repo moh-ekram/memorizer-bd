@@ -215,56 +215,69 @@ export async function deleteDoc(docRef: any) {
 export async function getDocs(queryOrCollectionRef: any) {
   try {
     const collectionName = queryOrCollectionRef.collectionName;
-    let builder = supabase.from(collectionName).select('*');
+    const docsMap = new Map<string, any>();
 
-    if (queryOrCollectionRef.constraints && Array.isArray(queryOrCollectionRef.constraints)) {
-      for (const c of queryOrCollectionRef.constraints) {
-        if (c.type === 'where') {
-          if (c.opStr === '==') {
-            builder = builder.eq(c.field, c.value);
-          } else if (c.opStr === '!=') {
-            builder = builder.neq(c.field, c.value);
+    // 1. Fetch from Supabase
+    try {
+      let builder = supabase.from(collectionName).select('*');
+
+      if (queryOrCollectionRef.constraints && Array.isArray(queryOrCollectionRef.constraints)) {
+        for (const c of queryOrCollectionRef.constraints) {
+          if (c.type === 'where') {
+            if (c.opStr === '==') {
+              builder = builder.eq(c.field, c.value);
+            } else if (c.opStr === '!=') {
+              builder = builder.neq(c.field, c.value);
+            }
           }
         }
       }
-    }
 
-    const { data, error } = await builder;
+      const { data, error } = await builder;
 
-    let docs: any[] = [];
-    if (!error && data && data.length > 0) {
-      docs = data.map((row: any) => {
-        const rowData = row.data ? { id: row.id, ...row.data } : row;
-        return {
-          id: row.id || rowData.id,
-          data: () => rowData,
-          exists: () => true
-        };
-      });
-    }
-
-    // Fallback to Firebase Firestore if Supabase returned 0 docs or errored
-    if (docs.length === 0) {
-      try {
-        const fbRef = fbCollection(rawFbDb, collectionName);
-        const fbSnap = await fbGetDocs(fbRef);
-        if (!fbSnap.empty) {
-          docs = fbSnap.docs.map(docSnap => {
-            const dData = docSnap.data();
-            const docObj = { id: docSnap.id, ...dData };
-            // Sync to Supabase in background
-            setDoc({ collectionName, docId: docSnap.id }, dData).catch(() => {});
-            return {
-              id: docSnap.id,
-              data: () => docObj,
-              exists: () => true
-            };
-          });
-        }
-      } catch (fbErr) {
-        console.warn('Firebase getDocs fallback error:', fbErr);
+      if (!error && data) {
+        data.forEach((row: any) => {
+          const rowData = row.data ? { id: row.id, ...row.data } : row;
+          const docId = row.id || rowData.id;
+          if (docId) {
+            docsMap.set(String(docId), rowData);
+          }
+        });
       }
+    } catch (sbErr) {
+      console.warn(`Supabase getDocs error for ${collectionName}:`, sbErr);
     }
+
+    // 2. Fetch from Firebase Firestore to catch any missing docs or empty fields
+    try {
+      const fbRef = fbCollection(rawFbDb, collectionName);
+      const fbSnap = await fbGetDocs(fbRef);
+      if (!fbSnap.empty) {
+        fbSnap.docs.forEach(docSnap => {
+          const docId = docSnap.id;
+          const dData = docSnap.data();
+          const existingInSB = docsMap.get(docId);
+          if (!existingInSB) {
+            const merged = { id: docId, ...dData };
+            docsMap.set(docId, merged);
+            // Sync to Supabase in background
+            setDoc({ collectionName, docId }, dData).catch(() => {});
+          } else if (collectionName === 'courses' && dData?.words && Array.isArray(dData.words) && dData.words.length > 0 && (!existingInSB.words || existingInSB.words.length === 0)) {
+            const merged = { ...existingInSB, ...dData, words: dData.words };
+            docsMap.set(docId, merged);
+            setDoc({ collectionName, docId }, merged).catch(() => {});
+          }
+        });
+      }
+    } catch (fbErr) {
+      console.warn(`Firebase getDocs fallback error for ${collectionName}:`, fbErr);
+    }
+
+    const docs = Array.from(docsMap.entries()).map(([id, docData]) => ({
+      id,
+      data: () => docData,
+      exists: () => true
+    }));
 
     return {
       docs,
@@ -300,7 +313,13 @@ export async function syncAllFirebaseToSupabase() {
     'app_settings', 
     'blank_questions', 
     'analogy_questions', 
-    'odd_questions'
+    'word_analogy_questions',
+    'odd_questions',
+    'odd_one_out_questions',
+    'reports',
+    'system_settings',
+    'used_transactions',
+    'user_wallets'
   ];
 
   let syncedCount = 0;
