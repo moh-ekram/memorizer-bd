@@ -39,7 +39,15 @@ import {
   Globe,
   Bell,
   Layout,
-  Plus
+  Plus,
+  Headphones,
+  MessageSquare,
+  Send,
+  ExternalLink,
+  Copy,
+  Check,
+  Mail,
+  Share2
 } from 'lucide-react';
 
 interface AppSettingsViewProps {
@@ -64,7 +72,8 @@ export default function AppSettingsView({
   allCourses = []
 }: AppSettingsViewProps) {
 
-  const [activeTab, setActiveTab] = useState<'flashcards' | 'quiz' | 'modules' | 'synonyms' | 'shortcuts' | 'account'>('flashcards');
+  const [activeTab, setActiveTab] = useState<'flashcards' | 'quiz' | 'modules' | 'synonyms' | 'shortcuts' | 'account' | 'contact'>('flashcards');
+  const [copiedEmail, setCopiedEmail] = useState(false);
 
   const formatLogTime = (isoString: string) => {
     try {
@@ -292,7 +301,8 @@ export default function AppSettingsView({
           { key: 'modules' as const, label: 'App Modules', icon: Gamepad2 },
           { key: 'synonyms' as const, label: 'Synonyms', icon: Sparkles },
           { key: 'shortcuts' as const, label: 'Shortcuts', icon: Keyboard },
-          { key: 'account' as const, label: 'Account & Sync', icon: Settings }
+          { key: 'account' as const, label: 'Account & Sync', icon: Settings },
+          { key: 'contact' as const, label: 'Contact Us', icon: Headphones }
         ].map(tab => {
           const isActive = activeTab === tab.key;
           const Icon = tab.icon;
@@ -999,6 +1009,194 @@ export default function AppSettingsView({
               </p>
             </div>
 
+          </div>
+        )}
+
+        {/* Contact & Support Tab */}
+        {activeTab === 'contact' && (
+          <div className="space-y-4 font-sans">
+            <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-slate-950 p-5 rounded-2xl text-white shadow-md relative overflow-hidden">
+              <div className="absolute top-0 right-0 -mt-6 -mr-6 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shrink-0">
+                  <Headphones className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-black tracking-tight text-white">Contact & Support (আমাদের সাথে যোগাযোগ)</h2>
+                  <p className="text-xs text-indigo-200/80 font-medium mt-0.5">Have questions, feedback, or need course access help? Reach out to us directly through any channel below!</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {/* WhatsApp Card */}
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-3 shadow-xs hover:border-emerald-300 transition">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0">
+                      <MessageSquare className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide">WhatsApp Support</h3>
+                      <p className="text-[11px] text-slate-500 font-medium">Direct Messaging & Quick Help</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md">Instant</span>
+                </div>
+                
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-150 flex items-center justify-between text-xs font-mono font-bold text-slate-700">
+                  <span>{settings.contactWhatsApp || '+8801581624202'}</span>
+                </div>
+
+                <a
+                  href={
+                    (settings.contactWhatsApp || '+8801581624202').startsWith('http')
+                      ? settings.contactWhatsApp
+                      : `https://wa.me/${(settings.contactWhatsApp || '8801581624202').replace(/[^0-9]/g, '')}`
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-2xs cursor-pointer"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  <span>Chat on WhatsApp (হোয়াটসঅ্যাপে মেসেজ দিন)</span>
+                  <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                </a>
+              </div>
+
+              {/* Facebook Link 1 (Page / Official) */}
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-3 shadow-xs hover:border-sky-300 transition">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-600 shrink-0">
+                      <Globe className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide">Facebook Page (অফিশিয়াল পেজ)</h3>
+                      <p className="text-[11px] text-slate-500 font-medium">Official Updates & News</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 bg-sky-50 text-sky-700 border border-sky-200 rounded-md">Official</span>
+                </div>
+
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-150 text-xs font-mono font-bold text-slate-700 truncate">
+                  {settings.contactFacebook1 || 'https://facebook.com/memorizer.official'}
+                </div>
+
+                <a
+                  href={settings.contactFacebook1 || 'https://facebook.com/memorizer.official'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-2xs cursor-pointer"
+                >
+                  <Globe className="w-4 h-4" />
+                  <span>Visit Facebook Page (পেজ ভিজিট করুন)</span>
+                  <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                </a>
+              </div>
+
+              {/* Facebook Link 2 (Community / Group) */}
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-3 shadow-xs hover:border-indigo-300 transition">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shrink-0">
+                      <Share2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide">Facebook Group (কমিউনিটি গ্রুপ)</h3>
+                      <p className="text-[11px] text-slate-500 font-medium">Community Discussion & Prep Tips</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md">Community</span>
+                </div>
+
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-150 text-xs font-mono font-bold text-slate-700 truncate">
+                  {settings.contactFacebook2 || 'https://facebook.com/groups/memorizer.bd'}
+                </div>
+
+                <a
+                  href={settings.contactFacebook2 || 'https://facebook.com/groups/memorizer.bd'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-2xs cursor-pointer"
+                >
+                  <Share2 className="w-4 h-4" />
+                  <span>Join Facebook Group (গ্রুপে যোগ দিন)</span>
+                  <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                </a>
+              </div>
+
+              {/* Telegram Channel / Support */}
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-3 shadow-xs hover:border-blue-300 transition">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shrink-0">
+                      <Send className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide">Telegram Channel</h3>
+                      <p className="text-[11px] text-slate-500 font-medium">PDF Books, Notes & Updates</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-md">Telegram</span>
+                </div>
+
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-150 text-xs font-mono font-bold text-slate-700 truncate">
+                  {settings.contactTelegram || 'https://t.me/memorizer_bd'}
+                </div>
+
+                <a
+                  href={settings.contactTelegram || 'https://t.me/memorizer_bd'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2.5 bg-blue-500 hover:bg-blue-400 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-2xs cursor-pointer"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>Open Telegram (টেলিগ্রাম চ্যানেল)</span>
+                  <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                </a>
+              </div>
+
+              {/* Email Support Card */}
+              <div className="md:col-span-2 bg-white border border-slate-200/80 rounded-2xl p-4 space-y-3 shadow-xs hover:border-amber-300 transition">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0">
+                      <Mail className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide">Email Support (ইমেইল সাপোর্ট)</h3>
+                      <p className="text-[11px] text-slate-500 font-medium">Send us detailed feedback or inquiries</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-md">24/7 Email</span>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                  <div className="flex-1 min-w-0 bg-slate-50 p-2.5 rounded-xl border border-slate-150 text-xs font-mono font-bold text-slate-700 truncate">
+                    {settings.contactEmail || 'mohammad.001ekram@gmail.com'}
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(settings.contactEmail || 'mohammad.001ekram@gmail.com');
+                      setCopiedEmail(true);
+                      setTimeout(() => setCopiedEmail(false), 2000);
+                    }}
+                    className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-250 text-slate-700 font-bold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    {copiedEmail ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                    <span>{copiedEmail ? 'Copied!' : 'Copy Email'}</span>
+                  </button>
+                  <a
+                    href={`mailto:${settings.contactEmail || 'mohammad.001ekram@gmail.com'}`}
+                    className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 shadow-2xs shrink-0 cursor-pointer"
+                  >
+                    <Mail className="w-4 h-4" />
+                    <span>Send Mail</span>
+                  </a>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

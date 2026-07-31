@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { vocabulary } from './data/vocabulary';
 import { UserProgress, WordStatus, CustomFolder, StudyGoal, ActiveTab, AppSettings, SyncLogEntry } from './types';
 import StatsDashboard from './components/StatsDashboard';
@@ -982,7 +982,11 @@ export default function App() {
 
             const mergedEnrolled = Array.from(new Set([...userEnrolled, ...autoSyncedPurchased]));
             setEnrolledCourseIds(mergedEnrolled);
-            setActiveCourseId(data.activeCourseId || (mergedEnrolled[0] || 'gre'));
+            // Protect current user selection: only set active course from cloud if user hasn't selected a course locally yet
+            setActiveCourseId(prev => {
+              if (prev && prev !== 'gre') return prev;
+              return data.activeCourseId || (mergedEnrolled[0] || 'gre');
+            });
             setQuizScore(typeof data.quizScore === 'number' ? data.quizScore : 0);
             setQuizTaken(typeof data.quizTaken === 'number' ? data.quizTaken : 0);
             
@@ -994,8 +998,8 @@ export default function App() {
               }
             }
 
-            // If user has no enrolled course, direct them immediately to 'My Courses'
-            if (mergedEnrolled.length === 0) {
+            // Only redirect to 'My Courses' if user has no enrolled courses on initial load
+            if (mergedEnrolled.length === 0 && !hasLoadedFromCloud) {
               setActiveTab('profile');
               setProfileSubTab('my_courses');
             }
@@ -1073,8 +1077,8 @@ export default function App() {
             setQuizScore(0);
             setQuizTaken(0);
 
-            // Direct new user to 'My Courses' if they have no enrolled courses
-            if (cleanEnrolled.length === 0) {
+            // Direct new user to 'My Courses' if they have no enrolled courses on initial load
+            if (cleanEnrolled.length === 0 && !hasLoadedFromCloud) {
               setActiveTab('profile');
               setProfileSubTab('my_courses');
             }
@@ -1336,27 +1340,31 @@ export default function App() {
     createdBy: dbGreCourse?.createdBy || 'system'
   };
 
-  const rawAllCourses: Course[] = [
-    defaultGreCourse, 
-    ...customCourses.filter(c => c.id.trim().toLowerCase() !== 'gre'), 
-    ...importedCourses.filter(c => c.id.trim().toLowerCase() !== 'gre')
-  ];
-  const allCourses: Course[] = [];
-  const seenCourseIds = new Set<string>();
-  for (const c of rawAllCourses) {
-    const cIdLower = c.id.trim().toLowerCase();
-    if (!seenCourseIds.has(cIdLower)) {
-      seenCourseIds.add(cIdLower);
-      const isFreeCourse = c.isDefault || cIdLower === 'gre' || c.price === 0;
-      allCourses.push({
-        ...c,
-        price: isFreeCourse ? 0 : (c.price !== undefined ? c.price : 30),
-        bkashNumber: (c.bkashNumber && c.bkashNumber !== '01700000000' && c.bkashNumber.trim() !== '') ? c.bkashNumber : '01581624202'
-      });
+  const allCourses: Course[] = useMemo(() => {
+    const rawAllCourses: Course[] = [
+      defaultGreCourse, 
+      ...customCourses.filter(c => c.id.trim().toLowerCase() !== 'gre'), 
+      ...importedCourses.filter(c => c.id.trim().toLowerCase() !== 'gre')
+    ];
+    const coursesList: Course[] = [];
+    const seenCourseIds = new Set<string>();
+    for (const c of rawAllCourses) {
+      const cIdLower = c.id.trim().toLowerCase();
+      if (!seenCourseIds.has(cIdLower)) {
+        seenCourseIds.add(cIdLower);
+        const isFreeCourse = c.isDefault || cIdLower === 'gre' || c.price === 0;
+        coursesList.push({
+          ...c,
+          price: isFreeCourse ? 0 : (c.price !== undefined ? c.price : 30),
+          bkashNumber: (c.bkashNumber && c.bkashNumber !== '01700000000' && c.bkashNumber.trim() !== '') ? c.bkashNumber : '01581624202'
+        });
+      }
     }
-  }
-  // Sort courses according to custom order set by admin
-  allCourses.sort((a, b) => (a.order !== undefined ? a.order : 999) - (b.order !== undefined ? b.order : 999));
+    // Sort courses according to custom order set by admin
+    coursesList.sort((a, b) => (a.order !== undefined ? a.order : 999) - (b.order !== undefined ? b.order : 999));
+    return coursesList;
+  }, [defaultGreCourse, customCourses, importedCourses]);
+
   const allAvailableCourses: Course[] = allCourses;
 
   // Keep users enrolled and active in default free course if no courses are enrolled
@@ -1377,12 +1385,15 @@ export default function App() {
     });
 
     const normActiveId = activeCourseId?.trim().toLowerCase();
-    const activeCourseObj = allCourses.find(c => c.id.trim().toLowerCase() === normActiveId);
-
-    if (!activeCourseId || !activeCourseObj) {
+    if (!normActiveId) {
       setActiveCourseId(defaultCourseId);
+    } else {
+      const activeCourseObj = allCourses.find(c => c.id.trim().toLowerCase() === normActiveId);
+      if (!activeCourseObj && customCourses.length > 0) {
+        setActiveCourseId(defaultCourseId);
+      }
     }
-  }, [allCourses]);
+  }, [allCourses, customCourses]);
 
   const handleImportCourse = (course: Course) => {
     setImportedCourses(prev => {

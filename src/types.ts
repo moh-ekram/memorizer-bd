@@ -98,6 +98,13 @@ export interface AppSettings {
   landingStat3Num?: string;
   landingStat3Label?: string;
   landingDisplayCourses?: string[];
+
+  // Contact & Support Info
+  contactWhatsApp?: string;
+  contactFacebook1?: string;
+  contactFacebook2?: string;
+  contactTelegram?: string;
+  contactEmail?: string;
 }
 
 export interface SyncLogEntry {

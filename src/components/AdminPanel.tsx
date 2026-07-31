@@ -57,7 +57,12 @@ import {
   Wallet,
   CreditCard,
   Megaphone,
-  Bell
+  Bell,
+  Headphones,
+  MessageSquare,
+  Share2,
+  Send,
+  Mail
 } from 'lucide-react';
 
 interface FirestoreUserDoc {
@@ -3584,6 +3589,126 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     );
                   });
                 })()}
+              </div>
+            </div>
+
+            {/* Contact & Support Channels Config (কন্টাক্ট সেটিং) */}
+            <div className="bg-white p-6 rounded-2xl border border-emerald-200/80 shadow-xs space-y-4 col-span-1 md:col-span-2">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                    <Headphones className="w-4 h-4 text-emerald-600" />
+                    <span>Contact & Support Information Controls (যোগাযোগ মাধ্যম ও কন্টাক্ট সেটিং)</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                    Configure official contact links (WhatsApp, 2 Facebook links, Telegram, and Support Email) visible to all users in User Settings.
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 font-extrabold text-[10px] rounded-lg uppercase">
+                  Live Synced
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* WhatsApp Number / Chat Link */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5">
+                    <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>WhatsApp Number / Direct Chat Link:</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. +8801581624202 or https://wa.me/8801581624202"
+                    value={settings?.contactWhatsApp || ''}
+                    onChange={(e) => {
+                      const updated = { ...settings, contactWhatsApp: e.target.value };
+                      if (onUpdateSettings) onUpdateSettings(updated);
+                      try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (err) {}
+                    }}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-800 focus:bg-white focus:border-emerald-500 transition"
+                  />
+                  <p className="text-[10px] text-slate-400 font-medium">Shown on WhatsApp button in User Settings</p>
+                </div>
+
+                {/* Facebook Link 1 (Official Page / Main) */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-sky-600" />
+                    <span>Facebook Link 1 (Official Page / Main Link):</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. https://facebook.com/memorizer.official"
+                    value={settings?.contactFacebook1 || ''}
+                    onChange={(e) => {
+                      const updated = { ...settings, contactFacebook1: e.target.value };
+                      if (onUpdateSettings) onUpdateSettings(updated);
+                      try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (err) {}
+                    }}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-800 focus:bg-white focus:border-sky-500 transition"
+                  />
+                  <p className="text-[10px] text-slate-400 font-medium">Link 1: Facebook Page / Main profile</p>
+                </div>
+
+                {/* Facebook Link 2 (Community Group) */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5">
+                    <Share2 className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Facebook Link 2 (Community / Group Link):</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. https://facebook.com/groups/memorizer.bd"
+                    value={settings?.contactFacebook2 || ''}
+                    onChange={(e) => {
+                      const updated = { ...settings, contactFacebook2: e.target.value };
+                      if (onUpdateSettings) onUpdateSettings(updated);
+                      try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (err) {}
+                    }}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-500 transition"
+                  />
+                  <p className="text-[10px] text-slate-400 font-medium">Link 2: Facebook Community Group / Secondary Link</p>
+                </div>
+
+                {/* Telegram Channel / Chat Link */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5">
+                    <Send className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Telegram Link / Channel Username:</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. https://t.me/memorizer_bd"
+                    value={settings?.contactTelegram || ''}
+                    onChange={(e) => {
+                      const updated = { ...settings, contactTelegram: e.target.value };
+                      if (onUpdateSettings) onUpdateSettings(updated);
+                      try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (err) {}
+                    }}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 transition"
+                  />
+                  <p className="text-[10px] text-slate-400 font-medium">Telegram channel or support bot link</p>
+                </div>
+
+                {/* Support Email */}
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Official Support Email Address:</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. support@memorizer.com or mohammad.001ekram@gmail.com"
+                    value={settings?.contactEmail || ''}
+                    onChange={(e) => {
+                      const updated = { ...settings, contactEmail: e.target.value };
+                      if (onUpdateSettings) onUpdateSettings(updated);
+                      try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (err) {}
+                    }}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-800 focus:bg-white focus:border-amber-500 transition"
+                  />
+                  <p className="text-[10px] text-slate-400 font-medium">Official support email for direct inquiries</p>
+                </div>
               </div>
             </div>
           </div>
