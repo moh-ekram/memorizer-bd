@@ -1706,7 +1706,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           <div>
             <span className="text-xs text-slate-400 font-bold uppercase tracking-wide block">Total Users</span>
             <span className="text-2xl font-black text-slate-800 font-mono">{totalUsers}</span>
-            <span className="text-[10px] text-slate-400 block mt-0.5">Firestore Database</span>
+            <span className="text-[10px] text-slate-400 block mt-0.5">Supabase Database</span>
           </div>
         </div>
 
@@ -1737,9 +1737,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             <Database className="w-6 h-6" />
           </div>
           <div className="min-w-0 flex-1">
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wide block">Firebase Status</span>
-            <span className="text-base font-black text-emerald-400 truncate block">100% Optimized</span>
-            <span className="text-[9px] text-slate-400 block mt-0.5 truncate">Offline Persistence Active</span>
+            <span className="text-xs text-slate-400 font-bold uppercase tracking-wide block">Supabase Status</span>
+            <span className="text-base font-black text-emerald-400 truncate block">100% Active</span>
+            <span className="text-[9px] text-slate-400 block mt-0.5 truncate">Supabase Realtime Synced</span>
           </div>
         </div>
       </div>
@@ -1859,7 +1859,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             {loading ? (
               <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
                 <RefreshCw className="w-8 h-8 animate-spin text-indigo-500" />
-                <p className="text-xs font-bold">Fetching real-time data from Cloud Firestore...</p>
+                <p className="text-xs font-bold">Fetching real-time data from Supabase Cloud DB...</p>
               </div>
             ) : error ? (
               <div className="p-8 text-center text-rose-500 flex flex-col items-center justify-center gap-3">
@@ -3647,7 +3647,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         excelSaveStatus === 'saving' ? 'bg-slate-400' : 'bg-emerald-600 hover:bg-emerald-500'
                       }`}
                     >
-                      {excelSaveStatus === 'saving' ? 'Saving...' : 'Save to Firestore'}
+                      {excelSaveStatus === 'saving' ? 'Saving...' : 'Save to Supabase'}
                     </button>
                   </div>
 
@@ -3672,7 +3672,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               {excelSaveStatus === 'saved' && (
                 <div className="p-3.5 bg-emerald-50 text-emerald-700 rounded-xl flex items-center gap-2 border border-emerald-100 text-xs font-semibold">
                   <CheckCircle className="w-4 h-4" />
-                  <span>Questions successfully saved to Firestore!</span>
+                  <span>Questions successfully saved to Supabase!</span>
                 </div>
               )}
             </div>
