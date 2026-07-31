@@ -888,8 +888,23 @@ export default function App() {
 
           if (data) {
 
-            // Set state directly from cloud data (isolated per user)
-            setProgress(data.progress && typeof data.progress === 'object' ? data.progress : {});
+            // Merge state from cloud data with existing local progress to prevent overwriting locally rated words
+            setProgress(prev => {
+              const cloudProg = (data.progress && typeof data.progress === 'object') ? data.progress : {};
+              const merged = { ...cloudProg };
+              Object.keys(prev).forEach(wordId => {
+                if (!merged[wordId]) {
+                  merged[wordId] = prev[wordId];
+                } else {
+                  const localTime = new Date(prev[wordId].updatedAt || 0).getTime();
+                  const cloudTime = new Date(merged[wordId].updatedAt || 0).getTime();
+                  if (localTime > cloudTime) {
+                    merged[wordId] = prev[wordId];
+                  }
+                }
+              });
+              return merged;
+            });
             setFolders(Array.isArray(data.folders) && data.folders.length > 0 ? data.folders : [
               { id: '1', name: 'Important Words (High Priority)', color: '#ef4444' },
               { id: '2', name: 'Hard Synonyms', color: '#f59e0b' }

@@ -366,7 +366,7 @@ export default function FlashcardViewer({
 
   const rateAndMaybeConfirm = (newStatus: WordStatus, autoAdvance = true) => {
     const now = Date.now();
-    if (now - lastActionTimeRef.current < 200) return;
+    if (now - lastActionTimeRef.current < 50) return;
     lastActionTimeRef.current = now;
 
     if (!currentActiveWord.id) return;
@@ -386,7 +386,7 @@ export default function FlashcardViewer({
     }
   };
 
-  // Phase 1: Filter words by selected groups, tag status, and custom bookmark folder
+  // Build and order filtered words deck when user changes filters, study sequence, or enters session
   useEffect(() => {
     let result = [...activeWordsList];
 
@@ -409,35 +409,29 @@ export default function FlashcardViewer({
     }
 
     setBaseFilteredWords(result);
-  }, [selectedGroups, selectedStatuses, selectedFolder, activeWordsList, progress, uniqueGroups.length]);
 
-  const wordIdsString = baseFilteredWords.map(w => w.id).join(',');
-
-  // Phase 2: Order/shuffle selected words
-  useEffect(() => {
-    let result = [...baseFilteredWords];
-
+    let ordered = [...result];
     if (studyOrder === 'random') {
-      for (let i = result.length - 1; i > 0; i--) {
+      for (let i = ordered.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        const temp = result[i];
-        result[i] = result[j];
-        result[j] = temp;
+        const temp = ordered[i];
+        ordered[i] = ordered[j];
+        ordered[j] = temp;
       }
     } else if (studyOrder === 'alphabetical') {
-      result.sort((a, b) => a.word.localeCompare(b.word));
+      ordered.sort((a, b) => a.word.localeCompare(b.word));
     }
 
-    setFilteredWords(result);
+    setFilteredWords(ordered);
 
-    const firstNonPariIndex = result.findIndex(w => {
+    const firstNonPariIndex = ordered.findIndex(w => {
       const status = progress[w.id]?.status || 'unrated';
       return status !== 'know';
     });
 
     setCurrentIndex(firstNonPariIndex !== -1 ? firstNonPariIndex : 0);
     setIsFlipped(false);
-  }, [wordIdsString, studyOrder, shuffleKey]);
+  }, [selectedGroups, selectedStatuses, selectedFolder, activeWordsList, studyOrder, shuffleKey, isSessionActive]);
 
   const currentActiveWord: VocabularyWord = filteredWords[currentIndex] || {
     id: '',
@@ -1622,8 +1616,6 @@ export default function FlashcardViewer({
                   <button
                     type="button"
                     style={{ touchAction: 'manipulation' }}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    onTouchEnd={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
                       rateAndMaybeConfirm('dont_know', true);
@@ -1646,8 +1638,6 @@ export default function FlashcardViewer({
                   <button
                     type="button"
                     style={{ touchAction: 'manipulation' }}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    onTouchEnd={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
                       rateAndMaybeConfirm('confusion', true);
@@ -1670,8 +1660,6 @@ export default function FlashcardViewer({
                   <button
                     type="button"
                     style={{ touchAction: 'manipulation' }}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    onTouchEnd={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleNext();
@@ -1690,8 +1678,6 @@ export default function FlashcardViewer({
                   <button
                     type="button"
                     style={{ touchAction: 'manipulation' }}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    onTouchEnd={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
                       rateAndMaybeConfirm('know', true);
@@ -1925,8 +1911,6 @@ export default function FlashcardViewer({
                   <button
                     type="button"
                     style={{ touchAction: 'manipulation' }}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    onTouchEnd={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
                       rateAndMaybeConfirm('dont_know', true);
@@ -1949,8 +1933,6 @@ export default function FlashcardViewer({
                   <button
                     type="button"
                     style={{ touchAction: 'manipulation' }}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    onTouchEnd={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
                       rateAndMaybeConfirm('confusion', true);
@@ -1973,8 +1955,6 @@ export default function FlashcardViewer({
                   <button
                     type="button"
                     style={{ touchAction: 'manipulation' }}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    onTouchEnd={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleNext();
@@ -1993,8 +1973,6 @@ export default function FlashcardViewer({
                   <button
                     type="button"
                     style={{ touchAction: 'manipulation' }}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    onTouchEnd={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
                       rateAndMaybeConfirm('know', true);
