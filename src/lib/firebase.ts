@@ -247,9 +247,13 @@ export async function getDoc(docRef: any) {
   }
 }
 
+const DOCS_CACHE_MAP = new Map<string, { docsMap: Map<string, any>; timestamp: number }>();
+const CACHE_TTL_MS = 30000; // 30 second in-memory cache for instant loads
+
 export async function setDoc(docRef: any, data: any, options?: { merge?: boolean }) {
   try {
     const { collectionName, docId } = docRef;
+    DOCS_CACHE_MAP.clear(); // Invalidate cache on mutations
     
     if (options?.merge) {
       const existing = await getDoc(docRef);
@@ -280,11 +284,13 @@ export async function setDoc(docRef: any, data: any, options?: { merge?: boolean
 }
 
 export async function updateDoc(docRef: any, data: any) {
+  DOCS_CACHE_MAP.clear();
   return setDoc(docRef, data, { merge: true });
 }
 
 export async function deleteDoc(docRef: any) {
   try {
+    DOCS_CACHE_MAP.clear();
     const { collectionName, docId } = docRef;
     await supabase.from(collectionName).delete().eq('id', docId);
   } catch (err) {
@@ -295,9 +301,28 @@ export async function deleteDoc(docRef: any) {
 export async function getDocs(queryOrCollectionRef: any) {
   try {
     const collectionName = queryOrCollectionRef.collectionName;
+    const cacheKey = `${collectionName}_${JSON.stringify(queryOrCollectionRef.constraints || [])}`;
+
+    // Return instant cached results if fresh
+    const cached = DOCS_CACHE_MAP.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
+      const cachedDocs = Array.from(cached.docsMap.entries()).map(([id, docData]) => ({
+        id,
+        data: () => docData,
+        exists: () => true
+      }));
+      return {
+        docs: cachedDocs,
+        empty: cachedDocs.length === 0,
+        size: cachedDocs.length,
+        forEach: (callback: (doc: any) => void) => cachedDocs.forEach(callback),
+        exists: () => cachedDocs.length > 0
+      };
+    }
+
     const docsMap = new Map<string, any>();
 
-    // 1. Fetch from Supabase
+    // 1. Fast fetch from Supabase
     try {
       let builder: any = supabase.from(collectionName).select('*');
 
@@ -330,7 +355,55 @@ export async function getDocs(queryOrCollectionRef: any) {
       console.warn(`Supabase getDocs error for ${collectionName}:`, sbErr);
     }
 
-    // 2. Fetch from Firebase Firestore (both custom and default DBs) to catch any missing docs
+    // 2. If Supabase returned data, update cache and return IMMEDIATELY (<100ms)
+    if (docsMap.size > 0) {
+      DOCS_CACHE_MAP.set(cacheKey, { docsMap, timestamp: Date.now() });
+
+      // Run background Firebase sync without blocking UI
+      setTimeout(async () => {
+        try {
+          const fbDbs = [rawFbCustomDb, rawFbDefaultDb];
+          for (const d of fbDbs) {
+            const fbRef = fbCollection(d, collectionName);
+            const fbSnap = await fbGetDocs(fbRef);
+            if (!fbSnap.empty) {
+              fbSnap.docs.forEach(docSnap => {
+                const docId = docSnap.id;
+                const dData = docSnap.data();
+                const existingInSB = docsMap.get(docId);
+                if (!existingInSB) {
+                  const merged = { id: docId, ...dData };
+                  docsMap.set(docId, merged);
+                  setDoc({ collectionName, docId }, dData).catch(() => {});
+                } else if (collectionName === 'courses' && dData?.words && Array.isArray(dData.words) && dData.words.length > 0 && (!existingInSB.words || existingInSB.words.length === 0)) {
+                  const merged = { ...existingInSB, ...dData, words: dData.words };
+                  docsMap.set(docId, merged);
+                  setDoc({ collectionName, docId }, merged).catch(() => {});
+                }
+              });
+            }
+          }
+        } catch (fbErr) {
+          // ignore async sync errors
+        }
+      }, 1500);
+
+      const docs = Array.from(docsMap.entries()).map(([id, docData]) => ({
+        id,
+        data: () => docData,
+        exists: () => true
+      }));
+
+      return {
+        docs,
+        empty: docs.length === 0,
+        size: docs.length,
+        forEach: (callback: (doc: any) => void) => docs.forEach(callback),
+        exists: () => docs.length > 0
+      };
+    }
+
+    // 3. Fall back to Firebase Firestore sync if Supabase is completely empty
     const fbDbs = [rawFbCustomDb, rawFbDefaultDb];
     for (const d of fbDbs) {
       try {
@@ -344,18 +417,17 @@ export async function getDocs(queryOrCollectionRef: any) {
             if (!existingInSB) {
               const merged = { id: docId, ...dData };
               docsMap.set(docId, merged);
-              // Sync to Supabase in background
               setDoc({ collectionName, docId }, dData).catch(() => {});
-            } else if (collectionName === 'courses' && dData?.words && Array.isArray(dData.words) && dData.words.length > 0 && (!existingInSB.words || existingInSB.words.length === 0)) {
-              const merged = { ...existingInSB, ...dData, words: dData.words };
-              docsMap.set(docId, merged);
-              setDoc({ collectionName, docId }, merged).catch(() => {});
             }
           });
         }
       } catch (fbErr) {
         console.warn(`Firebase getDocs fallback error for ${collectionName}:`, fbErr);
       }
+    }
+
+    if (docsMap.size > 0) {
+      DOCS_CACHE_MAP.set(cacheKey, { docsMap, timestamp: Date.now() });
     }
 
     const docs = Array.from(docsMap.entries()).map(([id, docData]) => ({

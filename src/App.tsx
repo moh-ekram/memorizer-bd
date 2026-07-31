@@ -82,9 +82,12 @@ const LOCAL_STORAGE_ACTIVE_COURSE_KEY = 'vocab_memorizer_active_course_v2';
 
 export default function App() {
   useEffect(() => {
-    syncAllFirebaseToSupabase().catch(err => {
-      console.warn('Auto sync Firebase to Supabase error:', err);
-    });
+    const timer = setTimeout(() => {
+      syncAllFirebaseToSupabase().catch(err => {
+        console.warn('Auto sync Firebase to Supabase error:', err);
+      });
+    }, 5000);
+    return () => clearTimeout(timer);
   }, []);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('profile');
