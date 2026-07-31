@@ -72,7 +72,7 @@ export default function AppSettingsView({
   allCourses = []
 }: AppSettingsViewProps) {
 
-  const [activeTab, setActiveTab] = useState<'flashcards' | 'quiz' | 'modules' | 'synonyms' | 'shortcuts' | 'account' | 'contact'>('flashcards');
+  const [activeTab, setActiveTab] = useState<'flashcards' | 'quiz' | 'synonyms' | 'shortcuts' | 'account' | 'contact'>('flashcards');
   const [copiedEmail, setCopiedEmail] = useState(false);
 
   const formatLogTime = (isoString: string) => {
@@ -298,7 +298,6 @@ export default function AppSettingsView({
         {[
           { key: 'flashcards' as const, label: 'Flashcards', icon: Layers },
           { key: 'quiz' as const, label: 'Quizzes', icon: Sliders },
-          { key: 'modules' as const, label: 'App Modules', icon: Gamepad2 },
           { key: 'synonyms' as const, label: 'Synonyms', icon: Sparkles },
           { key: 'shortcuts' as const, label: 'Shortcuts', icon: Keyboard },
           { key: 'account' as const, label: 'Account & Sync', icon: Settings },
@@ -571,124 +570,7 @@ export default function AppSettingsView({
           </div>
         )}
 
-        {/* App Modules & Features Tab */}
-        {activeTab === 'modules' && (
-          <div className="space-y-4">
-            <div className="bg-white border border-slate-200 rounded-xl p-3.5 sm:p-4 space-y-4">
-              <div>
-                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Practice Games & Modules Control</h3>
-                <p className="text-[11px] text-slate-400">Enable or disable specific learning games and features across the app.</p>
-              </div>
 
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                {[
-                  { key: 'enableBlankFillingGame' as const, label: 'Fill-in-the-Blanks Game', desc: 'Spelling & missing letters test' },
-                  { key: 'enableWordAnalogyGame' as const, label: 'Word Analogy Practice', desc: 'Relationship & logical pairing' },
-                  { key: 'enableOddOneOutGame' as const, label: 'Odd One Out Game', desc: 'Vocabulary distinction challenge' },
-                  { key: 'enableSynonymCheck' as const, label: 'Synonym Practice Tool', desc: 'Synonym-antonym matching tool' },
-                  { key: 'enableWordMatchGame' as const, label: 'Word Match Pair Game', desc: 'Interactive tile matching game' },
-                ].map(mod => {
-                  const isEnabled = settings[mod.key] !== false;
-                  return (
-                    <div key={mod.key} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200/60">
-                      <div>
-                        <span className="block text-xs font-bold text-slate-800">{mod.label}</span>
-                        <span className="block text-[10px] text-slate-400">{mod.desc}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onUpdateSettings({
-                            ...settings,
-                            [mod.key]: !isEnabled
-                          });
-                        }}
-                        className={`relative inline-flex h-4.5 w-8 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                          isEnabled ? 'bg-slate-900' : 'bg-slate-200'
-                        }`}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs transition duration-200 ease-in-out ${
-                            isEnabled ? 'translate-x-3.5' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="space-y-3 pt-3.5 border-t border-slate-100">
-                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">System Preferences</h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200/60">
-                    <div>
-                      <span className="block text-xs font-bold text-slate-800">Global Leaderboard</span>
-                      <span className="block text-[10px] text-slate-400">Display student rankings</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onUpdateSettings({ ...settings, enableGlobalLeaderboard: settings.enableGlobalLeaderboard === false ? true : false })}
-                      className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                        settings.enableGlobalLeaderboard !== false ? 'bg-indigo-600' : 'bg-slate-200'
-                      }`}
-                    >
-                      <span className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs transition duration-200 ease-in-out ${settings.enableGlobalLeaderboard !== false ? 'translate-x-3.5' : 'translate-x-0'}`} />
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200/60">
-                    <div>
-                      <span className="block text-xs font-bold text-slate-800">Sound Effects</span>
-                      <span className="block text-[10px] text-slate-400">Interactive audio cues</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onUpdateSettings({ ...settings, soundEffectsEnabled: settings.soundEffectsEnabled === false ? true : false })}
-                      className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                        settings.soundEffectsEnabled !== false ? 'bg-emerald-600' : 'bg-slate-200'
-                      }`}
-                    >
-                      <span className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs transition duration-200 ease-in-out ${settings.soundEffectsEnabled !== false ? 'translate-x-3.5' : 'translate-x-0'}`} />
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200/60">
-                    <div>
-                      <span className="block text-xs font-bold text-slate-800">Bengali Translations</span>
-                      <span className="block text-[10px] text-slate-400">Show Bengali meanings</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onUpdateSettings({ ...settings, showBengaliTranslations: settings.showBengaliTranslations === false ? true : false })}
-                      className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                        settings.showBengaliTranslations !== false ? 'bg-amber-600' : 'bg-slate-200'
-                      }`}
-                    >
-                      <span className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs transition duration-200 ease-in-out ${settings.showBengaliTranslations !== false ? 'translate-x-3.5' : 'translate-x-0'}`} />
-                    </button>
-                  </div>
-
-                  <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/60 space-y-1">
-                    <span className="block text-xs font-bold text-slate-800">Daily Target Words</span>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min="5"
-                        max="100"
-                        value={settings.dailyGoalWordCount || 20}
-                        onChange={(e) => onUpdateSettings({ ...settings, dailyGoalWordCount: parseInt(e.target.value, 10) || 20 })}
-                        className="w-full bg-white border border-slate-300 rounded px-2 py-0.5 text-xs font-bold text-slate-800 focus:outline-hidden"
-                      />
-                      <span className="text-[10px] font-semibold text-slate-500 whitespace-nowrap">words/day</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Synonyms Settings Tab */}
         {activeTab === 'synonyms' && (
@@ -1014,7 +896,7 @@ export default function AppSettingsView({
 
         {/* Contact & Support Tab */}
         {activeTab === 'contact' && (
-          <div className="space-y-4 font-sans">
+          <div className="space-y-4 font-['Poppins',sans-serif]">
             <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-slate-950 p-5 rounded-2xl text-white shadow-md relative overflow-hidden">
               <div className="absolute top-0 right-0 -mt-6 -mr-6 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
               <div className="flex items-center gap-3">
@@ -1022,7 +904,7 @@ export default function AppSettingsView({
                   <Headphones className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-base sm:text-lg font-black tracking-tight text-white">Contact & Support (আমাদের সাথে যোগাযোগ)</h2>
+                  <h2 className="text-base sm:text-lg font-bold tracking-tight text-white">Contact & Support</h2>
                   <p className="text-xs text-indigo-200/80 font-medium mt-0.5">Have questions, feedback, or need course access help? Reach out to us directly through any channel below!</p>
                 </div>
               </div>
@@ -1037,11 +919,11 @@ export default function AppSettingsView({
                       <MessageSquare className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide">WhatsApp Support</h3>
+                      <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">WhatsApp Support</h3>
                       <p className="text-[11px] text-slate-500 font-medium">Direct Messaging & Quick Help</p>
                     </div>
                   </div>
-                  <span className="text-[10px] font-extrabold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md">Instant</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md">Instant</span>
                 </div>
                 
                 <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-150 flex items-center justify-between text-xs font-mono font-bold text-slate-700">
@@ -1059,7 +941,7 @@ export default function AppSettingsView({
                   className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-2xs cursor-pointer"
                 >
                   <MessageSquare className="w-4 h-4" />
-                  <span>Chat on WhatsApp (হোয়াটসঅ্যাপে মেসেজ দিন)</span>
+                  <span>Chat on WhatsApp</span>
                   <ExternalLink className="w-3.5 h-3.5 opacity-80" />
                 </a>
               </div>
@@ -1072,11 +954,11 @@ export default function AppSettingsView({
                       <Globe className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide">Facebook Page (অফিশিয়াল পেজ)</h3>
+                      <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Facebook Page</h3>
                       <p className="text-[11px] text-slate-500 font-medium">Official Updates & News</p>
                     </div>
                   </div>
-                  <span className="text-[10px] font-extrabold px-2 py-0.5 bg-sky-50 text-sky-700 border border-sky-200 rounded-md">Official</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-sky-50 text-sky-700 border border-sky-200 rounded-md">Official</span>
                 </div>
 
                 <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-150 text-xs font-mono font-bold text-slate-700 truncate">
@@ -1090,7 +972,7 @@ export default function AppSettingsView({
                   className="w-full py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-2xs cursor-pointer"
                 >
                   <Globe className="w-4 h-4" />
-                  <span>Visit Facebook Page (পেজ ভিজিট করুন)</span>
+                  <span>Visit Facebook Page</span>
                   <ExternalLink className="w-3.5 h-3.5 opacity-80" />
                 </a>
               </div>
@@ -1103,11 +985,11 @@ export default function AppSettingsView({
                       <Share2 className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide">Facebook Group (কমিউনিটি গ্রুপ)</h3>
+                      <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Facebook Group</h3>
                       <p className="text-[11px] text-slate-500 font-medium">Community Discussion & Prep Tips</p>
                     </div>
                   </div>
-                  <span className="text-[10px] font-extrabold px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md">Community</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md">Community</span>
                 </div>
 
                 <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-150 text-xs font-mono font-bold text-slate-700 truncate">
@@ -1121,7 +1003,7 @@ export default function AppSettingsView({
                   className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-2xs cursor-pointer"
                 >
                   <Share2 className="w-4 h-4" />
-                  <span>Join Facebook Group (গ্রুপে যোগ দিন)</span>
+                  <span>Join Facebook Group</span>
                   <ExternalLink className="w-3.5 h-3.5 opacity-80" />
                 </a>
               </div>
@@ -1134,11 +1016,11 @@ export default function AppSettingsView({
                       <Send className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide">Telegram Channel</h3>
+                      <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Telegram Channel</h3>
                       <p className="text-[11px] text-slate-500 font-medium">PDF Books, Notes & Updates</p>
                     </div>
                   </div>
-                  <span className="text-[10px] font-extrabold px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-md">Telegram</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-md">Telegram</span>
                 </div>
 
                 <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-150 text-xs font-mono font-bold text-slate-700 truncate">
@@ -1152,7 +1034,7 @@ export default function AppSettingsView({
                   className="w-full py-2.5 bg-blue-500 hover:bg-blue-400 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-2xs cursor-pointer"
                 >
                   <Send className="w-4 h-4" />
-                  <span>Open Telegram (টেলিগ্রাম চ্যানেল)</span>
+                  <span>Open Telegram</span>
                   <ExternalLink className="w-3.5 h-3.5 opacity-80" />
                 </a>
               </div>
@@ -1165,11 +1047,11 @@ export default function AppSettingsView({
                       <Mail className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide">Email Support (ইমেইল সাপোর্ট)</h3>
+                      <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Email Support</h3>
                       <p className="text-[11px] text-slate-500 font-medium">Send us detailed feedback or inquiries</p>
                     </div>
                   </div>
-                  <span className="text-[10px] font-extrabold px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-md">24/7 Email</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-md">24/7 Email</span>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">

@@ -3592,13 +3592,13 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               </div>
             </div>
 
-            {/* Contact & Support Channels Config (কন্টাক্ট সেটিং) */}
-            <div className="bg-white p-6 rounded-2xl border border-emerald-200/80 shadow-xs space-y-4 col-span-1 md:col-span-2">
+            {/* Contact & Support Channels Config */}
+            <div className="bg-white p-6 rounded-2xl border border-emerald-200/80 shadow-xs space-y-4 col-span-1 md:col-span-2 font-['Poppins',sans-serif]">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div>
-                  <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                  <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                     <Headphones className="w-4 h-4 text-emerald-600" />
-                    <span>Contact & Support Information Controls (যোগাযোগ মাধ্যম ও কন্টাক্ট সেটিং)</span>
+                    <span>Contact & Support Information Controls</span>
                   </h4>
                   <p className="text-[11px] text-slate-500 font-medium mt-0.5">
                     Configure official contact links (WhatsApp, 2 Facebook links, Telegram, and Support Email) visible to all users in User Settings.
