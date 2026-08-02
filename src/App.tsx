@@ -998,14 +998,10 @@ export default function App() {
               }
             }
 
-            // Only redirect to 'My Courses' if user has no enrolled courses on initial load
-            if (mergedEnrolled.length === 0 && !hasLoadedFromCloud) {
-              setActiveTab('profile');
-              setProfileSubTab('my_courses');
-            }
-            
             setSyncStatus('synced');
             setHasLoadedFromCloud(true);
+            const loadedCount = Object.keys(data.progress || {}).length;
+            addSyncLog('cloud_fetch', `Restored ${loadedCount} progress item${loadedCount === 1 ? '' : 's'} from Cloud snapshot`, 'success', loadedCount);
           } else {
             // New user signup: create clean user record with auto-synced purchases if any
             const cleanProgress = {};
@@ -1157,10 +1153,12 @@ export default function App() {
           updatedAt: new Date().toISOString()
         }, { merge: true });
         setSyncStatus('synced');
-        addSyncLog('auto', 'Saved study progress and preferences to Cloud', 'success');
+        const itemCount = Object.keys(progress || {}).length;
+        addSyncLog('auto', `Saved ${itemCount} study item${itemCount === 1 ? '' : 's'} & preferences to Cloud`, 'success', itemCount);
       } catch (err) {
         console.error('Error saving to Firestore:', err);
         setSyncStatus('error');
+        addSyncLog('auto', 'Automatic cloud sync failed', 'error', 0);
       }
     };
 
@@ -1218,11 +1216,12 @@ export default function App() {
 
       setSyncStatus('synced');
       setHasLoadedFromCloud(true);
-      addSyncLog('manual', 'Cloud backup & Firebase data recovery completed successfully', 'success');
+      const itemsProcessed = Object.keys(currentProgressToSave || {}).length;
+      addSyncLog('manual', `Manual cloud backup & recovery completed (${itemsProcessed} item${itemsProcessed === 1 ? '' : 's'} verified)`, 'success', itemsProcessed);
     } catch (err) {
       console.error('Manual sync failed:', err);
       setSyncStatus('error');
-      addSyncLog('manual', 'Manual cloud backup failed', 'error');
+      addSyncLog('manual', 'Manual cloud backup failed', 'error', 0);
     }
   };
 

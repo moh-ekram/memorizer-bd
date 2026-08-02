@@ -3353,47 +3353,6 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               </div>
             </div>
 
-            {/* Restricted Course Free Flashcards Limit */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-amber-500" />
-                  <span>Free Sample Limit (Restricted Courses)</span>
-                </h4>
-                <span className="px-2.5 py-1 bg-amber-50 text-amber-800 font-extrabold text-[10px] rounded-lg uppercase">
-                  Free Trial Limit
-                </span>
-              </div>
-
-              <div className="space-y-3 pt-1 font-sans">
-                <label className="block text-xs font-bold text-slate-700">
-                  How many initial flashcards in restricted courses should be unlocked for free preview?
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="number"
-                    min={0}
-                    max={200}
-                    value={settings?.freeFlashcardsCount ?? 10}
-                    onChange={(e) => {
-                      const val = Math.max(0, parseInt(e.target.value) || 0);
-                      if (settings && onUpdateSettings) {
-                        onUpdateSettings({
-                          ...settings,
-                          freeFlashcardsCount: val
-                        });
-                      }
-                    }}
-                    className="w-28 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 focus:bg-white outline-none text-sm font-mono font-extrabold text-slate-800"
-                  />
-                  <span className="text-xs font-bold text-slate-600">flashcards viewable for free (Default: 10)</span>
-                </div>
-                <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                  After reaching the free flashcard trial limit, students will be prompted to enroll or unlock the course.
-                </p>
-              </div>
-            </div>
-
             {/* Practice & Games Item Positioning Setting */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-4 col-span-1 md:col-span-2">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">

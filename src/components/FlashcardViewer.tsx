@@ -93,7 +93,7 @@ export default function FlashcardViewer({
   courseTitle,
   onUnlockCourse
 }: FlashcardViewerProps) {
-  const effectiveFreeLimit = freeFlashcardsCount || settings?.freeFlashcardsCount || 10;
+  const effectiveFreeLimit = 5;
   const effectiveStreak = streak !== undefined ? streak : (() => {
     try {
       const savedGoal = localStorage.getItem('vocab_memorizer_study_goal');
@@ -241,6 +241,9 @@ export default function FlashcardViewer({
   const [localAnimation, setLocalAnimation] = useState<FlipAnimationKey>('shuffle');
   const [isAnimPickerOpen, setIsAnimPickerOpen] = useState(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+
+  // Preserve back face card word during flip transitions to prevent back data leakage on next card
+  const [displayedBackWord, setDisplayedBackWord] = useState<VocabularyWord>(() => words[0] || { id: '', group: 1, word: '', meaning: '' });
 
   // Random animation state for shuffle option
   const [currentRandomAnim, setCurrentRandomAnim] = useState<'flip-h' | 'flip-v' | 'diagonal'>('flip-h');
@@ -443,6 +446,15 @@ export default function FlashcardViewer({
     extraMeaning: ''
   };
 
+  // Keep back face card content updated when card flips open
+  useEffect(() => {
+    if (isFlipped && currentActiveWord?.id) {
+      setDisplayedBackWord(currentActiveWord);
+    } else if (!displayedBackWord.id && currentActiveWord?.id) {
+      setDisplayedBackWord(currentActiveWord);
+    }
+  }, [isFlipped, currentActiveWord]);
+
   // Calculate progress stats for ALL words in the course (activeWordsList)
   const filterProgressStats = React.useMemo(() => {
     const total = activeWordsList.length;
@@ -547,6 +559,7 @@ export default function FlashcardViewer({
   // Keyboard Hotkeys
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return;
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
         return;
       }
@@ -1699,69 +1712,78 @@ export default function FlashcardViewer({
             </div>
 
             {/* BACK FACE */}
-            <div className={`absolute inset-0 w-full h-full bg-white text-slate-900 rounded-3xl p-5 sm:p-6 md:p-7 shadow-2xl border border-slate-100 flex flex-col justify-between backface-hidden backface-${activeAnimKey} ${
-              isFlipped ? 'pointer-events-auto' : 'pointer-events-none'
-            }`}>
-              {/* Top Row: Google Search, Speaker Icon & Word Meta */}
-              <div className="flex items-center justify-between w-full">
-                <span className="text-[11px] font-bold uppercase tracking-widest text-indigo-500 bg-indigo-50 px-3 py-1 rounded-full">
-                  Group {currentActiveWord.group}
-                </span>
+            {(() => {
+              const backWordToUse = (displayedBackWord && displayedBackWord.id) ? displayedBackWord : currentActiveWord;
+              return (
+                <div className={`absolute inset-0 w-full h-full bg-white text-slate-900 rounded-3xl p-5 sm:p-6 md:p-7 shadow-2xl border border-slate-100 flex flex-col justify-between backface-hidden backface-${activeAnimKey} ${
+                  isFlipped ? 'pointer-events-auto' : 'pointer-events-none'
+                }`}>
+                  {/* Top Row: Google Search, Speaker Icon & Word Meta */}
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-indigo-500 bg-indigo-50 px-3 py-1 rounded-full">
+                      Group {backWordToUse.group}
+                    </span>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const googleUrl = getGoogleSearchUrl(currentActiveWord.word, googleSearchQuery);
-                      window.open(googleUrl, '_blank');
-                    }}
-                    className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition shadow-xs cursor-pointer active:scale-90 flex items-center justify-center border border-slate-200"
-                    title="Search on Google"
-                  >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24">
-                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-                    </svg>
-                  </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const googleUrl = getGoogleSearchUrl(backWordToUse.word, googleSearchQuery);
+                          window.open(googleUrl, '_blank');
+                        }}
+                        className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition shadow-xs cursor-pointer active:scale-90 flex items-center justify-center border border-slate-200"
+                        title="Search on Google"
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24">
+                          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                        </svg>
+                      </button>
 
-                  {variableToggles?.audio !== false && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        speakWord();
-                      }}
-                      className="p-2.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-full transition shadow-xs cursor-pointer active:scale-90"
-                      title="Speak word"
-                    >
-                      <Volume2 className="w-5 h-5" />
-                    </button>
-                  )}
-                </div>
-              </div>
+                      {variableToggles?.audio !== false && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (backWordToUse.word) {
+                              const utterance = new SpeechSynthesisUtterance(backWordToUse.word);
+                              utterance.lang = 'en-US';
+                              utterance.rate = 0.85;
+                              window.speechSynthesis.cancel();
+                              window.speechSynthesis.speak(utterance);
+                            }
+                          }}
+                          className="p-2.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-full transition shadow-xs cursor-pointer active:scale-90"
+                          title="Speak word"
+                        >
+                          <Volume2 className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
 
-              {/* Center Content: Back Face */}
-              {(() => {
-                const place1Label = placeLabels?.place1?.trim() || 'Word';
-                const place2Label = placeLabels?.place2?.trim() || 'Meaning';
-                const place3Label = placeLabels?.place3?.trim() || 'Example Sentence';
-                const place4Label = placeLabels?.place4?.trim() || 'Derivative';
-                const place5Label = placeLabels?.place5?.trim() || 'Synonyms';
-                const place6Label = placeLabels?.place6?.trim() || 'Mnemonic / Note';
+                  {/* Center Content: Back Face */}
+                  {(() => {
+                    const place1Label = placeLabels?.place1?.trim() || 'Word';
+                    const place2Label = placeLabels?.place2?.trim() || 'Meaning';
+                    const place3Label = placeLabels?.place3?.trim() || 'Example Sentence';
+                    const place4Label = placeLabels?.place4?.trim() || 'Derivative';
+                    const place5Label = placeLabels?.place5?.trim() || 'Synonyms';
+                    const place6Label = placeLabels?.place6?.trim() || 'Mnemonic / Note';
 
-                const place1Val = currentActiveWord.word?.trim();
-                const place2Val = currentActiveWord.meaning?.trim();
-                const hasPlace2 = Boolean(place2Val);
-                const place3Val = currentActiveWord.example?.trim();
-                const hasPlace3 = Boolean(place3Val);
-                const place4Val = currentActiveWord.extraWord?.trim();
-                const hasPlace4 = Boolean(place4Val);
-                const place5Val = currentActiveWord.synonyms?.trim();
-                const hasPlace5 = Boolean(place5Val);
-                const place6Val = (currentActiveWord.mnemonic || progress[currentActiveWord.id]?.notes)?.trim();
+                    const place1Val = backWordToUse.word?.trim();
+                    const place2Val = backWordToUse.meaning?.trim();
+                    const hasPlace2 = Boolean(place2Val);
+                    const place3Val = backWordToUse.example?.trim();
+                    const hasPlace3 = Boolean(place3Val);
+                    const place4Val = backWordToUse.extraWord?.trim();
+                    const hasPlace4 = Boolean(place4Val);
+                    const place5Val = backWordToUse.synonyms?.trim();
+                    const hasPlace5 = Boolean(place5Val);
+                    const place6Val = (backWordToUse.mnemonic || progress[backWordToUse.id]?.notes)?.trim();
                 const hasPlace6 = Boolean(place6Val);
 
                 const formatLineWithRedPlace1 = (val: string) => {
@@ -1992,10 +2014,10 @@ export default function FlashcardViewer({
                 </div>
               </div>
             </div>
+          );
+        })()}
           </div>
         </div>
-
-
       </main>
 
       {/* Word Issue Report Modal */}
@@ -2087,32 +2109,32 @@ export default function FlashcardViewer({
           </div>
         </div>
       )}
-      {/* Free Trial Flashcards Limit Reached Modal */}
+      {/* Free Trial Flashcards Limit Reached Modal - Light Theme */}
       {isTrialLimitModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn font-sans">
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 max-w-md w-full shadow-2xl text-center space-y-6 relative overflow-hidden">
-            <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto border border-amber-200 shadow-inner">
-              <Lock className="w-8 h-8" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn font-['Poppins',sans-serif]">
+          <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-8 max-w-md w-full shadow-2xl text-center space-y-5 relative overflow-hidden">
+            <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto border border-amber-200/80 shadow-xs">
+              <Lock className="w-8 h-8 text-amber-500" />
             </div>
 
             <div className="space-y-2">
-              <span className="px-3 py-1 bg-amber-50 text-amber-800 text-[11px] font-black rounded-full uppercase tracking-wider border border-amber-200">
+              <span className="px-3 py-1 bg-amber-50 text-amber-800 text-[11px] font-black rounded-full uppercase tracking-wider border border-amber-200/80">
                 Free Sample Reached
               </span>
               <h3 className="text-xl font-black text-slate-900 tracking-tight">
-                ফ্রি ফ্ল্যাশকার্ড এর সীমা শেষ!
+                ফ্রি ফ্ল্যাশকার্ডের সীমা শেষ!
               </h3>
               <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                {courseTitle ? <strong className="text-indigo-600 font-extrabold">{courseTitle}</strong> : 'এই'} কোর্সের প্রথম {effectiveFreeLimit}টি ফ্রি ফ্ল্যাশকার্ড দেখা সম্পন্ন হয়েছে। পুরো কোর্সের সকল ফ্ল্যাশকার্ড ও ফিচার পেতে কোর্সটি কিনে নিন।
+                {courseTitle ? <strong className="text-indigo-600 font-extrabold">{courseTitle}</strong> : 'এই'} কোর্সের প্রথম {effectiveFreeLimit}টি ফ্রি ফ্ল্যাশকার্ড দেখা সম্পন্ন হয়েছে। পুরো কোর্সের সকল ফ্ল্যাশকার্ড ও ফিচার পেতে কোর্সটি আনলক বা এনরোল করুন।
               </p>
             </div>
 
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-left space-y-2">
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 text-left space-y-2">
               <div className="flex items-center justify-between text-xs font-bold text-slate-700">
                 <span>কোর্সের নির্ধারিত মূল্য:</span>
-                <span className="text-sm font-black text-emerald-600">{coursePrice || 30} ৳</span>
+                <span className="text-sm font-black text-emerald-600">৳{coursePrice || 30} BDT</span>
               </div>
-              <p className="text-[11px] text-slate-500 leading-relaxed">
+              <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
                 আপনার ওয়ালেটে পর্যাপ্ত ব্যালেন্স থাকলে সাথে সাথে আনলক হবে, অথবা বিকাশ সেন্ড মানি করে ব্যালেন্স রিচার্জ করুন।
               </p>
             </div>
@@ -2126,7 +2148,7 @@ export default function FlashcardViewer({
                     setIsSessionActive(false);
                     onUnlockCourse();
                   }}
-                  className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center justify-center gap-2 cursor-pointer shadow-indigo-600/20"
                 >
                   <Lock className="w-4 h-4" />
                   <span>কোর্সটি কিনুন / আনলক করুন</span>
@@ -2139,7 +2161,7 @@ export default function FlashcardViewer({
                   setIsTrialLimitModalOpen(false);
                   setIsSessionActive(false);
                 }}
-                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer border border-slate-200/60"
               >
                 আগে দেখুন (Back to Setup)
               </button>
