@@ -113,7 +113,14 @@ export default function FlashcardViewer({
 
   const [isTrialLimitModalOpen, setIsTrialLimitModalOpen] = useState(false);
   // Session active state - true when inside the full-screen card focus mode, false when on intermediate filter setup screen
-  const [isSessionActive, setIsSessionActive] = useState<boolean>(() => Boolean(initialGroup));
+  const [isSessionActive, setIsSessionActive] = useState<boolean>(() => Boolean(initialGroup) || Boolean(isRestrictedLocked));
+
+  // Dynamic auto-activation if restricted locked course
+  useEffect(() => {
+    if (isRestrictedLocked) {
+      setIsSessionActive(true);
+    }
+  }, [isRestrictedLocked]);
 
   // Filter States - Dynamic unique groups from activeWordsList
   const uniqueGroups = React.useMemo(() => {
@@ -192,10 +199,12 @@ export default function FlashcardViewer({
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   const touchHandled = useRef<boolean>(false);
+  const touchStartTimeRef = useRef<number>(0);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
+    touchStartTimeRef.current = Date.now();
     touchHandled.current = false;
   };
 
@@ -204,11 +213,12 @@ export default function FlashcardViewer({
 
     const touchEndX = e.changedTouches[0].clientX;
     const touchEndY = e.changedTouches[0].clientY;
+    const touchDuration = Date.now() - touchStartTimeRef.current;
 
     const deltaX = touchEndX - touchStartX.current;
     const deltaY = touchEndY - touchStartY.current;
 
-    if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+    if (touchDuration < 600 && Math.abs(deltaX) > 65 && Math.abs(deltaX) > Math.abs(deltaY) * 1.8) {
       touchHandled.current = true;
       if (deltaX < 0) {
         handleNext();
@@ -369,9 +379,10 @@ export default function FlashcardViewer({
 
   const rateAndMaybeConfirm = (newStatus: WordStatus, autoAdvance = true) => {
     const now = Date.now();
-    if (now - lastActionTimeRef.current < 50) return;
+    if (now - lastActionTimeRef.current < 300) return;
     lastActionTimeRef.current = now;
 
+    setIsFlipped(false);
     if (!currentActiveWord.id) return;
     onRateWord(currentActiveWord.id, newStatus);
     if (autoAdvance) {
@@ -536,7 +547,14 @@ export default function FlashcardViewer({
     }
   }, [currentIndex, filteredWords.length, currentActiveWord.id, progress, currentActiveWord.mnemonic]);
 
+  const lastNavTimeRef = useRef<number>(0);
+
   const handlePrev = () => {
+    const now = Date.now();
+    if (now - lastNavTimeRef.current < 250) return;
+    lastNavTimeRef.current = now;
+
+    setIsFlipped(false);
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1);
     } else {
@@ -545,11 +563,17 @@ export default function FlashcardViewer({
   };
 
   const handleNext = () => {
+    const now = Date.now();
+    if (now - lastNavTimeRef.current < 250) return;
+    lastNavTimeRef.current = now;
+
+    setIsFlipped(false);
     if (currentIndex < filteredWords.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
       if (isRestrictedLocked) {
         setIsTrialLimitModalOpen(true);
+        setIsSessionActive(false);
       } else {
         setCurrentIndex(0);
       }
