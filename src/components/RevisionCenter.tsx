@@ -3,7 +3,7 @@ import { VocabularyWord, UserProgress, CustomFolder, AppSettings, WordStatus } f
 import FlashcardViewer from './FlashcardViewer';
 import { 
   RotateCcw, Clock, CheckCircle2, CalendarCheck, Sparkles, Play, 
-  ArrowLeft, Layers, BookOpen, Volume2, Search
+  ArrowLeft, Layers, BookOpen, Volume2, Search, SlidersHorizontal, ShieldCheck, Zap
 } from 'lucide-react';
 
 interface RevisionCenterProps {
@@ -46,7 +46,7 @@ export default function RevisionCenter({
   // Session active state & active words for flashcard revision
   const [activeRevisionWords, setActiveRevisionWords] = useState<VocabularyWord[] | null>(null);
   const [sessionTitle, setSessionTitle] = useState<string>('Revision Session');
-  const [selectedStageFilter, setSelectedStageFilter] = useState<'all_due' | '1day' | '3days' | '7days' | '15days' | 'all_know'>('all_due');
+  const [selectedStageFilter, setSelectedStageFilter] = useState<'all_due' | '1day' | '3days' | '7days' | '15days' | 'long_term' | 'all_know'>('all_due');
   const [searchTerm, setSearchTerm] = useState('');
 
   const now = Date.now();
@@ -57,11 +57,12 @@ export default function RevisionCenter({
   }, [words, progress]);
 
   // Categorize know words by interval since last updated
-  const { due1Day, due3Days, due7Days, due15Days, allDueWords } = useMemo(() => {
+  const { due1Day, due3Days, due7Days, due15Days, dueLongTerm, allDueWords } = useMemo(() => {
     const d1: VocabularyWord[] = [];
     const d3: VocabularyWord[] = [];
     const d7: VocabularyWord[] = [];
     const d15: VocabularyWord[] = [];
+    const dLong: VocabularyWord[] = [];
     const due: VocabularyWord[] = [];
 
     knowWords.forEach(w => {
@@ -86,6 +87,7 @@ export default function RevisionCenter({
       }
       if (diffDays >= 7) {
         d7.push(w);
+        dLong.push(w);
       }
       if (diffDays >= 15) {
         d15.push(w);
@@ -97,6 +99,7 @@ export default function RevisionCenter({
       due3Days: d3,
       due7Days: d7,
       due15Days: d15,
+      dueLongTerm: dLong,
       allDueWords: due
     };
   }, [knowWords, progress, now]);
@@ -127,6 +130,7 @@ export default function RevisionCenter({
     else if (selectedStageFilter === '3days') list = due3Days;
     else if (selectedStageFilter === '7days') list = due7Days;
     else if (selectedStageFilter === '15days') list = due15Days;
+    else if (selectedStageFilter === 'long_term') list = dueLongTerm;
     else if (selectedStageFilter === 'all_know') list = knowWords;
 
     if (!searchTerm.trim()) return list;
@@ -136,7 +140,7 @@ export default function RevisionCenter({
       w.meaning.toLowerCase().includes(q) ||
       (w.synonyms && w.synonyms.toLowerCase().includes(q))
     );
-  }, [selectedStageFilter, allDueWords, due1Day, due3Days, due7Days, due15Days, knowWords, searchTerm]);
+  }, [selectedStageFilter, allDueWords, due1Day, due3Days, due7Days, due15Days, dueLongTerm, knowWords, searchTerm]);
 
   // Format relative time helper
   const getRelativeTimeText = (updatedAtStr?: string) => {
@@ -146,16 +150,16 @@ export default function RevisionCenter({
     const diffHours = Math.floor(diffMin / 60);
     const diffDays = Math.floor(diffHours / 24);
 
-    if (diffDays >= 1) return `${diffDays} দিন আগে (Know marked)`;
-    if (diffHours >= 1) return `${diffHours} ঘণ্টা আগে`;
-    if (diffMin >= 1) return `${diffMin} মিনিট আগে`;
-    return 'এইমাত্র';
+    if (diffDays >= 1) return `${diffDays} days ago (Know marked)`;
+    if (diffHours >= 1) return `${diffHours} hours ago`;
+    if (diffMin >= 1) return `${diffMin} mins ago`;
+    return 'Just now';
   };
 
   // If revision session is active, render FlashcardViewer with activeRevisionWords
   if (activeRevisionWords && activeRevisionWords.length > 0) {
     return (
-      <div className="space-y-4 max-w-5xl mx-auto px-2 sm:px-4 py-3">
+      <div className="space-y-4 max-w-5xl mx-auto px-2 sm:px-4 py-3" style={{ fontFamily: "'Poppins', sans-serif" }}>
         {/* Session Top Bar */}
         <div className="flex items-center justify-between bg-white border border-slate-200 p-3 sm:p-4 rounded-2xl shadow-xs">
           <div className="flex items-center gap-3">
@@ -173,7 +177,7 @@ export default function RevisionCenter({
                 <span>{sessionTitle}</span>
               </h2>
               <p className="text-[11px] text-slate-500 font-medium">
-                {activeRevisionWords.length}টি শব্দের অটো রিভিশন সেশন চলছে
+                {activeRevisionWords.length} words auto-revision session active
               </p>
             </div>
           </div>
@@ -208,7 +212,7 @@ export default function RevisionCenter({
   }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto px-2 sm:px-4 py-4" style={{ fontFamily: "'Poppins', 'Hind Siliguri', sans-serif" }}>
+    <div className="space-y-6 max-w-5xl mx-auto px-2 sm:px-4 py-4" style={{ fontFamily: "'Poppins', sans-serif" }}>
       {/* Top Banner Header */}
       <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-indigo-950 text-white rounded-3xl p-5 sm:p-7 shadow-xl relative overflow-hidden border border-emerald-500/20">
         <div className="relative z-10 space-y-3">
@@ -221,10 +225,10 @@ export default function RevisionCenter({
 
           <div className="space-y-1 max-w-2xl">
             <h1 className="text-xl sm:text-3xl font-black text-white tracking-tight">
-              স্মার্ট রিভিশন সেন্টার (Spaced Repetition)
+              Smart Revision Center (Spaced Repetition)
             </h1>
             <p className="text-xs sm:text-sm text-emerald-100 font-medium leading-relaxed">
-              আপনার চিহ্নিত <strong className="text-emerald-300">"Know"</strong> শব্দের দীর্ঘমেয়াদী মেমরি নিশ্চিত করতে ১ দিন, ৩ দিন, ৭ দিন ও ১৫ দিন পর পর রিভিশন নিন।
+              Schedule automated spaced repetition reviews for your <strong className="text-emerald-300">"Know"</strong> words at 1, 3, 7, and 15-day intervals to build long-term memory.
             </p>
           </div>
 
@@ -241,7 +245,7 @@ export default function RevisionCenter({
               }`}
             >
               <Play className="w-4 h-4 fill-current text-slate-950" />
-              <span>আজকের সকল রিভিশন শুরু করুন ({allDueWords.length}টি)</span>
+              <span>Start All Due Revisions ({allDueWords.length})</span>
             </button>
 
             <button
@@ -251,7 +255,7 @@ export default function RevisionCenter({
               className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl text-xs font-bold transition cursor-pointer border border-white/20 flex items-center gap-2"
             >
               <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-              <span>সকল Know ওয়ার্ড রিভিশন ({knowWords.length}টি)</span>
+              <span>Review All Know Words ({knowWords.length})</span>
             </button>
           </div>
         </div>
@@ -267,7 +271,7 @@ export default function RevisionCenter({
         {/* Total Know Words */}
         <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs space-y-1">
           <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider">
-            মোট জানা শব্দ
+            Total Known Words
           </span>
           <div className="flex items-baseline justify-between">
             <p className="text-2xl font-black text-slate-900">{knowWords.length}</p>
@@ -279,7 +283,7 @@ export default function RevisionCenter({
         {/* Due Today */}
         <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs space-y-1">
           <span className="text-[10px] font-extrabold uppercase text-amber-600 tracking-wider">
-            আজকে রিভিশন দেওয়া লাগবে
+            Due Today for Review
           </span>
           <div className="flex items-baseline justify-between">
             <p className="text-2xl font-black text-amber-600">{allDueWords.length}</p>
@@ -291,7 +295,7 @@ export default function RevisionCenter({
         {/* 7 Days Stage */}
         <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs space-y-1">
           <span className="text-[10px] font-extrabold uppercase text-indigo-600 tracking-wider">
-            ৭ দিন পর রিভিশন
+            7-Day Interval Review
           </span>
           <div className="flex items-baseline justify-between">
             <p className="text-2xl font-black text-indigo-600">{due7Days.length}</p>
@@ -303,7 +307,7 @@ export default function RevisionCenter({
         {/* 15 Days Stage */}
         <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs space-y-1">
           <span className="text-[10px] font-extrabold uppercase text-purple-600 tracking-wider">
-            ১৫ দিন পর রিভিশন
+            15-Day Interval Review
           </span>
           <div className="flex items-baseline justify-between">
             <p className="text-2xl font-black text-purple-600">{due15Days.length}</p>
@@ -313,24 +317,83 @@ export default function RevisionCenter({
         </div>
       </div>
 
+      {/* FOCUS INTERVAL FILTER TOGGLE BAR */}
+      <div className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-2xl p-4 shadow-md border border-slate-800 space-y-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl border border-indigo-500/30">
+              <SlidersHorizontal className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-xs sm:text-sm font-black text-white tracking-wide uppercase">
+                Focus Mode Filter
+              </h3>
+              <p className="text-[11px] text-slate-400 font-medium">
+                Isolate study time specifically for immediate 1-day items or long-term retention
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto bg-slate-950/70 p-1.5 rounded-xl border border-slate-800">
+            <button
+              type="button"
+              onClick={() => setSelectedStageFilter('1day')}
+              className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                selectedStageFilter === '1day'
+                  ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>1-Day Focus ({due1Day.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedStageFilter('long_term')}
+              className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                selectedStageFilter === 'long_term'
+                  ? 'bg-indigo-500 text-white shadow-sm'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Long-Term (7+ Days) ({dueLongTerm.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedStageFilter('all_due')}
+              className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                selectedStageFilter === 'all_due'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <span>All Due ({allDueWords.length})</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* 4 STAGE CARDS GRID */}
       <div className="space-y-3">
         <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-700 flex items-center gap-2">
           <Layers className="w-4 h-4 text-indigo-600" />
-          <span>রিভিশন ইন্টারভাল ধাপসমূহ (Revision Stages)</span>
+          <span>Revision Stages & Intervals</span>
         </h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Stage 1: 1 Day */}
           <div className="bg-white border border-slate-200/90 rounded-2xl p-4 space-y-3 shadow-2xs hover:shadow-md transition">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <span className="text-xs font-black text-slate-800">১ দিন পর রিভিশন</span>
+              <span className="text-xs font-black text-slate-800">1-Day Review</span>
               <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200">
                 {due1Day.length} Words
               </span>
             </div>
             <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
-              শব্দগুলো Know মার্ক করার ১ দিন পার হওয়া কার্ডগুলো রিভিশন দিন।
+              Review words marked as "Know" that have passed 1 day since last review.
             </p>
             <button
               type="button"
@@ -343,20 +406,20 @@ export default function RevisionCenter({
               }`}
             >
               <Play className="w-3.5 h-3.5 fill-current" />
-              <span>১ দিনের রিভিশন ({due1Day.length})</span>
+              <span>1-Day Review ({due1Day.length})</span>
             </button>
           </div>
 
           {/* Stage 2: 3 Days */}
           <div className="bg-white border border-slate-200/90 rounded-2xl p-4 space-y-3 shadow-2xs hover:shadow-md transition">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <span className="text-xs font-black text-slate-800">৩ দিন পর রিভিশন</span>
+              <span className="text-xs font-black text-slate-800">3-Day Review</span>
               <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full border border-amber-200">
                 {due3Days.length} Words
               </span>
             </div>
             <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
-              ৩ দিন আগে পড়া শব্দগুলো দ্বিতীয় রাউন্ডে স্মৃতিতে পাকা করুন।
+              Reinforce words studied 3 days ago for second-stage memory retention.
             </p>
             <button
               type="button"
@@ -369,20 +432,20 @@ export default function RevisionCenter({
               }`}
             >
               <Play className="w-3.5 h-3.5 fill-current" />
-              <span>৩ দিনের রিভিশন ({due3Days.length})</span>
+              <span>3-Day Review ({due3Days.length})</span>
             </button>
           </div>
 
           {/* Stage 3: 7 Days */}
           <div className="bg-white border border-slate-200/90 rounded-2xl p-4 space-y-3 shadow-2xs hover:shadow-md transition">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <span className="text-xs font-black text-slate-800">৭ দিন পর রিভিশন</span>
+              <span className="text-xs font-black text-slate-800">7-Day Review</span>
               <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-200">
                 {due7Days.length} Words
               </span>
             </div>
             <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
-              ১ সপ্তাহ পর ৩য় রাউন্ডের মাধ্যমে লং-টার্ম মেমরিতে স্থায়ী করুন।
+              Consolidate words into long-term memory after 1 week.
             </p>
             <button
               type="button"
@@ -395,20 +458,20 @@ export default function RevisionCenter({
               }`}
             >
               <Play className="w-3.5 h-3.5 fill-current" />
-              <span>৭ দিনের রিভিশন ({due7Days.length})</span>
+              <span>7-Day Review ({due7Days.length})</span>
             </button>
           </div>
 
           {/* Stage 4: 15 Days */}
           <div className="bg-white border border-slate-200/90 rounded-2xl p-4 space-y-3 shadow-2xs hover:shadow-md transition">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <span className="text-xs font-black text-slate-800">১৫ দিন পর রিভিশন</span>
+              <span className="text-xs font-black text-slate-800">15-Day Review</span>
               <span className="text-[10px] font-bold px-2 py-0.5 bg-purple-50 text-purple-700 rounded-full border border-purple-200">
                 {due15Days.length} Words
               </span>
             </div>
             <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
-              ১৫ দিন পরের চূড়ান্ত রিভিশন দিয়ে মাস্টার লেভেলে নিশ্চিত করুন।
+              Final mastery review for words after 15 days of retention.
             </p>
             <button
               type="button"
@@ -421,7 +484,7 @@ export default function RevisionCenter({
               }`}
             >
               <Play className="w-3.5 h-3.5 fill-current" />
-              <span>১৫ দিনের রিভিশন ({due15Days.length})</span>
+              <span>15-Day Review ({due15Days.length})</span>
             </button>
           </div>
         </div>
@@ -433,7 +496,7 @@ export default function RevisionCenter({
           <div className="flex items-center gap-2">
             <BookOpen className="w-4 h-4 text-emerald-600" />
             <h3 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider">
-              রিভিশন তালিকা ({currentStageWords.length} Words)
+              Revision List ({currentStageWords.length} Words)
             </h3>
           </div>
 
@@ -448,7 +511,7 @@ export default function RevisionCenter({
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              আজকে Due ({allDueWords.length})
+              Due Today ({allDueWords.length})
             </button>
 
             <button
@@ -460,7 +523,19 @@ export default function RevisionCenter({
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              ১ দিন ({due1Day.length})
+              1 Day ({due1Day.length})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedStageFilter('long_term')}
+              className={`px-3 py-1.5 rounded-xl transition cursor-pointer whitespace-nowrap ${
+                selectedStageFilter === 'long_term'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Long-Term 7+ Days ({dueLongTerm.length})
             </button>
 
             <button
@@ -472,7 +547,7 @@ export default function RevisionCenter({
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              ৩ দিন ({due3Days.length})
+              3 Days ({due3Days.length})
             </button>
 
             <button
@@ -484,7 +559,7 @@ export default function RevisionCenter({
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              ৭ দিন ({due7Days.length})
+              7 Days ({due7Days.length})
             </button>
 
             <button
@@ -496,7 +571,7 @@ export default function RevisionCenter({
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              ১৫ দিন ({due15Days.length})
+              15 Days ({due15Days.length})
             </button>
 
             <button
@@ -508,7 +583,7 @@ export default function RevisionCenter({
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              সকল Know ({knowWords.length})
+              All Know ({knowWords.length})
             </button>
           </div>
         </div>
@@ -520,7 +595,7 @@ export default function RevisionCenter({
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="খুঁজুন (Word or Meaning)..."
+            placeholder="Search (Word or Meaning)..."
             className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20"
           />
         </div>
@@ -531,11 +606,11 @@ export default function RevisionCenter({
             <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto opacity-80" />
             <p className="text-xs font-bold text-slate-700">
               {knowWords.length === 0 
-                ? 'এখনো কোন শব্দকে "Know" ট্যাগ করা হয়নি।'
-                : 'এই ফিল্টারে বর্তমানে কোন রিভিশন বাকি নেই!'}
+                ? 'No words have been marked as "Know" yet.'
+                : 'No pending revisions under this filter!'}
             </p>
             <p className="text-[11px] text-slate-500 font-medium">
-              ফ্ল্যাশকার্ডে রিভিশন দেওয়ার সময় শব্দগুলোকে "Know" ট্যাগ দিন।
+              Mark words as "Know" during flashcard study to include them in revision.
             </p>
           </div>
         ) : (
