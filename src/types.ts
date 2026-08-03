@@ -29,7 +29,7 @@ export interface CustomFolder {
   createdAt?: string;
 }
 
-export type ActiveTab = 'profile' | 'dashboard' | 'my_courses' | 'flashcard' | 'synonym' | 'quiz' | 'match' | 'dictionary' | 'lists' | 'planner' | 'settings' | 'admin' | 'leaderboard' | 'practice' | 'study_tools' | 'story';
+export type ActiveTab = 'profile' | 'dashboard' | 'my_courses' | 'flashcard' | 'synonym' | 'quiz' | 'match' | 'dictionary' | 'lists' | 'planner' | 'settings' | 'admin' | 'leaderboard' | 'practice' | 'study_tools' | 'story' | 'revision';
 
 export interface AppSettings {
   defaultFlashcardTags: WordStatus[];

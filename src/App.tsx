@@ -11,6 +11,7 @@ import GlobalLeaderboard from './components/GlobalLeaderboard';
 import MyCoursesView from './components/MyCoursesView';
 import AnnouncementBanner from './components/AnnouncementBanner';
 import LandingHomePage from './components/LandingHomePage';
+import RevisionCenter from './components/RevisionCenter';
 
 import {
   LayoutDashboard,
@@ -123,13 +124,14 @@ export default function App() {
     isCancelled: boolean;
   } | null>(null);
 
-  const MAIN_TABS = ['profile', 'leaderboard', 'practice', 'study_tools', 'settings'];
+  const MAIN_TABS = ['profile', 'revision', 'leaderboard', 'practice', 'study_tools', 'settings'];
 
   const TAB_LABELS: Record<string, string> = {
     profile: 'My Profile',
     dashboard: 'Dashboard',
     my_courses: 'My Courses',
     flashcard: 'Flashcard',
+    revision: 'Revision',
     leaderboard: 'Leaderboard',
     practice: 'Games',
     study_tools: 'Study Tools',
@@ -139,6 +141,7 @@ export default function App() {
 
   const getPrimaryTab = (tab: string): string => {
     if (['profile', 'dashboard', 'my_courses', 'flashcard'].includes(tab)) return 'profile';
+    if (tab === 'revision') return 'revision';
     if (['practice', 'synonym', 'quiz', 'match'].includes(tab)) return 'practice';
     if (['study_tools', 'dictionary', 'lists', 'planner', 'story'].includes(tab)) return 'study_tools';
     return tab;
@@ -1862,6 +1865,19 @@ export default function App() {
         </button>
 
         <button
+          onClick={() => handleNavigateTab('revision')}
+          data-active={activeTab === 'revision'}
+          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 p-2 md:px-4 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 text-xs font-bold ${
+            activeTab === 'revision'
+              ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/15'
+              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+          }`}
+        >
+          <RotateCcw className="w-4 h-4 text-emerald-400" />
+          <span>Revision</span>
+        </button>
+
+        <button
           onClick={() => handleNavigateTab('leaderboard')}
           data-active={activeTab === 'leaderboard'}
           className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 p-2 md:px-4 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 text-xs font-bold ${
@@ -2155,6 +2171,30 @@ export default function App() {
                 />
               )}
             </div>
+          )}
+
+          {activeTab === 'revision' && (
+            <RevisionCenter
+              words={activeWords}
+              progress={progress}
+              folders={folders}
+              streak={goal.streak}
+              onRateWord={handleRateWord}
+              onUpdateNotes={handleUpdateNotes}
+              onToggleBookmark={handleToggleBookmark}
+              settings={settings}
+              onUpdateSettings={setSettings}
+              placeLabels={activeCourse?.placeLabels}
+              googleSearchQuery={activeCourse?.googleSearchQuery}
+              isRestrictedLocked={isRestrictedLocked}
+              freeFlashcardsCount={activeCourse?.freeFlashcardsCount}
+              coursePrice={activeCourse?.price}
+              courseTitle={activeCourse?.title}
+              onUnlockCourse={() => {
+                setActiveTab('profile');
+                setProfileSubTab('my_courses');
+              }}
+            />
           )}
 
           {activeTab === 'leaderboard' && (
