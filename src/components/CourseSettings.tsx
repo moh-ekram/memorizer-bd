@@ -13,6 +13,7 @@ import {
   ToggleRight, 
   Edit, 
   AlertCircle, 
+  AlertTriangle,
   Copy, 
   Check, 
   BookOpen, 
@@ -124,6 +125,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   const [newMcqExplanation, setNewMcqExplanation] = useState('');
   const [excelMcqPreview, setExcelMcqPreview] = useState<CustomMcqQuestion[]>([]);
   const [excelMcqUploadError, setExcelMcqUploadError] = useState<string | null>(null);
+  const [excelMcqNotice, setExcelMcqNotice] = useState<string[] | null>(null);
   const [excelMcqSaveStatus, setExcelMcqSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   // --- GENERAL COURSE STATES ---
@@ -929,6 +931,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     if (!file) return;
 
     setExcelMcqUploadError(null);
+    setExcelMcqNotice(null);
     setExcelMcqPreview([]);
 
     const reader = new FileReader();
@@ -946,6 +949,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
         }
 
         const questionsList: CustomMcqQuestion[] = [];
+        const skippedNotices: string[] = [];
 
         for (let idx = 0; idx < rawRows.length; idx++) {
           const row = rawRows[idx];
@@ -964,11 +968,14 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
           }
 
           if (!rawId) {
-            setExcelMcqUploadError(`Row ${idx + 1}: Column 1 (Mandatory Unique ID) is empty.`);
-            return;
+            skippedNotices.push(`Row ${idx + 1}: Column 1 (Mandatory Unique ID) is empty.`);
+            continue;
           }
 
-          if (!questionText) continue;
+          if (!questionText) {
+            skippedNotices.push(`Row ${idx + 1} (${rawId}): Question text is empty.`);
+            continue;
+          }
 
           // Extract raw options from columns 3 to 6 (0-indexed 2 to 5)
           const rawOpts: string[] = [];
@@ -977,7 +984,10 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
             rawOpts.push(val);
           }
 
-          if (rawOpts.some(o => o === '')) continue;
+          if (rawOpts.some(o => o === '')) {
+            skippedNotices.push(`Row ${idx + 1} (${rawId}): One or more option columns are empty.`);
+            continue;
+          }
 
           let answer = '';
           let explanation = '';
@@ -1006,15 +1016,32 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
             explanation = row[7] !== undefined && row[7] !== null ? String(row[7]).trim() : '';
 
             if (!col7Ans) {
-              setExcelMcqUploadError(`Row ${idx + 1} (${rawId}): No trailing '#' found in options (Format 1) and Column 7 (correct answer) is empty (Format 2).`);
-              return;
+              skippedNotices.push(`Row ${idx + 1} (${rawId}): No trailing '#' found in options (Format 1) and Column 7 (correct answer) is empty (Format 2).`);
+              continue;
             }
 
-            // Check if col7Ans matches one of the options (case-insensitive)
-            const matched = rawOpts.find(o => o.trim().toLowerCase() === col7Ans.toLowerCase());
+            // Normalization helper to match answer flexibly across Bengali/English character sets
+            const normalizeStr = (str: string) => str.trim().toLowerCase().replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\s+/g, ' ');
+
+            // Try direct match, normalized match, or stripped punctuation match
+            let matched = rawOpts.find(o => o.trim() === col7Ans);
             if (!matched) {
-              setExcelMcqUploadError(`Row ${idx + 1} (${rawId}): Column 7 answer "${col7Ans}" does not match any of the 4 options: [${rawOpts.join(', ')}].`);
-              return;
+              matched = rawOpts.find(o => normalizeStr(o) === normalizeStr(col7Ans));
+            }
+            if (!matched) {
+              const clean7 = normalizeStr(col7Ans).replace(/[^a-z0-9\u0980-\u09FF]/g, '');
+              if (clean7) {
+                matched = rawOpts.find(o => {
+                  const cleanO = normalizeStr(o).replace(/[^a-z0-9\u0980-\u09FF]/g, '');
+                  return cleanO === clean7;
+                });
+              }
+            }
+
+            if (!matched) {
+              // Option mismatch: skip this row and record notice so user can add manually!
+              skippedNotices.push(`Row ${idx + 1} (${rawId}): Column 7 answer "${col7Ans}" does not match any of the 4 options: [${rawOpts.join(', ')}].`);
+              continue;
             }
 
             cleanOpts.length = 0;
@@ -1035,8 +1062,14 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
           }
         }
 
+        if (skippedNotices.length > 0) {
+          setExcelMcqNotice(skippedNotices);
+        } else {
+          setExcelMcqNotice(null);
+        }
+
         if (questionsList.length === 0) {
-          setExcelMcqUploadError('No valid MCQ questions found in the file.');
+          setExcelMcqUploadError('No valid MCQ questions parsed from the file.');
         } else {
           setExcelMcqPreview(questionsList);
         }
@@ -4439,6 +4472,23 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                       <div className="p-3 bg-rose-50 text-rose-700 rounded-xl flex items-start gap-2 border border-rose-100 text-xs font-semibold">
                         <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                         <span>{excelMcqUploadError}</span>
+                      </div>
+                    )}
+
+                    {excelMcqNotice && excelMcqNotice.length > 0 && (
+                      <div className="p-3.5 bg-amber-50 text-amber-900 rounded-2xl border border-amber-200/80 text-xs font-semibold space-y-2 animate-fadeIn">
+                        <div className="flex items-center gap-2 font-black text-amber-800 text-[11px] uppercase tracking-wide">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                          <span>Notice: {excelMcqNotice.length} Question(s) Skipped Due to Option Mismatch</span>
+                        </div>
+                        <p className="text-[11px] text-amber-800 leading-relaxed font-normal">
+                          The following question(s) were skipped because Column 7 answer did not match any of the 4 option columns. All other valid questions were parsed successfully. You can add the skipped ones manually:
+                        </p>
+                        <ul className="max-h-36 overflow-y-auto space-y-1.5 pl-2 text-[11px] font-mono text-amber-950 bg-white/80 p-2.5 rounded-xl border border-amber-200/60 divide-y divide-amber-100">
+                          {excelMcqNotice.map((notice, nIdx) => (
+                            <li key={nIdx} className="pt-1 first:pt-0 break-words leading-snug">{notice}</li>
+                          ))}
+                        </ul>
                       </div>
                     )}
 
