@@ -14,7 +14,8 @@ import {
   Shuffle,
   Zap,
   CheckCircle2,
-  CheckCircle
+  CheckCircle,
+  BarChart3
 } from 'lucide-react';
 import { db, collection, getDocs } from '../lib/firebase';
 import SynonymCheck from './SynonymCheck';
@@ -23,6 +24,7 @@ import WordMatchGame from './WordMatchGame';
 import BlankFillingPractice from './BlankFillingPractice';
 import OddOneOutGame from './OddOneOutGame';
 import WordAnalogyGame from './WordAnalogyGame';
+import GameAnalyticsDashboard from './GameAnalyticsDashboard';
 import QuickShuffleModal from './QuickShuffleModal';
 import { 
   VocabularyWord, 
@@ -33,7 +35,8 @@ import {
   BlankQuestion,
   OddOneOutQuestion,
   WordAnalogyQuestion,
-  CustomMcqQuestion
+  CustomMcqQuestion,
+  Course
 } from '../types';
 
 // Circular SVG Progress Ring Component
@@ -106,6 +109,7 @@ interface PracticeCenterProps {
   settings: AppSettings;
   onQuizComplete: (score: number, totalQuestions: number) => void;
   activeCourseId: string;
+  allCourses?: Course[];
   enabledGames?: Record<string, boolean>;
   placeLabels?: {
     place1?: string;
@@ -137,11 +141,12 @@ export default function PracticeCenter({
   settings,
   onQuizComplete,
   activeCourseId,
+  allCourses,
   enabledGames,
   placeLabels,
   googleSearchQuery
 }: PracticeCenterProps) {
-  const [subTab, setSubTab] = useState<'hub' | 'quiz' | 'match' | 'synonym' | 'blank' | 'odd_one_out' | 'analogy'>('hub');
+  const [subTab, setSubTab] = useState<'hub' | 'quiz' | 'match' | 'synonym' | 'blank' | 'odd_one_out' | 'analogy' | 'analytics'>('hub');
   const [isQuickShuffleOpen, setIsQuickShuffleOpen] = useState<boolean>(false);
 
   const [mobileCollapsedState, setMobileCollapsedState] = useState<Record<string, boolean>>({});
@@ -433,7 +438,53 @@ export default function PracticeCenter({
 
   return (
     <div className="space-y-6" id="practice-center-wrapper">
+      {/* Practice Center View Mode Switcher Header */}
+      <div className="flex items-center gap-2 p-1.5 bg-slate-100 rounded-2xl w-fit border border-slate-200/80">
+        <button
+          type="button"
+          onClick={() => setSubTab('hub')}
+          className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-2 cursor-pointer ${
+            subTab === 'hub' ? 'bg-white text-indigo-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Gamepad2 className="w-4 h-4 text-indigo-600" />
+          <span>Games Hub</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setSubTab('analytics')}
+          className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-2 cursor-pointer ${
+            subTab === 'analytics' ? 'bg-white text-indigo-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <BarChart3 className="w-4 h-4 text-emerald-600" />
+          <span>Tracking Dashboard</span>
+          <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black rounded-full uppercase">
+            Correct %
+          </span>
+        </button>
+      </div>
+
       {/* RENDER ACTIVE MODE */}
+      {subTab === 'analytics' && (
+        <GameAnalyticsDashboard
+          words={words}
+          progress={progress}
+          synonymProgress={synonymProgress}
+          blankProgress={blankProgress}
+          oooProgress={oooProgress}
+          analogyProgress={analogyProgress}
+          blankQs={blankQs}
+          oooQs={oooQs}
+          analogyQs={analogyQs}
+          mcqQs={mcqQs}
+          activeCourseId={activeCourseId}
+          allCourses={allCourses}
+          onPlayGame={(gameKey) => setSubTab(gameKey)}
+          onBackToHub={() => setSubTab('hub')}
+        />
+      )}
+
       {subTab === 'hub' && (
         <div className="space-y-6">
           <div className="bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-8 rounded-3xl relative overflow-hidden shadow-md flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
@@ -457,22 +508,33 @@ export default function PracticeCenter({
               <h2 className="text-2xl sm:text-3xl font-black tracking-tight">Games</h2>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setIsQuickShuffleOpen(true)}
-              className="px-5 py-3.5 bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-slate-950 rounded-2xl font-black text-sm shadow-xl shadow-amber-500/20 hover:shadow-amber-500/30 transition-all flex items-center justify-center gap-3 shrink-0 cursor-pointer active:scale-95 group border border-amber-300/40"
-            >
-              <div className="w-8 h-8 rounded-xl bg-slate-950/10 flex items-center justify-center text-slate-950 group-hover:rotate-180 transition-transform duration-500">
-                <Shuffle className="w-4 h-4" />
-              </div>
-              <div className="text-left leading-tight">
-                <div className="text-xs font-black tracking-wide uppercase">Quick Shuffle</div>
-                <div className="text-[10px] font-bold opacity-80 flex items-center gap-1">
-                  <Zap className="w-3 h-3 fill-slate-950" />
-                  <span>5 Qs Confusion Quiz</span>
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setSubTab('analytics')}
+                className="px-4 py-3 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 rounded-2xl font-bold text-xs border border-emerald-500/40 transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <BarChart3 className="w-4 h-4 text-emerald-400" />
+                <span>Tracking Dashboard</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsQuickShuffleOpen(true)}
+                className="px-5 py-3.5 bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-slate-950 rounded-2xl font-black text-sm shadow-xl shadow-amber-500/20 hover:shadow-amber-500/30 transition-all flex items-center justify-center gap-3 shrink-0 cursor-pointer active:scale-95 group border border-amber-300/40"
+              >
+                <div className="w-8 h-8 rounded-xl bg-slate-950/10 flex items-center justify-center text-slate-950 group-hover:rotate-180 transition-transform duration-500">
+                  <Shuffle className="w-4 h-4" />
                 </div>
-              </div>
-            </button>
+                <div className="text-left leading-tight">
+                  <div className="text-xs font-black tracking-wide uppercase">Quick Shuffle</div>
+                  <div className="text-[10px] font-bold opacity-80 flex items-center gap-1">
+                    <Zap className="w-3 h-3 fill-slate-950" />
+                    <span>5 Qs Confusion Quiz</span>
+                  </div>
+                </div>
+              </button>
+            </div>
           </div>
 
           {/* Mobile Collapse / Expand Control Header */}

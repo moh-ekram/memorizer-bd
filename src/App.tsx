@@ -2224,6 +2224,7 @@ export default function App() {
                 setQuizTaken(prev => prev + 1);
               }}
               activeCourseId={activeCourseId}
+              allCourses={allAvailableCourses}
               enabledGames={activeCourse?.enabledGames}
               placeLabels={activeCourse?.placeLabels}
               googleSearchQuery={activeCourse?.googleSearchQuery}
