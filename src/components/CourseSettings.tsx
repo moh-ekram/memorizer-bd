@@ -35,7 +35,7 @@ import {
   Shuffle,
   Save
 } from 'lucide-react';
-import { db, doc, setDoc, getDoc, collection, getDocs, updateDoc, deleteDoc } from '../lib/firebase';
+import { db, doc, setDoc, getDoc, collection, getDocs, updateDoc, deleteDoc, saveBulkDocs, deleteBulkDocs } from '../lib/firebase';
 import { read, utils, writeFile } from 'xlsx';
 
 interface CourseSettingsProps {
@@ -511,10 +511,8 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     if (excelQuestionsPreview.length === 0) return;
     setExcelSaveStatus('saving');
     try {
-      for (const q of excelQuestionsPreview) {
-        const updatedQ = { ...q, courseId: course.id };
-        await setDoc(doc(db, 'blank_questions', q.id), updatedQ);
-      }
+      const updatedList = excelQuestionsPreview.map(q => ({ ...q, courseId: course.id }));
+      await saveBulkDocs('blank_questions', updatedList);
       setExcelSaveStatus('saved');
       setExcelQuestionsPreview([]);
       fetchBlankQuestions();
@@ -577,9 +575,8 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     if (!window.confirm(`Are you sure you want to delete all ${courseBlankQuestions.length} Blank Filling questions for this course? This action is permanent and cannot be undone.`)) return;
     setBlankQuestionsLoading(true);
     try {
-      for (const q of courseBlankQuestions) {
-        await deleteDoc(doc(db, 'blank_questions', q.id));
-      }
+      const ids = courseBlankQuestions.map(q => q.id);
+      await deleteBulkDocs('blank_questions', ids);
       setCourseBlankQuestions([]);
       alert('All Blank Filling questions deleted successfully!');
     } catch (err) {
@@ -678,10 +675,8 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     if (excelOooPreview.length === 0) return;
     setExcelOooSaveStatus('saving');
     try {
-      for (const q of excelOooPreview) {
-        const updatedQ = { ...q, courseId: course.id };
-        await setDoc(doc(db, 'odd_one_out_questions', q.id), updatedQ);
-      }
+      const updatedList = excelOooPreview.map(q => ({ ...q, courseId: course.id }));
+      await saveBulkDocs('odd_one_out_questions', updatedList);
       setExcelOooSaveStatus('saved');
       setExcelOooPreview([]);
       fetchOooQuestions();
@@ -741,9 +736,8 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     if (!window.confirm(`Are you sure you want to delete all ${courseOooQuestions.length} Odd One Out questions for this course? This action is permanent and cannot be undone.`)) return;
     setOooQuestionsLoading(true);
     try {
-      for (const q of courseOooQuestions) {
-        await deleteDoc(doc(db, 'odd_one_out_questions', q.id));
-      }
+      const ids = courseOooQuestions.map(q => q.id);
+      await deleteBulkDocs('odd_one_out_questions', ids);
       setCourseOooQuestions([]);
       alert('All Odd One Out questions deleted successfully!');
     } catch (err) {
@@ -846,10 +840,8 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     if (excelAnalogyPreview.length === 0) return;
     setExcelAnalogySaveStatus('saving');
     try {
-      for (const q of excelAnalogyPreview) {
-        const updatedQ = { ...q, courseId: course.id };
-        await setDoc(doc(db, 'word_analogy_questions', q.id), updatedQ);
-      }
+      const updatedList = excelAnalogyPreview.map(q => ({ ...q, courseId: course.id }));
+      await saveBulkDocs('word_analogy_questions', updatedList);
       setExcelAnalogySaveStatus('saved');
       setExcelAnalogyPreview([]);
       fetchAnalogyQuestions();
@@ -911,9 +903,8 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     if (!window.confirm(`Are you sure you want to delete all ${courseAnalogyQuestions.length} Word Analogy questions for this course? This action is permanent and cannot be undone.`)) return;
     setAnalogyQuestionsLoading(true);
     try {
-      for (const q of courseAnalogyQuestions) {
-        await deleteDoc(doc(db, 'word_analogy_questions', q.id));
-      }
+      const ids = courseAnalogyQuestions.map(q => q.id);
+      await deleteBulkDocs('word_analogy_questions', ids);
       setCourseAnalogyQuestions([]);
       alert('All Word Analogy questions deleted successfully!');
     } catch (err) {
@@ -1085,10 +1076,8 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     if (excelMcqPreview.length === 0) return;
     setExcelMcqSaveStatus('saving');
     try {
-      for (const q of excelMcqPreview) {
-        const updatedQ = { ...q, courseId: course.id };
-        await setDoc(doc(db, 'mcq_questions', q.id), updatedQ);
-      }
+      const updatedList = excelMcqPreview.map(q => ({ ...q, courseId: course.id }));
+      await saveBulkDocs('mcq_questions', updatedList);
       setExcelMcqSaveStatus('saved');
       setExcelMcqPreview([]);
       fetchMcqQuestions();
@@ -1150,9 +1139,8 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     if (!window.confirm(`Are you sure you want to delete all ${courseMcqQuestions.length} MCQ questions for this course? This action is permanent and cannot be undone.`)) return;
     setMcqQuestionsLoading(true);
     try {
-      for (const q of courseMcqQuestions) {
-        await deleteDoc(doc(db, 'mcq_questions', q.id));
-      }
+      const ids = courseMcqQuestions.map(q => q.id);
+      await deleteBulkDocs('mcq_questions', ids);
       setCourseMcqQuestions([]);
       alert('All MCQ questions deleted successfully!');
     } catch (err) {

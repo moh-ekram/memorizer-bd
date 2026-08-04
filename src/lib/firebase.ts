@@ -298,6 +298,63 @@ export async function deleteDoc(docRef: any) {
   }
 }
 
+export async function saveBulkDocs(collectionName: string, items: any[]) {
+  if (!items || items.length === 0) return;
+  DOCS_CACHE_MAP.clear();
+  try {
+    const payloads = items.map(item => ({
+      id: item.id,
+      ...item,
+      data: item
+    }));
+
+    const CHUNK_SIZE = 200;
+    for (let i = 0; i < payloads.length; i += CHUNK_SIZE) {
+      const chunk = payloads.slice(i, i + CHUNK_SIZE);
+      const { error } = await supabase
+        .from(collectionName)
+        .upsert(chunk);
+      
+      if (error) {
+        console.warn(`Supabase bulk upsert fallback for ${collectionName}:`, error);
+        const SUB_CHUNK = 25;
+        for (let j = 0; j < chunk.length; j += SUB_CHUNK) {
+          const sub = chunk.slice(j, j + SUB_CHUNK);
+          await Promise.all(sub.map(p => setDoc({ collectionName, docId: p.id }, p.data)));
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`saveBulkDocs exception for ${collectionName}:`, err);
+  }
+}
+
+export async function deleteBulkDocs(collectionName: string, docIds: string[]) {
+  if (!docIds || docIds.length === 0) return;
+  DOCS_CACHE_MAP.clear();
+  try {
+    const CHUNK_SIZE = 200;
+    for (let i = 0; i < docIds.length; i += CHUNK_SIZE) {
+      const chunk = docIds.slice(i, i + CHUNK_SIZE);
+      const { error } = await supabase
+        .from(collectionName)
+        .delete()
+        .in('id', chunk);
+      
+      if (error) {
+        console.warn(`Supabase deleteBulkDocs fallback for ${collectionName}:`, error);
+        const SUB_CHUNK = 25;
+        for (let j = 0; j < chunk.length; j += SUB_CHUNK) {
+          const sub = chunk.slice(j, j + SUB_CHUNK);
+          await Promise.all(sub.map(id => deleteDoc({ collectionName, docId: id })));
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`deleteBulkDocs exception for ${collectionName}:`, err);
+  }
+}
+
 export async function getDocs(queryOrCollectionRef: any) {
   try {
     const collectionName = queryOrCollectionRef.collectionName;
