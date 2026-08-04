@@ -242,4 +242,14 @@ export interface WordAnalogyQuestion {
   createdAt?: string;
 }
 
+export interface CustomMcqQuestion {
+  id: string;          // Mandatory Unique ID (e.g. ooo-101)
+  question: string;    // Question text
+  options: string[];   // 4 options
+  answer: string;      // Correct answer option text
+  explanation?: string; // Optional reason/explanation
+  courseId?: string;
+  createdAt?: string;
+}
+
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Course, VocabularyWord, BlankQuestion, OddOneOutQuestion, WordAnalogyQuestion, StoryItem } from '../types';
+import { Course, VocabularyWord, BlankQuestion, OddOneOutQuestion, WordAnalogyQuestion, CustomMcqQuestion, StoryItem } from '../types';
 import { extractTextFromWordFile, parseStoriesFromRawText } from '../utils/storyParser';
 import { 
   X, 
@@ -41,7 +41,7 @@ interface CourseSettingsProps {
   course: Course;
   onClose: () => void;
   onSaveSuccess: (updatedCourse?: Course) => void;
-  initialTab?: 'general' | 'variables' | 'access' | 'students' | 'wordlist' | 'addwords' | 'verification' | 'blank-questions' | 'ooo-questions' | 'analogy-questions' | 'practice-games' | 'story-management';
+  initialTab?: 'general' | 'variables' | 'access' | 'students' | 'wordlist' | 'addwords' | 'verification' | 'blank-questions' | 'ooo-questions' | 'analogy-questions' | 'mcq-questions' | 'practice-games' | 'story-management';
   initialEditWordName?: string;
 }
 
@@ -114,6 +114,17 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   const [excelAnalogyPreview, setExcelAnalogyPreview] = useState<WordAnalogyQuestion[]>([]);
   const [excelAnalogyUploadError, setExcelAnalogyUploadError] = useState<string | null>(null);
   const [excelAnalogySaveStatus, setExcelAnalogySaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  // --- MCQ QUESTIONS STATES ---
+  const [courseMcqQuestions, setCourseMcqQuestions] = useState<CustomMcqQuestion[]>([]);
+  const [mcqQuestionsLoading, setMcqQuestionsLoading] = useState(false);
+  const [newMcqQuestion, setNewMcqQuestion] = useState('');
+  const [newMcqOpts, setNewMcqOpts] = useState<string[]>(['', '', '', '']);
+  const [newMcqCorrectIndex, setNewMcqCorrectIndex] = useState<number>(0);
+  const [newMcqExplanation, setNewMcqExplanation] = useState('');
+  const [excelMcqPreview, setExcelMcqPreview] = useState<CustomMcqQuestion[]>([]);
+  const [excelMcqUploadError, setExcelMcqUploadError] = useState<string | null>(null);
+  const [excelMcqSaveStatus, setExcelMcqSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   // --- GENERAL COURSE STATES ---
   const [title, setTitle] = useState(course.title);
@@ -377,6 +388,25 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     }
   };
 
+  const fetchMcqQuestions = async () => {
+    setMcqQuestionsLoading(true);
+    try {
+      const qSnap = await getDocs(collection(db, 'mcq_questions'));
+      const list: CustomMcqQuestion[] = [];
+      qSnap.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data.courseId === course.id) {
+          list.push({ id: docSnap.id, ...data } as CustomMcqQuestion);
+        }
+      });
+      setCourseMcqQuestions(list);
+    } catch (err) {
+      console.error('Error fetching course MCQ questions:', err);
+    } finally {
+      setMcqQuestionsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'blank-questions') {
       fetchBlankQuestions();
@@ -384,6 +414,8 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
       fetchOooQuestions();
     } else if (activeTab === 'analogy-questions') {
       fetchAnalogyQuestions();
+    } else if (activeTab === 'mcq-questions') {
+      fetchMcqQuestions();
     }
   }, [activeTab, course.id]);
 
@@ -888,6 +920,214 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     } finally {
       setAnalogyQuestionsLoading(false);
       fetchAnalogyQuestions();
+    }
+  };
+
+  // --- MCQ QUESTIONS HANDLERS ---
+  const handleUploadMcqExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setExcelMcqUploadError(null);
+    setExcelMcqPreview([]);
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const rawRows = utils.sheet_to_json(ws, { header: 1 }) as any[][];
+
+        if (!rawRows || rawRows.length === 0) {
+          setExcelMcqUploadError('The uploaded file is empty.');
+          return;
+        }
+
+        const questionsList: CustomMcqQuestion[] = [];
+
+        for (let idx = 0; idx < rawRows.length; idx++) {
+          const row = rawRows[idx];
+          if (!row || row.length < 5) continue;
+
+          const rawId = row[0] !== undefined && row[0] !== null ? String(row[0]).trim() : '';
+          const questionText = row[1] !== undefined && row[1] !== null ? String(row[1]).trim() : '';
+
+          // Skip header row if present
+          if (idx === 0 && (
+            rawId.toLowerCase().includes('id') ||
+            rawId.toLowerCase().includes('unique') ||
+            questionText.toLowerCase().includes('question')
+          )) {
+            continue;
+          }
+
+          if (!rawId) {
+            setExcelMcqUploadError(`Row ${idx + 1}: Column 1 (Mandatory Unique ID) is empty.`);
+            return;
+          }
+
+          if (!questionText) continue;
+
+          // Extract raw options from columns 3 to 6 (0-indexed 2 to 5)
+          const rawOpts: string[] = [];
+          for (let col = 2; col <= 5; col++) {
+            const val = row[col] !== undefined && row[col] !== null ? String(row[col]).trim() : '';
+            rawOpts.push(val);
+          }
+
+          if (rawOpts.some(o => o === '')) continue;
+
+          let answer = '';
+          let explanation = '';
+          const cleanOpts: string[] = [];
+          let hashFound = false;
+
+          // Check Format 1: trailing '#' in any option
+          for (const optVal of rawOpts) {
+            if (optVal.includes('#')) {
+              hashFound = true;
+              const cleaned = optVal.replace(/#/g, '').trim();
+              cleanOpts.push(cleaned);
+              answer = cleaned;
+            } else {
+              cleanOpts.push(optVal.trim());
+            }
+          }
+
+          if (hashFound) {
+            // Format 1: Column 7 (0-indexed 6) is optional Reason/explanation
+            explanation = row[6] !== undefined && row[6] !== null ? String(row[6]).trim() : '';
+          } else {
+            // Format 2: Column 7 (0-indexed 6) is correct answer text
+            const col7Ans = row[6] !== undefined && row[6] !== null ? String(row[6]).trim() : '';
+            // Column 8 (0-indexed 7) is optional Reason/explanation
+            explanation = row[7] !== undefined && row[7] !== null ? String(row[7]).trim() : '';
+
+            if (!col7Ans) {
+              setExcelMcqUploadError(`Row ${idx + 1} (${rawId}): No trailing '#' found in options (Format 1) and Column 7 (correct answer) is empty (Format 2).`);
+              return;
+            }
+
+            // Check if col7Ans matches one of the options (case-insensitive)
+            const matched = rawOpts.find(o => o.trim().toLowerCase() === col7Ans.toLowerCase());
+            if (!matched) {
+              setExcelMcqUploadError(`Row ${idx + 1} (${rawId}): Column 7 answer "${col7Ans}" does not match any of the 4 options: [${rawOpts.join(', ')}].`);
+              return;
+            }
+
+            cleanOpts.length = 0;
+            rawOpts.forEach(o => cleanOpts.push(o.trim()));
+            answer = matched.trim();
+          }
+
+          if (cleanOpts.length === 4 && answer) {
+            questionsList.push({
+              id: rawId,
+              question: questionText,
+              options: cleanOpts,
+              answer,
+              explanation,
+              courseId: course.id,
+              createdAt: new Date().toISOString()
+            });
+          }
+        }
+
+        if (questionsList.length === 0) {
+          setExcelMcqUploadError('No valid MCQ questions found in the file.');
+        } else {
+          setExcelMcqPreview(questionsList);
+        }
+      } catch (err) {
+        console.error('Error parsing MCQ excel:', err);
+        setExcelMcqUploadError('Failed to parse file.');
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleSaveMcqExcelQuestions = async () => {
+    if (excelMcqPreview.length === 0) return;
+    setExcelMcqSaveStatus('saving');
+    try {
+      for (const q of excelMcqPreview) {
+        const updatedQ = { ...q, courseId: course.id };
+        await setDoc(doc(db, 'mcq_questions', q.id), updatedQ);
+      }
+      setExcelMcqSaveStatus('saved');
+      setExcelMcqPreview([]);
+      fetchMcqQuestions();
+      setTimeout(() => setExcelMcqSaveStatus('idle'), 3000);
+    } catch (err) {
+      console.error('Error saving MCQ questions:', err);
+      setExcelMcqSaveStatus('error');
+    }
+  };
+
+  const handleManualAddMcqQuestion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMcqQuestion.trim() || newMcqOpts.some(o => !o.trim())) {
+      alert('Please fill out the question and all 4 options.');
+      return;
+    }
+    const rawOpts = newMcqOpts.map(o => o.trim());
+    const answer = rawOpts[newMcqCorrectIndex];
+    const newQ: CustomMcqQuestion = {
+      id: `mcq-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      question: newMcqQuestion.trim(),
+      options: rawOpts,
+      answer,
+      explanation: newMcqExplanation.trim(),
+      courseId: course.id,
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      await setDoc(doc(db, 'mcq_questions', newQ.id), newQ);
+      setNewMcqQuestion('');
+      setNewMcqOpts(['', '', '', '']);
+      setNewMcqCorrectIndex(0);
+      setNewMcqExplanation('');
+      fetchMcqQuestions();
+      alert('MCQ question added successfully!');
+    } catch (err) {
+      console.error('Error adding MCQ question manually:', err);
+      alert('Failed to add MCQ question.');
+    }
+  };
+
+  const handleDeleteMcqQuestion = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this question?')) return;
+    try {
+      await deleteDoc(doc(db, 'mcq_questions', id));
+      setCourseMcqQuestions(prev => prev.filter(q => q.id !== id));
+    } catch (err) {
+      console.error('Error deleting MCQ question:', err);
+      alert('Failed to delete question.');
+    }
+  };
+
+  const handleBulkDeleteMcqQuestions = async () => {
+    if (courseMcqQuestions.length === 0) {
+      alert('No MCQ questions to delete.');
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to delete all ${courseMcqQuestions.length} MCQ questions for this course? This action is permanent and cannot be undone.`)) return;
+    setMcqQuestionsLoading(true);
+    try {
+      for (const q of courseMcqQuestions) {
+        await deleteDoc(doc(db, 'mcq_questions', q.id));
+      }
+      setCourseMcqQuestions([]);
+      alert('All MCQ questions deleted successfully!');
+    } catch (err) {
+      console.error('Error bulk deleting MCQ questions:', err);
+      alert('Failed to delete some or all questions.');
+    } finally {
+      setMcqQuestionsLoading(false);
+      fetchMcqQuestions();
     }
   };
 
@@ -1870,6 +2110,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     { id: 'blank-questions' as const, label: 'Blank Questions', icon: FileSpreadsheet, badge: courseBlankQuestions.length },
     { id: 'ooo-questions' as const, label: 'Odd One Out', icon: HelpCircle, badge: courseOooQuestions.length },
     { id: 'analogy-questions' as const, label: 'Word Analogy', icon: Shuffle, badge: courseAnalogyQuestions.length },
+    { id: 'mcq-questions' as const, label: 'MCQ Quiz Qs', icon: GraduationCap, badge: courseMcqQuestions.length },
     { id: 'story-management' as const, label: 'Read Story Management', icon: BookOpen, badge: localStories.length },
   ];
 
@@ -4134,6 +4375,261 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                               <td className="px-4 py-2.5 text-right">
                                 <button
                                   onClick={() => handleDeleteAnalogyQuestion(q.id)}
+                                  className="p-1 text-rose-500 hover:bg-rose-50 hover:text-rose-700 rounded-lg transition cursor-pointer"
+                                  title="Delete question"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* --- SECTION: COURSE CUSTOM MCQ QUESTIONS --- */}
+            {activeTab === 'mcq-questions' && (
+              <div className="space-y-6 overflow-y-auto max-h-[60vh] pr-2 animate-fadeIn">
+                <div className="border-b border-slate-100 pb-3 mb-2">
+                  <h4 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                    <GraduationCap className="w-4.5 h-4.5 text-indigo-600" />
+                    <span>Course Custom MCQ Quiz Questions</span>
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-1 font-medium leading-relaxed">
+                    Upload or manually manage custom Multiple Choice Questions for this course. When custom questions exist and MCQ Quiz toggle is enabled, auto-generated MCQs are stopped and these custom questions are served to students.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Excel Upload Card */}
+                  <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-200/60 space-y-4">
+                    <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                      <FileSpreadsheet className="w-4.5 h-4.5 text-indigo-600" />
+                      <span className="text-xs font-black text-slate-800">Upload via Excel / CSV</span>
+                    </div>
+
+                    <div className="space-y-2 text-[11px] text-slate-600 bg-white p-3 rounded-xl border border-slate-200/80 font-sans">
+                      <span className="font-bold text-slate-900 block">Supported Formats:</span>
+                      <p>
+                        <strong>Format 1:</strong> Col 1: Mandatory ID (e.g. <code>ooo-101</code>) | Col 2: Question | Col 3-6: 4 Options (mark correct option with trailing <code>#</code> like <code>"harmful#"</code>) | Col 7: Reason/Explanation (optional).
+                      </p>
+                      <p className="border-t border-slate-100 pt-1.5">
+                        <strong>Format 2:</strong> Col 1: Mandatory ID (e.g. <code>ooo-101</code>) | Col 2: Question | Col 3-6: 4 Options | Col 7: Correct Answer text (must match one of Col 3-6) | Col 8: Reason/Explanation (optional).
+                      </p>
+                    </div>
+
+                    {/* Drag & Drop Zone */}
+                    <div className="border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-xl p-6 text-center transition cursor-pointer relative bg-white">
+                      <input 
+                        type="file" 
+                        accept=".xlsx, .xls, .csv" 
+                        onChange={handleUploadMcqExcel}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer font-sans"
+                      />
+                      <UploadCloud className="w-8 h-8 text-slate-450 mx-auto mb-2" />
+                      <p className="text-xs font-bold text-slate-700">Click or drag Excel/CSV file here</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Supports .xlsx, .xls, .csv</p>
+                    </div>
+
+                    {excelMcqUploadError && (
+                      <div className="p-3 bg-rose-50 text-rose-700 rounded-xl flex items-start gap-2 border border-rose-100 text-xs font-semibold">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <span>{excelMcqUploadError}</span>
+                      </div>
+                    )}
+
+                    {excelMcqPreview.length > 0 && (
+                      <div className="space-y-3 pt-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">
+                            {excelMcqPreview.length} questions parsed
+                          </span>
+                          <button
+                            onClick={handleSaveMcqExcelQuestions}
+                            disabled={excelMcqSaveStatus === 'saving'}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-400 text-white text-xs font-bold rounded-xl shadow transition cursor-pointer"
+                          >
+                            {excelMcqSaveStatus === 'saving' ? 'Saving...' : 'Save to Cloud'}
+                          </button>
+                        </div>
+
+                        {/* Excel Preview Panel */}
+                        <div className="max-h-[180px] overflow-y-auto border border-slate-100 rounded-xl divide-y divide-slate-50 bg-white text-xs">
+                          {excelMcqPreview.map((q, idx) => (
+                            <div key={idx} className="p-3 space-y-1">
+                              <p className="font-bold text-slate-800"><span className="text-slate-400 mr-1">#{q.id}</span> {q.question}</p>
+                              <div className="grid grid-cols-2 gap-1.5 font-mono text-[11px] text-slate-500">
+                                {q.options.map((opt, oIdx) => (
+                                  <span key={oIdx} className={opt === q.answer ? 'text-emerald-600 font-extrabold bg-emerald-50 px-1 rounded' : ''}>
+                                    {opt} {opt === q.answer ? '✓' : ''}
+                                  </span>
+                                ))}
+                              </div>
+                              {q.explanation && (
+                                <p className="text-[10px] text-slate-400 italic">Reason: {q.explanation}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {excelMcqSaveStatus === 'saved' && (
+                      <div className="p-3 bg-emerald-50 text-emerald-700 rounded-xl flex items-center gap-2 border border-emerald-100 text-xs font-semibold">
+                        <CheckCircle className="w-4 h-4" />
+                        <span>MCQ questions imported successfully!</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Manual Question Form */}
+                  <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-200/60 space-y-4">
+                    <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                      <PlusCircle className="w-4.5 h-4.5 text-indigo-600" />
+                      <span className="text-xs font-black text-slate-800">Add Manually</span>
+                    </div>
+
+                    <form onSubmit={handleManualAddMcqQuestion} className="space-y-4">
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wide">Question</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Which of the following means 'harmful'?"
+                          value={newMcqQuestion}
+                          onChange={(e) => setNewMcqQuestion(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        {newMcqOpts.map((opt, oIdx) => (
+                          <div className="space-y-1" key={oIdx}>
+                            <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wide">Option {oIdx + 1}</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder={`Option ${oIdx + 1}`}
+                              value={opt}
+                              onChange={(e) => {
+                                const next = [...newMcqOpts];
+                                next[oIdx] = e.target.value;
+                                setNewMcqOpts(next);
+                              }}
+                              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800"
+                            />
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wide">Correct Answer Option</label>
+                        <select
+                          value={newMcqCorrectIndex}
+                          onChange={(e) => setNewMcqCorrectIndex(Number(e.target.value))}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800"
+                        >
+                          <option value={0}>Option 1: {newMcqOpts[0] || '(empty)'}</option>
+                          <option value={1}>Option 2: {newMcqOpts[1] || '(empty)'}</option>
+                          <option value={2}>Option 3: {newMcqOpts[2] || '(empty)'}</option>
+                          <option value={3}>Option 4: {newMcqOpts[3] || '(empty)'}</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wide">Reason / Explanation (Optional)</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Detrimental means causing harm or damage."
+                          value={newMcqExplanation}
+                          onChange={(e) => setNewMcqExplanation(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="w-full py-2 bg-indigo-600 hover:bg-indigo-550 text-white font-extrabold text-xs rounded-xl shadow transition cursor-pointer"
+                      >
+                        Add Question
+                      </button>
+                    </form>
+                  </div>
+                </div>
+
+                {/* Existing Questions list */}
+                <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-200/60 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-extrabold text-slate-800 text-xs">Existing Course MCQ Questions ({courseMcqQuestions.length})</h4>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Uploaded custom questions serve as primary MCQ quiz source</p>
+                    </div>
+                    <div className="flex gap-2">
+                      {courseMcqQuestions.length > 0 && (
+                        <button
+                          onClick={handleBulkDeleteMcqQuestions}
+                          className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-750 text-xs font-black rounded-xl transition cursor-pointer"
+                        >
+                          <span>Bulk Delete All</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={fetchMcqQuestions}
+                        className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${mcqQuestionsLoading ? 'animate-spin' : ''}`} />
+                        <span>Refresh</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {mcqQuestionsLoading ? (
+                    <div className="flex items-center justify-center py-8 text-slate-400">
+                      <RefreshCw className="w-5 h-5 animate-spin mr-2" />
+                      <span className="text-xs font-bold font-mono">Loading questions...</span>
+                    </div>
+                  ) : courseMcqQuestions.length === 0 ? (
+                    <div className="text-center py-8 border border-dashed border-slate-200 rounded-xl bg-white text-xs text-slate-400">
+                      No custom MCQ questions uploaded yet. Upload an Excel sheet or add questions manually. (System is using auto-generated vocabulary MCQs)
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50 text-[10px] font-extrabold text-slate-450 uppercase tracking-wider border-b border-slate-150">
+                            <th className="px-4 py-2.5">ID</th>
+                            <th className="px-4 py-2.5">Question</th>
+                            <th className="px-4 py-2.5">Options</th>
+                            <th className="px-4 py-2.5">Correct Answer</th>
+                            <th className="px-4 py-2.5">Explanation</th>
+                            <th className="px-4 py-2.5 text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                          {courseMcqQuestions.map((q) => (
+                            <tr key={q.id} className="hover:bg-slate-50/50">
+                              <td className="px-4 py-2.5 font-mono text-[10px] text-slate-500">{q.id}</td>
+                              <td className="px-4 py-2.5 font-bold text-slate-800 max-w-xs truncate" title={q.question}>
+                                {q.question}
+                              </td>
+                              <td className="px-4 py-2.5 font-mono text-[10px] text-slate-500 max-w-xs truncate" title={q.options.join(', ')}>
+                                {q.options.join(', ')}
+                              </td>
+                              <td className="px-4 py-2.5">
+                                <span className="inline-block px-2 py-0.5 bg-emerald-50 text-emerald-800 font-extrabold rounded text-[10px]">
+                                  {q.answer}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2.5 text-slate-400 italic max-w-xs truncate" title={q.explanation}>
+                                {q.explanation || '—'}
+                              </td>
+                              <td className="px-4 py-2.5 text-right">
+                                <button
+                                  onClick={() => handleDeleteMcqQuestion(q.id)}
                                   className="p-1 text-rose-500 hover:bg-rose-50 hover:text-rose-700 rounded-lg transition cursor-pointer"
                                   title="Delete question"
                                 >

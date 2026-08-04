@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { VocabularyWord, WordStatus, UserProgress, AppSettings } from '../types';
+import { VocabularyWord, WordStatus, UserProgress, AppSettings, CustomMcqQuestion } from '../types';
 import { CheckCircle2, XCircle, RefreshCw, HelpCircle, AlertCircle, Award, Sparkles, ChevronRight, HelpCircle as HelpIcon, ArrowRight, ArrowLeft } from 'lucide-react';
 
 interface PracticeQuizProps {
@@ -8,6 +8,7 @@ interface PracticeQuizProps {
   onRateWord: (wordId: string, status: WordStatus) => void;
   activeGroup: number | string | null;
   settings?: AppSettings;
+  customMcqQuestions?: CustomMcqQuestion[];
   onQuizComplete?: (score: number, totalQuestions: number) => void;
   onBack?: () => void;
   placeLabels?: {
@@ -23,12 +24,14 @@ interface PracticeQuizProps {
 type QuizType = 'mcq_en_bn' | 'mcq_bn_en' | 'typing_spelling';
 
 interface Question {
-  word: VocabularyWord;
+  word?: VocabularyWord;
+  questionTitle?: string;
   options: string[];
   correctAnswer: string;
+  explanation?: string;
 }
 
-export default function PracticeQuiz({ words, progress, onRateWord, activeGroup, settings, onQuizComplete, onBack, placeLabels }: PracticeQuizProps) {
+export default function PracticeQuiz({ words, progress, onRateWord, activeGroup, settings, customMcqQuestions, onQuizComplete, onBack, placeLabels }: PracticeQuizProps) {
   // Quiz states
   const [quizType, setQuizType] = useState<QuizType>(() => {
     return settings?.defaultQuizType || 'mcq_en_bn';
@@ -99,6 +102,32 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
 
   // Generate Questions when game starts
   const startQuiz = () => {
+    // If admin uploaded custom MCQ questions for this course, use those instead of auto-generating
+    if (customMcqQuestions && customMcqQuestions.length > 0 && quizType !== 'typing_spelling') {
+      const pool = [...customMcqQuestions];
+      pool.sort(() => Math.random() - 0.5);
+      const selectedBatch = pool.slice(0, Math.min(quizLength, pool.length));
+
+      const generatedQuestions: Question[] = selectedBatch.map(q => ({
+        questionTitle: q.question,
+        options: [...q.options].sort(() => Math.random() - 0.5),
+        correctAnswer: q.answer,
+        explanation: q.explanation,
+        word: { id: q.id, word: q.question, meaning: q.answer, group: 1 } as VocabularyWord
+      }));
+
+      setQuestions(generatedQuestions);
+      setCurrentQuestionIndex(0);
+      setSelectedAnswer(null);
+      setTypedAnswer('');
+      setAnswerSubmitted(false);
+      setScore(0);
+      setIncorrectWords([]);
+      setHintsUsed(0);
+      setGameState('playing');
+      return;
+    }
+
     let sourcePool = [...words];
 
     // Filter by multiple selected groups (same logic as FlashcardViewer)
@@ -178,10 +207,14 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
 
     if (isCorrect) {
       setScore(prev => prev + 1);
-      onRateWord(currentQuestion.word.id, 'know');
+      if (currentQuestion.word?.id) {
+        onRateWord(currentQuestion.word.id, 'know');
+      }
     } else {
-      setIncorrectWords(prev => [...prev, currentQuestion.word]);
-      onRateWord(currentQuestion.word.id, 'dont_know');
+      if (currentQuestion.word) {
+        setIncorrectWords(prev => [...prev, currentQuestion.word!]);
+        onRateWord(currentQuestion.word.id, 'dont_know');
+      }
     }
 
     setAnswerSubmitted(true);
@@ -202,11 +235,14 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
     if (isCorrect) {
       setScore(prev => prev + 1);
       // Boost rate in background automatically
-      onRateWord(currentQuestion.word.id, 'know');
+      if (currentQuestion.word?.id) {
+        onRateWord(currentQuestion.word.id, 'know');
+      }
     } else {
-      setIncorrectWords(prev => [...prev, currentQuestion.word]);
-      // Mark as weak automatically in background
-      onRateWord(currentQuestion.word.id, 'dont_know');
+      if (currentQuestion.word) {
+        setIncorrectWords(prev => [...prev, currentQuestion.word!]);
+        onRateWord(currentQuestion.word.id, 'dont_know');
+      }
     }
 
     setAnswerSubmitted(true);
@@ -560,10 +596,12 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
               {quizType === 'mcq_bn_en' ? (placeLabels?.place2 || 'Meaning') : (placeLabels?.place1 || 'English Word')}
             </span>
 
-            <h1 className="text-3xl md:text-4xl font-black text-slate-800 leading-tight">
-              {quizType === 'mcq_bn_en'
-                ? questions[currentQuestionIndex].word.meaning
-                : questions[currentQuestionIndex].word.word}
+            <h1 className="text-2xl md:text-3xl font-black text-slate-800 leading-tight">
+              {questions[currentQuestionIndex].questionTitle || (
+                quizType === 'mcq_bn_en'
+                  ? questions[currentQuestionIndex].word?.meaning
+                  : questions[currentQuestionIndex].word?.word
+              )}
             </h1>
 
             {/* Display synonyms context removed as requested */}
@@ -571,37 +609,45 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
 
           {/* MCQ Options representation */}
           {quizType !== 'typing_spelling' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 font-sans">
-              {questions[currentQuestionIndex].options.map((option, idx) => {
-                const isSelected = selectedAnswer === option;
-                const isCorrectOpt = option === questions[currentQuestionIndex].correctAnswer;
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 font-sans">
+                {questions[currentQuestionIndex].options.map((option, idx) => {
+                  const isSelected = selectedAnswer === option;
+                  const isCorrectOpt = option === questions[currentQuestionIndex].correctAnswer;
 
-                let btnStyle = 'border-slate-200/60 hover:border-indigo-300 hover:bg-indigo-50/10 text-slate-700 bg-white';
-                if (answerSubmitted) {
-                  if (isCorrectOpt) {
-                    btnStyle = 'border-emerald-500 bg-emerald-100 text-emerald-950 font-black';
+                  let btnStyle = 'border-slate-200/60 hover:border-indigo-300 hover:bg-indigo-50/10 text-slate-700 bg-white';
+                  if (answerSubmitted) {
+                    if (isCorrectOpt) {
+                      btnStyle = 'border-emerald-500 bg-emerald-100 text-emerald-950 font-black';
+                    } else if (isSelected) {
+                      btnStyle = 'border-rose-500 bg-rose-50 text-rose-800';
+                    } else {
+                      btnStyle = 'border-slate-100 bg-slate-50/50 text-slate-400 opacity-60';
+                    }
                   } else if (isSelected) {
-                    btnStyle = 'border-rose-500 bg-rose-50 text-rose-800';
-                  } else {
-                    btnStyle = 'border-slate-100 bg-slate-50/50 text-slate-400 opacity-60';
+                    btnStyle = 'border-indigo-500 ring-2 ring-indigo-500/10 bg-indigo-50/30 text-indigo-950 font-bold';
                   }
-                } else if (isSelected) {
-                  btnStyle = 'border-indigo-500 ring-2 ring-indigo-500/10 bg-indigo-50/30 text-indigo-950 font-bold';
-                }
 
-                return (
-                  <button
-                    key={idx}
-                    disabled={answerSubmitted}
-                    onClick={() => handleMCQOptionClick(option)}
-                    className={`p-4 text-left rounded-xl border text-sm transition flex items-center justify-between min-h-14 ${btnStyle}`}
-                  >
-                    <span>{option}</span>
-                    {answerSubmitted && isCorrectOpt && <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />}
-                    {answerSubmitted && isSelected && !isCorrectOpt && <XCircle className="w-5 h-5 text-rose-500 flex-shrink-0" />}
-                  </button>
-                );
-              })}
+                  return (
+                    <button
+                      key={idx}
+                      disabled={answerSubmitted}
+                      onClick={() => handleMCQOptionClick(option)}
+                      className={`p-4 text-left rounded-xl border text-sm transition flex items-center justify-between min-h-14 ${btnStyle}`}
+                    >
+                      <span>{option}</span>
+                      {answerSubmitted && isCorrectOpt && <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />}
+                      {answerSubmitted && isSelected && !isCorrectOpt && <XCircle className="w-5 h-5 text-rose-500 flex-shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+              {answerSubmitted && questions[currentQuestionIndex]?.explanation && (
+                <div className="p-4 bg-amber-50/80 border border-amber-200/80 text-amber-900 text-xs rounded-xl font-sans space-y-1">
+                  <span className="font-extrabold uppercase tracking-wider text-[10px] text-amber-800 block">Reason / Explanation:</span>
+                  <p className="font-medium leading-relaxed">{questions[currentQuestionIndex].explanation}</p>
+                </div>
+              )}
             </div>
           ) : (
             /* Spelling Typing Mode input fields */

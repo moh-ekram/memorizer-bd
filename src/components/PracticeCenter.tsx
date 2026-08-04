@@ -32,7 +32,8 @@ import {
   UserProgress,
   BlankQuestion,
   OddOneOutQuestion,
-  WordAnalogyQuestion 
+  WordAnalogyQuestion,
+  CustomMcqQuestion
 } from '../types';
 
 // Circular SVG Progress Ring Component
@@ -159,6 +160,7 @@ export default function PracticeCenter({
   const [blankQs, setBlankQs] = useState<BlankQuestion[]>([]);
   const [oooQs, setOooQs] = useState<OddOneOutQuestion[]>([]);
   const [analogyQs, setAnalogyQs] = useState<WordAnalogyQuestion[]>([]);
+  const [mcqQs, setMcqQs] = useState<CustomMcqQuestion[]>([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -199,10 +201,22 @@ export default function PracticeCenter({
           }
         });
 
+        // 4. MCQ questions
+        const mcqSnap = await getDocs(collection(db, 'mcq_questions'));
+        const loadedMcq: CustomMcqQuestion[] = [];
+        mcqSnap.forEach(docSnap => {
+          const data = docSnap.data();
+          const qCourseId = (data.courseId || 'gre').trim().toLowerCase();
+          if (qCourseId === cleanCourseId || (!data.courseId && cleanCourseId === 'gre')) {
+            loadedMcq.push({ id: docSnap.id, ...data } as CustomMcqQuestion);
+          }
+        });
+
         if (isMounted) {
           setBlankQs(loadedBlank);
           setOooQs(loadedOoo);
           setAnalogyQs(loadedAnalogy);
+          setMcqQs(loadedMcq);
         }
       } catch (err) {
         console.error('Error fetching game questions for course:', err);
@@ -218,7 +232,7 @@ export default function PracticeCenter({
     const isGre = (activeCourseId || 'gre').trim().toLowerCase() === 'gre';
 
     // 1. Quiz Stats
-    const quizTotal = words.length;
+    const quizTotal = mcqQs.length > 0 ? mcqQs.length : words.length;
     const quizCompleted = words.filter(w => {
       const p = progress[w.id];
       return p && (p.status === 'know' || p.status === 'dont_know' || p.status === 'confusion');
@@ -614,6 +628,7 @@ export default function PracticeCenter({
           onRateWord={onRateWord}
           activeGroup={activeGroup}
           settings={settings}
+          customMcqQuestions={mcqQs}
           onQuizComplete={onQuizComplete}
           onBack={() => setSubTab('hub')}
           placeLabels={placeLabels}
