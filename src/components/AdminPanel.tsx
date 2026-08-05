@@ -10,7 +10,9 @@ import {
   updateDoc,
   getDoc,
   query,
-  where
+  where,
+  saveBulkDocs,
+  incrementCourseClickCount
 } from '../lib/firebase';
 import { VocabularyWord, UserProgress, Course, AccessRequest, BlankQuestion, AppSettings, VerifiedPayment } from '../types';
 import { RESTORED_AUTH_USERS, RECOVERED_USER_DATA } from '../lib/importedUserData';
@@ -62,7 +64,11 @@ import {
   MessageSquare,
   Share2,
   Send,
-  Mail
+  Mail,
+  MousePointerClick,
+  ArrowUpDown,
+  SortAsc,
+  Eye
 } from 'lucide-react';
 
 interface FirestoreUserDoc {
@@ -144,6 +150,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const [coursesLoading, setCoursesLoading] = useState(false);
   const [coursesError, setCoursesError] = useState<string | null>(null);
   const [hasFetchedCourses, setHasFetchedCourses] = useState(false);
+  const [courseSearchQuery, setCourseSearchQuery] = useState('');
+  const [courseSortMode, setCourseSortMode] = useState<'clickFrequency' | 'manualOrder'>('clickFrequency');
 
   // Pending Access Requests Expiry Inputs state
   const [requestExpiryDates, setRequestExpiryDates] = useState<Record<string, string>>({});
@@ -396,19 +404,25 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       const userEmail = req.email.toLowerCase().trim();
       const nowISO = new Date().toISOString();
 
-      // Check and set used_transactions lock
+      // Immediately update local UI state so admin doesn't experience lag
+      setAccessRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved', spent: true, price: finalPrice, totalPrice: finalPrice } : r));
+
+      const tasks: Promise<any>[] = [];
+
+      // 1. Mark request status as 'approved' in Firestore
+      const reqRef = doc(db, 'access_requests', req.id);
+      tasks.push(updateDoc(reqRef, { 
+        status: 'approved',
+        spent: true,
+        spentAt: nowISO,
+        price: finalPrice,
+        totalPrice: finalPrice
+      }));
+
+      // 2. Lock used_transactions
       if (req.trxId) {
         const reqTrx = req.trxId.toLowerCase().trim();
-        const usedTxSnap = await getDoc(doc(db, 'used_transactions', reqTrx));
-        if (usedTxSnap.exists()) {
-          const usedData = usedTxSnap.data();
-          if (usedData.spent === true || usedData.status === 'spent') {
-            alert(`Error: Transaction ID (${req.trxId}) is already marked as spent in the system.`);
-            return;
-          }
-        }
-
-        await setDoc(doc(db, 'used_transactions', reqTrx), {
+        tasks.push(setDoc(doc(db, 'used_transactions', reqTrx), {
           trxId: reqTrx,
           spent: true,
           status: 'spent',
@@ -418,33 +432,104 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           amount: finalPrice,
           createdAt: nowISO,
           usedAt: nowISO
-        }, { merge: true });
+        }, { merge: true }));
       }
 
-      // 1. Update request status to 'approved', spent = true, price = finalPrice
-      const reqRef = doc(db, 'access_requests', req.id);
-      await updateDoc(reqRef, { 
-        status: 'approved',
-        spent: true,
-        spentAt: nowISO,
-        price: finalPrice,
-        totalPrice: finalPrice
-      });
-
+      // 3. Handle Wallet Recharge vs Course Access
       if (req.courseId === 'wallet_recharge' || req.courseTitle?.includes('Wallet Recharge')) {
         const rechargeAmt = finalPrice;
         const walletRef = doc(db, 'user_wallets', userEmail);
-        const walletSnap = await getDoc(walletRef);
-        const curBal = walletSnap.exists() ? (walletSnap.data().balance || 0) : 0;
-        const newBal = curBal + rechargeAmt;
-        await setDoc(walletRef, {
-          email: userEmail,
-          balance: newBal,
-          updatedAt: nowISO
-        }, { merge: true });
+        
+        // Fetch current wallet balance in parallel with other setup
+        const walletTask = getDoc(walletRef).then(walletSnap => {
+          const curBal = walletSnap.exists() ? (walletSnap.data().balance || 0) : 0;
+          const newBal = curBal + rechargeAmt;
+          return setDoc(walletRef, {
+            email: userEmail,
+            balance: newBal,
+            updatedAt: nowISO
+          }, { merge: true });
+        });
+        tasks.push(walletTask);
+      } else {
+        const targetCourseIds = (req.courseIds && req.courseIds.length > 0) 
+          ? req.courseIds 
+          : [req.courseId];
 
-        // Mark matching payment in system_settings/global_verified_payments as spent
-        if (req.trxId) {
+        for (const courseId of targetCourseIds) {
+          if (!courseId || courseId === 'wallet_recharge') continue;
+          
+          const courseTask = (async () => {
+            let courseObj = customCourses.find(c => c.id === courseId);
+            let currentAllowed: string[] = courseObj?.allowedUsers || [];
+            let currentAllowedExpiry: Record<string, string> = courseObj?.allowedUsersExpiry || {};
+            let durationDays = courseObj?.accessDurationDays || 365;
+
+            if (!courseObj) {
+              const courseDoc = await getDoc(doc(db, 'courses', courseId));
+              if (courseDoc.exists()) {
+                const courseData = courseDoc.data() as Course;
+                currentAllowed = courseData.allowedUsers || [];
+                currentAllowedExpiry = courseData.allowedUsersExpiry || {};
+                if (courseData.accessDurationDays) durationDays = courseData.accessDurationDays;
+              }
+            }
+
+            const updatedAllowed = currentAllowed.includes(userEmail) ? currentAllowed : [...currentAllowed, userEmail];
+            const updatedExpiryMap = { ...currentAllowedExpiry };
+            const expDate = new Date();
+            expDate.setDate(expDate.getDate() + durationDays);
+            updatedExpiryMap[userEmail] = expDate.toISOString().split('T')[0];
+
+            await setDoc(doc(db, 'courses', courseId), { 
+              allowedUsers: updatedAllowed,
+              allowedUsersExpiry: updatedExpiryMap
+            }, { merge: true });
+
+            setCustomCourses(prev => prev.map(c => c.id === courseId ? { 
+              ...c, 
+              allowedUsers: updatedAllowed,
+              allowedUsersExpiry: updatedExpiryMap
+            } : c));
+          })();
+          tasks.push(courseTask);
+        }
+
+        // Sync directly to the user's document
+        const userSyncTask = (async () => {
+          try {
+            const usersQuery = query(collection(db, 'users'), where('email', '==', userEmail));
+            const usersSnap = await getDocs(usersQuery);
+            for (const uDoc of usersSnap.docs) {
+              const uData = uDoc.data();
+              const existingEnrolled: string[] = Array.isArray(uData.enrolledCourseIds) ? uData.enrolledCourseIds : [];
+              const existingSet = new Set(existingEnrolled.map(id => typeof id === 'string' ? id.trim().toLowerCase() : ''));
+              let updated = false;
+              const updatedEnrolled = [...existingEnrolled];
+
+              const targetCourseIds = (req.courseIds && req.courseIds.length > 0) ? req.courseIds : [req.courseId];
+              for (const cid of targetCourseIds) {
+                if (cid && cid !== 'wallet_recharge' && !existingSet.has(cid.trim().toLowerCase())) {
+                  updatedEnrolled.push(cid);
+                  existingSet.add(cid.trim().toLowerCase());
+                  updated = true;
+                }
+              }
+
+              if (updated) {
+                await updateDoc(doc(db, 'users', uDoc.id), { enrolledCourseIds: updatedEnrolled, updatedAt: nowISO });
+              }
+            }
+          } catch (uSyncErr) {
+            console.warn('Notice: Could not sync enrolledCourseIds to user doc:', uSyncErr);
+          }
+        })();
+        tasks.push(userSyncTask);
+      }
+
+      // Mark matching payment in global_verified_payments as spent
+      if (req.trxId) {
+        const vpTask = (async () => {
           const globalDocRef = doc(db, 'system_settings', 'global_verified_payments');
           const vpSnap = await getDoc(globalDocRef);
           if (vpSnap.exists()) {
@@ -472,126 +557,12 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               }
             }
           }
-        }
-
-        setAccessRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved', spent: true, price: finalPrice, totalPrice: finalPrice } : r));
-        alert(`Wallet recharge request approved! ৳${rechargeAmt} BDT added to ${userEmail}'s wallet (New Balance: ৳${newBal} BDT).`);
-        return;
+        })();
+        tasks.push(vpTask);
       }
 
-      const targetCourseIds = (req.courseIds && req.courseIds.length > 0) 
-        ? req.courseIds 
-        : [req.courseId];
-
-      for (const courseId of targetCourseIds) {
-        if (!courseId || courseId === 'wallet_recharge') continue;
-        let courseObj = customCourses.find(c => c.id === courseId);
-        let currentAllowed: string[] = [];
-        let currentAllowedExpiry: Record<string, string> = {};
-        let durationDays = courseObj?.accessDurationDays || 365;
-        
-        if (courseObj) {
-          currentAllowed = courseObj.allowedUsers || [];
-          currentAllowedExpiry = courseObj.allowedUsersExpiry || {};
-        } else {
-          const courseDoc = await getDoc(doc(db, 'courses', courseId));
-          if (courseDoc.exists()) {
-            const courseData = courseDoc.data() as Course;
-            currentAllowed = courseData.allowedUsers || [];
-            currentAllowedExpiry = courseData.allowedUsersExpiry || {};
-            if (courseData.accessDurationDays) {
-              durationDays = courseData.accessDurationDays;
-            }
-          }
-        }
-
-        const updatedAllowed = currentAllowed.includes(userEmail) ? currentAllowed : [...currentAllowed, userEmail];
-        const updatedExpiryMap = { ...currentAllowedExpiry };
-
-        // Automatically set expiry to default duration (365 days / 1 year) from today
-        const expDate = new Date();
-        expDate.setDate(expDate.getDate() + durationDays);
-        const expiryDateStr = expDate.toISOString().split('T')[0];
-        updatedExpiryMap[userEmail] = expiryDateStr;
-
-        // Update the course in Firestore
-        const courseRef = doc(db, 'courses', courseId);
-        await setDoc(courseRef, { 
-          allowedUsers: updatedAllowed,
-          allowedUsersExpiry: updatedExpiryMap
-        }, { merge: true });
-        
-        // Update local state
-        setCustomCourses(prev => prev.map(c => c.id === courseId ? { 
-          ...c, 
-          allowedUsers: updatedAllowed,
-          allowedUsersExpiry: updatedExpiryMap
-        } : c));
-      }
-
-      // Mark matching payment in system_settings/global_verified_payments as spent
-      if (req.trxId) {
-        const globalDocRef = doc(db, 'system_settings', 'global_verified_payments');
-        const vpSnap = await getDoc(globalDocRef);
-        if (vpSnap.exists()) {
-          const vps = vpSnap.data().verifiedPayments || [];
-          if (Array.isArray(vps)) {
-            const reqTrx = req.trxId.toLowerCase().trim();
-            let updated = false;
-            const updatedVps = vps.map((vp: any) => {
-              if ((vp.trxId || '').toLowerCase().trim() === reqTrx) {
-                updated = true;
-                return {
-                  ...vp,
-                  spent: true,
-                  claimed: true,
-                  claimedBy: userEmail,
-                  claimedAt: nowISO,
-                  spentAt: nowISO
-                };
-              }
-              return vp;
-            });
-            if (updated) {
-              await setDoc(globalDocRef, { verifiedPayments: updatedVps }, { merge: true });
-              setGlobalVerifiedPayments(updatedVps);
-            }
-          }
-        }
-      }
-
-      // Sync directly to the user's document in 'users' collection if registered
-      try {
-        const cleanUserEmail = userEmail.toLowerCase().trim();
-        const usersQuery = query(collection(db, 'users'), where('email', '==', cleanUserEmail));
-        const usersSnap = await getDocs(usersQuery);
-        for (const uDoc of usersSnap.docs) {
-          const uData = uDoc.data();
-          const existingEnrolled: string[] = Array.isArray(uData.enrolledCourseIds) ? uData.enrolledCourseIds : [];
-          const existingSet = new Set(existingEnrolled.map(id => typeof id === 'string' ? id.trim().toLowerCase() : ''));
-          let updated = false;
-          const updatedEnrolled = [...existingEnrolled];
-
-          for (const cid of targetCourseIds) {
-            if (cid && cid !== 'wallet_recharge' && !existingSet.has(cid.trim().toLowerCase())) {
-              updatedEnrolled.push(cid);
-              existingSet.add(cid.trim().toLowerCase());
-              updated = true;
-            }
-          }
-
-          if (updated) {
-            await updateDoc(doc(db, 'users', uDoc.id), { enrolledCourseIds: updatedEnrolled, updatedAt: nowISO });
-          }
-        }
-      } catch (uSyncErr) {
-        console.warn('Notice: Could not sync enrolledCourseIds to user document:', uSyncErr);
-      }
-
-      // Update local requests state and mark approved & spent in DB
-      await updateDoc(doc(db, 'access_requests', req.id), { status: 'approved', spent: true, spentAt: nowISO, price: finalPrice, totalPrice: finalPrice });
-      setAccessRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved', spent: true, price: finalPrice, totalPrice: finalPrice } : r));
-      alert(`Access request approved successfully! User ${userEmail} granted access for 1 Year.`);
+      // Wait for all parallel tasks to finish
+      await Promise.all(tasks);
     } catch (err) {
       console.error('Error approving request:', err);
       alert('Failed to approve request: ' + (err instanceof Error ? err.message : String(err)));
@@ -1663,9 +1634,44 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   };
 
   const filteredCustomCoursesList = customCourses.filter(c => c.id.trim().toLowerCase() !== 'gre');
-  const allAdminCoursesList = [defaultGreCourse, ...filteredCustomCoursesList].sort(
-    (a, b) => (a.order !== undefined ? a.order : 999) - (b.order !== undefined ? b.order : 999)
-  );
+  const allAdminCoursesList = [defaultGreCourse, ...filteredCustomCoursesList].sort((a, b) => {
+    if (courseSortMode === 'clickFrequency') {
+      const clicksA = typeof a.clickCount === 'number' ? a.clickCount : 0;
+      const clicksB = typeof b.clickCount === 'number' ? b.clickCount : 0;
+      if (clicksB !== clicksA) return clicksB - clicksA;
+    }
+    return (a.order !== undefined ? a.order : 999) - (b.order !== undefined ? b.order : 999);
+  });
+
+  const searchedCoursesList = allAdminCoursesList.filter(c => {
+    if (!courseSearchQuery.trim()) return true;
+    const q = courseSearchQuery.toLowerCase();
+    return c.title.toLowerCase().includes(q) || c.id.toLowerCase().includes(q) || (c.description && c.description.toLowerCase().includes(q));
+  });
+
+  const handleSyncOrderToClicks = async () => {
+    if (!window.confirm("Sync all courses' order numbers (#1, #2, #3...) to match their current click frequency rank?")) return;
+    try {
+      const updatedList = allAdminCoursesList.map((c, idx) => ({
+        ...c,
+        order: idx + 1
+      }));
+      await saveBulkDocs('courses', updatedList);
+      setCustomCourses(prev => prev.map(c => {
+        const found = updatedList.find(u => u.id === c.id);
+        return found ? { ...c, order: found.order } : c;
+      }));
+      alert("All course order numbers updated and saved based on click frequency!");
+    } catch (err) {
+      console.error("Error syncing course order:", err);
+      alert("Failed to sync course order.");
+    }
+  };
+
+  const handleAdminIncrementClick = async (courseId: string) => {
+    await incrementCourseClickCount(courseId);
+    setCustomCourses(prev => prev.map(c => c.id === courseId ? { ...c, clickCount: (c.clickCount || 0) + 1 } : c));
+  };
 
   const getCourseUserCount = (courseId: string) => {
     return users.filter(u => {
@@ -1968,140 +1974,230 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
       {activeAdminTab === 'courses' && (
         <div className="space-y-6">
-          {/* Course Management Table - Full Width Excel Sheet Layout */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-sm space-y-4 w-full" style={{ fontFamily: "'Poppins', sans-serif" }}>
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="font-extrabold text-slate-900 text-base">Course Management Table</h3>
-                <p className="text-xs text-slate-400 font-medium">Spreadsheet view of all created & default courses</p>
+          {/* Minimalist Course Management Table */}
+          <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-100/90 shadow-2xs space-y-5 w-full" style={{ fontFamily: "'Poppins', sans-serif" }}>
+            
+            {/* Header & Controls Toolbar */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2.5">
+                  <h3 className="font-bold text-slate-900 text-lg tracking-tight">Course Management</h3>
+                  <span className="text-xs font-semibold px-2.5 py-0.5 bg-slate-100 text-slate-700 rounded-full">
+                    {allAdminCoursesList.length} Courses
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 font-normal">
+                  Listing order based on real student click frequency & course engagement
+                </p>
               </div>
-              <div className="flex items-center gap-3">
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Search Bar */}
+                <div className="relative min-w-[200px] flex-1 sm:flex-none">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={courseSearchQuery}
+                    onChange={(e) => setCourseSearchQuery(e.target.value)}
+                    placeholder="Search courses..."
+                    className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                  />
+                  {courseSearchQuery && (
+                    <button 
+                      onClick={() => setCourseSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                {/* Sort Mode Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setCourseSortMode(prev => prev === 'clickFrequency' ? 'manualOrder' : 'clickFrequency')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 border transition cursor-pointer ${
+                    courseSortMode === 'clickFrequency'
+                      ? 'bg-indigo-50 border-indigo-200/80 text-indigo-700'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                  title="Toggle sorting mode"
+                >
+                  <MousePointerClick className="w-3.5 h-3.5" />
+                  <span>{courseSortMode === 'clickFrequency' ? 'Sorted by Clicks' : 'Sorted by Manual #'}</span>
+                </button>
+
+                {/* Sync Order Button */}
+                <button
+                  type="button"
+                  onClick={handleSyncOrderToClicks}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-medium flex items-center gap-1.5 transition cursor-pointer border border-slate-200/60"
+                  title="Save current click frequency rank as official course order numbers"
+                >
+                  <ArrowUpDown className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Sync Rank to Order</span>
+                </button>
+
+                {/* Create Course Button */}
                 <button
                   onClick={() => setShowCreateCourseModal(true)}
-                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+                  className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Create New Course</span>
+                  <span>Create Course</span>
                 </button>
-                <span className="text-xs font-bold px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full font-mono">
-                  {allAdminCoursesList.length} Courses
-                </span>
               </div>
             </div>
 
-            {/* Excel Table Grid Container */}
-            <div className="overflow-x-auto border border-slate-300 rounded-xl shadow-2xs">
+            {/* Minimalist Table Grid */}
+            <div className="overflow-x-auto rounded-2xl border border-slate-100/90">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-300 text-[11px] uppercase tracking-wider font-mono">
-                    <th className="py-2.5 px-3 border-r border-slate-300 text-center w-16">ID</th>
-                    <th className="py-2.5 px-3 border-r border-slate-300">Title & Description</th>
-                    <th className="py-2.5 px-3 border-r border-slate-300 text-center w-20">Words</th>
-                    <th className="py-2.5 px-3 border-r border-slate-300 text-center w-20">Users</th>
-                    <th className="py-2.5 px-3 border-r border-slate-300 text-center w-20">Price</th>
-                    <th className="py-2.5 px-3 border-r border-slate-300 text-center w-16">Access</th>
-                    <th className="py-2.5 px-3 border-r border-slate-300 text-center w-28">Order</th>
-                    <th className="py-2.5 px-3 text-center w-36">Actions</th>
+                  <tr className="bg-slate-50/70 text-slate-400 font-medium text-[11px] uppercase tracking-wider border-b border-slate-100">
+                    <th className="py-3 px-4 text-center w-20">Rank (#)</th>
+                    <th className="py-3 px-4 text-center w-28">Clicks</th>
+                    <th className="py-3 px-4 w-28">ID Code</th>
+                    <th className="py-3 px-[18px]">Course Title & Description</th>
+                    <th className="py-3 px-4 text-center w-20">Words</th>
+                    <th className="py-3 px-4 text-center w-20">Users</th>
+                    <th className="py-3 px-4 text-center w-24">Price</th>
+                    <th className="py-3 px-4 text-center w-24">Access</th>
+                    <th className="py-3 px-4 text-center w-24">Order #</th>
+                    <th className="py-3 px-4 text-center w-36">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200 bg-white">
-                  {allAdminCoursesList.map((c) => {
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {searchedCoursesList.map((c, index) => {
                     const isDefault = c.id.trim().toLowerCase() === 'gre';
                     const wordCount = c.words?.length || (isDefault ? 1110 : 0);
                     const userCount = getCourseUserCount(c.id);
                     const price = (c.price && c.price > 0) ? c.price : 30;
+                    const clickCount = typeof c.clickCount === 'number' ? c.clickCount : 0;
+                    const rankNumber = index + 1;
 
                     return (
-                      <tr key={c.id} className="hover:bg-slate-50 transition border-b border-slate-200">
-                        {/* Column 1: ID */}
-                        <td className="py-2.5 px-3 border-r border-slate-200 font-mono font-extrabold text-indigo-700 text-center uppercase">
-                          {c.id}
-                        </td>
-
-                        {/* Column 2: Title & Description (Clickable) */}
-                        <td 
-                          className="py-2.5 px-3 border-r border-slate-200 cursor-pointer hover:bg-indigo-50/50 transition group"
-                          onClick={() => setEditingCourse(c)}
-                          title="Click to open course settings"
-                        >
-                          <div className="font-extrabold text-indigo-900 group-hover:text-indigo-600 group-hover:underline leading-tight flex items-center gap-1">
-                            <span>{c.title}</span>
-                            {isDefault && <span className="text-[10px] font-mono font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded ml-1 border border-indigo-200 no-underline">Default</span>}
-                          </div>
-                          {c.description && (
-                            <div className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-normal">
-                              {c.description}
-                            </div>
+                      <tr key={c.id} className="hover:bg-slate-50/60 transition-colors duration-150 border-b border-slate-100/80 group">
+                        
+                        {/* Column 1: Rank Number (based on click frequency order) */}
+                        <td className="py-3.5 px-4 text-center">
+                          {rankNumber === 1 ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200/70 font-semibold rounded-full text-[11px]">
+                              #1 Top
+                            </span>
+                          ) : rankNumber <= 3 ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200/60 font-semibold rounded-full text-[11px]">
+                              #{rankNumber}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-slate-100 text-slate-600 font-medium rounded-full text-[11px]">
+                              #{rankNumber}
+                            </span>
                           )}
                         </td>
 
-                        {/* Column 3: Words */}
-                        <td className="py-2.5 px-3 border-r border-slate-200 text-center font-mono font-bold text-slate-800">
+                        {/* Column 2: Click Frequency */}
+                        <td className="py-3.5 px-4 text-center">
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 text-slate-800 rounded-lg text-xs font-medium border border-slate-100">
+                            <MousePointerClick className="w-3.5 h-3.5 text-indigo-500" />
+                            <span>{clickCount.toLocaleString()}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleAdminIncrementClick(c.id)}
+                              className="ml-1 text-[10px] text-slate-400 hover:text-indigo-600 font-bold hover:bg-slate-200 px-1 rounded transition"
+                              title="Test/Simulate +1 Click"
+                            >
+                              +1
+                            </button>
+                          </div>
+                        </td>
+
+                        {/* Column 3: Course ID Code */}
+                        <td className="py-3.5 px-4">
+                          <span className="font-mono text-[11px] text-slate-500 bg-slate-100/80 px-2 py-0.5 rounded-md uppercase tracking-tight">
+                            {c.id}
+                          </span>
+                        </td>
+
+                        {/* Column 4: Title & Description */}
+                        <td className="py-3.5 px-[18px]">
+                          <div 
+                            className="cursor-pointer group-hover:text-indigo-600 transition"
+                            onClick={() => setEditingCourse(c)}
+                            title="Click to manage course content"
+                          >
+                            <div className="font-semibold text-slate-900 flex items-center gap-1.5 leading-snug">
+                              <span>{c.title}</span>
+                              {isDefault && (
+                                <span className="text-[10px] font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-150">
+                                  Default
+                                </span>
+                              )}
+                            </div>
+                            {c.description && (
+                              <div className="text-[11px] text-slate-400 line-clamp-1 mt-0.5 font-normal">
+                                {c.description}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Column 5: Words Count */}
+                        <td className="py-3.5 px-4 text-center font-medium text-slate-700">
                           {wordCount}
                         </td>
 
-                        {/* Column 4: Users */}
-                        <td className="py-2.5 px-3 border-r border-slate-200 text-center font-mono font-bold text-slate-800">
+                        {/* Column 6: Users Count */}
+                        <td className="py-3.5 px-4 text-center font-medium text-slate-700">
                           {userCount}
                         </td>
 
-                        {/* Column 5: Price */}
-                        <td className="py-2.5 px-3 border-r border-slate-200 text-center font-mono font-bold text-slate-900">
-                          ৳{price} BDT
-                        </td>
-
-                        {/* Column 6: Access Status (Minimal Black Icon) */}
-                        <td className="py-2.5 px-3 border-r border-slate-200 text-center">
-                          {c.isRestricted ? (
-                            <Lock className="w-4 h-4 text-slate-900 mx-auto" title="Restricted" />
+                        {/* Column 7: Price */}
+                        <td className="py-3.5 px-4 text-center font-semibold text-slate-900">
+                          {price === 0 ? (
+                            <span className="text-emerald-600 font-medium">Free</span>
                           ) : (
-                            <Globe className="w-4 h-4 text-slate-900 mx-auto" title="Public" />
+                            `৳${price} BDT`
                           )}
                         </td>
 
-                        {/* Column 7: Editable Order Field & Re-order Controls */}
-                        <td className="py-2.5 px-3 border-r border-slate-200 text-center">
-                          <div className="inline-flex items-center justify-center gap-1 font-mono text-xs">
-                            <button
-                              type="button"
-                              onClick={() => handleMoveCourseOrder(c.id, -1, allAdminCoursesList)}
-                              className="p-1 hover:bg-slate-100 text-slate-700 hover:text-slate-950 rounded transition cursor-pointer"
-                              title="Move Up"
-                            >
-                              <ChevronUp className="w-3.5 h-3.5" />
-                            </button>
-                            <div className="relative flex items-center">
-                              <span className="text-slate-400 font-bold text-[10px] mr-0.5">#</span>
-                              <input
-                                type="number"
-                                value={c.order !== undefined ? c.order : 0}
-                                onChange={(e) => {
-                                  const val = parseInt(e.target.value, 10);
-                                  const newOrder = isNaN(val) ? 0 : val;
-                                  handleUpdateSingleCourseOrder(c.id, newOrder);
-                                }}
-                                className="w-12 px-1 py-0.5 text-center font-mono font-extrabold text-indigo-950 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:border-indigo-500 focus:bg-white text-xs shadow-2xs"
-                                title="Type order index number to re-order course globally"
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleMoveCourseOrder(c.id, 1, allAdminCoursesList)}
-                              className="p-1 hover:bg-slate-100 text-slate-700 hover:text-slate-950 rounded transition cursor-pointer"
-                              title="Move Down"
-                            >
-                              <ChevronDown className="w-3.5 h-3.5" />
-                            </button>
+                        {/* Column 8: Access Status */}
+                        <td className="py-3.5 px-4 text-center">
+                          {c.isRestricted ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200/60">
+                              <Lock className="w-3 h-3 text-amber-600" /> Restricted
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/60">
+                              <Globe className="w-3 h-3 text-emerald-600" /> Public
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Column 9: Manual Order Number */}
+                        <td className="py-3.5 px-4 text-center">
+                          <div className="inline-flex items-center justify-center gap-1 text-xs">
+                            <input
+                              type="number"
+                              value={c.order !== undefined ? c.order : 0}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                const newOrder = isNaN(val) ? 0 : val;
+                                handleUpdateSingleCourseOrder(c.id, newOrder);
+                              }}
+                              className="w-12 px-1 py-0.5 text-center font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:bg-white text-xs"
+                              title="Type custom order number"
+                            />
                           </div>
                         </td>
 
-                        {/* Column 8: Actions */}
-                        <td className="py-2.5 px-3 text-center">
-                          <div className="flex items-center justify-center gap-1 font-sans">
+                        {/* Column 10: Actions */}
+                        <td className="py-3.5 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
                             <button
                               type="button"
                               onClick={() => handleOpenEditModal(c)}
-                              className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[11px] font-bold transition cursor-pointer border border-indigo-200/80"
+                              className="px-2.5 py-1 text-slate-700 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg text-xs font-medium transition cursor-pointer"
+                              title="Edit Course"
                             >
                               Edit
                             </button>
@@ -2111,7 +2207,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                                 navigator.clipboard.writeText(c.id);
                                 alert(`Course Code "${c.id}" copied to clipboard!`);
                               }}
-                              className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[11px] font-bold transition cursor-pointer border border-slate-200"
+                              className="px-2.5 py-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg text-xs font-medium transition cursor-pointer"
+                              title="Copy Code"
                             >
                               Copy
                             </button>
@@ -2119,7 +2216,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                               <button
                                 type="button"
                                 onClick={() => handleDeleteCourse(c.id)}
-                                className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded text-[11px] font-bold transition cursor-pointer border border-rose-200/80"
+                                className="px-2.5 py-1 text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-medium transition cursor-pointer"
+                                title="Delete Course"
                               >
                                 Delete
                               </button>
@@ -2129,6 +2227,13 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       </tr>
                     );
                   })}
+                  {searchedCoursesList.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="py-8 text-center text-slate-400 font-medium">
+                        No courses found matching "{courseSearchQuery}".
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

@@ -298,6 +298,23 @@ export async function deleteDoc(docRef: any) {
   }
 }
 
+export async function incrementCourseClickCount(courseId: string) {
+  if (!courseId) return;
+  try {
+    const docRef = doc(db, 'courses', courseId);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      const currentClicks = typeof data?.clickCount === 'number' ? data.clickCount : 0;
+      await updateDoc(docRef, { clickCount: currentClicks + 1 });
+    } else {
+      await setDoc(docRef, { clickCount: 1, id: courseId }, { merge: true });
+    }
+  } catch (err) {
+    console.warn('incrementCourseClickCount error:', err);
+  }
+}
+
 export async function saveBulkDocs(collectionName: string, items: any[]) {
   if (!items || items.length === 0) return;
   DOCS_CACHE_MAP.clear();

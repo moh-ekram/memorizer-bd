@@ -333,6 +333,13 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     }
   }, [courseRequests, verifiedPayments]);
 
+  const matchesCourse = (qCourseId?: string, targetCourseId?: string) => {
+    if (!targetCourseId) return false;
+    const cleanTarget = targetCourseId.trim().toLowerCase();
+    if (!qCourseId) return cleanTarget === 'gre';
+    return qCourseId.trim().toLowerCase() === cleanTarget;
+  };
+
   const fetchBlankQuestions = async () => {
     setBlankQuestionsLoading(true);
     try {
@@ -340,7 +347,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
       const list: BlankQuestion[] = [];
       qSnap.forEach(docSnap => {
         const data = docSnap.data();
-        if (data.courseId === course.id) {
+        if (matchesCourse(data.courseId, course.id)) {
           list.push({ id: docSnap.id, ...data } as BlankQuestion);
         }
       });
@@ -359,7 +366,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
       const list: OddOneOutQuestion[] = [];
       qSnap.forEach(docSnap => {
         const data = docSnap.data();
-        if (data.courseId === course.id) {
+        if (matchesCourse(data.courseId, course.id)) {
           list.push({ id: docSnap.id, ...data } as OddOneOutQuestion);
         }
       });
@@ -378,7 +385,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
       const list: WordAnalogyQuestion[] = [];
       qSnap.forEach(docSnap => {
         const data = docSnap.data();
-        if (data.courseId === course.id) {
+        if (matchesCourse(data.courseId, course.id)) {
           list.push({ id: docSnap.id, ...data } as WordAnalogyQuestion);
         }
       });
@@ -397,7 +404,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
       const list: CustomMcqQuestion[] = [];
       qSnap.forEach(docSnap => {
         const data = docSnap.data();
-        if (data.courseId === course.id) {
+        if (matchesCourse(data.courseId, course.id)) {
           list.push({ id: docSnap.id, ...data } as CustomMcqQuestion);
         }
       });
@@ -775,22 +782,27 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
 
         for (let idx = 0; idx < rawRows.length; idx++) {
           const row = rawRows[idx];
-          if (!row || row.length < 6) continue;
+          if (!row || row.length < 2) continue;
 
-          const rawId = row[0] ? String(row[0]).trim() : '';
-          const analogy = row[1] ? String(row[1]).trim() : '';
+          let rawId = row[0] ? String(row[0]).trim() : '';
+          let analogy = row[1] ? String(row[1]).trim() : '';
+
+          // If row 1 is question and row 0 is missing, shift
+          if (!analogy && rawId && (idx > 0 || !rawId.toLowerCase().includes('id'))) {
+            analogy = rawId;
+            rawId = '';
+          }
 
           // Skip header row
-          if (idx === 0 && (rawId.toLowerCase() === 'id' || rawId.toLowerCase() === 'unique id' || rawId.toLowerCase() === 'uid' || analogy.toLowerCase().includes('analogy') || analogy.toLowerCase().includes('question'))) {
+          if (idx === 0 && (rawId.toLowerCase().includes('id') || analogy.toLowerCase().includes('analogy') || analogy.toLowerCase().includes('question'))) {
             continue;
           }
 
-          if (!rawId) {
-            setExcelAnalogyUploadError(`Error at Row ${idx + 1}: The first column must contain a mandatory unique ID.`);
-            return;
-          }
-
           if (!analogy) continue;
+
+          if (!rawId) {
+            rawId = `ana-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 5)}`;
+          }
 
           const opts: string[] = [];
           let answer = '';
@@ -808,9 +820,13 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
             }
           }
 
+          if (opts.length > 0 && !answer) {
+            answer = opts[0];
+          }
+
           const explanation = row[6] ? String(row[6]).trim() : '';
 
-          if (analogy && opts.length === 4 && answer) {
+          if (analogy && opts.length >= 2 && answer) {
             questionsList.push({
               id: rawId,
               analogy,

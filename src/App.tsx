@@ -1362,8 +1362,13 @@ export default function App() {
         });
       }
     }
-    // Sort courses according to custom order set by admin
-    coursesList.sort((a, b) => (a.order !== undefined ? a.order : 999) - (b.order !== undefined ? b.order : 999));
+    // Sort courses by click frequency (highest clicks first), then by custom order
+    coursesList.sort((a, b) => {
+      const clicksA = typeof a.clickCount === 'number' ? a.clickCount : 0;
+      const clicksB = typeof b.clickCount === 'number' ? b.clickCount : 0;
+      if (clicksB !== clicksA) return clicksB - clicksA;
+      return (a.order !== undefined ? a.order : 999) - (b.order !== undefined ? b.order : 999);
+    });
     return coursesList;
   }, [defaultGreCourse, customCourses, importedCourses]);
 

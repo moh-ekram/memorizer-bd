@@ -157,6 +157,7 @@ export interface Course {
   freeFlashcardsCount?: number;
   bkashNumber?: string;
   order?: number;
+  clickCount?: number;
   code?: string;
   verifiedPayments?: { bkashNumber: string; trxId: string; amount?: number }[];
   placeLabels?: {

@@ -7,7 +7,7 @@ import {
   Copy, ArrowRight, Star, Heart, Calendar, ShieldAlert, Layers, Play,
   ChevronDown, ChevronUp, Info, Eye, Wallet, EyeOff, MoreHorizontal, ArrowUpRight
 } from 'lucide-react';
-import { db, doc, setDoc, getDoc, getDocs, query, collection, where } from '../lib/firebase';
+import { db, doc, setDoc, getDoc, getDocs, query, collection, where, incrementCourseClickCount } from '../lib/firebase';
 import { Course, UserProgress, ActiveTab } from '../types';
 import { isCourseEnrolled, isCourseAccessible } from '../lib/courseAccess';
 import CoursePreviewModal from './CoursePreviewModal';
@@ -397,7 +397,7 @@ export default function MyCoursesView({
       } else {
         setRechargeMessage({
           type: 'info',
-          text: data.message || `আপনার ওয়ালেট রিচার্জ রিকুয়েস্ট জমা হয়েছে। এডমিন প্যানেল থেকে ভেরিফাই করে দ্রুত ব্যালেন্স যোগ করা হবে।`
+          text: data.message || `Request Sent: Your wallet recharge request has been submitted successfully.`
         });
         setRechargeTrx('');
       }
@@ -922,6 +922,7 @@ export default function MyCoursesView({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         onClick={() => {
+          incrementCourseClickCount(course.id);
           if (isUserAllowed) {
             setActiveCourseId(course.id);
             setActiveCourseToast(`Activated "${course.title}" course!`);
@@ -1671,14 +1672,14 @@ export default function MyCoursesView({
                 <button
                   type="submit"
                   disabled={isSubmittingRecharge}
-                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-light text-xs rounded-xl transition cursor-pointer shadow-xs mt-1 flex items-center justify-center gap-1.5"
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-medium text-xs rounded-xl transition cursor-pointer shadow-xs mt-1 flex items-center justify-center gap-1.5"
                 >
                   {isSubmittingRecharge ? (
-                    <span>যাচাই করা হচ্ছে...</span>
+                    <span>Request Sent...</span>
                   ) : (
                     <>
                       <PlusCircle className="w-3.5 h-3.5" />
-                      <span>রিচার্জ ক怼ইম করুন</span>
+                      <span>Claim Recharge</span>
                     </>
                   )}
                 </button>
