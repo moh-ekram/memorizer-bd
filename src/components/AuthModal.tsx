@@ -5,7 +5,7 @@ import {
   createUserWithEmailAndPassword, 
   GoogleAuthProvider, 
   signInWithPopup 
-} from '../lib/firebase';
+} from '../lib/db';
 import { Mail, Lock, X, AlertCircle, LogIn, UserPlus, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -52,7 +52,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
       } else if (err.code === 'auth/invalid-email') {
         errMsg = 'Please enter a valid email address.';
       } else if (err.code === 'auth/operation-not-allowed') {
-        errMsg = 'Email/password sign-in is not enabled in Firebase Console. Please use the Google Sign-In button below.';
+        errMsg = 'Email/password sign-in is not enabled. Please use the Google Sign-In button below.';
       } else if (err.message) {
         errMsg = err.message;
       }
@@ -80,7 +80,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
       let errMsg = 'Failed to sign in with Google.';
       if (err.code === 'auth/unauthorized-domain') {
         const currentDomain = window.location.hostname;
-        errMsg = `This domain (${currentDomain}) is not authorized in Firebase Authentication. Please add it to the Authorized Domains tab under Authentication > Settings.`;
+        errMsg = `This domain (${currentDomain}) is not authorized for Google Sign-In.`;
       } else if (err.code) {
         errMsg = `${errMsg} (${err.code})`;
       } else if (err.message) {

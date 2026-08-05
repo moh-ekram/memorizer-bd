@@ -14,7 +14,7 @@ import {
   createUserWithEmailAndPassword, 
   GoogleAuthProvider, 
   signInWithPopup 
-} from '../lib/firebase';
+} from '../lib/db';
 import { Course, AppSettings } from '../types';
 import MyCoursesView from './MyCoursesView';
 
@@ -411,7 +411,7 @@ export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse
       }
       let errMsg = 'Failed to sign in with Google.';
       if (err.code === 'auth/unauthorized-domain') {
-        errMsg = 'This domain is not authorized in Firebase Authentication.';
+        errMsg = 'This domain is not authorized for Google Sign-In.';
       } else if (err.message) {
         errMsg = err.message;
       }

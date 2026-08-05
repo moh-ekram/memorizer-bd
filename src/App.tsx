@@ -53,14 +53,11 @@ import {
   getDocs,
   query,
   where,
-  syncAllFirebaseToSupabase,
-  findAndMigrateUserProgressByEmail,
-  User as FirebaseUser
-} from './lib/firebase';
+  type User as DbUser
+} from './lib/db';
 import { Course } from './types';
 import { isCourseEnrolled, isCourseAccessible } from './lib/courseAccess';
 import AuthModal from './components/AuthModal';
-import firebaseConfigJson from '../firebase-applet-config.json';
 import { 
   saveProgressToIndexedDB, 
   getProgressFromIndexedDB, 
@@ -82,14 +79,6 @@ const LOCAL_STORAGE_ENROLLED_COURSES_KEY = 'vocab_memorizer_enrolled_courses_v2'
 const LOCAL_STORAGE_ACTIVE_COURSE_KEY = 'vocab_memorizer_active_course_v2';
 
 export default function App() {
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      syncAllFirebaseToSupabase().catch(err => {
-        console.warn('Auto sync Firebase to Supabase error:', err);
-      });
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, []);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('profile');
   const [profileSubTab, setProfileSubTab] = useState<'flashcard' | 'dashboard' | 'my_courses'>('flashcard');
@@ -410,8 +399,8 @@ export default function App() {
     return saved ? parseInt(saved, 10) : 0;
   });
 
-  // --- FIREBASE SYNC & AUTH STATES ---
-  const [user, setUser] = useState<FirebaseUser | null>(null);
+  // --- CLOUD SYNC & AUTH STATES ---
+  const [user, setUser] = useState<DbUser | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
   const isSyncingFromCloud = useRef(false);
@@ -572,7 +561,7 @@ export default function App() {
       setSyncStatus('synced');
       addSyncLog('offline_queue', 'Synced queued offline changes to Cloud', 'success', queuedItems.length);
     } catch (err) {
-      console.error('Error syncing offline queue to firestore:', err);
+      console.error('Error syncing offline queue to database:', err);
       setSyncStatus('error');
       addSyncLog('offline_queue', 'Offline queue synchronization failed', 'error');
     }
@@ -857,22 +846,10 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        // Save user UID and Firebase Config to meta store for Service Worker use
         try {
           await saveMetaValue('uid', currentUser.uid);
-          const env = (import.meta as any).env || {};
-          const config = {
-            apiKey: env.VITE_FIREBASE_API_KEY || firebaseConfigJson.apiKey || "AIzaSyCYIkpASqZD6R2bOOi9F3hvQMl_iTLsjBI",
-            authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfigJson.authDomain || "myvocab-13ebc.firebaseapp.com",
-            projectId: env.VITE_FIREBASE_PROJECT_ID || firebaseConfigJson.projectId || "myvocab-13ebc",
-            storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfigJson.storageBucket || "myvocab-13ebc.firebasestorage.app",
-            messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfigJson.messagingSenderId || "531149838847",
-            appId: env.VITE_FIREBASE_APP_ID || firebaseConfigJson.appId || "1:531149838847:web:a4577c60628b9c4c6b2fca",
-            firestoreDatabaseId: firebaseConfigJson.firestoreDatabaseId || "(default)"
-          };
-          await saveMetaValue('firebaseConfig', config);
         } catch (e) {
-          console.warn('Error saving meta values to IDB:', e);
+          console.warn('Error saving uid to IDB:', e);
         }
 
         setSyncStatus('syncing');
@@ -882,14 +859,9 @@ export default function App() {
           const userDocRef = doc(db, 'users', currentUser.uid);
           
           let data: any = null;
-          const migratedData = await findAndMigrateUserProgressByEmail(currentUser);
-          if (migratedData) {
-            data = migratedData;
-          } else {
-            const docSnap = await getDoc(userDocRef);
-            if (docSnap.exists()) {
-              data = docSnap.data();
-            }
+          const docSnap = await getDoc(userDocRef);
+          if (docSnap.exists()) {
+            data = docSnap.data();
           }
 
           if (data) {
@@ -1114,7 +1086,6 @@ export default function App() {
         // Logged out
         try {
           await saveMetaValue('uid', null);
-          await saveMetaValue('firebaseConfig', null);
         } catch (e) {}
         isSyncingFromCloud.current = false;
         setHasLoadedFromCloud(false);
@@ -1159,7 +1130,7 @@ export default function App() {
         const itemCount = Object.keys(progress || {}).length;
         addSyncLog('auto', `Saved ${itemCount} study item${itemCount === 1 ? '' : 's'} & preferences to Cloud`, 'success', itemCount);
       } catch (err) {
-        console.error('Error saving to Firestore:', err);
+        console.error('Error saving to Cloud:', err);
         setSyncStatus('error');
         addSyncLog('auto', 'Automatic cloud sync failed', 'error', 0);
       }
@@ -1176,40 +1147,16 @@ export default function App() {
     if (!user) return;
     setSyncStatus('syncing');
     try {
-      // Auto-recover any old progress from Firebase or Supabase matching user's email
-      const recoveredData = await findAndMigrateUserProgressByEmail(user);
-      
-      const currentProgressToSave = (recoveredData?.progress && Object.keys(recoveredData.progress).length > Object.keys(progress).length)
-        ? recoveredData.progress
-        : progress;
-
-      if (recoveredData) {
-        if (recoveredData.progress && Object.keys(recoveredData.progress).length > Object.keys(progress).length) {
-          setProgress(recoveredData.progress);
-        }
-        if (Array.isArray(recoveredData.folders) && recoveredData.folders.length > 0) {
-          setFolders(recoveredData.folders);
-        }
-        if (recoveredData.goal) setGoal(recoveredData.goal);
-        if (recoveredData.synonymProgress) setSynonymProgress(recoveredData.synonymProgress);
-        if (recoveredData.blankProgress) setBlankProgress(recoveredData.blankProgress);
-        if (recoveredData.oooProgress) setOooProgress(recoveredData.oooProgress);
-        if (recoveredData.analogyProgress) setAnalogyProgress(recoveredData.analogyProgress);
-        if (Array.isArray(recoveredData.enrolledCourseIds)) {
-          setEnrolledCourseIds(prev => Array.from(new Set([...prev, ...recoveredData.enrolledCourseIds])));
-        }
-      }
-
       await setDoc(doc(db, 'users', user.uid), {
-        progress: currentProgressToSave,
-        folders: (recoveredData?.folders && recoveredData.folders.length > 0) ? recoveredData.folders : folders,
-        goal: recoveredData?.goal || goal,
-        synonymProgress: recoveredData?.synonymProgress || synonymProgress,
-        blankProgress: recoveredData?.blankProgress || blankProgress,
-        oooProgress: recoveredData?.oooProgress || oooProgress,
-        analogyProgress: recoveredData?.analogyProgress || analogyProgress,
+        progress,
+        folders,
+        goal,
+        synonymProgress,
+        blankProgress,
+        oooProgress,
+        analogyProgress,
         settings,
-        enrolledCourseIds: recoveredData?.enrolledCourseIds ? Array.from(new Set([...enrolledCourseIds, ...recoveredData.enrolledCourseIds])) : enrolledCourseIds,
+        enrolledCourseIds,
         activeCourseId,
         quizScore,
         quizTaken,
@@ -1219,7 +1166,7 @@ export default function App() {
 
       setSyncStatus('synced');
       setHasLoadedFromCloud(true);
-      const itemsProcessed = Object.keys(currentProgressToSave || {}).length;
+      const itemsProcessed = Object.keys(progress || {}).length;
       addSyncLog('manual', `Manual cloud backup & recovery completed (${itemsProcessed} item${itemsProcessed === 1 ? '' : 's'} verified)`, 'success', itemsProcessed);
     } catch (err) {
       console.error('Manual sync failed:', err);

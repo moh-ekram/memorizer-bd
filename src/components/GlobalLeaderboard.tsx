@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { auth, db, collection, getDocs } from '../lib/firebase';
+import { auth, db, collection, getDocs } from '../lib/db';
 import { 
   Crown, Trophy, Award, Flame, RefreshCw, Search, 
   HelpCircle, Star, Users, Medal, GraduationCap, FileSpreadsheet 

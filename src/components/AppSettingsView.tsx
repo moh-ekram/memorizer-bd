@@ -1037,7 +1037,7 @@ export default function AppSettingsView({
                 <span>How Cloud Synchronization Works</span>
               </div>
               <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                Your study activity (mastered words, custom folders, study streaks, and quiz results) is continuously updated in your browser and automatically backed up to Cloud Firestore every time changes are made. When offline, changes are safely queued in local memory and pushed as soon as your connection restores.
+                Your study activity (mastered words, custom folders, study streaks, and quiz results) is continuously updated in your browser and automatically backed up to Supabase every time changes are made. When offline, changes are safely queued in local memory and pushed as soon as your connection restores.
               </p>
             </div>
 

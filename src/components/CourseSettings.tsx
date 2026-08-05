@@ -35,7 +35,7 @@ import {
   Shuffle,
   Save
 } from 'lucide-react';
-import { db, doc, setDoc, getDoc, collection, getDocs, updateDoc, deleteDoc, saveBulkDocs, deleteBulkDocs } from '../lib/firebase';
+import { db, doc, setDoc, getDoc, collection, getDocs, updateDoc, deleteDoc, saveBulkDocs, deleteBulkDocs } from '../lib/db';
 import { read, utils, writeFile } from 'xlsx';
 
 interface CourseSettingsProps {

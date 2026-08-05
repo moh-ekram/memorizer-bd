@@ -17,7 +17,7 @@ import {
   CheckCircle,
   BarChart3
 } from 'lucide-react';
-import { db, collection, getDocs } from '../lib/firebase';
+import { db, collection, getDocs } from '../lib/db';
 import SynonymCheck from './SynonymCheck';
 import PracticeQuiz from './PracticeQuiz';
 import WordMatchGame from './WordMatchGame';

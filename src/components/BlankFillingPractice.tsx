@@ -14,7 +14,7 @@ import {
   ArrowLeft,
   Sparkles
 } from 'lucide-react';
-import { db, collection, getDocs } from '../lib/firebase';
+import { db, collection, getDocs } from '../lib/db';
 import { BlankQuestion, VocabularyWord } from '../types';
 
 interface BlankFillingPracticeProps {
