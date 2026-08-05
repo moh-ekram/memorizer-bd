@@ -278,15 +278,21 @@ export async function setDoc(docRef: any, data: any, options?: { merge?: boolean
       ]);
     } catch (_) {}
 
-    // 3. Supabase
+    // 3. Supabase with safety timeout
     const payload = { id: docId, ...dataToSave, data: dataToSave };
-    const { error } = await supabase
-      .from(collectionName)
-      .upsert(payload);
+    try {
+      const sbTimeout = new Promise<{ error: any }>((resolve) => 
+        setTimeout(() => resolve({ error: new Error('Supabase timeout') }), 2000)
+      );
+      const { error } = await Promise.race([
+        supabase.from(collectionName).upsert(payload),
+        sbTimeout
+      ]);
 
-    if (error) {
-      await supabase.from(collectionName).upsert({ id: docId, data: dataToSave }).catch(() => {});
-    }
+      if (error) {
+        supabase.from(collectionName).upsert({ id: docId, data: dataToSave }).catch(() => {});
+      }
+    } catch (_) {}
   } catch (err) {
     console.warn('setDoc exception:', err);
   }
@@ -340,17 +346,25 @@ export async function saveBulkDocs(collectionName: string, items: any[]) {
   if (!items || items.length === 0) return;
   DOCS_CACHE_MAP.clear();
   try {
-    // Save to LocalStorage & Firestore in parallel
+    // 1. Save to LocalStorage & Firestore in parallel
+    const fbPromises: Promise<any>[] = [];
     for (const item of items) {
       if (!item.id) continue;
       try {
         localStorage.setItem(`local_store_${collectionName}_${item.id}`, JSON.stringify(item));
       } catch (_) {}
 
-      fbSetDoc(fbDoc(rawFbCustomDb, collectionName, item.id), item, { merge: true }).catch(() => {});
-      fbSetDoc(fbDoc(rawFbDefaultDb, collectionName, item.id), item, { merge: true }).catch(() => {});
+      fbPromises.push(fbSetDoc(fbDoc(rawFbCustomDb, collectionName, item.id), item, { merge: true }).catch(() => {}));
+      fbPromises.push(fbSetDoc(fbDoc(rawFbDefaultDb, collectionName, item.id), item, { merge: true }).catch(() => {}));
     }
 
+    // Wait max 2 seconds for Firestore batch writes to settle
+    await Promise.race([
+      Promise.allSettled(fbPromises),
+      new Promise(res => setTimeout(res, 2000))
+    ]);
+
+    // 2. Try Supabase bulk upsert with timeout
     const payloads = items.map(item => ({
       id: item.id,
       ...item,
@@ -360,17 +374,20 @@ export async function saveBulkDocs(collectionName: string, items: any[]) {
     const CHUNK_SIZE = 200;
     for (let i = 0; i < payloads.length; i += CHUNK_SIZE) {
       const chunk = payloads.slice(i, i + CHUNK_SIZE);
-      const { error } = await supabase
-        .from(collectionName)
-        .upsert(chunk);
-      
-      if (error) {
-        console.warn(`Supabase bulk upsert fallback for ${collectionName}:`, error);
-        const SUB_CHUNK = 25;
-        for (let j = 0; j < chunk.length; j += SUB_CHUNK) {
-          const sub = chunk.slice(j, j + SUB_CHUNK);
-          await Promise.all(sub.map(p => setDoc({ collectionName, docId: p.id }, p.data)));
+      try {
+        const sbTimeout = new Promise<{ error: any }>((resolve) => 
+          setTimeout(() => resolve({ error: new Error('Supabase timeout') }), 2500)
+        );
+        const { error } = await Promise.race([
+          supabase.from(collectionName).upsert(chunk),
+          sbTimeout
+        ]);
+
+        if (error) {
+          console.warn(`Supabase bulk upsert notice for ${collectionName}:`, error);
         }
+      } catch (sbErr) {
+        console.warn(`Supabase bulk exception for ${collectionName}:`, sbErr);
       }
     }
   } catch (err) {
@@ -393,19 +410,13 @@ export async function deleteBulkDocs(collectionName: string, docIds: string[]) {
     const CHUNK_SIZE = 200;
     for (let i = 0; i < docIds.length; i += CHUNK_SIZE) {
       const chunk = docIds.slice(i, i + CHUNK_SIZE);
-      const { error } = await supabase
-        .from(collectionName)
-        .delete()
-        .in('id', chunk);
-      
-      if (error) {
-        console.warn(`Supabase deleteBulkDocs fallback for ${collectionName}:`, error);
-        const SUB_CHUNK = 25;
-        for (let j = 0; j < chunk.length; j += SUB_CHUNK) {
-          const sub = chunk.slice(j, j + SUB_CHUNK);
-          await Promise.all(sub.map(id => deleteDoc({ collectionName, docId: id })));
-        }
-      }
+      try {
+        const sbTimeout = new Promise<any>((resolve) => setTimeout(resolve, 2000));
+        await Promise.race([
+          supabase.from(collectionName).delete().in('id', chunk),
+          sbTimeout
+        ]);
+      } catch (_) {}
     }
   } catch (err) {
     console.error(`deleteBulkDocs exception for ${collectionName}:`, err);
