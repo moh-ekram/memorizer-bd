@@ -105,11 +105,15 @@ export default function BlankFillingPractice({
 
   // Helper to match course IDs flexibly
   const matchesCourse = (qCourseId?: string, targetCourseId?: string) => {
-    if (!qCourseId || qCourseId.trim() === '') return true;
     if (!targetCourseId || targetCourseId.trim() === '' || targetCourseId === 'all') return true;
+    if (!qCourseId || qCourseId.trim() === '') return true;
     const cleanTarget = targetCourseId.trim().toLowerCase();
     const cleanQ = qCourseId.trim().toLowerCase();
-    return cleanQ === cleanTarget || cleanTarget.includes(cleanQ) || cleanQ.includes(cleanTarget) || cleanQ === 'gre' || cleanTarget === 'gre';
+    if (cleanQ === cleanTarget || cleanTarget.includes(cleanQ) || cleanQ.includes(cleanTarget)) return true;
+    const normTarget = cleanTarget.replace(/[^a-z0-9]/g, '');
+    const normQ = cleanQ.replace(/[^a-z0-9]/g, '');
+    if (normQ === normTarget || normTarget.includes(normQ) || normQ.includes(normTarget)) return true;
+    return false;
   };
 
   // Fetch blank questions from Firestore on mount/activeCourseId change
@@ -119,21 +123,17 @@ export default function BlankFillingPractice({
       try {
         const qSnap = await getDocs(collection(db, 'blank_questions'));
         const loaded: BlankQuestion[] = [];
-        const fallbackAll: BlankQuestion[] = [];
         qSnap.forEach(docSnap => {
           const data = docSnap.data();
           const qObj = { id: docSnap.id, ...data } as BlankQuestion;
-          fallbackAll.push(qObj);
 
           if (matchesCourse(data.courseId, activeCourseId)) {
             loaded.push(qObj);
           }
         });
 
-        const finalQuestions = loaded.length > 0 ? loaded : fallbackAll;
-        
-        if (finalQuestions.length > 0) {
-          setAllQuestions(finalQuestions);
+        if (loaded.length > 0) {
+          setAllQuestions(loaded);
         } else {
           // Fallback to default high-quality questions if database collection is empty
           if (activeCourseId?.trim().toLowerCase() === 'gre' || !words || words.length === 0) {

@@ -100,11 +100,15 @@ export default function WordAnalogyGame({
 
   // Helper to match course IDs flexibly
   const matchesCourse = (qCourseId?: string, targetCourseId?: string) => {
-    if (!qCourseId || qCourseId.trim() === '') return true;
     if (!targetCourseId || targetCourseId.trim() === '' || targetCourseId === 'all') return true;
+    if (!qCourseId || qCourseId.trim() === '') return true;
     const cleanTarget = targetCourseId.trim().toLowerCase();
     const cleanQ = qCourseId.trim().toLowerCase();
-    return cleanQ === cleanTarget || cleanTarget.includes(cleanQ) || cleanQ.includes(cleanTarget) || cleanQ === 'gre' || cleanTarget === 'gre';
+    if (cleanQ === cleanTarget || cleanTarget.includes(cleanQ) || cleanQ.includes(cleanTarget)) return true;
+    const normTarget = cleanTarget.replace(/[^a-z0-9]/g, '');
+    const normQ = cleanQ.replace(/[^a-z0-9]/g, '');
+    if (normQ === normTarget || normTarget.includes(normQ) || normQ.includes(normTarget)) return true;
+    return false;
   };
 
   // Fetch from Firestore or fallback
@@ -114,21 +118,17 @@ export default function WordAnalogyGame({
       try {
         const qSnap = await getDocs(collection(db, 'word_analogy_questions'));
         const loaded: WordAnalogyQuestion[] = [];
-        const fallbackAll: WordAnalogyQuestion[] = [];
         qSnap.forEach(docSnap => {
           const data = docSnap.data();
           const qObj = { id: docSnap.id, ...data } as WordAnalogyQuestion;
-          fallbackAll.push(qObj);
 
           if (matchesCourse(data.courseId, activeCourseId)) {
             loaded.push(qObj);
           }
         });
 
-        const finalQuestions = loaded.length > 0 ? loaded : fallbackAll;
-
-        if (finalQuestions.length > 0) {
-          setAllQuestions(finalQuestions);
+        if (loaded.length > 0) {
+          setAllQuestions(loaded);
         } else {
           // Fallback
           setAllQuestions(DEFAULT_QUESTIONS);

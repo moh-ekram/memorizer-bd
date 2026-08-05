@@ -18,6 +18,7 @@ import {
 import { VocabularyWord, UserProgress, Course, AccessRequest, BlankQuestion, AppSettings, VerifiedPayment } from '../types';
 import { read, utils } from 'xlsx';
 import { CourseSettings } from './CourseSettings';
+import TransactionHistoryView from './TransactionHistoryView';
 import { 
   Users, 
   ShieldCheck, 
@@ -68,7 +69,8 @@ import {
   MousePointerClick,
   ArrowUpDown,
   SortAsc,
-  Eye
+  Eye,
+  History
 } from 'lucide-react';
 
 interface FirestoreUserDoc {
@@ -145,7 +147,15 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
   // Course management and upload states
   const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'courses' | 'reports' | 'access-requests' | 'autoverify' | 'system-settings'>('courses');
-  const [requestsSubTab, setRequestsSubTab] = useState<'pending' | 'autoverify'>('pending');
+  const [requestsSubTab, setRequestsSubTab] = useState<'pending' | 'autoverify' | 'history'>('pending');
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToastMessage({ text, type });
+    setTimeout(() => {
+      setToastMessage(prev => prev?.text === text ? null : prev);
+    }, 4500);
+  };
   const [customCourses, setCustomCourses] = useState<Course[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(false);
   const [coursesError, setCoursesError] = useState<string | null>(null);
@@ -450,16 +460,17 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           const curBal = walletSnap.exists() ? (walletSnap.data().balance || 0) : 0;
           const newBal = curBal + rechargeAmt;
           
+          // Set user_wallets document
           await setDoc(walletRef, {
             email: userEmail,
             balance: newBal,
             updatedAt: nowISO
           }, { merge: true });
 
-          // Also update users collection for this email
-          try {
-            const uQuery = query(collection(db, 'users'), where('email', '==', userEmail));
-            const uSnap = await getDocs(uQuery);
+          // Also update user document in users collection
+          const uQuery = query(collection(db, 'users'), where('email', '==', userEmail));
+          const uSnap = await getDocs(uQuery);
+          if (!uSnap.empty) {
             for (const uDoc of uSnap.docs) {
               await setDoc(doc(db, 'users', uDoc.id), {
                 walletBalance: newBal,
@@ -467,8 +478,13 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 updatedAt: nowISO
               }, { merge: true });
             }
-          } catch (uErr) {
-            console.warn('Could not update users doc with new wallet balance:', uErr);
+          } else {
+            await setDoc(doc(db, 'users', userEmail), {
+              email: userEmail,
+              walletBalance: newBal,
+              balance: newBal,
+              updatedAt: nowISO
+            }, { merge: true });
           }
 
           return newBal;
@@ -586,9 +602,19 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
       // Wait for all parallel tasks to finish
       await Promise.all(tasks);
+
+      // Explicit confirmation toast triggers ONLY after database update succeeds
+      showToast(
+        isRecharge 
+          ? `✅ Server Confirmed: Recharged ৳${finalPrice} & updated balance for ${userEmail}!`
+          : `✅ Server Confirmed: Approved course access request for ${userEmail}!`,
+        'success'
+      );
     } catch (err) {
       console.error('Error approving request:', err);
-      alert('Failed to approve request: ' + (err instanceof Error ? err.message : String(err)));
+      // Revert optimistic UI state if server transaction fails
+      setAccessRequests(prev => prev.map(r => r.id === req.id ? req : r));
+      showToast('❌ Server Error: Failed to process request on database: ' + (err instanceof Error ? err.message : String(err)), 'error');
     }
   };
 
@@ -599,10 +625,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       await updateDoc(reqRef, { status: 'rejected' });
       
       setAccessRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: 'rejected' } : r));
-      alert('Access request rejected.');
+      showToast('✅ Server Confirmed: Request status set to Rejected.', 'info');
     } catch (err) {
       console.error('Error rejecting request:', err);
-      alert('Failed to reject request: ' + (err instanceof Error ? err.message : String(err)));
+      showToast('❌ Server Error: Failed to reject request.', 'error');
     }
   };
 
@@ -1475,9 +1501,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             }, { merge: true });
 
             // Sync balance to users collection
-            try {
-              const uQuery = query(collection(db, 'users'), where('email', '==', reqEmail));
-              const uSnap = await getDocs(uQuery);
+            const uQuery = query(collection(db, 'users'), where('email', '==', reqEmail));
+            const uSnap = await getDocs(uQuery);
+            if (!uSnap.empty) {
               for (const uDoc of uSnap.docs) {
                 await setDoc(doc(db, 'users', uDoc.id), {
                   walletBalance: newBal,
@@ -1485,8 +1511,13 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   updatedAt: nowISO
                 }, { merge: true });
               }
-            } catch (uErr) {
-              console.warn('Could not update users doc in auto approve:', uErr);
+            } else {
+              await setDoc(doc(db, 'users', reqEmail), {
+                email: reqEmail,
+                walletBalance: newBal,
+                balance: newBal,
+                updatedAt: nowISO
+              }, { merge: true });
             }
 
             await setDoc(doc(db, 'access_requests', req.id), {
@@ -1571,6 +1602,26 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               balance: remainingBalance,
               updatedAt: new Date().toISOString()
             }, { merge: true });
+
+            // Sync remaining balance to users collection
+            const uQuery = query(collection(db, 'users'), where('email', '==', reqEmail));
+            const uSnap = await getDocs(uQuery);
+            if (!uSnap.empty) {
+              for (const uDoc of uSnap.docs) {
+                await setDoc(doc(db, 'users', uDoc.id), {
+                  walletBalance: remainingBalance,
+                  balance: remainingBalance,
+                  updatedAt: new Date().toISOString()
+                }, { merge: true });
+              }
+            } else {
+              await setDoc(doc(db, 'users', reqEmail), {
+                email: reqEmail,
+                walletBalance: remainingBalance,
+                balance: remainingBalance,
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+            }
 
             await setDoc(doc(db, 'access_requests', req.id), {
               status: 'approved',
@@ -1716,6 +1767,30 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
   return (
     <div className="space-y-8 font-sans" id="admin-panel-container">
+      {/* Fixed Confirmation Toast Notification */}
+      {toastMessage && (
+        <div
+          className={`fixed top-5 right-5 z-50 px-5 py-3.5 rounded-2xl shadow-2xl border flex items-center gap-3 font-semibold text-xs transition-all duration-300 animate-in fade-in slide-in-from-top-4 ${
+            toastMessage.type === 'success' 
+              ? 'bg-slate-900 text-emerald-300 border-emerald-500/50 shadow-emerald-900/30' 
+              : toastMessage.type === 'error'
+              ? 'bg-slate-900 text-rose-300 border-rose-500/50 shadow-rose-900/30'
+              : 'bg-slate-900 text-indigo-300 border-indigo-500/50 shadow-indigo-900/30'
+          }`}
+        >
+          {toastMessage.type === 'success' && <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />}
+          {toastMessage.type === 'error' && <XCircle className="w-4 h-4 text-rose-400 shrink-0" />}
+          {toastMessage.type === 'info' && <Info className="w-4 h-4 text-indigo-400 shrink-0" />}
+          <span>{toastMessage.text}</span>
+          <button 
+            onClick={() => setToastMessage(null)} 
+            className="ml-2 text-slate-400 hover:text-white transition cursor-pointer"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden border border-indigo-500/10" id="admin-header-banner">
         <div className="absolute right-0 top-0 -mt-10 -mr-10 w-44 h-44 bg-indigo-500/10 rounded-full blur-3xl"></div>
@@ -2419,6 +2494,22 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 <Zap className="w-4 h-4 fill-slate-950 text-slate-950" />
                 <span>⚡ bKash Gateway ({globalVerifiedPayments.length})</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setRequestsSubTab('history');
+                  fetchAccessRequests();
+                }}
+                className={`px-4 py-2 text-xs font-black rounded-lg transition cursor-pointer flex items-center gap-2 ${
+                  requestsSubTab === 'history'
+                    ? 'bg-white text-indigo-700 shadow-2xs border border-indigo-200/60'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <History className="w-4 h-4 text-emerald-600" />
+                <span>📜 Transaction History ({accessRequests.length})</span>
+              </button>
             </div>
 
             <div className="flex items-center gap-2 self-end sm:self-center">
@@ -2740,7 +2831,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               </div>
             )}
           </div>
-        ) : (
+        ) : requestsSubTab === 'autoverify' ? (
         <div className="space-y-6 font-sans" style={{ fontFamily: "'Poppins', sans-serif" }}>
           {/* Header Banner */}
           <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 rounded-2xl border border-indigo-800/60 shadow-md">
@@ -3027,6 +3118,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             )}
           </div>
         </div>
+      ) : (
+        <TransactionHistoryView 
+          requests={accessRequests} 
+          onRefresh={fetchAccessRequests} 
+          onApprove={handleApproveAccessRequest} 
+          onReject={handleRejectAccessRequest} 
+          showToast={showToast} 
+        />
       )}
     </div>
   )}

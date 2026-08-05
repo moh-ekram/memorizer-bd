@@ -172,74 +172,66 @@ export default function PracticeCenter({
     const fetchAllCourseQuestions = async () => {
       try {
         const matchesCourse = (qCourseId?: string, targetCourseId?: string) => {
-          if (!qCourseId || qCourseId.trim() === '') return true;
           if (!targetCourseId || targetCourseId.trim() === '' || targetCourseId === 'all') return true;
+          if (!qCourseId || qCourseId.trim() === '') return true;
           const cleanTarget = targetCourseId.trim().toLowerCase();
           const cleanQ = qCourseId.trim().toLowerCase();
-          return cleanQ === cleanTarget || cleanTarget.includes(cleanQ) || cleanQ.includes(cleanTarget) || cleanQ === 'gre' || cleanTarget === 'gre';
+          if (cleanQ === cleanTarget || cleanTarget.includes(cleanQ) || cleanQ.includes(cleanTarget)) return true;
+          const normTarget = cleanTarget.replace(/[^a-z0-9]/g, '');
+          const normQ = cleanQ.replace(/[^a-z0-9]/g, '');
+          if (normQ === normTarget || normTarget.includes(normQ) || normQ.includes(normTarget)) return true;
+          return false;
         };
 
         // 1. Blank questions
         const blankSnap = await getDocs(collection(db, 'blank_questions'));
         const loadedBlank: BlankQuestion[] = [];
-        const fallbackBlank: BlankQuestion[] = [];
         blankSnap.forEach(docSnap => {
           const data = docSnap.data();
           const qObj = { id: docSnap.id, ...data } as BlankQuestion;
-          fallbackBlank.push(qObj);
           if (matchesCourse(data.courseId, activeCourseId)) {
             loadedBlank.push(qObj);
           }
         });
-        const finalBlank = loadedBlank.length > 0 ? loadedBlank : fallbackBlank;
 
         // 2. OOO questions
         const oooSnap = await getDocs(collection(db, 'odd_one_out_questions'));
         const loadedOoo: OddOneOutQuestion[] = [];
-        const fallbackOoo: OddOneOutQuestion[] = [];
         oooSnap.forEach(docSnap => {
           const data = docSnap.data();
           const qObj = { id: docSnap.id, ...data } as OddOneOutQuestion;
-          fallbackOoo.push(qObj);
           if (matchesCourse(data.courseId, activeCourseId)) {
             loadedOoo.push(qObj);
           }
         });
-        const finalOoo = loadedOoo.length > 0 ? loadedOoo : fallbackOoo;
 
         // 3. Analogy questions
         const analogySnap = await getDocs(collection(db, 'word_analogy_questions'));
         const loadedAnalogy: WordAnalogyQuestion[] = [];
-        const fallbackAnalogy: WordAnalogyQuestion[] = [];
         analogySnap.forEach(docSnap => {
           const data = docSnap.data();
           const qObj = { id: docSnap.id, ...data } as WordAnalogyQuestion;
-          fallbackAnalogy.push(qObj);
           if (matchesCourse(data.courseId, activeCourseId)) {
             loadedAnalogy.push(qObj);
           }
         });
-        const finalAnalogy = loadedAnalogy.length > 0 ? loadedAnalogy : fallbackAnalogy;
 
         // 4. MCQ questions
         const mcqSnap = await getDocs(collection(db, 'mcq_questions'));
         const loadedMcq: CustomMcqQuestion[] = [];
-        const fallbackMcq: CustomMcqQuestion[] = [];
         mcqSnap.forEach(docSnap => {
           const data = docSnap.data();
           const qObj = { id: docSnap.id, ...data } as CustomMcqQuestion;
-          fallbackMcq.push(qObj);
           if (matchesCourse(data.courseId, activeCourseId)) {
             loadedMcq.push(qObj);
           }
         });
-        const finalMcq = loadedMcq.length > 0 ? loadedMcq : fallbackMcq;
 
         if (isMounted) {
-          setBlankQs(finalBlank);
-          setOooQs(finalOoo);
-          setAnalogyQs(finalAnalogy);
-          setMcqQs(finalMcq);
+          setBlankQs(loadedBlank);
+          setOooQs(loadedOoo);
+          setAnalogyQs(loadedAnalogy);
+          setMcqQs(loadedMcq);
         }
       } catch (err) {
         console.error('Error fetching game questions for course:', err);
@@ -284,6 +276,9 @@ export default function PracticeCenter({
       blankTotal = 5;
       const defIds = ['bq-def-1', 'bq-def-2', 'bq-def-3', 'bq-def-4', 'bq-def-5'];
       blankCompleted = defIds.filter(id => blankProgress[id] !== undefined).length;
+    } else if (words.length > 0) {
+      blankTotal = Math.min(20, words.length);
+      blankCompleted = Object.keys(blankProgress).length;
     }
     const blankPercent = blankTotal > 0 ? Math.min(100, Math.round((blankCompleted / blankTotal) * 100)) : 0;
 
@@ -297,7 +292,7 @@ export default function PracticeCenter({
       const defIds = ['ooo-def-1', 'ooo-def-2', 'ooo-def-3', 'ooo-def-4', 'ooo-def-5'];
       oooCompleted = defIds.filter(id => oooProgress[id] !== undefined).length;
     } else if (words.length > 3) {
-      oooTotal = words.length;
+      oooTotal = Math.min(20, words.length);
       oooCompleted = Object.keys(oooProgress).length;
     }
     const oooPercent = oooTotal > 0 ? Math.min(100, Math.round((oooCompleted / oooTotal) * 100)) : 0;
@@ -312,7 +307,7 @@ export default function PracticeCenter({
       const defIds = ['ana-def-1', 'ana-def-2', 'ana-def-3', 'ana-def-4', 'ana-def-5'];
       analogyCompleted = defIds.filter(id => analogyProgress[id] !== undefined).length;
     } else if (words.length > 3) {
-      analogyTotal = words.length;
+      analogyTotal = Math.min(20, words.length);
       analogyCompleted = Object.keys(analogyProgress).length;
     }
     const analogyPercent = analogyTotal > 0 ? Math.min(100, Math.round((analogyCompleted / analogyTotal) * 100)) : 0;

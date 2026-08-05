@@ -95,11 +95,15 @@ export default function OddOneOutGame({
 
   // Helper to match course IDs flexibly
   const matchesCourse = (qCourseId?: string, targetCourseId?: string) => {
-    if (!qCourseId || qCourseId.trim() === '') return true;
     if (!targetCourseId || targetCourseId.trim() === '' || targetCourseId === 'all') return true;
+    if (!qCourseId || qCourseId.trim() === '') return true;
     const cleanTarget = targetCourseId.trim().toLowerCase();
     const cleanQ = qCourseId.trim().toLowerCase();
-    return cleanQ === cleanTarget || cleanTarget.includes(cleanQ) || cleanQ.includes(cleanTarget) || cleanQ === 'gre' || cleanTarget === 'gre';
+    if (cleanQ === cleanTarget || cleanTarget.includes(cleanQ) || cleanQ.includes(cleanTarget)) return true;
+    const normTarget = cleanTarget.replace(/[^a-z0-9]/g, '');
+    const normQ = cleanQ.replace(/[^a-z0-9]/g, '');
+    if (normQ === normTarget || normTarget.includes(normQ) || normQ.includes(normTarget)) return true;
+    return false;
   };
 
   // Fetch from Firestore or auto-generate
@@ -109,23 +113,18 @@ export default function OddOneOutGame({
       try {
         const qSnap = await getDocs(collection(db, 'odd_one_out_questions'));
         const loaded: OddOneOutQuestion[] = [];
-        const fallbackAll: OddOneOutQuestion[] = [];
         qSnap.forEach(docSnap => {
           const data = docSnap.data();
           const qObj = { id: docSnap.id, ...data } as OddOneOutQuestion;
-          fallbackAll.push(qObj);
-
           if (matchesCourse(data.courseId, activeCourseId)) {
             loaded.push(qObj);
           }
         });
 
-        const finalQuestions = loaded.length > 0 ? loaded : fallbackAll;
-
-        if (finalQuestions.length > 0) {
-          setAllQuestions(finalQuestions);
+        if (loaded.length > 0) {
+          setAllQuestions(loaded);
         } else {
-          // Fallback or generator if database is empty
+          // Fallback or generator if database has no questions for this course
           if (activeCourseId?.trim().toLowerCase() === 'gre' || !words || words.length <= 3) {
             setAllQuestions(DEFAULT_QUESTIONS);
           } else if (words && words.length > 3) {
@@ -135,18 +134,21 @@ export default function OddOneOutGame({
             // Loop through words and see if we have synonyms declared
             words.forEach((w, idx) => {
               const synonymsList = w.synonyms
-                ? w.synonyms.split(',').map(s => s.trim().toLowerCase()).filter(s => s.length > 0)
+                ? w.synonyms
+                    .split(',')
+                    .map(s => s.trim().toLowerCase())
+                    .filter(s => s.length > 0 && s.length < 25 && !s.includes(' '))
                 : [];
               
-              if (synonymsList.length >= 2) {
-                // Find a distractor word that is NOT in the synonyms list
+              if (synonymsList.length >= 2 && w.word && !w.word.includes(' ')) {
+                // Find a single distractor word that is NOT in the synonyms list
                 const distractors = words
-                  .filter(other => other.id !== w.id && !synonymsList.includes(other.word.toLowerCase()) && other.word.toLowerCase() !== w.word.toLowerCase())
+                  .filter(other => other.id !== w.id && !other.word.includes(' ') && !synonymsList.includes(other.word.toLowerCase()) && other.word.toLowerCase() !== w.word.toLowerCase())
                   .map(other => other.word);
                 
                 if (distractors.length > 0) {
                   const oddWord = distractors[Math.floor(Math.random() * distractors.length)];
-                  const oooWords = [w.word, ...synonymsList.slice(0, 2), oddWord];
+                  const oooWords = [w.word, synonymsList[0], synonymsList[1], oddWord];
                   // Shuffle choices
                   const shuffled = [...oooWords].sort(() => 0.5 - Math.random());
                   
@@ -154,7 +156,7 @@ export default function OddOneOutGame({
                     id: `ooo-gen-${w.id}-${idx}`,
                     words: shuffled,
                     answer: oddWord,
-                    reason: `"${oddWord}" is the odd one out because the other three words ("${w.word}", "${synonymsList[0]}", "${synonymsList[1]}") are synonyms meaning "${w.meaning}".`,
+                    reason: `"${oddWord}" is the odd one out because the other three words ("${w.word}", "${synonymsList[0]}", "${synonymsList[1]}") share similar meanings.`,
                     courseId: activeCourseId
                   });
                 }
