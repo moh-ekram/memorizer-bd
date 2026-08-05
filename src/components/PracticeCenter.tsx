@@ -171,57 +171,75 @@ export default function PracticeCenter({
     let isMounted = true;
     const fetchAllCourseQuestions = async () => {
       try {
-        const cleanCourseId = (activeCourseId || 'gre').trim().toLowerCase();
+        const matchesCourse = (qCourseId?: string, targetCourseId?: string) => {
+          if (!qCourseId || qCourseId.trim() === '') return true;
+          if (!targetCourseId || targetCourseId.trim() === '' || targetCourseId === 'all') return true;
+          const cleanTarget = targetCourseId.trim().toLowerCase();
+          const cleanQ = qCourseId.trim().toLowerCase();
+          return cleanQ === cleanTarget || cleanTarget.includes(cleanQ) || cleanQ.includes(cleanTarget) || cleanQ === 'gre' || cleanTarget === 'gre';
+        };
 
         // 1. Blank questions
         const blankSnap = await getDocs(collection(db, 'blank_questions'));
         const loadedBlank: BlankQuestion[] = [];
+        const fallbackBlank: BlankQuestion[] = [];
         blankSnap.forEach(docSnap => {
           const data = docSnap.data();
-          const qCourseId = (data.courseId || 'gre').trim().toLowerCase();
-          if (qCourseId === cleanCourseId || (!data.courseId && cleanCourseId === 'gre')) {
-            loadedBlank.push({ id: docSnap.id, ...data } as BlankQuestion);
+          const qObj = { id: docSnap.id, ...data } as BlankQuestion;
+          fallbackBlank.push(qObj);
+          if (matchesCourse(data.courseId, activeCourseId)) {
+            loadedBlank.push(qObj);
           }
         });
+        const finalBlank = loadedBlank.length > 0 ? loadedBlank : fallbackBlank;
 
         // 2. OOO questions
         const oooSnap = await getDocs(collection(db, 'odd_one_out_questions'));
         const loadedOoo: OddOneOutQuestion[] = [];
+        const fallbackOoo: OddOneOutQuestion[] = [];
         oooSnap.forEach(docSnap => {
           const data = docSnap.data();
-          const qCourseId = (data.courseId || 'gre').trim().toLowerCase();
-          if (qCourseId === cleanCourseId || (!data.courseId && cleanCourseId === 'gre')) {
-            loadedOoo.push({ id: docSnap.id, ...data } as OddOneOutQuestion);
+          const qObj = { id: docSnap.id, ...data } as OddOneOutQuestion;
+          fallbackOoo.push(qObj);
+          if (matchesCourse(data.courseId, activeCourseId)) {
+            loadedOoo.push(qObj);
           }
         });
+        const finalOoo = loadedOoo.length > 0 ? loadedOoo : fallbackOoo;
 
         // 3. Analogy questions
         const analogySnap = await getDocs(collection(db, 'word_analogy_questions'));
         const loadedAnalogy: WordAnalogyQuestion[] = [];
+        const fallbackAnalogy: WordAnalogyQuestion[] = [];
         analogySnap.forEach(docSnap => {
           const data = docSnap.data();
-          const qCourseId = (data.courseId || 'gre').trim().toLowerCase();
-          if (qCourseId === cleanCourseId || (!data.courseId && cleanCourseId === 'gre')) {
-            loadedAnalogy.push({ id: docSnap.id, ...data } as WordAnalogyQuestion);
+          const qObj = { id: docSnap.id, ...data } as WordAnalogyQuestion;
+          fallbackAnalogy.push(qObj);
+          if (matchesCourse(data.courseId, activeCourseId)) {
+            loadedAnalogy.push(qObj);
           }
         });
+        const finalAnalogy = loadedAnalogy.length > 0 ? loadedAnalogy : fallbackAnalogy;
 
         // 4. MCQ questions
         const mcqSnap = await getDocs(collection(db, 'mcq_questions'));
         const loadedMcq: CustomMcqQuestion[] = [];
+        const fallbackMcq: CustomMcqQuestion[] = [];
         mcqSnap.forEach(docSnap => {
           const data = docSnap.data();
-          const qCourseId = (data.courseId || 'gre').trim().toLowerCase();
-          if (qCourseId === cleanCourseId || (!data.courseId && cleanCourseId === 'gre')) {
-            loadedMcq.push({ id: docSnap.id, ...data } as CustomMcqQuestion);
+          const qObj = { id: docSnap.id, ...data } as CustomMcqQuestion;
+          fallbackMcq.push(qObj);
+          if (matchesCourse(data.courseId, activeCourseId)) {
+            loadedMcq.push(qObj);
           }
         });
+        const finalMcq = loadedMcq.length > 0 ? loadedMcq : fallbackMcq;
 
         if (isMounted) {
-          setBlankQs(loadedBlank);
-          setOooQs(loadedOoo);
-          setAnalogyQs(loadedAnalogy);
-          setMcqQs(loadedMcq);
+          setBlankQs(finalBlank);
+          setOooQs(finalOoo);
+          setAnalogyQs(finalAnalogy);
+          setMcqQs(finalMcq);
         }
       } catch (err) {
         console.error('Error fetching game questions for course:', err);

@@ -7,7 +7,7 @@ import {
   Copy, ArrowRight, Star, Heart, Calendar, ShieldAlert, Layers, Play,
   ChevronDown, ChevronUp, Info, Eye, Wallet, EyeOff, MoreHorizontal, ArrowUpRight
 } from 'lucide-react';
-import { db, doc, setDoc, getDoc, getDocs, query, collection, where, incrementCourseClickCount } from '../lib/db';
+import { db, doc, setDoc, getDoc, getDocs, onSnapshot, query, collection, where, incrementCourseClickCount } from '../lib/db';
 import { Course, UserProgress, ActiveTab } from '../types';
 import { isCourseEnrolled, isCourseAccessible } from '../lib/courseAccess';
 import CoursePreviewModal from './CoursePreviewModal';
@@ -110,23 +110,25 @@ export default function MyCoursesView({
     }
   }, [user]);
 
-  // Fetch wallet balance whenever accessEmail changes or modal opens
+  // Listen to wallet balance in real time whenever accessEmail changes
   useEffect(() => {
     if (!accessEmail || !accessEmail.includes('@')) return;
-    const fetchWallet = async () => {
-      try {
-        const walletSnap = await getDoc(doc(db, 'user_wallets', accessEmail.toLowerCase().trim()));
-        if (walletSnap.exists()) {
-          setUserWalletBalance(walletSnap.data().balance || 0);
-        } else {
-          setUserWalletBalance(0);
-        }
-      } catch (e) {
-        console.warn("Wallet fetch notice:", e);
+    const cleanEmail = accessEmail.toLowerCase().trim();
+    const walletRef = doc(db, 'user_wallets', cleanEmail);
+
+    const unsubscribe = onSnapshot(walletRef, (walletSnap) => {
+      if (walletSnap.exists()) {
+        const bal = walletSnap.data().balance;
+        setUserWalletBalance(typeof bal === 'number' ? bal : 0);
+      } else {
+        setUserWalletBalance(0);
       }
-    };
-    fetchWallet();
-  }, [accessEmail, selectedBuyCourse, isCartCheckoutMode]);
+    }, (err) => {
+      console.warn("Realtime wallet listener notice:", err);
+    });
+
+    return () => unsubscribe();
+  }, [accessEmail]);
 
   const toggleCartCourse = (course: Course, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();

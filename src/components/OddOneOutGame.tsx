@@ -93,6 +93,15 @@ export default function OddOneOutGame({
     return { yet_to_try: yetToTry, incorrect, done };
   }, [allQuestions, progress]);
 
+  // Helper to match course IDs flexibly
+  const matchesCourse = (qCourseId?: string, targetCourseId?: string) => {
+    if (!qCourseId || qCourseId.trim() === '') return true;
+    if (!targetCourseId || targetCourseId.trim() === '' || targetCourseId === 'all') return true;
+    const cleanTarget = targetCourseId.trim().toLowerCase();
+    const cleanQ = qCourseId.trim().toLowerCase();
+    return cleanQ === cleanTarget || cleanTarget.includes(cleanQ) || cleanQ.includes(cleanTarget) || cleanQ === 'gre' || cleanTarget === 'gre';
+  };
+
   // Fetch from Firestore or auto-generate
   useEffect(() => {
     const fetchQuestions = async () => {
@@ -100,21 +109,24 @@ export default function OddOneOutGame({
       try {
         const qSnap = await getDocs(collection(db, 'odd_one_out_questions'));
         const loaded: OddOneOutQuestion[] = [];
+        const fallbackAll: OddOneOutQuestion[] = [];
         qSnap.forEach(docSnap => {
           const data = docSnap.data();
-          if (
-            (data.courseId && activeCourseId && data.courseId.trim().toLowerCase() === activeCourseId.trim().toLowerCase()) ||
-            (!data.courseId && activeCourseId?.trim().toLowerCase() === 'gre')
-          ) {
-            loaded.push({ id: docSnap.id, ...data } as OddOneOutQuestion);
+          const qObj = { id: docSnap.id, ...data } as OddOneOutQuestion;
+          fallbackAll.push(qObj);
+
+          if (matchesCourse(data.courseId, activeCourseId)) {
+            loaded.push(qObj);
           }
         });
 
-        if (loaded.length > 0) {
-          setAllQuestions(loaded);
+        const finalQuestions = loaded.length > 0 ? loaded : fallbackAll;
+
+        if (finalQuestions.length > 0) {
+          setAllQuestions(finalQuestions);
         } else {
-          // Fallback or generator
-          if (activeCourseId?.trim().toLowerCase() === 'gre') {
+          // Fallback or generator if database is empty
+          if (activeCourseId?.trim().toLowerCase() === 'gre' || !words || words.length <= 3) {
             setAllQuestions(DEFAULT_QUESTIONS);
           } else if (words && words.length > 3) {
             // Smart automatic generation based on vocabulary synonyms!

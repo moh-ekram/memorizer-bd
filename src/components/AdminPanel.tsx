@@ -436,20 +436,43 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       }
 
       // 3. Handle Wallet Recharge vs Course Access
-      if (req.courseId === 'wallet_recharge' || req.courseTitle?.includes('Wallet Recharge')) {
+      const isRecharge = req.courseId === 'wallet_recharge' || 
+                         req.courseTitle?.toLowerCase().includes('recharge') ||
+                         req.courseTitle?.toLowerCase().includes('wallet');
+
+      if (isRecharge) {
         const rechargeAmt = finalPrice;
         const walletRef = doc(db, 'user_wallets', userEmail);
         
         // Fetch current wallet balance in parallel with other setup
-        const walletTask = getDoc(walletRef).then(walletSnap => {
+        const walletTask = (async () => {
+          const walletSnap = await getDoc(walletRef);
           const curBal = walletSnap.exists() ? (walletSnap.data().balance || 0) : 0;
           const newBal = curBal + rechargeAmt;
-          return setDoc(walletRef, {
+          
+          await setDoc(walletRef, {
             email: userEmail,
             balance: newBal,
             updatedAt: nowISO
           }, { merge: true });
-        });
+
+          // Also update users collection for this email
+          try {
+            const uQuery = query(collection(db, 'users'), where('email', '==', userEmail));
+            const uSnap = await getDocs(uQuery);
+            for (const uDoc of uSnap.docs) {
+              await setDoc(doc(db, 'users', uDoc.id), {
+                walletBalance: newBal,
+                balance: newBal,
+                updatedAt: nowISO
+              }, { merge: true });
+            }
+          } catch (uErr) {
+            console.warn('Could not update users doc with new wallet balance:', uErr);
+          }
+
+          return newBal;
+        })();
         tasks.push(walletTask);
       } else {
         const targetCourseIds = (req.courseIds && req.courseIds.length > 0) 
@@ -1411,7 +1434,11 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         let walletSnap = await getDoc(walletRef);
         let existingWalletBalance = walletSnap.exists() ? (walletSnap.data().balance || 0) : 0;
 
-        if (req.courseId === 'wallet_recharge') {
+        const isRechargeReq = req.courseId === 'wallet_recharge' || 
+                              req.courseTitle?.toLowerCase().includes('recharge') ||
+                              req.courseTitle?.toLowerCase().includes('wallet');
+
+        if (isRechargeReq) {
           if (matchedVp) {
             const rechargeAmt = matchedVp.amount || req.totalPrice || req.price || 50;
             const newBal = existingWalletBalance + rechargeAmt;
@@ -1446,6 +1473,21 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               balance: newBal,
               updatedAt: nowISO
             }, { merge: true });
+
+            // Sync balance to users collection
+            try {
+              const uQuery = query(collection(db, 'users'), where('email', '==', reqEmail));
+              const uSnap = await getDocs(uQuery);
+              for (const uDoc of uSnap.docs) {
+                await setDoc(doc(db, 'users', uDoc.id), {
+                  walletBalance: newBal,
+                  balance: newBal,
+                  updatedAt: nowISO
+                }, { merge: true });
+              }
+            } catch (uErr) {
+              console.warn('Could not update users doc in auto approve:', uErr);
+            }
 
             await setDoc(doc(db, 'access_requests', req.id), {
               status: 'approved',

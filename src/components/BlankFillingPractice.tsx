@@ -103,6 +103,15 @@ export default function BlankFillingPractice({
     return { yet_to_try: yetToTry, incorrect, done };
   }, [allQuestions, blankProgress]);
 
+  // Helper to match course IDs flexibly
+  const matchesCourse = (qCourseId?: string, targetCourseId?: string) => {
+    if (!qCourseId || qCourseId.trim() === '') return true;
+    if (!targetCourseId || targetCourseId.trim() === '' || targetCourseId === 'all') return true;
+    const cleanTarget = targetCourseId.trim().toLowerCase();
+    const cleanQ = qCourseId.trim().toLowerCase();
+    return cleanQ === cleanTarget || cleanTarget.includes(cleanQ) || cleanQ.includes(cleanTarget) || cleanQ === 'gre' || cleanTarget === 'gre';
+  };
+
   // Fetch blank questions from Firestore on mount/activeCourseId change
   useEffect(() => {
     const fetchQuestions = async () => {
@@ -110,22 +119,24 @@ export default function BlankFillingPractice({
       try {
         const qSnap = await getDocs(collection(db, 'blank_questions'));
         const loaded: BlankQuestion[] = [];
+        const fallbackAll: BlankQuestion[] = [];
         qSnap.forEach(docSnap => {
           const data = docSnap.data();
-          // Filter by active course or if courseId is empty default to gre
-          if (
-            (data.courseId && activeCourseId && data.courseId.trim().toLowerCase() === activeCourseId.trim().toLowerCase()) ||
-            (!data.courseId && activeCourseId?.trim().toLowerCase() === 'gre')
-          ) {
-            loaded.push({ id: docSnap.id, ...data } as BlankQuestion);
+          const qObj = { id: docSnap.id, ...data } as BlankQuestion;
+          fallbackAll.push(qObj);
+
+          if (matchesCourse(data.courseId, activeCourseId)) {
+            loaded.push(qObj);
           }
         });
+
+        const finalQuestions = loaded.length > 0 ? loaded : fallbackAll;
         
-        if (loaded.length > 0) {
-          setAllQuestions(loaded);
+        if (finalQuestions.length > 0) {
+          setAllQuestions(finalQuestions);
         } else {
-          // Fallback to default high-quality questions for default GRE or if none uploaded yet
-          if (activeCourseId?.trim().toLowerCase() === 'gre') {
+          // Fallback to default high-quality questions if database collection is empty
+          if (activeCourseId?.trim().toLowerCase() === 'gre' || !words || words.length === 0) {
             setAllQuestions(DEFAULT_QUESTIONS);
           } else if (words && words.length > 0) {
             // Auto-generate high-quality practice questions from vocabulary words
