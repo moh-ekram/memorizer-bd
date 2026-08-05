@@ -4,7 +4,9 @@ import {
   collection as fbCollection, 
   getDocs as fbGetDocs, 
   doc as fbDoc, 
-  getDoc as fbGetDoc 
+  getDoc as fbGetDoc,
+  setDoc as fbSetDoc,
+  deleteDoc as fbDeleteDoc
 } from 'firebase/firestore';
 import { supabase } from './supabase';
 import { RECOVERED_USER_DATA, RESTORED_AUTH_USERS } from './importedUserData';
@@ -255,28 +257,35 @@ export async function setDoc(docRef: any, data: any, options?: { merge?: boolean
     const { collectionName, docId } = docRef;
     DOCS_CACHE_MAP.clear(); // Invalidate cache on mutations
     
+    let dataToSave = data;
     if (options?.merge) {
       const existing = await getDoc(docRef);
       if (existing.exists()) {
-        const merged = { ...existing.data(), ...data };
-        const payload = { id: docId, ...merged, data: merged };
-        const { error } = await supabase
-          .from(collectionName)
-          .upsert(payload);
-        if (error) {
-          await supabase.from(collectionName).upsert({ id: docId, data: merged });
-        }
-        return;
+        dataToSave = { ...existing.data(), ...data };
       }
     }
 
-    const payload = { id: docId, ...data, data };
+    // 1. LocalStorage
+    try {
+      localStorage.setItem(`local_store_${collectionName}_${docId}`, JSON.stringify(dataToSave));
+    } catch (_) {}
+
+    // 2. Firebase Firestore
+    try {
+      await Promise.allSettled([
+        fbSetDoc(fbDoc(rawFbCustomDb, collectionName, docId), dataToSave, { merge: true }),
+        fbSetDoc(fbDoc(rawFbDefaultDb, collectionName, docId), dataToSave, { merge: true })
+      ]);
+    } catch (_) {}
+
+    // 3. Supabase
+    const payload = { id: docId, ...dataToSave, data: dataToSave };
     const { error } = await supabase
       .from(collectionName)
       .upsert(payload);
 
     if (error) {
-      await supabase.from(collectionName).upsert({ id: docId, data });
+      await supabase.from(collectionName).upsert({ id: docId, data: dataToSave }).catch(() => {});
     }
   } catch (err) {
     console.warn('setDoc exception:', err);
@@ -292,7 +301,19 @@ export async function deleteDoc(docRef: any) {
   try {
     DOCS_CACHE_MAP.clear();
     const { collectionName, docId } = docRef;
-    await supabase.from(collectionName).delete().eq('id', docId);
+
+    try {
+      localStorage.removeItem(`local_store_${collectionName}_${docId}`);
+    } catch (_) {}
+
+    try {
+      await Promise.allSettled([
+        fbDeleteDoc(fbDoc(rawFbCustomDb, collectionName, docId)),
+        fbDeleteDoc(fbDoc(rawFbDefaultDb, collectionName, docId))
+      ]);
+    } catch (_) {}
+
+    await supabase.from(collectionName).delete().eq('id', docId).catch(() => {});
   } catch (err) {
     console.warn('deleteDoc exception:', err);
   }
@@ -319,6 +340,17 @@ export async function saveBulkDocs(collectionName: string, items: any[]) {
   if (!items || items.length === 0) return;
   DOCS_CACHE_MAP.clear();
   try {
+    // Save to LocalStorage & Firestore in parallel
+    for (const item of items) {
+      if (!item.id) continue;
+      try {
+        localStorage.setItem(`local_store_${collectionName}_${item.id}`, JSON.stringify(item));
+      } catch (_) {}
+
+      fbSetDoc(fbDoc(rawFbCustomDb, collectionName, item.id), item, { merge: true }).catch(() => {});
+      fbSetDoc(fbDoc(rawFbDefaultDb, collectionName, item.id), item, { merge: true }).catch(() => {});
+    }
+
     const payloads = items.map(item => ({
       id: item.id,
       ...item,
@@ -350,6 +382,14 @@ export async function deleteBulkDocs(collectionName: string, docIds: string[]) {
   if (!docIds || docIds.length === 0) return;
   DOCS_CACHE_MAP.clear();
   try {
+    for (const id of docIds) {
+      try {
+        localStorage.removeItem(`local_store_${collectionName}_${id}`);
+      } catch (_) {}
+      fbDeleteDoc(fbDoc(rawFbCustomDb, collectionName, id)).catch(() => {});
+      fbDeleteDoc(fbDoc(rawFbDefaultDb, collectionName, id)).catch(() => {});
+    }
+
     const CHUNK_SIZE = 200;
     for (let i = 0; i < docIds.length; i += CHUNK_SIZE) {
       const chunk = docIds.slice(i, i + CHUNK_SIZE);
@@ -477,14 +517,15 @@ export async function getDocs(queryOrCollectionRef: any) {
       };
     }
 
-    // 3. Fall back to Firebase Firestore sync if Supabase is completely empty
+    // 3. Fall back to Firebase Firestore sync if Supabase is completely empty (with 1.5s timeout per DB)
     const fbDbs = [rawFbCustomDb, rawFbDefaultDb];
     for (const d of fbDbs) {
       try {
         const fbRef = fbCollection(d, collectionName);
-        const fbSnap = await fbGetDocs(fbRef);
-        if (!fbSnap.empty) {
-          fbSnap.docs.forEach(docSnap => {
+        const fbTimeout = new Promise<any>((resolve) => setTimeout(() => resolve({ empty: true, docs: [] }), 1500));
+        const fbSnap = await Promise.race([fbGetDocs(fbRef), fbTimeout]);
+        if (fbSnap && !fbSnap.empty && fbSnap.docs) {
+          fbSnap.docs.forEach((docSnap: any) => {
             const docId = docSnap.id;
             const dData = docSnap.data();
             const existingInSB = docsMap.get(docId);
@@ -499,6 +540,26 @@ export async function getDocs(queryOrCollectionRef: any) {
         console.warn(`Firebase getDocs fallback error for ${collectionName}:`, fbErr);
       }
     }
+
+    // 4. Fallback to LocalStorage items for dynamic local persistence
+    try {
+      const prefix = `local_store_${collectionName}_`;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(prefix)) {
+          const docId = key.replace(prefix, '');
+          if (!docsMap.has(docId)) {
+            const rawVal = localStorage.getItem(key);
+            if (rawVal) {
+              try {
+                const parsed = JSON.parse(rawVal);
+                docsMap.set(docId, { id: docId, ...parsed });
+              } catch (_) {}
+            }
+          }
+        }
+      }
+    } catch (_) {}
 
     if (docsMap.size > 0) {
       DOCS_CACHE_MAP.set(cacheKey, { docsMap, timestamp: Date.now() });
@@ -526,30 +587,46 @@ export function onSnapshot(_ref: any, callback: (snap: any) => void, onError?: (
   const isDoc = _ref && typeof _ref.docId === 'string' && _ref.docId.length > 0;
 
   if (isDoc) {
-    getDoc(_ref).then(snap => callback(snap));
+    getDoc(_ref)
+      .then(snap => callback(snap))
+      .catch(err => {
+        if (onError) onError(err);
+        callback({ exists: () => false, data: () => null });
+      });
 
     const collectionName = _ref.collectionName || 'users';
-    const channel = supabase.channel(`public:${collectionName}:${_ref.docId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: collectionName }, () => {
-        getDoc(_ref).then(snap => callback(snap));
-      })
-      .subscribe();
+    let channel: any;
+    try {
+      channel = supabase.channel(`public:${collectionName}:${_ref.docId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: collectionName }, () => {
+          getDoc(_ref).then(snap => callback(snap)).catch(err => { if (onError) onError(err); });
+        })
+        .subscribe();
+    } catch (_) {}
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   } else {
-    getDocs(_ref).then(snap => callback(snap));
+    getDocs(_ref)
+      .then(snap => callback(snap))
+      .catch(err => {
+        if (onError) onError(err);
+        callback({ docs: [], empty: true, size: 0, forEach: () => {}, exists: () => false });
+      });
     
     const collectionName = _ref?.collectionName || 'users';
-    const channel = supabase.channel(`public:${collectionName}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: collectionName }, () => {
-        getDocs(_ref).then(snap => callback(snap));
-      })
-      .subscribe();
+    let channel: any;
+    try {
+      channel = supabase.channel(`public:${collectionName}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: collectionName }, () => {
+          getDocs(_ref).then(snap => callback(snap)).catch(err => { if (onError) onError(err); });
+        })
+        .subscribe();
+    } catch (_) {}
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }
 }

@@ -12,7 +12,8 @@ import {
   query,
   where,
   saveBulkDocs,
-  incrementCourseClickCount
+  incrementCourseClickCount,
+  onSnapshot
 } from '../lib/firebase';
 import { VocabularyWord, UserProgress, Course, AccessRequest, BlankQuestion, AppSettings, VerifiedPayment } from '../types';
 import { RESTORED_AUTH_USERS, RECOVERED_USER_DATA } from '../lib/importedUserData';
@@ -643,6 +644,20 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     fetchReports();
     fetchAccessRequests();
     fetchBlankQuestions();
+
+    let unsubReqs = () => {};
+    try {
+      unsubReqs = onSnapshot(collection(db, 'access_requests'), () => {
+        fetchAccessRequests();
+      }, (err) => {
+        console.warn("Real-time access_requests snapshot notice:", err);
+        setAccessRequestsLoading(false);
+      });
+    } catch (e) {
+      setAccessRequestsLoading(false);
+    }
+
+    return () => unsubReqs();
   }, []);
 
   // Sync slug from title
@@ -693,11 +708,11 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         const reqsSnap = await getDocs(collection(db, 'access_requests'));
         reqsSnap.forEach((rDoc) => {
           const rData = rDoc.data();
-          const rEmail = (rData.userEmail || '').trim().toLowerCase();
+          const rEmail = (rData.email || rData.userEmail || '').trim().toLowerCase();
           if (rEmail && !fetchedUsersMap.has(rEmail)) {
             fetchedUsersMap.set(rEmail, {
               id: `req-${rDoc.id}`,
-              email: rData.userEmail,
+              email: rData.email || rData.userEmail,
               createdAt: rData.timestamp || rData.createdAt || new Date().toISOString(),
               updatedAt: rData.timestamp || new Date().toISOString(),
               progress: {},
@@ -746,12 +761,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
       setUsers(Array.from(fetchedUsersMap.values()));
     } catch (err) {
-      setError('Failed to load users data from Firestore. Please verify Firestore Security Rules.');
-      try {
-        handleFirestoreError(err, OperationType.LIST, path);
-      } catch (e) {
-        // Suppress or handle rethrown JSON error
-      }
+      console.warn('Error in fetchUsersData:', err);
     } finally {
       setLoading(false);
     }
@@ -759,6 +769,20 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
   useEffect(() => {
     fetchUsersData();
+
+    let unsubUsers = () => {};
+    try {
+      unsubUsers = onSnapshot(collection(db, 'users'), () => {
+        fetchUsersData();
+      }, (err) => {
+        console.warn("Real-time users snapshot notice:", err);
+        setLoading(false);
+      });
+    } catch (e) {
+      setLoading(false);
+    }
+
+    return () => unsubUsers();
   }, []);
 
   // Drag and drop handlers

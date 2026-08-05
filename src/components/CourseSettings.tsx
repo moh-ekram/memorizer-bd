@@ -334,10 +334,11 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   }, [courseRequests, verifiedPayments]);
 
   const matchesCourse = (qCourseId?: string, targetCourseId?: string) => {
-    if (!targetCourseId) return false;
+    if (!targetCourseId) return true;
     const cleanTarget = targetCourseId.trim().toLowerCase();
-    if (!qCourseId) return cleanTarget === 'gre';
-    return qCourseId.trim().toLowerCase() === cleanTarget;
+    if (!qCourseId) return true;
+    const cleanQ = qCourseId.trim().toLowerCase();
+    return cleanQ === cleanTarget || cleanTarget.includes(cleanQ) || cleanQ.includes(cleanTarget);
   };
 
   const fetchBlankQuestions = async () => {
@@ -417,6 +418,13 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   };
 
   useEffect(() => {
+    fetchBlankQuestions();
+    fetchOooQuestions();
+    fetchAnalogyQuestions();
+    fetchMcqQuestions();
+  }, [course.id]);
+
+  useEffect(() => {
     if (activeTab === 'blank-questions') {
       fetchBlankQuestions();
     } else if (activeTab === 'ooo-questions') {
@@ -426,7 +434,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     } else if (activeTab === 'mcq-questions') {
       fetchMcqQuestions();
     }
-  }, [activeTab, course.id]);
+  }, [activeTab]);
 
   const handleUploadBlankExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
