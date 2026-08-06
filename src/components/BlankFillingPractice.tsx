@@ -14,7 +14,7 @@ import {
   ArrowLeft,
   Sparkles
 } from 'lucide-react';
-import { db, collection, getDocs } from '../lib/db';
+import { db, collection, getDocs, matchesCourseId, clearQuestionsCache } from '../lib/db';
 import { BlankQuestion, VocabularyWord } from '../types';
 
 interface BlankFillingPracticeProps {
@@ -103,20 +103,7 @@ export default function BlankFillingPractice({
     return { yet_to_try: yetToTry, incorrect, done };
   }, [allQuestions, blankProgress]);
 
-  // Helper to match course IDs flexibly
-  const matchesCourse = (qCourseId?: string, targetCourseId?: string) => {
-    if (!targetCourseId || targetCourseId.trim() === '' || targetCourseId === 'all') return true;
-    if (!qCourseId || qCourseId.trim() === '') return true;
-    const cleanTarget = targetCourseId.trim().toLowerCase();
-    const cleanQ = qCourseId.trim().toLowerCase();
-    if (cleanQ === cleanTarget || cleanTarget.includes(cleanQ) || cleanQ.includes(cleanTarget)) return true;
-    const normTarget = cleanTarget.replace(/[^a-z0-9]/g, '');
-    const normQ = cleanQ.replace(/[^a-z0-9]/g, '');
-    if (normQ === normTarget || normTarget.includes(normQ) || normQ.includes(normTarget)) return true;
-    return false;
-  };
-
-  // Fetch blank questions from Firestore on mount/activeCourseId change
+  // Fetch blank questions from Supabase/DB on mount/activeCourseId change
   useEffect(() => {
     const fetchQuestions = async () => {
       setLoading(true);
@@ -127,7 +114,7 @@ export default function BlankFillingPractice({
           const data = docSnap.data();
           const qObj = { id: docSnap.id, ...data } as BlankQuestion;
 
-          if (matchesCourse(data.courseId, activeCourseId)) {
+          if (matchesCourseId(data.courseId, activeCourseId)) {
             loaded.push(qObj);
           }
         });
@@ -135,7 +122,9 @@ export default function BlankFillingPractice({
         if (loaded.length > 0) {
           setAllQuestions(loaded);
         } else {
-          // Fallback to default high-quality questions if database collection is empty
+          // Clear questions cache when falling back to default/generated questions
+          clearQuestionsCache('blank_questions', activeCourseId);
+
           if (activeCourseId?.trim().toLowerCase() === 'gre' || !words || words.length === 0) {
             setAllQuestions(DEFAULT_QUESTIONS);
           } else if (words && words.length > 0) {
@@ -213,6 +202,7 @@ export default function BlankFillingPractice({
         }
       } catch (err) {
         console.error('Error fetching blank questions:', err);
+        clearQuestionsCache('blank_questions', activeCourseId);
         if (activeCourseId === 'gre') {
           setAllQuestions(DEFAULT_QUESTIONS);
         } else {

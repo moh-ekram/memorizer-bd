@@ -13,7 +13,7 @@ import {
   ArrowLeft,
   Sparkles
 } from 'lucide-react';
-import { db, collection, getDocs } from '../lib/db';
+import { db, collection, getDocs, matchesCourseId, clearQuestionsCache } from '../lib/db';
 import { WordAnalogyQuestion, VocabularyWord } from '../types';
 
 interface WordAnalogyGameProps {
@@ -98,20 +98,7 @@ export default function WordAnalogyGame({
     return { yet_to_try: yetToTry, incorrect, done };
   }, [allQuestions, progress]);
 
-  // Helper to match course IDs flexibly
-  const matchesCourse = (qCourseId?: string, targetCourseId?: string) => {
-    if (!targetCourseId || targetCourseId.trim() === '' || targetCourseId === 'all') return true;
-    if (!qCourseId || qCourseId.trim() === '') return true;
-    const cleanTarget = targetCourseId.trim().toLowerCase();
-    const cleanQ = qCourseId.trim().toLowerCase();
-    if (cleanQ === cleanTarget || cleanTarget.includes(cleanQ) || cleanQ.includes(cleanTarget)) return true;
-    const normTarget = cleanTarget.replace(/[^a-z0-9]/g, '');
-    const normQ = cleanQ.replace(/[^a-z0-9]/g, '');
-    if (normQ === normTarget || normTarget.includes(normQ) || normQ.includes(normTarget)) return true;
-    return false;
-  };
-
-  // Fetch from Firestore or fallback
+  // Fetch from Supabase/DB or fallback
   useEffect(() => {
     const fetchQuestions = async () => {
       setLoading(true);
@@ -122,7 +109,7 @@ export default function WordAnalogyGame({
           const data = docSnap.data();
           const qObj = { id: docSnap.id, ...data } as WordAnalogyQuestion;
 
-          if (matchesCourse(data.courseId, activeCourseId)) {
+          if (matchesCourseId(data.courseId, activeCourseId)) {
             loaded.push(qObj);
           }
         });
@@ -130,11 +117,13 @@ export default function WordAnalogyGame({
         if (loaded.length > 0) {
           setAllQuestions(loaded);
         } else {
-          // Fallback
+          // Clear questions cache when falling back to default questions
+          clearQuestionsCache('word_analogy_questions', activeCourseId);
           setAllQuestions(DEFAULT_QUESTIONS);
         }
       } catch (err) {
         console.error('Error loading analogy questions:', err);
+        clearQuestionsCache('word_analogy_questions', activeCourseId);
         setAllQuestions(DEFAULT_QUESTIONS);
       } finally {
         setLoading(false);

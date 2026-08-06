@@ -13,7 +13,7 @@ import {
   ArrowLeft,
   Sparkles
 } from 'lucide-react';
-import { db, collection, getDocs } from '../lib/db';
+import { db, collection, getDocs, matchesCourseId, clearQuestionsCache } from '../lib/db';
 import { OddOneOutQuestion, VocabularyWord } from '../types';
 
 interface OddOneOutGameProps {
@@ -93,20 +93,7 @@ export default function OddOneOutGame({
     return { yet_to_try: yetToTry, incorrect, done };
   }, [allQuestions, progress]);
 
-  // Helper to match course IDs flexibly
-  const matchesCourse = (qCourseId?: string, targetCourseId?: string) => {
-    if (!targetCourseId || targetCourseId.trim() === '' || targetCourseId === 'all') return true;
-    if (!qCourseId || qCourseId.trim() === '') return true;
-    const cleanTarget = targetCourseId.trim().toLowerCase();
-    const cleanQ = qCourseId.trim().toLowerCase();
-    if (cleanQ === cleanTarget || cleanTarget.includes(cleanQ) || cleanQ.includes(cleanTarget)) return true;
-    const normTarget = cleanTarget.replace(/[^a-z0-9]/g, '');
-    const normQ = cleanQ.replace(/[^a-z0-9]/g, '');
-    if (normQ === normTarget || normTarget.includes(normQ) || normQ.includes(normTarget)) return true;
-    return false;
-  };
-
-  // Fetch from Firestore or auto-generate
+  // Fetch from Firestore/Supabase DB or auto-generate on course/words change
   useEffect(() => {
     const fetchQuestions = async () => {
       setLoading(true);
@@ -116,7 +103,7 @@ export default function OddOneOutGame({
         qSnap.forEach(docSnap => {
           const data = docSnap.data();
           const qObj = { id: docSnap.id, ...data } as OddOneOutQuestion;
-          if (matchesCourse(data.courseId, activeCourseId)) {
+          if (matchesCourseId(data.courseId, activeCourseId)) {
             loaded.push(qObj);
           }
         });
@@ -124,7 +111,9 @@ export default function OddOneOutGame({
         if (loaded.length > 0) {
           setAllQuestions(loaded);
         } else {
-          // Fallback or generator if database has no questions for this course
+          // Clear stale questions cache if falling back to default/generated questions
+          clearQuestionsCache('odd_one_out_questions', activeCourseId);
+
           if (activeCourseId?.trim().toLowerCase() === 'gre' || !words || words.length <= 3) {
             setAllQuestions(DEFAULT_QUESTIONS);
           } else if (words && words.length > 3) {
@@ -174,6 +163,7 @@ export default function OddOneOutGame({
         }
       } catch (err) {
         console.error('Error loading OOO questions:', err);
+        clearQuestionsCache('odd_one_out_questions', activeCourseId);
         setAllQuestions(DEFAULT_QUESTIONS);
       } finally {
         setLoading(false);

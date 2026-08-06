@@ -35,7 +35,7 @@ import {
   Shuffle,
   Save
 } from 'lucide-react';
-import { db, doc, setDoc, getDoc, collection, getDocs, updateDoc, deleteDoc, saveBulkDocs, deleteBulkDocs } from '../lib/db';
+import { db, doc, setDoc, getDoc, collection, getDocs, updateDoc, deleteDoc, saveBulkDocs, deleteBulkDocs, matchesCourseId } from '../lib/db';
 import { read, utils, writeFile } from 'xlsx';
 
 interface CourseSettingsProps {
@@ -334,11 +334,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   }, [courseRequests, verifiedPayments]);
 
   const matchesCourse = (qCourseId?: string, targetCourseId?: string) => {
-    if (!targetCourseId) return true;
-    const cleanTarget = targetCourseId.trim().toLowerCase();
-    if (!qCourseId) return true;
-    const cleanQ = qCourseId.trim().toLowerCase();
-    return cleanQ === cleanTarget || cleanTarget.includes(cleanQ) || cleanQ.includes(cleanTarget);
+    return matchesCourseId(qCourseId, targetCourseId);
   };
 
   const fetchBlankQuestions = async () => {

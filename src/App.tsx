@@ -12,6 +12,7 @@ import MyCoursesView from './components/MyCoursesView';
 import AnnouncementBanner from './components/AnnouncementBanner';
 import LandingHomePage from './components/LandingHomePage';
 import RevisionCenter from './components/RevisionCenter';
+import { SyncConflictModal, SyncConflictData } from './components/SyncConflictModal';
 
 import {
   LayoutDashboard,
@@ -405,6 +406,10 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
   const isSyncingFromCloud = useRef(false);
   const [hasLoadedFromCloud, setHasLoadedFromCloud] = useState(false);
+
+  // Data Conflict Resolution states
+  const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
+  const [conflictModalData, setConflictModalData] = useState<SyncConflictData | null>(null);
 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
@@ -2241,6 +2246,54 @@ export default function App() {
         isOpen={isAuthModalOpen} 
         onClose={() => setIsAuthModalOpen(false)} 
         onAuthSuccess={() => {}}
+      />
+
+      <SyncConflictModal
+        isOpen={isConflictModalOpen}
+        conflictData={conflictModalData}
+        onClose={() => setIsConflictModalOpen(false)}
+        onKeepLocal={async () => {
+          setIsConflictModalOpen(false);
+          await forceSyncToCloud();
+          addSyncLog('manual', 'Resolved Conflict: Device local state pushed to Cloud', 'success');
+        }}
+        onUseServer={() => {
+          if (!conflictModalData?.cloudRawData) return;
+          const data = conflictModalData.cloudRawData;
+          setIsConflictModalOpen(false);
+          if (data.progress) setProgress(data.progress);
+          if (Array.isArray(data.folders)) setFolders(data.folders);
+          if (data.goal) setGoal(data.goal);
+          addSyncLog('cloud_fetch', 'Resolved Conflict: Replaced local device with Cloud Backup', 'success');
+        }}
+        onMergeBoth={async () => {
+          if (!conflictModalData?.cloudRawData) return;
+          const data = conflictModalData.cloudRawData;
+          setIsConflictModalOpen(false);
+          const cloudProg = (data.progress && typeof data.progress === 'object') ? data.progress : {};
+          const merged = { ...cloudProg };
+          Object.keys(progress).forEach(wordId => {
+            if (!merged[wordId]) {
+              merged[wordId] = progress[wordId];
+            } else {
+              const localTime = new Date(progress[wordId].updatedAt || 0).getTime();
+              const cloudTime = new Date(merged[wordId].updatedAt || 0).getTime();
+              if (localTime >= cloudTime) {
+                merged[wordId] = progress[wordId];
+              }
+            }
+          });
+          setProgress(merged);
+          if (user) {
+            try {
+              await setDoc(doc(db, 'users', user.uid), {
+                progress: merged,
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+            } catch (e) {}
+          }
+          addSyncLog('manual', 'Resolved Conflict: Merged local & cloud progress', 'success');
+        }}
       />
     </div>
   );
