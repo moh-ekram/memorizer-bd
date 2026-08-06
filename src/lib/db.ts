@@ -160,6 +160,19 @@ export async function getDoc(docRef: any) {
       };
     }
 
+    // Check LocalStorage cache fallback if Supabase doc was not found or errored
+    try {
+      const cached = localStorage.getItem(`local_store_${collectionName}_${docId}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        return {
+          exists: () => true,
+          data: () => ({ ...parsed, id: docId }),
+          id: docId
+        };
+      }
+    } catch (_) {}
+
     return { exists: () => false, data: () => null, id: docId };
   } catch (err) {
     return { exists: () => false, data: () => null, id: docRef?.docId || '' };
@@ -239,14 +252,21 @@ export async function incrementCourseClickCount(courseId: string) {
 export async function saveBulkDocs(collectionName: string, items: any[]) {
   if (!items || items.length === 0) return;
   try {
-    for (const item of items) {
-      if (!item.id) continue;
+    const processedItems = items.map((item, index) => {
+      const docId = item.id || `${collectionName}_${Date.now()}_${index}_${Math.random().toString(36).substring(2, 8)}`;
+      return {
+        ...item,
+        id: docId
+      };
+    });
+
+    for (const item of processedItems) {
       try {
         localStorage.setItem(`local_store_${collectionName}_${item.id}`, JSON.stringify(item));
       } catch (_) {}
     }
 
-    const payloads = items.map(item => ({
+    const payloads = processedItems.map(item => ({
       id: item.id,
       ...item,
       data: item
@@ -327,7 +347,7 @@ export async function getDocs(queryOrCollectionRef: any) {
 
       const { data, error } = await builder;
 
-      if (!error && data) {
+      if (!error && data && data.length > 0) {
         data.forEach((row: any) => {
           const rowData = row.data && typeof row.data === 'object'
             ? { ...row, ...row.data, id: row.id || row.data?.id }
@@ -337,6 +357,38 @@ export async function getDocs(queryOrCollectionRef: any) {
             docsMap.set(String(docId), rowData);
           }
         });
+      } else if (queryOrCollectionRef.constraints && queryOrCollectionRef.constraints.length > 0) {
+        // Fallback: If filtered query returned no rows or errored, fetch all rows and filter in JS
+        const { data: allRows } = await supabase.from(collectionName).select('*');
+        if (allRows) {
+          allRows.forEach((row: any) => {
+            const rowData = row.data && typeof row.data === 'object'
+              ? { ...row, ...row.data, id: row.id || row.data?.id }
+              : row;
+            const docId = row.id || rowData.id;
+
+            // Check if row satisfies all constraints in JS
+            let matchesAll = true;
+            for (const c of queryOrCollectionRef.constraints) {
+              if (c.type === 'where' && c.opStr === '==') {
+                const rowVal = rowData[c.field] !== undefined ? rowData[c.field] : row[c.field];
+                if (typeof c.value === 'string') {
+                  if (String(rowVal || '').toLowerCase().trim() !== String(c.value).toLowerCase().trim()) {
+                    matchesAll = false;
+                    break;
+                  }
+                } else if (rowVal !== c.value) {
+                  matchesAll = false;
+                  break;
+                }
+              }
+            }
+
+            if (matchesAll && docId) {
+              docsMap.set(String(docId), rowData);
+            }
+          });
+        }
       }
     } catch (sbErr) {
       console.warn(`Supabase getDocs error for ${collectionName}:`, sbErr);

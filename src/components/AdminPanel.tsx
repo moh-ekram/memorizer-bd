@@ -454,37 +454,56 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         const rechargeAmt = finalPrice;
         const walletRef = doc(db, 'user_wallets', userEmail);
         
-        // Fetch current wallet balance in parallel with other setup
+        // Fetch current wallet balance across user_wallets and users collection
         const walletTask = (async () => {
           const walletSnap = await getDoc(walletRef);
-          const curBal = walletSnap.exists() ? (walletSnap.data().balance || 0) : 0;
+          let curBal = walletSnap.exists() ? (walletSnap.data().balance ?? walletSnap.data().walletBalance ?? 0) : 0;
+
+          // Also check users collection for existing balance
+          try {
+            const uQuery = query(collection(db, 'users'), where('email', '==', userEmail));
+            const uSnap = await getDocs(uQuery);
+            if (!uSnap.empty) {
+              uSnap.forEach(uDoc => {
+                const b = uDoc.data().balance ?? uDoc.data().walletBalance ?? 0;
+                if (typeof b === 'number' && b > curBal) curBal = b;
+              });
+            }
+          } catch (_) {}
+
           const newBal = curBal + rechargeAmt;
           
-          // Set user_wallets document
+          // Set user_wallets document with both balance and walletBalance
           await setDoc(walletRef, {
             email: userEmail,
             balance: newBal,
+            walletBalance: newBal,
             updatedAt: nowISO
           }, { merge: true });
 
           // Also update user document in users collection
-          const uQuery = query(collection(db, 'users'), where('email', '==', userEmail));
-          const uSnap = await getDocs(uQuery);
-          if (!uSnap.empty) {
-            for (const uDoc of uSnap.docs) {
-              await setDoc(doc(db, 'users', uDoc.id), {
+          try {
+            const uQuery = query(collection(db, 'users'), where('email', '==', userEmail));
+            const uSnap = await getDocs(uQuery);
+            if (!uSnap.empty) {
+              for (const uDoc of uSnap.docs) {
+                await setDoc(doc(db, 'users', uDoc.id), {
+                  email: userEmail,
+                  walletBalance: newBal,
+                  balance: newBal,
+                  updatedAt: nowISO
+                }, { merge: true });
+              }
+            } else {
+              await setDoc(doc(db, 'users', userEmail), {
+                email: userEmail,
                 walletBalance: newBal,
                 balance: newBal,
                 updatedAt: nowISO
               }, { merge: true });
             }
-          } else {
-            await setDoc(doc(db, 'users', userEmail), {
-              email: userEmail,
-              walletBalance: newBal,
-              balance: newBal,
-              updatedAt: nowISO
-            }, { merge: true });
+          } catch (uErr) {
+            console.warn("Notice: users collection update exception:", uErr);
           }
 
           return newBal;

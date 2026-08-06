@@ -110,25 +110,85 @@ export default function MyCoursesView({
     }
   }, [user]);
 
-  // Listen to wallet balance in real time whenever accessEmail changes
+  // Listen to wallet balance in real time whenever accessEmail or user changes
   useEffect(() => {
-    if (!accessEmail || !accessEmail.includes('@')) return;
-    const cleanEmail = accessEmail.toLowerCase().trim();
-    const walletRef = doc(db, 'user_wallets', cleanEmail);
+    if ((!accessEmail || !accessEmail.includes('@')) && !user?.email) return;
+    const cleanEmail = (accessEmail || user?.email || '').toLowerCase().trim();
+    if (!cleanEmail) return;
 
-    const unsubscribe = onSnapshot(walletRef, (walletSnap) => {
-      if (walletSnap.exists()) {
-        const bal = walletSnap.data().balance;
-        setUserWalletBalance(typeof bal === 'number' ? bal : 0);
-      } else {
-        setUserWalletBalance(0);
+    let isMounted = true;
+
+    const fetchAndUpdateBalance = async () => {
+      let maxBal = 0;
+
+      // 1. Check user_wallets by cleanEmail
+      try {
+        const walletSnap = await getDoc(doc(db, 'user_wallets', cleanEmail));
+        if (walletSnap.exists()) {
+          const d = walletSnap.data();
+          const b = typeof d?.balance === 'number' ? d.balance : (typeof d?.walletBalance === 'number' ? d.walletBalance : 0);
+          if (b > maxBal) maxBal = b;
+        }
+      } catch (_) {}
+
+      // 2. Check users collection by user.uid if available
+      if (user?.uid) {
+        try {
+          const userSnap = await getDoc(doc(db, 'users', user.uid));
+          if (userSnap.exists()) {
+            const d = userSnap.data();
+            const b = typeof d?.balance === 'number' ? d.balance : (typeof d?.walletBalance === 'number' ? d.walletBalance : 0);
+            if (b > maxBal) maxBal = b;
+          }
+        } catch (_) {}
       }
+
+      // 3. Check users collection by email query as fallback
+      try {
+        const uQuery = query(collection(db, 'users'), where('email', '==', cleanEmail));
+        const uSnap = await getDocs(uQuery);
+        if (!uSnap.empty) {
+          uSnap.forEach(uDoc => {
+            const d = uDoc.data();
+            const b = typeof d?.balance === 'number' ? d.balance : (typeof d?.walletBalance === 'number' ? d.walletBalance : 0);
+            if (b > maxBal) maxBal = b;
+          });
+        }
+      } catch (_) {}
+
+      if (isMounted) {
+        setUserWalletBalance(maxBal);
+      }
+    };
+
+    fetchAndUpdateBalance();
+
+    // Real-time listener on user_wallets
+    const walletRef = doc(db, 'user_wallets', cleanEmail);
+    const unsubWallet = onSnapshot(walletRef, () => {
+      fetchAndUpdateBalance();
     }, (err) => {
       console.warn("Realtime wallet listener notice:", err);
     });
 
-    return () => unsubscribe();
-  }, [accessEmail]);
+    // Real-time listener on users document
+    let unsubUser: (() => void) | undefined;
+    if (user?.uid) {
+      const userRef = doc(db, 'users', user.uid);
+      unsubUser = onSnapshot(userRef, () => {
+        fetchAndUpdateBalance();
+      });
+    }
+
+    const intervalId = setInterval(fetchAndUpdateBalance, 10000);
+
+    return () => {
+      isMounted = false;
+      unsubWallet();
+      if (unsubUser) unsubUser();
+      clearInterval(intervalId);
+    };
+  }, [accessEmail, user]);
 
   const toggleCartCourse = (course: Course, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
