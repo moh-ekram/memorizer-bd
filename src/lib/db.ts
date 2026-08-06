@@ -143,24 +143,43 @@ export function limit(n: number) {
 export async function getDoc(docRef: any) {
   try {
     const { collectionName, docId } = docRef;
-    const { data, error } = await supabase
-      .from(collectionName)
-      .select('*')
-      .eq('id', docId)
-      .maybeSingle();
 
-    if (!error && data) {
-      const docData = data.data && typeof data.data === 'object'
-        ? { ...data, ...data.data, id: data.id || docId }
-        : data;
-      return {
-        exists: () => true,
-        data: () => docData,
-        id: docId
-      };
-    }
+    // 1. Try server API
+    try {
+      const res = await fetch(`/api/db/${encodeURIComponent(collectionName)}/doc/${encodeURIComponent(docId)}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.exists && json.data) {
+          return {
+            exists: () => true,
+            data: () => json.data,
+            id: docId
+          };
+        }
+      }
+    } catch (_) {}
 
-    // Check LocalStorage cache fallback if Supabase doc was not found or errored
+    // 2. Try Supabase
+    try {
+      const { data, error } = await supabase
+        .from(collectionName)
+        .select('*')
+        .eq('id', docId)
+        .maybeSingle();
+
+      if (!error && data) {
+        const docData = data.data && typeof data.data === 'object'
+          ? { ...data, ...data.data, id: data.id || docId }
+          : data;
+        return {
+          exists: () => true,
+          data: () => docData,
+          id: docId
+        };
+      }
+    } catch (_) {}
+
+    // 3. Check LocalStorage cache fallback if doc was not found
     try {
       const cached = localStorage.getItem(`local_store_${collectionName}_${docId}`);
       if (cached) {
@@ -196,17 +215,22 @@ export async function setDoc(docRef: any, data: any, options?: { merge?: boolean
       localStorage.setItem(`local_store_${collectionName}_${docId}`, JSON.stringify(dataToSave));
     } catch (_) {}
 
+    // Send to Server API for multi-user cloud persistence
+    try {
+      await fetch(`/api/db/${encodeURIComponent(collectionName)}/doc`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: docId, data: dataToSave, merge: options?.merge })
+      });
+    } catch (e) {
+      console.warn(`setDoc API warning for ${collectionName}:`, e);
+    }
+
     // Supabase upsert
     const payload = { id: docId, ...dataToSave, data: dataToSave };
-    const { error } = await supabase
-      .from(collectionName)
-      .upsert(payload);
-
-    if (error) {
-      try {
-        await supabase.from(collectionName).upsert({ id: docId, data: dataToSave });
-      } catch (_) {}
-    }
+    try {
+      await supabase.from(collectionName).upsert(payload);
+    } catch (_) {}
   } catch (err) {
     console.warn('setDoc exception:', err);
   }
@@ -222,6 +246,12 @@ export async function deleteDoc(docRef: any) {
 
     try {
       localStorage.removeItem(`local_store_${collectionName}_${docId}`);
+    } catch (_) {}
+
+    try {
+      await fetch(`/api/db/${encodeURIComponent(collectionName)}/doc/${encodeURIComponent(docId)}`, {
+        method: 'DELETE'
+      });
     } catch (_) {}
 
     try {
@@ -266,6 +296,17 @@ export async function saveBulkDocs(collectionName: string, items: any[]) {
       } catch (_) {}
     }
 
+    // Send to Server API for multi-user cloud persistence
+    try {
+      await fetch(`/api/db/${encodeURIComponent(collectionName)}/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: processedItems })
+      });
+    } catch (e) {
+      console.warn(`saveBulkDocs API warning for ${collectionName}:`, e);
+    }
+
     const payloads = processedItems.map(item => ({
       id: item.id,
       ...item,
@@ -275,24 +316,9 @@ export async function saveBulkDocs(collectionName: string, items: any[]) {
     const CHUNK_SIZE = 100;
     for (let i = 0; i < payloads.length; i += CHUNK_SIZE) {
       const chunk = payloads.slice(i, i + CHUNK_SIZE);
-      const { error } = await supabase
-        .from(collectionName)
-        .upsert(chunk);
-
-      if (error) {
-        console.warn(`Supabase bulk upsert warning for ${collectionName}, executing fallback jsonb payload upsert:`, error);
-        const fallbackChunk = chunk.map(c => ({
-          id: c.id,
-          data: c.data
-        }));
-        const { error: fallbackErr } = await supabase
-          .from(collectionName)
-          .upsert(fallbackChunk);
-        
-        if (fallbackErr) {
-          console.error(`Supabase fallback bulk upsert error for ${collectionName}:`, fallbackErr);
-        }
-      }
+      try {
+        await supabase.from(collectionName).upsert(chunk);
+      } catch (_) {}
     }
   } catch (err) {
     console.error(`saveBulkDocs exception for ${collectionName}:`, err);
@@ -308,14 +334,19 @@ export async function deleteBulkDocs(collectionName: string, docIds: string[]) {
       } catch (_) {}
     }
 
+    try {
+      await fetch(`/api/db/${encodeURIComponent(collectionName)}/delete-bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ docIds })
+      });
+    } catch (_) {}
+
     const CHUNK_SIZE = 200;
     for (let i = 0; i < docIds.length; i += CHUNK_SIZE) {
       const chunk = docIds.slice(i, i + CHUNK_SIZE);
       try {
-        await supabase
-          .from(collectionName)
-          .delete()
-          .in('id', chunk);
+        await supabase.from(collectionName).delete().in('id', chunk);
       } catch (_) {}
     }
   } catch (err) {
@@ -328,6 +359,24 @@ export async function getDocs(queryOrCollectionRef: any) {
     const collectionName = queryOrCollectionRef.collectionName;
     const docsMap = new Map<string, any>();
 
+    // 1. Fetch from Server API
+    try {
+      const res = await fetch(`/api/db/${encodeURIComponent(collectionName)}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.docs)) {
+          json.docs.forEach((docData: any) => {
+            if (docData && docData.id) {
+              docsMap.set(String(docData.id), docData);
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.warn(`API getDocs error for ${collectionName}:`, e);
+    }
+
+    // 2. Query Supabase
     try {
       let builder: any = supabase.from(collectionName).select('*');
 
@@ -358,7 +407,6 @@ export async function getDocs(queryOrCollectionRef: any) {
           }
         });
       } else if (queryOrCollectionRef.constraints && queryOrCollectionRef.constraints.length > 0) {
-        // Fallback: If filtered query returned no rows or errored, fetch all rows and filter in JS
         const { data: allRows } = await supabase.from(collectionName).select('*');
         if (allRows) {
           allRows.forEach((row: any) => {
@@ -367,7 +415,6 @@ export async function getDocs(queryOrCollectionRef: any) {
               : row;
             const docId = row.id || rowData.id;
 
-            // Check if row satisfies all constraints in JS
             let matchesAll = true;
             for (const c of queryOrCollectionRef.constraints) {
               if (c.type === 'where' && c.opStr === '==') {
@@ -394,25 +441,37 @@ export async function getDocs(queryOrCollectionRef: any) {
       console.warn(`Supabase getDocs error for ${collectionName}:`, sbErr);
     }
 
-    // Fallback to LocalStorage items if offline or cached
+    // 3. Fallback to LocalStorage items AND auto-sync local items to server if missing
+    const unsyncedItems: any[] = [];
     try {
       const prefix = `local_store_${collectionName}_`;
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.startsWith(prefix)) {
           const docId = key.replace(prefix, '');
-          if (!docsMap.has(docId)) {
-            const rawVal = localStorage.getItem(key);
-            if (rawVal) {
-              try {
-                const parsed = JSON.parse(rawVal);
-                docsMap.set(docId, { id: docId, ...parsed });
-              } catch (_) {}
-            }
+          const rawVal = localStorage.getItem(key);
+          if (rawVal) {
+            try {
+              const parsed = JSON.parse(rawVal);
+              const itemObj = { id: docId, ...parsed };
+              if (!docsMap.has(docId)) {
+                docsMap.set(docId, itemObj);
+              }
+              unsyncedItems.push(itemObj);
+            } catch (_) {}
           }
         }
       }
     } catch (_) {}
+
+    // Auto-sync any unsynced local items to server background
+    if (unsyncedItems.length > 0) {
+      fetch(`/api/db/${encodeURIComponent(collectionName)}/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: unsyncedItems })
+      }).catch(() => {});
+    }
 
     const docs = Array.from(docsMap.entries()).map(([id, docData]) => ({
       id,

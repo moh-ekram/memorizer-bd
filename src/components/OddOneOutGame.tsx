@@ -164,7 +164,7 @@ export default function OddOneOutGame({
             });
 
             if (generated.length >= 5) {
-              setAllQuestions(generated.slice(0, 20));
+              setAllQuestions(generated);
             } else {
               setAllQuestions(DEFAULT_QUESTIONS);
             }

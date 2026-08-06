@@ -13,12 +13,52 @@ const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_ab
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-async function getDoc(colName: string, id: string) {
-  const { data, error } = await supabase.from(colName).select('*').eq('id', id).maybeSingle();
-  if (!error && data) {
-    const docData = data.data && typeof data.data === 'object' ? { ...data, ...data.data, id: data.id || id } : data;
-    return { exists: () => true, data: () => docData, id };
+const DATA_DIR = path.join(process.cwd(), "data_store");
+if (!fs.existsSync(DATA_DIR)) {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  } catch (_) {}
+}
+
+function getCollectionFilePath(colName: string): string {
+  const safeName = colName.replace(/[^a-zA-Z0-9_-]/g, "_");
+  return path.join(DATA_DIR, `${safeName}.json`);
+}
+
+function readCollectionFile(colName: string): Record<string, any> {
+  const filePath = getCollectionFilePath(colName);
+  if (!fs.existsSync(filePath)) return {};
+  try {
+    const raw = fs.readFileSync(filePath, "utf-8");
+    return JSON.parse(raw) || {};
+  } catch (e) {
+    return {};
   }
+}
+
+function writeCollectionFile(colName: string, dataMap: Record<string, any>) {
+  const filePath = getCollectionFilePath(colName);
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(dataMap, null, 2), "utf-8");
+  } catch (e) {
+    console.error(`Error writing collection file ${colName}:`, e);
+  }
+}
+
+async function getDoc(colName: string, id: string) {
+  // Check local file store first
+  const fileData = readCollectionFile(colName);
+  if (fileData[id]) {
+    return { exists: () => true, data: () => fileData[id], id };
+  }
+
+  try {
+    const { data, error } = await supabase.from(colName).select('*').eq('id', id).maybeSingle();
+    if (!error && data) {
+      const docData = data.data && typeof data.data === 'object' ? { ...data, ...data.data, id: data.id || id } : data;
+      return { exists: () => true, data: () => docData, id };
+    }
+  } catch (_) {}
   return { exists: () => false, data: () => null, id };
 }
 
@@ -30,27 +70,166 @@ async function setDoc(colName: string, id: string, data: any, options?: { merge?
       dataToSave = { ...existing.data(), ...data };
     }
   }
-  const payload = { id, ...dataToSave, data: dataToSave };
-  await supabase.from(colName).upsert(payload);
+
+  // Update file store
+  const fileData = readCollectionFile(colName);
+  fileData[id] = { ...dataToSave, id };
+  writeCollectionFile(colName, fileData);
+
+  // Attempt Supabase
+  try {
+    const payload = { id, ...dataToSave, data: dataToSave };
+    await supabase.from(colName).upsert(payload);
+  } catch (_) {}
 }
 
 async function getDocs(colName: string) {
-  const { data, error } = await supabase.from(colName).select('*');
-  if (!error && data) {
-    const docs = data.map((row: any) => {
-      const rowData = row.data && typeof row.data === 'object' ? { ...row, ...row.data, id: row.id || row.data?.id } : row;
-      return { id: row.id || rowData.id, data: () => rowData, exists: () => true };
-    });
-    return { docs, empty: docs.length === 0 };
-  }
-  return { docs: [], empty: true };
+  const docsMap = new Map<string, any>();
+
+  // 1. Read file store
+  const fileData = readCollectionFile(colName);
+  Object.entries(fileData).forEach(([id, item]) => {
+    docsMap.set(id, item);
+  });
+
+  // 2. Try Supabase
+  try {
+    const { data, error } = await supabase.from(colName).select('*');
+    if (!error && data) {
+      data.forEach((row: any) => {
+        const rowData = row.data && typeof row.data === 'object' ? { ...row, ...row.data, id: row.id || row.data?.id } : row;
+        const docId = row.id || rowData.id;
+        if (docId) docsMap.set(String(docId), rowData);
+      });
+    }
+  } catch (_) {}
+
+  const docs = Array.from(docsMap.entries()).map(([id, docData]) => ({
+    id,
+    data: () => docData,
+    exists: () => true
+  }));
+
+  return { docs, empty: docs.length === 0 };
 }
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '50mb' }));
+
+  // Generic DB API endpoints for persistent multi-user data storage
+  app.get("/api/db/:colName", async (req, res) => {
+    try {
+      const { colName } = req.params;
+      const snap = await getDocs(colName);
+      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      res.json({ success: true, docs });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err?.message || String(err), docs: [] });
+    }
+  });
+
+  app.get("/api/db/:colName/doc/:docId", async (req, res) => {
+    try {
+      const { colName, docId } = req.params;
+      const snap = await getDoc(colName, docId);
+      if (snap.exists()) {
+        res.json({ success: true, exists: true, data: snap.data() });
+      } else {
+        res.json({ success: true, exists: false, data: null });
+      }
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err?.message || String(err) });
+    }
+  });
+
+  app.post("/api/db/:colName/bulk", async (req, res) => {
+    try {
+      const { colName } = req.params;
+      const items = req.body.items || [];
+      if (!Array.isArray(items) || items.length === 0) {
+        return res.json({ success: true, count: 0 });
+      }
+
+      const fileData = readCollectionFile(colName);
+      items.forEach((item, index) => {
+        const docId = item.id || `${colName}_${Date.now()}_${index}_${Math.random().toString(36).substring(2, 8)}`;
+        fileData[docId] = { ...item, id: docId };
+      });
+
+      writeCollectionFile(colName, fileData);
+
+      // Attempt Supabase
+      try {
+        const payloads = items.map(item => ({ id: item.id, ...item, data: item }));
+        const CHUNK_SIZE = 100;
+        for (let i = 0; i < payloads.length; i += CHUNK_SIZE) {
+          const chunk = payloads.slice(i, i + CHUNK_SIZE);
+          try {
+            await supabase.from(colName).upsert(chunk);
+          } catch (_) {}
+        }
+      } catch (_) {}
+
+      res.json({ success: true, count: items.length });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err?.message || String(err) });
+    }
+  });
+
+  app.post("/api/db/:colName/doc", async (req, res) => {
+    try {
+      const { colName } = req.params;
+      const { id, data, merge } = req.body;
+      if (!id) {
+        return res.status(400).json({ success: false, error: "Missing document id" });
+      }
+      await setDoc(colName, id, data, { merge });
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err?.message || String(err) });
+    }
+  });
+
+  app.delete("/api/db/:colName/doc/:docId", async (req, res) => {
+    try {
+      const { colName, docId } = req.params;
+      const fileData = readCollectionFile(colName);
+      delete fileData[docId];
+      writeCollectionFile(colName, fileData);
+
+      try {
+        await supabase.from(colName).delete().eq('id', docId);
+      } catch (_) {}
+
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err?.message || String(err) });
+    }
+  });
+
+  app.post("/api/db/:colName/delete-bulk", async (req, res) => {
+    try {
+      const { colName } = req.params;
+      const docIds = req.body.docIds || [];
+      if (Array.isArray(docIds) && docIds.length > 0) {
+        const fileData = readCollectionFile(colName);
+        docIds.forEach(id => {
+          delete fileData[id];
+        });
+        writeCollectionFile(colName, fileData);
+
+        try {
+          await supabase.from(colName).delete().in('id', docIds);
+        } catch (_) {}
+      }
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err?.message || String(err) });
+    }
+  });
 
   // API Route for server-side transaction verification and marking as 'spent'
   app.post("/api/verify-transaction", async (req, res) => {
