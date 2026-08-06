@@ -231,6 +231,35 @@ async function startServer() {
     }
   });
 
+  app.post("/api/db/:colName/clear", async (req, res) => {
+    try {
+      const { colName } = req.params;
+      const { courseId } = req.body || {};
+
+      const fileData = readCollectionFile(colName);
+      if (courseId) {
+        Object.keys(fileData).forEach(id => {
+          const item = fileData[id];
+          if (!item?.courseId || item.courseId === courseId) {
+            delete fileData[id];
+          }
+        });
+        writeCollectionFile(colName, fileData);
+        try {
+          await supabase.from(colName).delete().eq('courseId', courseId);
+        } catch (_) {}
+      } else {
+        writeCollectionFile(colName, {});
+        try {
+          await supabase.from(colName).delete().neq('id', '___NON_EXISTENT_ID___');
+        } catch (_) {}
+      }
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err?.message || String(err) });
+    }
+  });
+
   // API Route for server-side transaction verification and marking as 'spent'
   app.post("/api/verify-transaction", async (req, res) => {
     try {

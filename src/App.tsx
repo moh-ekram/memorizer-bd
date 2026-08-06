@@ -2233,9 +2233,24 @@ export default function App() {
               words={activeWords} 
               settings={settings}
               onUpdateSettings={setSettings}
-              onCoursesUpdated={(updatedCourses) => {
+              onCoursesUpdated={async (updatedCourses) => {
                 setCustomCourses(updatedCourses);
                 localStorage.setItem('vocab_memorizer_cached_custom_courses', JSON.stringify(updatedCourses));
+
+                // Verify user write access permission and persist courses data to Supabase DB via setDoc
+                const hasWriteAccess = user && (user.email === 'mohammad.001ekram@gmail.com' || settings.adminEmails?.includes(user.email || ''));
+                if (hasWriteAccess && Array.isArray(updatedCourses) && updatedCourses.length > 0) {
+                  try {
+                    for (const course of updatedCourses) {
+                      if (course && course.id) {
+                        const courseRef = doc(db, 'courses', course.id);
+                        await setDoc(courseRef, course, { merge: true });
+                      }
+                    }
+                  } catch (err) {
+                    console.error('Error persisting course data to Supabase:', err);
+                  }
+                }
               }}
             />
           )}

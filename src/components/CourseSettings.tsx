@@ -35,8 +35,18 @@ import {
   Shuffle,
   Save
 } from 'lucide-react';
-import { db, doc, setDoc, getDoc, collection, getDocs, updateDoc, deleteDoc, saveBulkDocs, deleteBulkDocs, matchesCourseId } from '../lib/db';
+import { db, doc, setDoc, getDoc, collection, getDocs, updateDoc, deleteDoc, saveBulkDocs, deleteBulkDocs, matchesCourseId, clearCollectionDocs } from '../lib/db';
 import { read, utils, writeFile } from 'xlsx';
+import {
+  downloadBlankExcelTemplate,
+  parseBlankExcel,
+  downloadOooExcelTemplate,
+  parseOooExcel,
+  downloadAnalogyExcelTemplate,
+  parseAnalogyExcel,
+  downloadMcqExcelTemplate,
+  parseMcqExcel
+} from '../lib/gameExcelUtils';
 
 interface CourseSettingsProps {
   course: Course;
@@ -432,90 +442,27 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     }
   }, [activeTab]);
 
-  const handleUploadBlankExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadBlankExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setExcelUploadError(null);
     setExcelQuestionsPreview([]);
     
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
-        const workbook = read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const rawRows = utils.sheet_to_json(sheet, { header: 1 }) as any[][];
-
-        if (rawRows.length === 0) {
-          setExcelUploadError('No data found in the selected Excel sheet.');
-          return;
+    try {
+      const { questions, notices } = await parseBlankExcel(file, course.id);
+      if (questions.length === 0) {
+        setExcelUploadError(notices[0] || 'No valid questions found in the selected Excel file.');
+      } else {
+        setExcelQuestionsPreview(questions);
+        if (notices.length > 0) {
+          console.warn('Blank Excel notices:', notices);
         }
-
-        const questionsList: BlankQuestion[] = [];
-
-        for (let idx = 0; idx < rawRows.length; idx++) {
-          const row = rawRows[idx];
-          if (!row || row.length < 3) continue;
-
-          const rawId = row[0] ? String(row[0]).trim() : '';
-          const sentence = row[1] ? String(row[1]).trim() : '';
-
-          // Skip header row
-          if (idx === 0 && (rawId.toLowerCase() === 'id' || rawId.toLowerCase() === 'unique id' || rawId.toLowerCase() === 'uid' || sentence.toLowerCase().includes('sentence') || sentence.toLowerCase().includes('blank'))) {
-            continue;
-          }
-
-          if (!rawId) {
-            setExcelUploadError(`Error at Row ${idx + 1}: The first column must contain a mandatory unique ID.`);
-            return;
-          }
-
-          if (!sentence) continue;
-
-          const opts: string[] = [];
-          let answer = '';
-
-          for (let col = 2; col <= 5; col++) {
-            const val = row[col] !== undefined && row[col] !== null ? String(row[col]).trim() : '';
-            if (val) {
-              if (val.includes('#')) {
-                const cleanVal = val.replace('#', '').trim();
-                opts.push(cleanVal);
-                answer = cleanVal;
-              } else {
-                opts.push(val);
-              }
-            }
-          }
-
-          const explanation = row[6] ? String(row[6]).trim() : '';
-
-          if (opts.length > 0 && answer) {
-            questionsList.push({
-              id: rawId,
-              sentence,
-              options: opts,
-              answer,
-              explanation,
-              courseId: course.id,
-              createdAt: new Date().toISOString()
-            });
-          }
-        }
-
-        if (questionsList.length === 0) {
-          setExcelUploadError('No valid questions found. Ensure one of the option columns contains a "#" to indicate the correct answer.');
-        } else {
-          setExcelQuestionsPreview(questionsList);
-        }
-      } catch (err) {
-        console.error('Error parsing blank excel:', err);
-        setExcelUploadError('Failed to parse Excel file. Make sure it is a valid .xlsx or .xls file.');
       }
-    };
-    reader.readAsArrayBuffer(file);
+    } catch (err: any) {
+      console.error('Error parsing blank excel:', err);
+      setExcelUploadError('Failed to parse Excel file. Make sure it is a valid .xlsx or .xls file.');
+    }
   };
 
   const handleSaveBlankExcelQuestions = async () => {
@@ -600,86 +547,27 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   };
 
   // --- OOO QUESTIONS EXCEL & MANUAL HANDLERS ---
-  const handleUploadOooExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadOooExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setExcelOooUploadError(null);
     setExcelOooPreview([]);
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
-        const workbook = read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const rawRows = utils.sheet_to_json(sheet, { header: 1 }) as any[][];
-
-        if (rawRows.length === 0) {
-          setExcelOooUploadError('No data found in the selected Excel sheet.');
-          return;
+    try {
+      const { questions, notices } = await parseOooExcel(file, course.id);
+      if (questions.length === 0) {
+        setExcelOooUploadError(notices[0] || 'No valid Odd One Out questions found in the selected Excel file.');
+      } else {
+        setExcelOooPreview(questions);
+        if (notices.length > 0) {
+          console.warn('OOO Excel notices:', notices);
         }
-
-        const questionsList: OddOneOutQuestion[] = [];
-
-        for (let idx = 0; idx < rawRows.length; idx++) {
-          const row = rawRows[idx];
-          if (!row || row.length < 5) continue;
-
-          const rawId = row[0] ? String(row[0]).trim() : '';
-
-          // Skip header row
-          if (idx === 0 && (rawId.toLowerCase() === 'id' || rawId.toLowerCase() === 'unique id' || rawId.toLowerCase() === 'uid')) {
-            continue;
-          }
-
-          if (!rawId) {
-            setExcelOooUploadError(`Error at Row ${idx + 1}: The first column must contain a mandatory unique ID.`);
-            return;
-          }
-
-          const wordsOpts: string[] = [];
-          let answer = '';
-
-          for (let col = 1; col <= 4; col++) {
-            const val = row[col] !== undefined && row[col] !== null ? String(row[col]).trim() : '';
-            if (val) {
-              if (val.includes('#')) {
-                const cleanVal = val.replace('#', '').trim();
-                wordsOpts.push(cleanVal);
-                answer = cleanVal;
-              } else {
-                wordsOpts.push(val);
-              }
-            }
-          }
-
-          const reason = row[5] ? String(row[5]).trim() : '';
-
-          if (wordsOpts.length === 4 && answer) {
-            questionsList.push({
-              id: rawId,
-              words: wordsOpts,
-              answer,
-              reason,
-              courseId: course.id,
-              createdAt: new Date().toISOString()
-            });
-          }
-        }
-
-        if (questionsList.length === 0) {
-          setExcelOooUploadError('No valid questions found. Ensure one of the 4 words contains a "#" to mark the odd one out.');
-        } else {
-          setExcelOooPreview(questionsList);
-        }
-      } catch (err) {
-        console.error('Error parsing OOO excel:', err);
-        setExcelOooUploadError('Failed to parse Excel file.');
       }
-    };
-    reader.readAsArrayBuffer(file);
+    } catch (err: any) {
+      console.error('Error parsing OOO excel:', err);
+      setExcelOooUploadError('Failed to parse Excel file.');
+    }
   };
 
   const handleSaveOooExcelQuestions = async () => {
@@ -761,99 +649,27 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   };
 
   // --- ANALOGY QUESTIONS EXCEL & MANUAL HANDLERS ---
-  const handleUploadAnalogyExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadAnalogyExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setExcelAnalogyUploadError(null);
     setExcelAnalogyPreview([]);
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
-        const workbook = read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const rawRows = utils.sheet_to_json(sheet, { header: 1 }) as any[][];
-
-        if (rawRows.length === 0) {
-          setExcelAnalogyUploadError('No data found in the selected Excel sheet.');
-          return;
+    try {
+      const { questions, notices } = await parseAnalogyExcel(file, course.id);
+      if (questions.length === 0) {
+        setExcelAnalogyUploadError(notices[0] || 'No valid Word Analogy questions found in the selected Excel file.');
+      } else {
+        setExcelAnalogyPreview(questions);
+        if (notices.length > 0) {
+          console.warn('Analogy Excel notices:', notices);
         }
-
-        const questionsList: WordAnalogyQuestion[] = [];
-
-        for (let idx = 0; idx < rawRows.length; idx++) {
-          const row = rawRows[idx];
-          if (!row || row.length < 2) continue;
-
-          let rawId = row[0] ? String(row[0]).trim() : '';
-          let analogy = row[1] ? String(row[1]).trim() : '';
-
-          // If row 1 is question and row 0 is missing, shift
-          if (!analogy && rawId && (idx > 0 || !rawId.toLowerCase().includes('id'))) {
-            analogy = rawId;
-            rawId = '';
-          }
-
-          // Skip header row
-          if (idx === 0 && (rawId.toLowerCase().includes('id') || analogy.toLowerCase().includes('analogy') || analogy.toLowerCase().includes('question'))) {
-            continue;
-          }
-
-          if (!analogy) continue;
-
-          if (!rawId) {
-            rawId = `ana-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 5)}`;
-          }
-
-          const opts: string[] = [];
-          let answer = '';
-
-          for (let col = 2; col <= 5; col++) {
-            const val = row[col] !== undefined && row[col] !== null ? String(row[col]).trim() : '';
-            if (val) {
-              if (val.includes('#')) {
-                const cleanVal = val.replace('#', '').trim();
-                opts.push(cleanVal);
-                answer = cleanVal;
-              } else {
-                opts.push(val);
-              }
-            }
-          }
-
-          if (opts.length > 0 && !answer) {
-            answer = opts[0];
-          }
-
-          const explanation = row[6] ? String(row[6]).trim() : '';
-
-          if (analogy && opts.length >= 2 && answer) {
-            questionsList.push({
-              id: rawId,
-              analogy,
-              options: opts,
-              answer,
-              explanation,
-              courseId: course.id,
-              createdAt: new Date().toISOString()
-            });
-          }
-        }
-
-        if (questionsList.length === 0) {
-          setExcelAnalogyUploadError('No valid questions found. Ensure one of the option columns (1 to 4) contains a "#" to mark the correct analogy option.');
-        } else {
-          setExcelAnalogyPreview(questionsList);
-        }
-      } catch (err) {
-        console.error('Error parsing analogy excel:', err);
-        setExcelAnalogyUploadError('Failed to parse Excel file.');
       }
-    };
-    reader.readAsArrayBuffer(file);
+    } catch (err: any) {
+      console.error('Error parsing analogy excel:', err);
+      setExcelAnalogyUploadError('Failed to parse Excel file.');
+    }
   };
 
   const handleSaveAnalogyExcelQuestions = async () => {
@@ -937,7 +753,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   };
 
   // --- MCQ QUESTIONS HANDLERS ---
-  const handleUploadMcqExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadMcqExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -945,151 +761,23 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     setExcelMcqNotice(null);
     setExcelMcqPreview([]);
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const bstr = evt.target?.result;
-        const wb = read(bstr, { type: 'binary' });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        const rawRows = utils.sheet_to_json(ws, { header: 1 }) as any[][];
-
-        if (!rawRows || rawRows.length === 0) {
-          setExcelMcqUploadError('The uploaded file is empty.');
-          return;
-        }
-
-        const questionsList: CustomMcqQuestion[] = [];
-        const skippedNotices: string[] = [];
-
-        for (let idx = 0; idx < rawRows.length; idx++) {
-          const row = rawRows[idx];
-          if (!row || row.length < 5) continue;
-
-          const rawId = row[0] !== undefined && row[0] !== null ? String(row[0]).trim() : '';
-          const questionText = row[1] !== undefined && row[1] !== null ? String(row[1]).trim() : '';
-
-          // Skip header row if present
-          if (idx === 0 && (
-            rawId.toLowerCase().includes('id') ||
-            rawId.toLowerCase().includes('unique') ||
-            questionText.toLowerCase().includes('question')
-          )) {
-            continue;
-          }
-
-          if (!rawId) {
-            skippedNotices.push(`Row ${idx + 1}: Column 1 (Mandatory Unique ID) is empty.`);
-            continue;
-          }
-
-          if (!questionText) {
-            skippedNotices.push(`Row ${idx + 1} (${rawId}): Question text is empty.`);
-            continue;
-          }
-
-          // Extract raw options from columns 3 to 6 (0-indexed 2 to 5)
-          const rawOpts: string[] = [];
-          for (let col = 2; col <= 5; col++) {
-            const val = row[col] !== undefined && row[col] !== null ? String(row[col]).trim() : '';
-            rawOpts.push(val);
-          }
-
-          if (rawOpts.some(o => o === '')) {
-            skippedNotices.push(`Row ${idx + 1} (${rawId}): One or more option columns are empty.`);
-            continue;
-          }
-
-          let answer = '';
-          let explanation = '';
-          const cleanOpts: string[] = [];
-          let hashFound = false;
-
-          // Check Format 1: trailing '#' in any option
-          for (const optVal of rawOpts) {
-            if (optVal.includes('#')) {
-              hashFound = true;
-              const cleaned = optVal.replace(/#/g, '').trim();
-              cleanOpts.push(cleaned);
-              answer = cleaned;
-            } else {
-              cleanOpts.push(optVal.trim());
-            }
-          }
-
-          if (hashFound) {
-            // Format 1: Column 7 (0-indexed 6) is optional Reason/explanation
-            explanation = row[6] !== undefined && row[6] !== null ? String(row[6]).trim() : '';
-          } else {
-            // Format 2: Column 7 (0-indexed 6) is correct answer text
-            const col7Ans = row[6] !== undefined && row[6] !== null ? String(row[6]).trim() : '';
-            // Column 8 (0-indexed 7) is optional Reason/explanation
-            explanation = row[7] !== undefined && row[7] !== null ? String(row[7]).trim() : '';
-
-            if (!col7Ans) {
-              skippedNotices.push(`Row ${idx + 1} (${rawId}): No trailing '#' found in options (Format 1) and Column 7 (correct answer) is empty (Format 2).`);
-              continue;
-            }
-
-            // Normalization helper to match answer flexibly across Bengali/English character sets
-            const normalizeStr = (str: string) => str.trim().toLowerCase().replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\s+/g, ' ');
-
-            // Try direct match, normalized match, or stripped punctuation match
-            let matched = rawOpts.find(o => o.trim() === col7Ans);
-            if (!matched) {
-              matched = rawOpts.find(o => normalizeStr(o) === normalizeStr(col7Ans));
-            }
-            if (!matched) {
-              const clean7 = normalizeStr(col7Ans).replace(/[^a-z0-9\u0980-\u09FF]/g, '');
-              if (clean7) {
-                matched = rawOpts.find(o => {
-                  const cleanO = normalizeStr(o).replace(/[^a-z0-9\u0980-\u09FF]/g, '');
-                  return cleanO === clean7;
-                });
-              }
-            }
-
-            if (!matched) {
-              // Option mismatch: skip this row and record notice so user can add manually!
-              skippedNotices.push(`Row ${idx + 1} (${rawId}): Column 7 answer "${col7Ans}" does not match any of the 4 options: [${rawOpts.join(', ')}].`);
-              continue;
-            }
-
-            cleanOpts.length = 0;
-            rawOpts.forEach(o => cleanOpts.push(o.trim()));
-            answer = matched.trim();
-          }
-
-          if (cleanOpts.length === 4 && answer) {
-            questionsList.push({
-              id: rawId,
-              question: questionText,
-              options: cleanOpts,
-              answer,
-              explanation,
-              courseId: course.id,
-              createdAt: new Date().toISOString()
-            });
-          }
-        }
-
-        if (skippedNotices.length > 0) {
-          setExcelMcqNotice(skippedNotices);
-        } else {
-          setExcelMcqNotice(null);
-        }
-
-        if (questionsList.length === 0) {
-          setExcelMcqUploadError('No valid MCQ questions parsed from the file.');
-        } else {
-          setExcelMcqPreview(questionsList);
-        }
-      } catch (err) {
-        console.error('Error parsing MCQ excel:', err);
-        setExcelMcqUploadError('Failed to parse file.');
+    try {
+      const { questions, notices } = await parseMcqExcel(file, course.id);
+      if (notices.length > 0) {
+        setExcelMcqNotice(notices);
+      } else {
+        setExcelMcqNotice(null);
       }
-    };
-    reader.readAsBinaryString(file);
+
+      if (questions.length === 0) {
+        setExcelMcqUploadError('No valid MCQ questions parsed from the file.');
+      } else {
+        setExcelMcqPreview(questions);
+      }
+    } catch (err: any) {
+      console.error('Error parsing MCQ excel:', err);
+      setExcelMcqUploadError('Failed to parse file.');
+    }
   };
 
   const handleSaveMcqExcelQuestions = async () => {
@@ -3737,13 +3425,23 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Excel Upload Card */}
                   <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-200/60 space-y-4">
-                    <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                      <FileSpreadsheet className="w-4.5 h-4.5 text-emerald-600" />
-                      <span className="text-xs font-black text-slate-800">Upload via Excel</span>
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <FileSpreadsheet className="w-4.5 h-4.5 text-emerald-600" />
+                        <span className="text-xs font-black text-slate-800">Upload via Excel</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={downloadBlankExcelTemplate}
+                        className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-extrabold rounded-lg transition flex items-center gap-1 cursor-pointer"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5" />
+                        <span>Download Template</span>
+                      </button>
                     </div>
 
-                    <p className="text-[11px] text-slate-400 leading-relaxed">
-                      <strong>Format:</strong> Column 1: Mandatory Unique ID (e.g. <code>bq-101</code>). Column 2: Sentence with blank (e.g. "Success is not ___."). Columns 3-6: Options. Mark the correct option with a trailing "#" (e.g., "final#"). Column 7 (optional): Explanation.
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      <strong>Flexible Layout:</strong> Col 1: Unique ID (optional/auto-generated). Col 2: Sentence/Question. Col 3-6: Options. Indicate correct answer with trailing "<code>#</code>" (e.g., <code>option#</code>) OR specify option in Col 7. Col 8: Explanation.
                     </p>
 
                     {/* Drag & Drop Zone */}
@@ -3989,13 +3687,23 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Excel Upload Card */}
                   <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-200/60 space-y-4">
-                    <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                      <FileSpreadsheet className="w-4.5 h-4.5 text-sky-650" />
-                      <span className="text-xs font-black text-slate-800">Upload via Excel</span>
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <FileSpreadsheet className="w-4.5 h-4.5 text-sky-650" />
+                        <span className="text-xs font-black text-slate-800">Upload via Excel</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={downloadOooExcelTemplate}
+                        className="px-2.5 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 text-[11px] font-extrabold rounded-lg transition flex items-center gap-1 cursor-pointer"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5" />
+                        <span>Download Template</span>
+                      </button>
                     </div>
 
-                    <p className="text-[11px] text-slate-400 leading-relaxed">
-                      <strong>Format:</strong> Column 1: Mandatory Unique ID (e.g. <code>ooo-101</code>). Columns 2-5: 4 Words. Mark the odd-one-out word with a trailing "#" (e.g. "harmful#"). Column 6 (optional): Reason / explanation.
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      <strong>Flexible Layout:</strong> Col 1: Unique ID (optional/auto-generated). Col 2-5: 4 Words. Indicate odd word with trailing "<code>#</code>" (e.g., <code>word#</code>) OR specify answer in Col 6. Col 7: Reason / explanation.
                     </p>
 
                     {/* Drag & Drop Zone */}
@@ -4208,13 +3916,23 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Excel Upload Card */}
                   <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-200/60 space-y-4">
-                    <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                      <FileSpreadsheet className="w-4.5 h-4.5 text-purple-650" />
-                      <span className="text-xs font-black text-slate-800">Upload via Excel</span>
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <FileSpreadsheet className="w-4.5 h-4.5 text-purple-650" />
+                        <span className="text-xs font-black text-slate-800">Upload via Excel</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={downloadAnalogyExcelTemplate}
+                        className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-[11px] font-extrabold rounded-lg transition flex items-center gap-1 cursor-pointer"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5" />
+                        <span>Download Template</span>
+                      </button>
                     </div>
 
-                    <p className="text-[11px] text-slate-400 leading-relaxed">
-                      <strong>Format:</strong> Column 1: Mandatory Unique ID (e.g. <code>ana-101</code>). Column 2: Base analogy (e.g. "hot : cold"). Columns 3-6: Pair options. Mark the correct answer option pair with a trailing "#" (e.g. "up : down#"). Column 7 (optional): Explanation.
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      <strong>Flexible Layout:</strong> Col 1: Unique ID (optional/auto-generated). Col 2: Stem Analogy (e.g., <code>LIGHT : BLIND</code>). Col 3-6: Pair Options. Indicate correct pair with trailing "<code>#</code>" (e.g., <code>speech : deaf#</code>) OR specify option in Col 7. Col 8: Explanation.
                     </p>
 
                     {/* Drag & Drop Zone */}
@@ -4448,9 +4166,19 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Excel Upload Card */}
                   <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-200/60 space-y-4">
-                    <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                      <FileSpreadsheet className="w-4.5 h-4.5 text-indigo-600" />
-                      <span className="text-xs font-black text-slate-800">Upload via Excel / CSV</span>
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <FileSpreadsheet className="w-4.5 h-4.5 text-indigo-600" />
+                        <span className="text-xs font-black text-slate-800">Upload via Excel / CSV</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={downloadMcqExcelTemplate}
+                        className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-[11px] font-extrabold rounded-lg transition flex items-center gap-1 cursor-pointer"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5" />
+                        <span>Download Template</span>
+                      </button>
                     </div>
 
                     <div className="space-y-2 text-[11px] text-slate-600 bg-white p-3 rounded-xl border border-slate-200/80 font-sans">

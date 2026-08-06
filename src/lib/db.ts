@@ -355,6 +355,41 @@ export async function deleteBulkDocs(collectionName: string, docIds: string[]) {
   }
 }
 
+export async function clearCollectionDocs(collectionName: string, courseId?: string) {
+  try {
+    // 1. Clear LocalStorage matching collectionName
+    const prefix = `local_store_${collectionName}_`;
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith(prefix) || key.includes(collectionName))) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+
+    // 2. Call server API clear
+    try {
+      await fetch(`/api/db/${encodeURIComponent(collectionName)}/clear`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId })
+      });
+    } catch (_) {}
+
+    // 3. Clear directly in Supabase
+    try {
+      if (courseId) {
+        await supabase.from(collectionName).delete().eq('courseId', courseId);
+      } else {
+        await supabase.from(collectionName).delete().neq('id', '___NON_EXISTENT_ID___');
+      }
+    } catch (_) {}
+  } catch (err) {
+    console.error(`clearCollectionDocs error for ${collectionName}:`, err);
+  }
+}
+
 export async function getDocs(queryOrCollectionRef: any) {
   try {
     const collectionName = queryOrCollectionRef.collectionName;
