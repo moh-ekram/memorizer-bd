@@ -24,39 +24,6 @@ interface OddOneOutGameProps {
   onBack: () => void;
 }
 
-const DEFAULT_QUESTIONS: OddOneOutQuestion[] = [
-  {
-    id: 'ooo-def-1',
-    words: ["benevolent", "generous", "kind", "malevolent"],
-    answer: "malevolent",
-    reason: "malevolent means showing ill-will, whereas others mean kind and giving."
-  },
-  {
-    id: 'ooo-def-2',
-    words: ["ephemeral", "transient", "fleeting", "permanent"],
-    answer: "permanent",
-    reason: "permanent means lasting forever, whereas others mean short-lived."
-  },
-  {
-    id: 'ooo-def-3',
-    words: ["frugal", "thrifty", "economical", "extravagant"],
-    answer: "extravagant",
-    reason: "extravagant means wasteful with money, whereas others mean wise spending."
-  },
-  {
-    id: 'ooo-def-4',
-    words: ["lucid", "coherent", "clear", "opaque"],
-    answer: "opaque",
-    reason: "opaque means difficult to understand or see through, whereas others mean clear."
-  },
-  {
-    id: 'ooo-def-5',
-    words: ["loquacious", "garrulous", "talkative", "taciturn"],
-    answer: "taciturn",
-    reason: "taciturn means reserved or uncommunicative in speech, whereas others mean talkative."
-  }
-];
-
 export default function OddOneOutGame({
   progress,
   onUpdateProgress,
@@ -111,66 +78,19 @@ export default function OddOneOutGame({
         if (loaded.length > 0) {
           setAllQuestions(loaded);
         } else {
-          // Clear stale questions cache if falling back to default/generated questions
           clearQuestionsCache('odd_one_out_questions', activeCourseId);
-
-          if (activeCourseId?.trim().toLowerCase() === 'gre' || !words || words.length <= 3) {
-            setAllQuestions(DEFAULT_QUESTIONS);
-          } else if (words && words.length > 3) {
-            // Smart automatic generation based on vocabulary synonyms!
-            const generated: OddOneOutQuestion[] = [];
-            
-            // Loop through words and see if we have synonyms declared
-            words.forEach((w, idx) => {
-              const synonymsList = w.synonyms
-                ? w.synonyms
-                    .split(',')
-                    .map(s => s.trim().toLowerCase())
-                    .filter(s => s.length > 0 && s.length < 25 && !s.includes(' '))
-                : [];
-              
-              if (synonymsList.length >= 2 && w.word && !w.word.includes(' ')) {
-                // Find a single distractor word that is NOT in the synonyms list
-                const distractors = words
-                  .filter(other => other.id !== w.id && !other.word.includes(' ') && !synonymsList.includes(other.word.toLowerCase()) && other.word.toLowerCase() !== w.word.toLowerCase())
-                  .map(other => other.word);
-                
-                if (distractors.length > 0) {
-                  const oddWord = distractors[Math.floor(Math.random() * distractors.length)];
-                  const oooWords = [w.word, synonymsList[0], synonymsList[1], oddWord];
-                  // Shuffle choices
-                  const shuffled = [...oooWords].sort(() => 0.5 - Math.random());
-                  
-                  generated.push({
-                    id: `ooo-gen-${w.id}-${idx}`,
-                    words: shuffled,
-                    answer: oddWord,
-                    reason: `"${oddWord}" is the odd one out because the other three words ("${w.word}", "${synonymsList[0]}", "${synonymsList[1]}") share similar meanings.`,
-                    courseId: activeCourseId
-                  });
-                }
-              }
-            });
-
-            if (generated.length >= 5) {
-              setAllQuestions(generated);
-            } else {
-              setAllQuestions(DEFAULT_QUESTIONS);
-            }
-          } else {
-            setAllQuestions(DEFAULT_QUESTIONS);
-          }
+          setAllQuestions([]);
         }
       } catch (err) {
         console.error('Error loading OOO questions:', err);
         clearQuestionsCache('odd_one_out_questions', activeCourseId);
-        setAllQuestions(DEFAULT_QUESTIONS);
+        setAllQuestions([]);
       } finally {
         setLoading(false);
       }
     };
     fetchQuestions();
-  }, [activeCourseId, words]);
+  }, [activeCourseId]);
 
   const applyFilter = (filterType: 'yet_to_try' | 'incorrect' | 'done', pool = allQuestions) => {
     setActiveFilter(filterType);

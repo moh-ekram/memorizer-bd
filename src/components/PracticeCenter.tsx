@@ -268,48 +268,18 @@ export default function PracticeCenter({
     const synonymPercent = synonymTotal > 0 ? Math.min(100, Math.round((synonymCompleted / synonymTotal) * 100)) : 0;
 
     // 4. Blank Filling Stats
-    let blankTotal = blankQs.length;
-    let blankCompleted = 0;
-    if (blankTotal > 0) {
-      blankCompleted = blankQs.filter(q => blankProgress[q.id] !== undefined).length;
-    } else if (isGre) {
-      blankTotal = 5;
-      const defIds = ['bq-def-1', 'bq-def-2', 'bq-def-3', 'bq-def-4', 'bq-def-5'];
-      blankCompleted = defIds.filter(id => blankProgress[id] !== undefined).length;
-    } else if (words.length > 0) {
-      blankTotal = Math.min(20, words.length);
-      blankCompleted = Object.keys(blankProgress).length;
-    }
+    const blankTotal = blankQs.length;
+    const blankCompleted = blankTotal > 0 ? blankQs.filter(q => blankProgress[q.id] !== undefined).length : 0;
     const blankPercent = blankTotal > 0 ? Math.min(100, Math.round((blankCompleted / blankTotal) * 100)) : 0;
 
     // 5. Odd One Out Stats
-    let oooTotal = oooQs.length;
-    let oooCompleted = 0;
-    if (oooTotal > 0) {
-      oooCompleted = oooQs.filter(q => oooProgress[q.id] !== undefined).length;
-    } else if (isGre) {
-      oooTotal = 5;
-      const defIds = ['ooo-def-1', 'ooo-def-2', 'ooo-def-3', 'ooo-def-4', 'ooo-def-5'];
-      oooCompleted = defIds.filter(id => oooProgress[id] !== undefined).length;
-    } else if (words.length > 3) {
-      oooTotal = Math.min(20, words.length);
-      oooCompleted = Object.keys(oooProgress).length;
-    }
+    const oooTotal = oooQs.length;
+    const oooCompleted = oooTotal > 0 ? oooQs.filter(q => oooProgress[q.id] !== undefined).length : 0;
     const oooPercent = oooTotal > 0 ? Math.min(100, Math.round((oooCompleted / oooTotal) * 100)) : 0;
 
     // 6. Word Analogy Stats
-    let analogyTotal = analogyQs.length;
-    let analogyCompleted = 0;
-    if (analogyTotal > 0) {
-      analogyCompleted = analogyQs.filter(q => analogyProgress[q.id] !== undefined).length;
-    } else if (isGre) {
-      analogyTotal = 5;
-      const defIds = ['ana-def-1', 'ana-def-2', 'ana-def-3', 'ana-def-4', 'ana-def-5'];
-      analogyCompleted = defIds.filter(id => analogyProgress[id] !== undefined).length;
-    } else if (words.length > 3) {
-      analogyTotal = Math.min(20, words.length);
-      analogyCompleted = Object.keys(analogyProgress).length;
-    }
+    const analogyTotal = analogyQs.length;
+    const analogyCompleted = analogyTotal > 0 ? analogyQs.filter(q => analogyProgress[q.id] !== undefined).length : 0;
     const analogyPercent = analogyTotal > 0 ? Math.min(100, Math.round((analogyCompleted / analogyTotal) * 100)) : 0;
 
     // Overall across all games

@@ -24,44 +24,6 @@ interface WordAnalogyGameProps {
   onBack: () => void;
 }
 
-const DEFAULT_QUESTIONS: WordAnalogyQuestion[] = [
-  {
-    id: 'ana-def-1',
-    analogy: "Meticulous : Care",
-    options: ["Garrulous : Talk", "Taciturn : Words", "Frugal : Money", "Soporific : Sleep"],
-    answer: "Garrulous : Talk",
-    explanation: "A meticulous person is characterized by extreme care. Similarly, a garrulous person is characterized by excessive talk/chatter."
-  },
-  {
-    id: 'ana-def-2',
-    analogy: "Ephemeral : Eternity",
-    options: ["Transient : Time", "Fleeting : Hour", "Taciturn : Speech", "Infinite : Space"],
-    answer: "Taciturn : Speech",
-    explanation: "Ephemeral represents a lack of eternity. Similarly, taciturn represents a lack of speech/talking."
-  },
-  {
-    id: 'ana-def-3',
-    analogy: "Benevolent : Kindness",
-    options: ["Malevolent : Spite", "Magnanimous : Greed", "Honest : Deceit", "Parsimonious : Charity"],
-    answer: "Malevolent : Spite",
-    explanation: "A benevolent person displays kindness. Similarly, a malevolent person displays spite."
-  },
-  {
-    id: 'ana-def-4',
-    analogy: "Antipathy : Affection",
-    options: ["Apathy : Interest", "Sympathy : Love", "Anger : Rage", "Pride : Arrogance"],
-    answer: "Apathy : Interest",
-    explanation: "Antipathy is the opposite of affection. Similarly, apathy is the opposite of interest."
-  },
-  {
-    id: 'ana-def-5',
-    analogy: "Gullible : Deceive",
-    options: ["Docile : Control", "Stubborn : Persuade", "Smart : Teach", "Fearful : Scared"],
-    answer: "Docile : Control",
-    explanation: "A gullible person is easy to deceive. Similarly, a docile person is easy to control."
-  }
-];
-
 export default function WordAnalogyGame({
   progress,
   onUpdateProgress,
@@ -117,20 +79,19 @@ export default function WordAnalogyGame({
         if (loaded.length > 0) {
           setAllQuestions(loaded);
         } else {
-          // Clear questions cache when falling back to default questions
           clearQuestionsCache('word_analogy_questions', activeCourseId);
-          setAllQuestions(DEFAULT_QUESTIONS);
+          setAllQuestions([]);
         }
       } catch (err) {
         console.error('Error loading analogy questions:', err);
         clearQuestionsCache('word_analogy_questions', activeCourseId);
-        setAllQuestions(DEFAULT_QUESTIONS);
+        setAllQuestions([]);
       } finally {
         setLoading(false);
       }
     };
     fetchQuestions();
-  }, [activeCourseId, words]);
+  }, [activeCourseId]);
 
   const applyFilter = (filterType: 'yet_to_try' | 'incorrect' | 'done', pool = allQuestions) => {
     setActiveFilter(filterType);
