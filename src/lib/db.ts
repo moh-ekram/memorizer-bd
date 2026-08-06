@@ -252,7 +252,7 @@ export async function saveBulkDocs(collectionName: string, items: any[]) {
       data: item
     }));
 
-    const CHUNK_SIZE = 200;
+    const CHUNK_SIZE = 100;
     for (let i = 0; i < payloads.length; i += CHUNK_SIZE) {
       const chunk = payloads.slice(i, i + CHUNK_SIZE);
       const { error } = await supabase
@@ -260,7 +260,18 @@ export async function saveBulkDocs(collectionName: string, items: any[]) {
         .upsert(chunk);
 
       if (error) {
-        console.warn(`Supabase bulk upsert notice for ${collectionName}:`, error);
+        console.warn(`Supabase bulk upsert warning for ${collectionName}, executing fallback jsonb payload upsert:`, error);
+        const fallbackChunk = chunk.map(c => ({
+          id: c.id,
+          data: c.data
+        }));
+        const { error: fallbackErr } = await supabase
+          .from(collectionName)
+          .upsert(fallbackChunk);
+        
+        if (fallbackErr) {
+          console.error(`Supabase fallback bulk upsert error for ${collectionName}:`, fallbackErr);
+        }
       }
     }
   } catch (err) {

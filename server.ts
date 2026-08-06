@@ -4,43 +4,47 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
-import { initializeApp } from "firebase/app";
-import { 
-  getFirestore, 
-  doc, 
-  getDoc, 
-  setDoc, 
-  getDocs, 
-  collection, 
-  query 
-} from "firebase/firestore";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
-// Read Firebase config for server-side initialization
-const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
-let firebaseConfig: any = {};
-try {
-  if (fs.existsSync(firebaseConfigPath)) {
-    firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf8"));
+const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://qredixumhxjcaymwqcec.supabase.co";
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_abgr_qMdFxAOn8IhHpm_PA_GamaQUgF";
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+async function getDoc(colName: string, id: string) {
+  const { data, error } = await supabase.from(colName).select('*').eq('id', id).maybeSingle();
+  if (!error && data) {
+    const docData = data.data && typeof data.data === 'object' ? { ...data, ...data.data, id: data.id || id } : data;
+    return { exists: () => true, data: () => docData, id };
   }
-} catch (e) {
-  console.warn("Could not load firebase-applet-config.json in server.ts:", e);
+  return { exists: () => false, data: () => null, id };
 }
 
-const fbConfig = {
-  apiKey: process.env.VITE_FIREBASE_API_KEY || firebaseConfig.apiKey || "AIzaSyCYIkpASqZD6R2bOOi9F3hvQMl_iTLsjBI",
-  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfig.authDomain || "myvocab-13ebc.firebaseapp.com",
-  projectId: process.env.VITE_FIREBASE_PROJECT_ID || firebaseConfig.projectId || "myvocab-13ebc",
-  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket || "myvocab-13ebc.firebasestorage.app",
-  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfig.messagingSenderId || "531149838847",
-  appId: process.env.VITE_FIREBASE_APP_ID || firebaseConfig.appId || "1:531149838847:web:a4577c60628b9c4c6b2fca"
-};
+async function setDoc(colName: string, id: string, data: any, options?: { merge?: boolean }) {
+  let dataToSave = data;
+  if (options?.merge) {
+    const existing = await getDoc(colName, id);
+    if (existing.exists()) {
+      dataToSave = { ...existing.data(), ...data };
+    }
+  }
+  const payload = { id, ...dataToSave, data: dataToSave };
+  await supabase.from(colName).upsert(payload);
+}
 
-const firebaseServerApp = initializeApp(fbConfig, "server-app");
-const db = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== "(default)"
-  ? getFirestore(firebaseServerApp, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(firebaseServerApp);
+async function getDocs(colName: string) {
+  const { data, error } = await supabase.from(colName).select('*');
+  if (!error && data) {
+    const docs = data.map((row: any) => {
+      const rowData = row.data && typeof row.data === 'object' ? { ...row, ...row.data, id: row.id || row.data?.id } : row;
+      return { id: row.id || rowData.id, data: () => rowData, exists: () => true };
+    });
+    return { docs, empty: docs.length === 0 };
+  }
+  return { docs: [], empty: true };
+}
 
 async function startServer() {
   const app = express();
@@ -70,8 +74,7 @@ async function startServer() {
       }
 
       // SERVER-SIDE CHECK 0: Check lock in 'used_transactions' collection
-      const usedTxRef = doc(db, 'used_transactions', cleanTrx);
-      const usedTxSnap = await getDoc(usedTxRef);
+      const usedTxSnap = await getDoc('used_transactions', cleanTrx);
       if (usedTxSnap.exists()) {
         const usedData = usedTxSnap.data();
         if (usedData.spent === true || usedData.status === 'spent') {
@@ -83,7 +86,7 @@ async function startServer() {
       }
 
       // SERVER-SIDE CHECK 1: Ensure transaction ID was NOT already used or spent in access_requests
-      const requestsSnap = await getDocs(query(collection(db, 'access_requests')));
+      const requestsSnap = await getDocs('access_requests');
       const isAlreadyUsedReq = requestsSnap.docs.some(docSnap => {
         const d = docSnap.data();
         const dTrx = (d.trxId || '').toString().trim().toLowerCase();
@@ -102,7 +105,7 @@ async function startServer() {
       }
 
       // SERVER-SIDE CHECK 2: Match against system_settings/global_verified_payments
-      const globalVpSnap = await getDoc(doc(db, 'system_settings', 'global_verified_payments'));
+      const globalVpSnap = await getDoc('system_settings', 'global_verified_payments');
       let allVps: any[] = [];
       let matchedVpIndex = -1;
       let matchedVp: any = null;
@@ -133,14 +136,13 @@ async function startServer() {
 
         // AUTO-VERIFIED MATCH FOUND! Read exact amount from verified payment item
         const addAmount = matchedVp.amount && matchedVp.amount > 0 ? matchedVp.amount : 50;
-        const walletRef = doc(db, 'user_wallets', cleanEmail);
-        const walletSnap = await getDoc(walletRef);
+        const walletSnap = await getDoc('user_wallets', cleanEmail);
         const currentBalance = walletSnap.exists() ? (walletSnap.data().balance || 0) : 0;
         const newBalance = currentBalance + addAmount;
         const nowISO = new Date().toISOString();
 
         // ATOMIC LOCK: Record transaction in used_transactions collection as 'spent' BEFORE updating wallet balance
-        await setDoc(doc(db, 'used_transactions', cleanTrx), {
+        await setDoc('used_transactions', cleanTrx, {
           trxId: cleanTrx,
           spent: true,
           status: 'spent',
@@ -153,7 +155,7 @@ async function startServer() {
         }, { merge: true });
 
         // Update Wallet Balance
-        await setDoc(walletRef, {
+        await setDoc('user_wallets', cleanEmail, {
           email: cleanEmail,
           bkashNumber: cleanSender,
           balance: newBalance,
@@ -169,11 +171,11 @@ async function startServer() {
           claimedAt: nowISO,
           spentAt: nowISO
         };
-        await setDoc(doc(db, 'system_settings', 'global_verified_payments'), { verifiedPayments: allVps }, { merge: true });
+        await setDoc('system_settings', 'global_verified_payments', { verifiedPayments: allVps }, { merge: true });
 
         // Record approved request doc with spent = true
         const reqId = `recharge_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-        await setDoc(doc(db, 'access_requests', reqId), {
+        await setDoc('access_requests', reqId, {
           id: reqId,
           courseId: 'wallet_recharge',
           courseTitle: 'Wallet Recharge Claim',
@@ -201,7 +203,7 @@ async function startServer() {
         // Submit for manual verification
         const reqId = `recharge_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
         const nowISO = new Date().toISOString();
-        await setDoc(doc(db, 'access_requests', reqId), {
+        await setDoc('access_requests', reqId, {
           id: reqId,
           courseId: 'wallet_recharge',
           courseTitle: 'Wallet Recharge Claim',
