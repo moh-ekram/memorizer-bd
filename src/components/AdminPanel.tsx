@@ -403,10 +403,28 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     setAccessRequestsLoading(true);
     try {
       const qSnap = await getDocs(collection(db, 'access_requests'));
-      const list: AccessRequest[] = [];
+      const reqMap = new Map<string, AccessRequest>();
+      
       qSnap.forEach(docSnap => {
-        list.push({ id: docSnap.id, ...docSnap.data() } as AccessRequest);
+        reqMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as AccessRequest);
       });
+
+      // Also check server API backup to catch any requests saved via server fallback
+      try {
+        const res = await fetch('/api/db/access_requests');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.docs)) {
+            json.docs.forEach((d: any) => {
+              if (d && d.id && !reqMap.has(d.id)) {
+                reqMap.set(d.id, { id: d.id, ...d } as AccessRequest);
+              }
+            });
+          }
+        }
+      } catch (_) {}
+
+      const list = Array.from(reqMap.values());
       list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       setAccessRequests(list);
     } catch (err) {
@@ -2648,12 +2666,12 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 <RefreshCw className="w-5 h-5 animate-spin mr-2" />
                 <span className="text-xs font-bold font-mono">Loading access requests...</span>
               </div>
-            ) : accessRequests.length === 0 ? (
+            ) : accessRequests.filter(r => r.status === 'pending').length === 0 ? (
               <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-2xl space-y-2">
                 <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto" />
                 <div className="space-y-0.5">
-                  <p className="text-xs font-bold text-slate-700">No requests found</p>
-                  <p className="text-[10px] text-slate-400 font-semibold">No students have requested access yet.</p>
+                  <p className="text-xs font-bold text-slate-700">No pending requests found</p>
+                  <p className="text-[10px] text-slate-400 font-semibold">All student access & wallet recharge requests have been processed!</p>
                 </div>
               </div>
             ) : (
@@ -2672,7 +2690,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-150 font-sans text-xs">
-                    {accessRequests.map((req) => (
+                    {accessRequests.filter(r => r.status === 'pending').map((req) => (
                       <tr key={req.id} className="hover:bg-slate-50/60 transition">
                         <td className="px-3 py-2.5">
                           {req.courseIds && req.courseIds.length > 1 ? (

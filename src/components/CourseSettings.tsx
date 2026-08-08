@@ -242,7 +242,10 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   const handleApproveRequest = async (req: any) => {
     try {
       const nowISO = new Date().toISOString();
-      const emailLower = req.email.toLowerCase();
+      const emailLower = req.email.toLowerCase().trim();
+      const isRecharge = req.courseId === 'wallet_recharge' || 
+                         req.courseTitle?.toLowerCase().includes('recharge') ||
+                         req.courseTitle?.toLowerCase().includes('wallet');
 
       if (req.trxId) {
         const reqTrx = String(req.trxId).toLowerCase().trim();
@@ -273,14 +276,100 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
       
       setCourseRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved', spent: true } : r));
 
-      if (!allowedUsers.includes(emailLower)) {
-        const updatedAllowed = [...allowedUsers, emailLower];
-        setAllowedUsers(updatedAllowed);
-        
-        const courseRef = doc(db, 'courses', course.id);
-        await updateDoc(courseRef, {
-          allowedUsers: updatedAllowed
-        });
+      if (isRecharge) {
+        const rechargeAmt = req.totalPrice || req.price || 50;
+        const walletRef = doc(db, 'user_wallets', emailLower);
+        const walletSnap = await getDoc(walletRef);
+        let curBal = walletSnap.exists() ? (walletSnap.data().balance ?? walletSnap.data().walletBalance ?? 0) : 0;
+
+        try {
+          const uQuery = query(collection(db, 'users'), where('email', '==', emailLower));
+          const uSnap = await getDocs(uQuery);
+          if (!uSnap.empty) {
+            uSnap.forEach(uDoc => {
+              const b = uDoc.data().balance ?? uDoc.data().walletBalance ?? 0;
+              if (typeof b === 'number' && b > curBal) curBal = b;
+            });
+          }
+        } catch (_) {}
+
+        const newBal = curBal + rechargeAmt;
+        await setDoc(walletRef, {
+          email: emailLower,
+          balance: newBal,
+          walletBalance: newBal,
+          updatedAt: nowISO
+        }, { merge: true });
+
+        try {
+          const uQuery = query(collection(db, 'users'), where('email', '==', emailLower));
+          const uSnap = await getDocs(uQuery);
+          if (!uSnap.empty) {
+            for (const uDoc of uSnap.docs) {
+              await setDoc(doc(db, 'users', uDoc.id), {
+                email: emailLower,
+                walletBalance: newBal,
+                balance: newBal,
+                updatedAt: nowISO
+              }, { merge: true });
+            }
+          } else {
+            await setDoc(doc(db, 'users', emailLower), {
+              email: emailLower,
+              walletBalance: newBal,
+              balance: newBal,
+              updatedAt: nowISO
+            }, { merge: true });
+          }
+        } catch (uErr) {
+          console.warn("Notice: users collection update exception:", uErr);
+        }
+      } else {
+        if (!allowedUsers.includes(emailLower)) {
+          const updatedAllowed = [...allowedUsers, emailLower];
+          setAllowedUsers(updatedAllowed);
+          
+          const courseRef = doc(db, 'courses', course.id);
+          await updateDoc(courseRef, {
+            allowedUsers: updatedAllowed
+          });
+        }
+
+        // Sync enrolledCourseIds directly to user document in users collection
+        try {
+          const targetCourseIds = (req.courseIds && req.courseIds.length > 0) ? req.courseIds : [req.courseId || course.id];
+          const usersQuery = query(collection(db, 'users'), where('email', '==', emailLower));
+          const usersSnap = await getDocs(usersQuery);
+          if (!usersSnap.empty) {
+            for (const uDoc of usersSnap.docs) {
+              const uData = uDoc.data();
+              const existingEnrolled: string[] = Array.isArray(uData.enrolledCourseIds) ? uData.enrolledCourseIds : [];
+              const existingSet = new Set(existingEnrolled.map(id => typeof id === 'string' ? id.trim().toLowerCase() : ''));
+              let updated = false;
+              const updatedEnrolled = [...existingEnrolled];
+
+              for (const cid of targetCourseIds) {
+                if (cid && cid !== 'wallet_recharge' && !existingSet.has(cid.trim().toLowerCase())) {
+                  updatedEnrolled.push(cid);
+                  existingSet.add(cid.trim().toLowerCase());
+                  updated = true;
+                }
+              }
+
+              if (updated) {
+                await setDoc(doc(db, 'users', uDoc.id), { email: emailLower, enrolledCourseIds: updatedEnrolled, updatedAt: nowISO }, { merge: true });
+              }
+            }
+          } else {
+            await setDoc(doc(db, 'users', emailLower), {
+              email: emailLower,
+              enrolledCourseIds: targetCourseIds.filter((id: string) => id && id !== 'wallet_recharge'),
+              updatedAt: nowISO
+            }, { merge: true });
+          }
+        } catch (uSyncErr) {
+          console.warn('Notice: Could not sync enrolledCourseIds to user doc:', uSyncErr);
+        }
       }
 
       // Mark matching payment in global_verified_payments as spent
