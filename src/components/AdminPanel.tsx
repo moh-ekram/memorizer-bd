@@ -702,7 +702,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       const qSnap = await getDocs(collection(db, 'courses'));
       const list: Course[] = [];
       qSnap.forEach(docSnap => {
-        list.push({ id: docSnap.id, ...docSnap.data() } as Course);
+        list.push({ ...docSnap.data(), id: docSnap.id } as Course);
       });
       setCustomCourses(list);
       setHasFetchedCourses(true);

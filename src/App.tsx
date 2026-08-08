@@ -211,7 +211,8 @@ export default function App() {
     // Minimum swipe threshold: >= 55px horizontal distance, < 80px vertical drift, within 600ms
     if (Math.abs(deltaX) >= 55 && Math.abs(deltaY) < 80 && timeDiff < 600) {
       const currentPrimary = getPrimaryTab(activeTab);
-      const availableTabs = (user && user.email === 'mohammad.001ekram@gmail.com')
+      const isAdmin = user && user.email && ['mohammad.001ekram@gmail.com', 'ten.billion.neu@gmail.com'].includes(user.email.trim().toLowerCase());
+      const availableTabs = isAdmin
         ? [...MAIN_TABS, 'admin']
         : MAIN_TABS;
       const currentIndex = availableTabs.indexOf(currentPrimary);
@@ -680,7 +681,7 @@ export default function App() {
       unsubscribe = onSnapshot(coursesRef, (querySnapshot) => {
         const loaded: Course[] = [];
         querySnapshot.forEach(docSnap => {
-          loaded.push({ id: docSnap.id, ...docSnap.data() } as Course);
+          loaded.push({ ...docSnap.data(), id: docSnap.id } as Course);
         });
         setCustomCourses(loaded);
         safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(loaded));

@@ -39,7 +39,7 @@ export function isCourseAccessible(
   }
 
   // 3. Admin user email bypasses all restrictions
-  if (cleanUserEmail === 'mohammad.001ekram@gmail.com') {
+  if (cleanUserEmail === 'mohammad.001ekram@gmail.com' || cleanUserEmail === 'ten.billion.neu@gmail.com') {
     return true;
   }
 

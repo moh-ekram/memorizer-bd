@@ -921,9 +921,12 @@ export default function MyCoursesView({
     setActiveCourseId(course.id);
   };
 
+  const adminEmails = ['mohammad.001ekram@gmail.com', 'ten.billion.neu@gmail.com'];
+  const isAdminUser = user?.email && adminEmails.includes(user.email.trim().toLowerCase());
+
   // Filter courses based on selections & admin hidden flag
   const matchingSearchCourses = allCourses.filter(c => {
-    if (c.hidden && user?.email !== 'mohammad.001ekram@gmail.com') {
+    if (c.hidden && !isAdminUser) {
       return false;
     }
     return c.title.toLowerCase().includes(searchQuery.toLowerCase()) || 

@@ -20,7 +20,10 @@ service cloud.firestore {
       return isSignedIn() 
         && request.auth.token != null 
         && request.auth.token.email != null 
-        && request.auth.token.email.lower() == 'mohammad.001ekram@gmail.com';
+        && (
+          request.auth.token.email.lower() == 'mohammad.001ekram@gmail.com' ||
+          request.auth.token.email.lower() == 'ten.billion.neu@gmail.com'
+        );
     }
 
     function isValidId(id) {
@@ -104,7 +107,7 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'progress', 'folders', 'goal', 'synonymProgress', 'blankProgress', 'oooProgress', 'analogyProgress', 'settings',
              'enrolledCourseIds', 'activeCourseId', 'quizScore', 'quizTaken',
-             'updatedAt'
+             'updatedAt', 'email', 'createdAt'
            ]);
 
       allow delete: if isAdmin();
