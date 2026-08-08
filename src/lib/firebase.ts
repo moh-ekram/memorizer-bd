@@ -3,13 +3,13 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCYIkpASqZD6R2bOOi9F3hvQMl_iTLsjBI",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "myvocab-13ebc.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "myvocab-13ebc",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "myvocab-13ebc.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "531149838847",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:531149838847:web:a4577c60628b9c4c6b2fca",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-9H02B1YN1D"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBA3n-QRziYy8TekhV37yp81mpHvco3BC4",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "memorizerbd-75fc8.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "memorizerbd-75fc8",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "memorizerbd-75fc8.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "216799445245",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:216799445245:web:75c35914c156d1610f7e94",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-M39JTWRE78"
 };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
