@@ -1912,7 +1912,7 @@ const getActiveCourse = (
           <span className="hidden md:inline">Settings</span>
         </button>
 
-        {user && user.email === 'mohammad.001ekram@gmail.com' && (
+        {user && user.email && ['mohammad.001ekram@gmail.com', 'ten.billion.neu@gmail.com'].includes(user.email.trim().toLowerCase()) && (
           <button
             onClick={() => setActiveTab('admin')}
             data-active={activeTab === 'admin'}
@@ -2254,28 +2254,45 @@ const getActiveCourse = (
             />
           )}
 
-          {activeTab === 'admin' && user && user.email === 'mohammad.001ekram@gmail.com' && (
+          {activeTab === 'admin' && user && user.email && ['mohammad.001ekram@gmail.com', 'ten.billion.neu@gmail.com'].includes(user.email.trim().toLowerCase()) && (
             <AdminPanel 
               words={activeWords} 
               settings={settings}
               onUpdateSettings={setSettings}
               onCoursesUpdated={async (updatedCourses) => {
+                console.log('[App.tsx onCoursesUpdated] Invoked with updatedCourses count:', updatedCourses?.length);
                 setCustomCourses(updatedCourses);
                 safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(updatedCourses));
 
-                // Verify user write access permission and persist courses data to Supabase DB via setDoc
-                const hasWriteAccess = user && (user.email === 'mohammad.001ekram@gmail.com' || settings.adminEmails?.includes(user.email || ''));
+                // Verify user write access permission and persist courses data to Firestore DB via setDoc
+                const adminEmails = ['mohammad.001ekram@gmail.com', 'ten.billion.neu@gmail.com'];
+                const userEmail = user?.email?.trim().toLowerCase();
+                const hasWriteAccess = !!userEmail && (
+                  adminEmails.includes(userEmail) || 
+                  (settings.adminEmails && settings.adminEmails.map(e => e.trim().toLowerCase()).includes(userEmail))
+                );
+
                 if (hasWriteAccess && Array.isArray(updatedCourses) && updatedCourses.length > 0) {
                   try {
                     for (const course of updatedCourses) {
                       if (course && course.id) {
+                        console.log(`[App.tsx onCoursesUpdated] Persisting course "${course.id}" ("${course.title}") to Firestore...`);
                         const courseRef = doc(db, 'courses', course.id);
                         await setDoc(courseRef, course, { merge: true });
+                        console.log(`[App.tsx onCoursesUpdated] Course "${course.id}" persisted successfully.`);
+                      } else {
+                        console.warn('[App.tsx onCoursesUpdated] Skipping invalid course item missing id:', course);
                       }
                     }
                   } catch (err) {
-                    console.error('Error persisting course data to Supabase:', err);
+                    console.error('[App.tsx onCoursesUpdated] Error persisting course data to Firestore:', err);
                   }
+                } else {
+                  console.warn('[App.tsx onCoursesUpdated] Write access permission check failed or no updated courses provided.', {
+                    userEmail,
+                    hasWriteAccess,
+                    updatedCoursesCount: updatedCourses?.length
+                  });
                 }
               }}
             />
