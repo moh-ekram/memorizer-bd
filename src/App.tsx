@@ -962,10 +962,10 @@ export default function App() {
 
             const mergedEnrolled = Array.from(new Set([...userEnrolled, ...autoSyncedPurchased]));
             setEnrolledCourseIds(mergedEnrolled);
-            // Protect current user selection: only set active course from cloud if user hasn't selected a course locally yet
+            // Sync active course from cloud: prefer cloud active course if available and valid
             setActiveCourseId(prev => {
-              if (prev && prev !== 'gre') return prev;
-              return data.activeCourseId || (mergedEnrolled[0] || 'gre');
+              if (data.activeCourseId) return data.activeCourseId;
+              return prev || (mergedEnrolled[0] || 'gre');
             });
             setQuizScore(typeof data.quizScore === 'number' ? data.quizScore : 0);
             setQuizTaken(typeof data.quizTaken === 'number' ? data.quizTaken : 0);
@@ -1326,33 +1326,62 @@ export default function App() {
 
   const allAvailableCourses: Course[] = allCourses;
 
-  // Keep users enrolled and active in default free course if no courses are enrolled
+// Unified helper function to resolve active course matching activeCourseId or falling back cleanly
+const getActiveCourse = (
+  targetId: string | undefined | null,
+  courses: Course[],
+  defaultFallback: Course
+): Course => {
+  if (!courses || courses.length === 0) return defaultFallback;
+  const norm = targetId?.trim().toLowerCase();
+  
+  if (norm) {
+    // 1. Direct exact ID match
+    let match = courses.find(c => c && c.id && c.id.trim().toLowerCase() === norm);
+    if (match) return match;
+
+    // 2. Course code match
+    match = courses.find(c => c && c.courseCode && c.courseCode.trim().toLowerCase() === norm);
+    if (match) return match;
+
+    // 3. Title match
+    match = courses.find(c => c && c.title && c.title.trim().toLowerCase() === norm);
+    if (match) return match;
+
+    // 4. Loose substring match
+    match = courses.find(c => 
+      (c && c.id && (c.id.trim().toLowerCase().includes(norm) || norm.includes(c.id.trim().toLowerCase()))) ||
+      (c && c.title && (c.title.trim().toLowerCase().includes(norm) || norm.includes(c.title.trim().toLowerCase())))
+    );
+    if (match) return match;
+  }
+
+  // Fallback to explicitly default course or first available course
+  const defaultObj = courses.find(c => c.isDefault || c.id.trim().toLowerCase() === 'gre') || courses[0];
+  return defaultObj || defaultFallback;
+};
+
   useEffect(() => {
     if (!allCourses || allCourses.length === 0) return;
 
-    const defaultCourseObj = allCourses.find(c => c.isDefault || c.id.trim().toLowerCase() === 'gre') || allCourses[0];
-    const defaultCourseId = defaultCourseObj.id;
+    const resolvedCourse = getActiveCourse(activeCourseId, allCourses, defaultGreCourse);
+    
+    // Automatically ensure activeCourseId stays in sync with canonical course ID
+    if (resolvedCourse && resolvedCourse.id && resolvedCourse.id !== activeCourseId) {
+      setActiveCourseId(resolvedCourse.id);
+    }
 
+    const canonicalId = resolvedCourse ? resolvedCourse.id : 'gre';
     setEnrolledCourseIds(prev => {
       if (!prev || prev.length === 0) {
-        return [defaultCourseId];
+        return [canonicalId];
       }
-      if (!prev.some(id => id.trim().toLowerCase() === defaultCourseId.trim().toLowerCase())) {
-        return [defaultCourseId, ...prev];
+      if (!prev.some(id => id.trim().toLowerCase() === canonicalId.trim().toLowerCase())) {
+        return [canonicalId, ...prev];
       }
       return prev;
     });
-
-    const normActiveId = activeCourseId?.trim().toLowerCase();
-    if (!normActiveId) {
-      setActiveCourseId(defaultCourseId);
-    } else {
-      const activeCourseObj = allCourses.find(c => c.id.trim().toLowerCase() === normActiveId);
-      if (!activeCourseObj && customCourses.length > 0) {
-        setActiveCourseId(defaultCourseId);
-      }
-    }
-  }, [allCourses, customCourses]);
+  }, [allCourses, activeCourseId, defaultGreCourse]);
 
   const handleImportCourse = (course: Course) => {
     setImportedCourses(prev => {
@@ -1374,12 +1403,9 @@ export default function App() {
     setActiveCourseId(course.id);
   };
 
-  const rawActiveCourse = (() => {
-    const normActiveId = activeCourseId?.trim().toLowerCase();
-    const course = allCourses.find(c => c.id.trim().toLowerCase() === normActiveId);
-    if (!course) return defaultGreCourse;
-    return course;
-  })() || defaultGreCourse;
+  const rawActiveCourse = useMemo(() => {
+    return getActiveCourse(activeCourseId, allCourses, defaultGreCourse);
+  }, [allCourses, activeCourseId, defaultGreCourse]);
 
   const isCourseFullyAccessible = isCourseAccessible(rawActiveCourse, enrolledCourseIds, user?.email);
   const isRestrictedLocked = !isCourseFullyAccessible;

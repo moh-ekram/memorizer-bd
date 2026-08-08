@@ -2,7 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Global Safety Net (Pillar 1)
+    // Global Safety Net
     match /{document=**} {
       allow read, write: if false;
     }
@@ -30,7 +30,7 @@ service cloud.firestore {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_-]+$');
     }
 
-    // --- ENTITY VALIDATION BLUEPRINTS (Pillar 2) ---
+    // --- ENTITY VALIDATION BLUEPRINTS ---
 
     function isValidUser(data) {
       return data.email is string && data.email.size() <= 256
@@ -90,38 +90,36 @@ service cloud.firestore {
 
     // 1. Users Profiles Collection
     match /users/{userId} {
+      // Allow single document get only if owner or admin
       allow get: if isOwner(userId) || isAdmin();
+      
+      // Allow list for signed in users (e.g., leaderboard/rankings)
       allow list: if isSignedIn();
 
+      // Create new profile: must be owner registering their own email
       allow create: if isOwner(userId) 
         && isValidId(userId)
         && isValidUser(request.resource.data)
         && request.resource.data.keys().hasAll(['email'])
         && request.resource.data.email == request.auth.token.email;
 
+      // Update profile: can only be done by owner or admin
       allow update: if (isOwner(userId) || isAdmin())
         && isValidId(userId)
-        && isValidUser(request.resource.data)
-        && (request.resource.data.createdAt == null || resource.data.createdAt == null || request.resource.data.createdAt == resource.data.createdAt)
-        && (request.resource.data.email == null || resource.data.email == null || request.resource.data.email == resource.data.email)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-             'progress', 'folders', 'goal', 'synonymProgress', 'blankProgress', 'oooProgress', 'analogyProgress', 'settings',
-             'enrolledCourseIds', 'activeCourseId', 'quizScore', 'quizTaken',
-             'updatedAt', 'email', 'createdAt'
-           ]);
+        && isValidUser(request.resource.data);
 
       allow delete: if isAdmin();
     }
 
     // 2. Courses Collection
     match /courses/{courseId} {
-      allow read: if true;
+      allow read: if true; // Publicly readable by all visitors & users
 
       allow create: if isAdmin()
         && isValidId(courseId)
         && isValidCourse(request.resource.data);
 
-      allow update: if (isAdmin() || isSignedIn())
+      allow update: if isAdmin()
         && isValidId(courseId)
         && isValidCourse(request.resource.data);
 
@@ -132,52 +130,53 @@ service cloud.firestore {
     match /reports/{reportId} {
       allow read: if isAdmin();
       allow create: if true;
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow update, delete: if isAdmin();
     }
 
     // 4. Access Requests Collection
     match /access_requests/{requestId} {
-      allow read: if true;
-      allow create: if true;
-      allow update: if true;
-      allow delete: if isAdmin();
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
     }
 
-    // 5. Blank Questions Collection
+    // 5. Questions Collections
     match /blank_questions/{questionId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
-    // 6. Odd One Out Questions Collection
     match /odd_one_out_questions/{questionId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
-    // 7. Word Analogy Questions Collection
     match /word_analogy_questions/{questionId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
-    // 8. System Settings Collection
+    match /mcq_questions/{questionId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 6. System Settings Collection
     match /system_settings/{settingId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
-    // 9. User Wallets Collection
+    // 7. User Wallets Collection
     match /user_wallets/{walletId} {
-      allow read, create, update: if true;
-      allow delete: if isAdmin();
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
     }
 
-    // 10. Used Transactions Collection
+    // 8. Used Transactions Collection
     match /used_transactions/{trxId} {
-      allow read, create, update: if true;
-      allow delete: if isAdmin();
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
     }
   }
 }
