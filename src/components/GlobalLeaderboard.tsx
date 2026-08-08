@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { auth, db, collection, getDocs } from '../lib/db';
+import { safeSetLocalStorage } from '../lib/storage';
 import { 
   Crown, Trophy, Award, Flame, RefreshCw, Search, 
   HelpCircle, Star, Users, Medal, GraduationCap, FileSpreadsheet 
@@ -103,8 +104,8 @@ export default function GlobalLeaderboard() {
       });
 
       setLeaderboard(sorted);
-      localStorage.setItem('vocab_memorizer_cached_leaderboard', JSON.stringify(sorted));
-      localStorage.setItem('vocab_memorizer_cached_leaderboard_timestamp', String(Date.now()));
+      safeSetLocalStorage('vocab_memorizer_cached_leaderboard', JSON.stringify(sorted));
+      safeSetLocalStorage('vocab_memorizer_cached_leaderboard_timestamp', String(Date.now()));
 
       // Locate current user rank
       if (currentUserId) {

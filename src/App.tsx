@@ -13,6 +13,7 @@ import AnnouncementBanner from './components/AnnouncementBanner';
 import LandingHomePage from './components/LandingHomePage';
 import RevisionCenter from './components/RevisionCenter';
 import { SyncConflictModal, SyncConflictData } from './components/SyncConflictModal';
+import { safeSetLocalStorage } from './lib/storage';
 
 import {
   LayoutDashboard,
@@ -433,9 +434,7 @@ export default function App() {
     };
     setSyncLogs(prev => {
       const updated = [newEntry, ...prev].slice(0, 15);
-      try {
-        localStorage.setItem('memorizer_sync_logs', JSON.stringify(updated));
-      } catch (e) {}
+      safeSetLocalStorage('memorizer_sync_logs', JSON.stringify(updated));
       return updated;
     });
   };
@@ -607,7 +606,7 @@ export default function App() {
 
   // Local Storage & IndexedDB Cache Save
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_PROGRESS_KEY, JSON.stringify(progress));
+    safeSetLocalStorage(LOCAL_STORAGE_PROGRESS_KEY, JSON.stringify(progress));
     saveProgressToIndexedDB(progress);
     
     // Also update pending count on progress change
@@ -621,35 +620,35 @@ export default function App() {
   }, [progress]);
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_FOLDERS_KEY, JSON.stringify(folders));
+    safeSetLocalStorage(LOCAL_STORAGE_FOLDERS_KEY, JSON.stringify(folders));
   }, [folders]);
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_GOALS_KEY, JSON.stringify(goal));
+    safeSetLocalStorage(LOCAL_STORAGE_GOALS_KEY, JSON.stringify(goal));
   }, [goal]);
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_SYNONYM_PROGRESS_KEY, JSON.stringify(synonymProgress));
+    safeSetLocalStorage(LOCAL_STORAGE_SYNONYM_PROGRESS_KEY, JSON.stringify(synonymProgress));
   }, [synonymProgress]);
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_BLANK_PROGRESS_KEY, JSON.stringify(blankProgress));
+    safeSetLocalStorage(LOCAL_STORAGE_BLANK_PROGRESS_KEY, JSON.stringify(blankProgress));
   }, [blankProgress]);
 
   useEffect(() => {
-    localStorage.setItem('vocab_memorizer_ooo_progress', JSON.stringify(oooProgress));
+    safeSetLocalStorage('vocab_memorizer_ooo_progress', JSON.stringify(oooProgress));
   }, [oooProgress]);
 
   useEffect(() => {
-    localStorage.setItem('vocab_memorizer_analogy_progress', JSON.stringify(analogyProgress));
+    safeSetLocalStorage('vocab_memorizer_analogy_progress', JSON.stringify(analogyProgress));
   }, [analogyProgress]);
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_SETTINGS_KEY, JSON.stringify(settings));
+    safeSetLocalStorage(LOCAL_STORAGE_SETTINGS_KEY, JSON.stringify(settings));
   }, [settings]);
 
   useEffect(() => {
-    localStorage.setItem('vocab_memorizer_dark_mode', JSON.stringify(darkMode));
+    safeSetLocalStorage('vocab_memorizer_dark_mode', JSON.stringify(darkMode));
     if (darkMode) {
       document.documentElement.classList.add('dark');
     } else {
@@ -658,19 +657,19 @@ export default function App() {
   }, [darkMode]);
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_ENROLLED_COURSES_KEY, JSON.stringify(enrolledCourseIds));
+    safeSetLocalStorage(LOCAL_STORAGE_ENROLLED_COURSES_KEY, JSON.stringify(enrolledCourseIds));
   }, [enrolledCourseIds]);
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_ACTIVE_COURSE_KEY, activeCourseId);
+    safeSetLocalStorage(LOCAL_STORAGE_ACTIVE_COURSE_KEY, activeCourseId);
   }, [activeCourseId]);
 
   useEffect(() => {
-    localStorage.setItem('vocab_memorizer_quiz_score', String(quizScore));
+    safeSetLocalStorage('vocab_memorizer_quiz_score', String(quizScore));
   }, [quizScore]);
 
   useEffect(() => {
-    localStorage.setItem('vocab_memorizer_quiz_taken', String(quizTaken));
+    safeSetLocalStorage('vocab_memorizer_quiz_taken', String(quizTaken));
   }, [quizTaken]);
 
   // Load custom courses with real-time snapshot updates and offline caching
@@ -684,7 +683,7 @@ export default function App() {
           loaded.push({ id: docSnap.id, ...docSnap.data() } as Course);
         });
         setCustomCourses(loaded);
-        localStorage.setItem('vocab_memorizer_cached_custom_courses', JSON.stringify(loaded));
+        safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(loaded));
 
         // Sync importedCourses if any match custom course IDs
         setImportedCourses(prev => {
@@ -698,7 +697,7 @@ export default function App() {
             return imp;
           });
           if (hasChanges) {
-            localStorage.setItem('vocab_memorizer_imported_courses', JSON.stringify(next));
+            safeSetLocalStorage('vocab_memorizer_imported_courses', JSON.stringify(next));
             return next;
           }
           return prev;
@@ -757,7 +756,7 @@ export default function App() {
           }
         });
         if (updated) {
-          localStorage.setItem(LOCAL_STORAGE_ENROLLED_COURSES_KEY, JSON.stringify(newArr));
+          safeSetLocalStorage(LOCAL_STORAGE_ENROLLED_COURSES_KEY, JSON.stringify(newArr));
           if (user) {
             setDoc(doc(db, 'users', user.uid), { enrolledCourseIds: newArr }, { merge: true }).catch(console.error);
           }
@@ -803,7 +802,7 @@ export default function App() {
               }
             });
             if (updated) {
-              localStorage.setItem(LOCAL_STORAGE_ENROLLED_COURSES_KEY, JSON.stringify(newArr));
+              safeSetLocalStorage(LOCAL_STORAGE_ENROLLED_COURSES_KEY, JSON.stringify(newArr));
               if (user) {
                 setDoc(doc(db, 'users', user.uid), { enrolledCourseIds: newArr }, { merge: true }).catch(console.error);
               }
@@ -1360,7 +1359,7 @@ export default function App() {
         return prev;
       }
       const updated = [...prev, course];
-      localStorage.setItem('vocab_memorizer_imported_courses', JSON.stringify(updated));
+      safeSetLocalStorage('vocab_memorizer_imported_courses', JSON.stringify(updated));
       return updated;
     });
 
@@ -2235,7 +2234,7 @@ export default function App() {
               onUpdateSettings={setSettings}
               onCoursesUpdated={async (updatedCourses) => {
                 setCustomCourses(updatedCourses);
-                localStorage.setItem('vocab_memorizer_cached_custom_courses', JSON.stringify(updatedCourses));
+                safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(updatedCourses));
 
                 // Verify user write access permission and persist courses data to Supabase DB via setDoc
                 const hasWriteAccess = user && (user.email === 'mohammad.001ekram@gmail.com' || settings.adminEmails?.includes(user.email || ''));

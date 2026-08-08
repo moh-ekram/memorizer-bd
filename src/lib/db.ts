@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { normalizeCourseId, matchesCourseId, clearQuestionsCache } from './courseUtils';
+import { safeSetLocalStorage } from './storage';
 
 export { supabase, normalizeCourseId, matchesCourseId, clearQuestionsCache };
 
@@ -213,7 +214,7 @@ export async function setDoc(docRef: any, data: any, options?: { merge?: boolean
 
     // LocalStorage cache for instant local performance
     try {
-      localStorage.setItem(`local_store_${collectionName}_${docId}`, JSON.stringify(dataToSave));
+      safeSetLocalStorage(`local_store_${collectionName}_${docId}`, JSON.stringify(dataToSave));
     } catch (_) {}
 
     // Send to Server API for multi-user cloud persistence
@@ -293,7 +294,7 @@ export async function saveBulkDocs(collectionName: string, items: any[]) {
 
     for (const item of processedItems) {
       try {
-        localStorage.setItem(`local_store_${collectionName}_${item.id}`, JSON.stringify(item));
+        safeSetLocalStorage(`local_store_${collectionName}_${item.id}`, JSON.stringify(item));
       } catch (_) {}
     }
 

@@ -1,4 +1,5 @@
 import { db, doc, setDoc, getDocs, collection } from './db';
+import { safeSetLocalStorage } from './storage';
 
 export interface ActivityLog {
   id: string;
@@ -40,7 +41,7 @@ export async function logAdminActivity(
       const logsRaw = localStorage.getItem('memorizer_activity_logs');
       const logs: ActivityLog[] = logsRaw ? JSON.parse(logsRaw) : [];
       logs.unshift(logItem);
-      localStorage.setItem('memorizer_activity_logs', JSON.stringify(logs.slice(0, 500)));
+      safeSetLocalStorage('memorizer_activity_logs', JSON.stringify(logs.slice(0, 100)));
     } catch (_) {}
   } catch (err) {
     console.warn('Failed to log admin activity:', err);
@@ -53,7 +54,7 @@ export async function fetchActivityLogs(): Promise<ActivityLog[]> {
     const logs: ActivityLog[] = snap.docs.map(d => d.data() as ActivityLog);
     logs.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
     if (logs.length > 0) {
-      localStorage.setItem('memorizer_activity_logs', JSON.stringify(logs.slice(0, 500)));
+      safeSetLocalStorage('memorizer_activity_logs', JSON.stringify(logs.slice(0, 100)));
       return logs;
     }
   } catch (err) {

@@ -8,6 +8,7 @@ import {
   ChevronDown, ChevronUp, Info, Eye, Wallet, EyeOff, MoreHorizontal, ArrowUpRight
 } from 'lucide-react';
 import { db, doc, setDoc, getDoc, getDocs, onSnapshot, query, collection, where, incrementCourseClickCount } from '../lib/db';
+import { safeSetLocalStorage } from '../lib/storage';
 import { Course, UserProgress, ActiveTab } from '../types';
 import { isCourseEnrolled, isCourseAccessible } from '../lib/courseAccess';
 import CoursePreviewModal from './CoursePreviewModal';
@@ -226,9 +227,7 @@ export default function MyCoursesView({
           const remoteData = snap.data().samples || {};
           setUsedFreeSamples(prev => {
             const merged = { ...prev, ...remoteData };
-            try {
-              localStorage.setItem(storageKey, JSON.stringify(merged));
-            } catch {}
+            safeSetLocalStorage(storageKey, JSON.stringify(merged));
             return merged;
           });
         }
@@ -256,9 +255,7 @@ export default function MyCoursesView({
     const storageKey = `vocab_used_free_samples_${cleanEmail || 'guest'}`;
     const updated = { ...usedFreeSamples, [normId]: true };
     setUsedFreeSamples(updated);
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-    } catch {}
+    safeSetLocalStorage(storageKey, JSON.stringify(updated));
 
     if (cleanEmail) {
       try {
@@ -364,7 +361,7 @@ export default function MyCoursesView({
             updated.push(id);
           }
         });
-        localStorage.setItem('vocab_memorizer_enrolled_courses', JSON.stringify(updated));
+        safeSetLocalStorage('vocab_memorizer_enrolled_courses', JSON.stringify(updated));
         if (user) {
           setDoc(doc(db, 'users', user.uid), { enrolledCourseIds: updated }, { merge: true }).catch(console.error);
         }
@@ -830,7 +827,7 @@ export default function MyCoursesView({
               updated.push(id);
             }
           });
-          localStorage.setItem('vocab_memorizer_enrolled_courses', JSON.stringify(updated));
+          safeSetLocalStorage('vocab_memorizer_enrolled_courses', JSON.stringify(updated));
           if (user) {
             setDoc(doc(db, 'users', user.uid), { enrolledCourseIds: updated }, { merge: true }).catch(console.error);
           }

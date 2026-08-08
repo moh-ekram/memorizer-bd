@@ -1,5 +1,6 @@
 import React, { ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { clearNonEssentialLocalStorageCache } from '../lib/storage';
 
 interface Props {
   children: ReactNode;
@@ -27,6 +28,10 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Uncaught error in React component tree:', error, errorInfo);
+    if (error?.name === 'QuotaExceededError' || error?.message?.includes('exceeded the quota')) {
+      console.warn('QuotaExceededError detected in ErrorBoundary. Cleaning up non-essential caches...');
+      clearNonEssentialLocalStorageCache();
+    }
     (this as any).setState({ errorInfo });
   }
 

@@ -5,6 +5,7 @@ import { Award, BookOpen, Flame, CheckCircle, AlertTriangle, XCircle, HelpCircle
 import { ResponsiveContainer, BarChart, Bar, AreaChart, Area, LineChart, Line, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Legend } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db, collection, getDocs, doc, getDoc, setDoc, query, limit } from '../lib/db';
+import { safeSetLocalStorage } from '../lib/storage';
 
 interface StatsDashboardProps {
   user: any;
@@ -98,14 +99,14 @@ export default function StatsDashboard({
       if (!animRecord || animRecord.date !== todayStr) {
         // First trigger of the day
         setShowFlashcardCoverAnim(true);
-        localStorage.setItem(
+        safeSetLocalStorage(
           'flashcard_banner_anim_data',
           JSON.stringify({ count: 1, lastTimestamp: now, date: todayStr })
         );
       } else if (animRecord.count < maxFrequency) {
         // Subsequent trigger of the day
         setShowFlashcardCoverAnim(true);
-        localStorage.setItem(
+        safeSetLocalStorage(
           'flashcard_banner_anim_data',
           JSON.stringify({ count: animRecord.count + 1, lastTimestamp: now, date: todayStr })
         );
@@ -415,8 +416,8 @@ export default function StatsDashboard({
         });
       });
       setDbLeaderboard(fetchedList);
-      localStorage.setItem('vocab_memorizer_cached_dashboard_leaderboard', JSON.stringify(fetchedList));
-      localStorage.setItem('vocab_memorizer_cached_dashboard_leaderboard_timestamp', String(Date.now()));
+      safeSetLocalStorage('vocab_memorizer_cached_dashboard_leaderboard', JSON.stringify(fetchedList));
+      safeSetLocalStorage('vocab_memorizer_cached_dashboard_leaderboard_timestamp', String(Date.now()));
     } catch (err) {
       console.error("Error fetching leaderboard from Firestore:", err);
     } finally {
