@@ -363,7 +363,7 @@ export default function MyCoursesView({
         });
         safeSetLocalStorage('vocab_memorizer_enrolled_courses', JSON.stringify(updated));
         if (user) {
-          setDoc(doc(db, 'users', user.uid), { enrolledCourseIds: updated }, { merge: true }).catch(console.error);
+          setDoc(doc(db, 'users', user.uid), { email: user.email, enrolledCourseIds: updated }, { merge: true }).catch(console.error);
         }
         return updated;
       });
@@ -829,7 +829,7 @@ export default function MyCoursesView({
           });
           safeSetLocalStorage('vocab_memorizer_enrolled_courses', JSON.stringify(updated));
           if (user) {
-            setDoc(doc(db, 'users', user.uid), { enrolledCourseIds: updated }, { merge: true }).catch(console.error);
+            setDoc(doc(db, 'users', user.uid), { email: user.email, enrolledCourseIds: updated }, { merge: true }).catch(console.error);
           }
           return updated;
         });

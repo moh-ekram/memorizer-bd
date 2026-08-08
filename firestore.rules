@@ -33,7 +33,7 @@ service cloud.firestore {
     // --- ENTITY VALIDATION BLUEPRINTS ---
 
     function isValidUser(data) {
-      return data.email is string && data.email.size() <= 256
+      return (data.get('email', null) == null || (data.email is string && data.email.size() <= 256))
         && (data.get('createdAt', null) == null || (data.createdAt is string && data.createdAt.size() <= 128))
         && (data.get('updatedAt', null) == null || (data.updatedAt is string && data.updatedAt.size() <= 128))
         && (data.get('activeCourseId', null) == null || (data.activeCourseId is string && data.activeCourseId.size() <= 128))
@@ -47,11 +47,15 @@ service cloud.firestore {
         && (data.get('synonymProgress', null) == null || data.synonymProgress is map)
         && (data.get('blankProgress', null) == null || data.blankProgress is map)
         && (data.get('oooProgress', null) == null || data.oooProgress is map)
-        && (data.get('analogyProgress', null) == null || data.analogyProgress is map);
+        && (data.get('analogyProgress', null) == null || data.analogyProgress is map)
+        && (data.get('walletBalance', null) == null || data.walletBalance is int || data.walletBalance is float)
+        && (data.get('balance', null) == null || data.balance is int || data.balance is float);
     }
 
     function isValidCourse(data) {
       return data.title is string && data.title.size() <= 1000
+        && (data.get('code', null) == null || (data.code is string && data.code.size() <= 128))
+        && (data.get('courseCode', null) == null || (data.courseCode is string && data.courseCode.size() <= 128))
         && (data.get('description', null) == null || (data.description is string && data.description.size() <= 10000))
         && (data.get('totalGroups', null) == null || data.totalGroups is int || data.totalGroups is float)
         && (data.get('words', null) == null || data.words is list)
@@ -63,7 +67,10 @@ service cloud.firestore {
         && (data.get('allowedUsers', null) == null || data.allowedUsers is list)
         && (data.get('variableToggles', null) == null || data.variableToggles is map)
         && (data.get('price', null) == null || data.price is int || data.price is float)
+        && (data.get('order', null) == null || data.order is int || data.order is float)
         && (data.get('bkashNumber', null) == null || (data.bkashNumber is string && data.bkashNumber.size() <= 64))
+        && (data.get('googleSearchQuery', null) == null || (data.googleSearchQuery is string && data.googleSearchQuery.size() <= 1000))
+        && (data.get('freeFlashcardsCount', null) == null || data.freeFlashcardsCount is int || data.freeFlashcardsCount is float)
         && (data.get('verifiedPayments', null) == null || data.verifiedPayments is list)
         && (data.get('placeLabels', null) == null || data.placeLabels is map)
         && (data.get('allowedUsersExpiry', null) == null || data.allowedUsersExpiry is map)
@@ -90,21 +97,19 @@ service cloud.firestore {
 
     // 1. Users Profiles Collection
     match /users/{userId} {
-      // Allow single document get only if owner or admin
-      allow get: if isOwner(userId) || isAdmin();
+      // Allow single document get if owner, admin, or document ID matches user email
+      allow get: if isOwner(userId) || isAdmin() || (isSignedIn() && request.auth.token.email != null && request.auth.token.email.lower() == userId.lower());
       
       // Allow list for signed in users (e.g., leaderboard/rankings)
       allow list: if isSignedIn();
 
-      // Create new profile: must be owner registering their own email
-      allow create: if isOwner(userId) 
+      // Create new profile: must be owner, admin, or matching user email
+      allow create: if (isOwner(userId) || isAdmin() || (isSignedIn() && request.auth.token.email != null && request.auth.token.email.lower() == userId.lower()))
         && isValidId(userId)
-        && isValidUser(request.resource.data)
-        && request.resource.data.keys().hasAll(['email'])
-        && request.resource.data.email == request.auth.token.email;
+        && isValidUser(request.resource.data);
 
-      // Update profile: can only be done by owner or admin
-      allow update: if (isOwner(userId) || isAdmin())
+      // Update profile: can be done by owner, admin, or matching user email
+      allow update: if (isOwner(userId) || isAdmin() || (isSignedIn() && request.auth.token.email != null && request.auth.token.email.lower() == userId.lower()))
         && isValidId(userId)
         && isValidUser(request.resource.data);
 
@@ -170,7 +175,11 @@ service cloud.firestore {
     // 7. User Wallets Collection
     match /user_wallets/{walletId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin();
+      allow create, update: if isSignedIn() && (
+        isAdmin() ||
+        (request.auth.token.email != null && request.auth.token.email.lower() == walletId.lower())
+      );
+      allow delete: if isAdmin();
     }
 
     // 8. Used Transactions Collection
