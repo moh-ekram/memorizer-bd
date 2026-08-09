@@ -85,29 +85,25 @@ export default function TransactionHistoryView({
   return (
     <div className="space-y-6">
       {/* Transaction Overview Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs space-y-1">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">Total Transactions</span>
-          <p className="text-2xl font-black text-slate-800 font-mono">{stats.total}</p>
-          <span className="text-[10px] text-slate-400">All submitted requests</span>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/80 shadow-2xs space-y-0.5">
+          <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-tight block">Total Tx</span>
+          <p className="text-lg sm:text-xl font-black text-slate-800 font-mono">{stats.total}</p>
         </div>
 
-        <div className="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200/60 shadow-2xs space-y-1">
-          <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">Approved Volume</span>
-          <p className="text-2xl font-black text-emerald-900 font-mono">৳{stats.approvedRechargeAmount}</p>
-          <span className="text-[10px] text-emerald-600 font-semibold">{stats.approved} approved requests</span>
+        <div className="bg-emerald-50/60 p-2.5 sm:p-3 rounded-xl border border-emerald-200/60 shadow-2xs space-y-0.5">
+          <span className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-tight block">Approved</span>
+          <p className="text-lg sm:text-xl font-black text-emerald-900 font-mono">৳{stats.approvedRechargeAmount}</p>
         </div>
 
-        <div className="bg-amber-50/60 p-4 rounded-2xl border border-amber-200/60 shadow-2xs space-y-1">
-          <span className="text-[11px] font-bold text-amber-700 uppercase tracking-wide">Pending Action</span>
-          <p className="text-2xl font-black text-amber-900 font-mono">{stats.pending}</p>
-          <span className="text-[10px] text-amber-600 font-semibold">Needs review</span>
+        <div className="bg-amber-50/60 p-2.5 sm:p-3 rounded-xl border border-amber-200/60 shadow-2xs space-y-0.5">
+          <span className="text-[10px] font-extrabold text-amber-700 uppercase tracking-tight block">Pending</span>
+          <p className="text-lg sm:text-xl font-black text-amber-900 font-mono">{stats.pending}</p>
         </div>
 
-        <div className="bg-rose-50/60 p-4 rounded-2xl border border-rose-200/60 shadow-2xs space-y-1">
-          <span className="text-[11px] font-bold text-rose-700 uppercase tracking-wide">Rejected Requests</span>
-          <p className="text-2xl font-black text-rose-900 font-mono">{stats.rejected}</p>
-          <span className="text-[10px] text-rose-600 font-semibold">Cancelled/Declined</span>
+        <div className="bg-rose-50/60 p-2.5 sm:p-3 rounded-xl border border-rose-200/60 shadow-2xs space-y-0.5">
+          <span className="text-[10px] font-extrabold text-rose-700 uppercase tracking-tight block">Rejected</span>
+          <p className="text-lg sm:text-xl font-black text-rose-900 font-mono">{stats.rejected}</p>
         </div>
       </div>
 

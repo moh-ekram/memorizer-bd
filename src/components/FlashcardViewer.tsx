@@ -42,7 +42,8 @@ import {
   Settings,
   HelpCircle,
   SkipForward,
-  Flame
+  Flame,
+  MousePointerClick
 } from 'lucide-react';
 
 interface FlashcardViewerProps {
@@ -248,6 +249,7 @@ export default function FlashcardViewer({
   // Card orientation and flip animation styles
   type FlipAnimationKey = 'flip-h' | 'flip-v' | 'diagonal' | 'shuffle';
   const [isFlipped, setIsFlipped] = useState(false);
+  const [hasFlippedCurrentCard, setHasFlippedCurrentCard] = useState(false);
   const [localAnimation, setLocalAnimation] = useState<FlipAnimationKey>('shuffle');
   const [isAnimPickerOpen, setIsAnimPickerOpen] = useState(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -266,7 +268,7 @@ export default function FlashcardViewer({
     const timer = setInterval(() => {
       setBannerRotationStep(prev => (prev + 1) % 3);
       setShowStartText(prev => !prev);
-    }, 4400); // 3.2s swap animation duration + 1.2s pause = 4.4s interval
+    }, 4500); // 4.5s per cycle: 1.8s click & disappear + 2.2s shuffle + 0.5s pause
     return () => clearInterval(timer);
   }, []);
 
@@ -543,6 +545,7 @@ export default function FlashcardViewer({
       setNoteText(progress[currentActiveWord.id]?.notes ?? currentActiveWord.mnemonic ?? '');
       setIsEditingNote(false);
       setIsFlipped(false);
+      setHasFlippedCurrentCard(false);
       setCustomSentenceInput('');
     }
   }, [currentIndex, filteredWords.length, currentActiveWord.id, progress, currentActiveWord.mnemonic]);
@@ -607,6 +610,7 @@ export default function FlashcardViewer({
       switch (action) {
         case 'flip':
           e.preventDefault();
+          setHasFlippedCurrentCard(true);
           setIsFlipped(prev => !prev);
           break;
         case 'dont_know':
@@ -818,14 +822,12 @@ export default function FlashcardViewer({
             </div>
           </div>
 
-          {/* Center: Animated Stacked Flashcards Illustration with Right-to-Left Traveling Motion & 3D Replacement Rotation */}
+          {/* Center: Animated Stacked Flashcards Illustration with Stationary In-Place 3D Rotation */}
           <motion.div 
             animate={{ 
-              x: [120, -100, 120],
-              y: [0, -8, 0, 8, 0]
+              y: [0, -4, 0, 4, 0]
             }}
             transition={{ 
-              x: { duration: 9, repeat: Infinity, repeatType: 'mirror', ease: 'easeInOut' },
               y: { duration: 4.5, repeat: Infinity, repeatType: 'mirror', ease: 'easeInOut' }
             }}
             className="flex items-center justify-center group-hover:scale-105 transition-transform duration-300 my-1 sm:my-0 relative shrink-0"
@@ -840,39 +842,37 @@ export default function FlashcardViewer({
 
                 let animateProps: any;
                 if (pos === 0) {
-                  // Top card (front)
+                  // Top card (front): stays stationary in place, then receives next middle card transition
                   animateProps = {
-                    zIndex: 30,
+                    zIndex: [20, 20, 30, 30],
                     x: 0,
-                    y: 0,
-                    rotate: 0,
-                    rotateY: 0,
-                    scale: 1,
-                    opacity: 1,
-                    transition: { duration: 3.2, ease: [0.25, 1, 0.5, 1] }
+                    y: [2, 2, 0, 0],
+                    rotate: [-6, -6, 0, 0],
+                    scale: [0.92, 0.92, 1, 1],
+                    opacity: [0.85, 0.85, 1, 1],
+                    transition: { duration: 4.5, times: [0, 0.4, 0.88, 1], ease: [0.25, 1, 0.5, 1] }
                   };
                 } else if (pos === 1) {
-                  // Second card (middle)
+                  // Second card (middle): stays stationary in place, then moves up to middle
                   animateProps = {
-                    zIndex: 20,
-                    x: -8,
-                    y: 2,
-                    rotate: -8,
-                    rotateY: 0,
-                    scale: 0.92,
-                    opacity: 0.85,
-                    transition: { duration: 3.2, ease: [0.25, 1, 0.5, 1] }
+                    zIndex: [10, 10, 20, 20],
+                    x: 0,
+                    y: [4, 4, 2, 2],
+                    rotate: [6, 6, -6, -6],
+                    scale: [0.84, 0.84, 0.92, 0.92],
+                    opacity: [0.65, 0.65, 0.85, 0.85],
+                    transition: { duration: 4.5, times: [0, 0.4, 0.88, 1], ease: [0.25, 1, 0.5, 1] }
                   };
                 } else {
-                  // Third / Bottom card (the former top card rotates out smoothly from right to left to back)
+                  // Third card (former top card): rotates in place stationary to back
                   animateProps = {
-                    zIndex: 10,
-                    x: [0, 50, -20],
-                    rotateY: [0, 75, -15],
-                    rotate: [0, 20, -12],
-                    scale: [1, 0.92, 0.84],
-                    opacity: [1, 0.85, 0.65],
-                    transition: { duration: 3.2, ease: [0.33, 1, 0.68, 1] }
+                    zIndex: [30, 30, 10, 10],
+                    x: 0,
+                    rotateY: [0, 0, 180, 0, 0],
+                    rotate: [0, 0, 12, 6, 6],
+                    scale: [1, 1, 0.88, 0.84, 0.84],
+                    opacity: [1, 1, 0.8, 0.65, 0.65],
+                    transition: { duration: 4.5, times: [0, 0.4, 0.68, 0.88, 1], ease: [0.33, 1, 0.68, 1] }
                   };
                 }
 
@@ -888,10 +888,38 @@ export default function FlashcardViewer({
                         : 'bg-indigo-400/40 border-indigo-300/40 shadow-sm'
                     }`}
                   >
-                    <div className={`h-1.5 rounded-full ${isTop ? 'w-[60%] bg-indigo-500' : 'w-[50%] bg-white/70'}`} />
-                    <div className={`h-1.5 rounded-full ${isTop ? 'w-[40%] bg-indigo-300' : 'w-[30%] bg-white/50'}`} />
-                    <div className={`h-1.5 rounded-full ${isTop ? 'w-[80%] bg-indigo-500' : 'w-[70%] bg-white/70'}`} />
-                    <div className={`h-1.5 rounded-full ${isTop ? 'w-[50%] bg-indigo-300' : 'w-[40%] bg-white/50'}`} />
+                    {isTop ? (
+                      <div className="flex flex-col items-center justify-center h-full relative">
+                        {/* Synchronized Click Icon: Clicks on top card, then disappears before full shuffle */}
+                        <motion.div 
+                          key={`click-icon-step-${bannerRotationStep}`}
+                          initial={{ opacity: 0, scale: 0.6, y: 8 }}
+                          animate={{
+                            opacity: [0, 1, 1, 1, 0, 0],
+                            scale: [0.6, 1, 0.82, 1.18, 0.5, 0.5],
+                            y: [8, 0, 0, 0, -10, -10]
+                          }}
+                          transition={{
+                            duration: 4.5,
+                            times: [0, 0.08, 0.2, 0.3, 0.4, 1],
+                            ease: "easeInOut"
+                          }}
+                          className="p-2 sm:p-2.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 shadow-xs flex items-center justify-center relative"
+                        >
+                          <MousePointerClick className="w-6 h-6 sm:w-7 sm:h-7 text-indigo-600" />
+                          <motion.span 
+                            animate={{ scale: [0.8, 1.6, 0.8], opacity: [0, 0.7, 0] }}
+                            transition={{ duration: 0.9, times: [0, 0.5, 1], delay: 0.8 }}
+                            className="absolute inset-0 rounded-xl border-2 border-indigo-400 pointer-events-none"
+                          />
+                        </motion.div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center gap-1 opacity-40 h-full">
+                        <div className="h-1.5 w-10 rounded-full bg-indigo-300/60" />
+                        <div className="h-1 w-6 rounded-full bg-indigo-200/50" />
+                      </div>
+                    )}
                   </motion.div>
                 );
               })}
@@ -1566,6 +1594,7 @@ export default function FlashcardViewer({
                 touchHandled.current = false;
                 return;
               }
+              setHasFlippedCurrentCard(true);
               setIsFlipped(prev => !prev);
             }}
             onTouchStart={handleTouchStart}
@@ -1637,9 +1666,24 @@ export default function FlashcardViewer({
                 <h1 className={`${getDynamicFontSizeClass(currentActiveWord.word)} ${getWordColorClass(activeStatus)} tracking-tight font-sans transition-colors duration-200`}>
                   {currentActiveWord.word}
                 </h1>
-                <p className="text-[11px] text-indigo-400 font-medium pt-3 animate-pulse font-sans">
-                  Tap card to reveal definition ↺
-                </p>
+                <AnimatePresence>
+                  {!isFlipped && !hasFlippedCurrentCard && (
+                    <motion.div 
+                      key="click-to-flip-indicator"
+                      initial={{ opacity: 0, scale: 0.8, y: 6 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.6, y: -8, transition: { duration: 0.22, ease: 'easeIn' } }}
+                      className="pt-3 flex items-center justify-center pointer-events-none select-none"
+                    >
+                      <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-indigo-50/95 text-indigo-600 border border-indigo-200/80 shadow-2xs group animate-pulse">
+                        <MousePointerClick className="w-3.5 h-3.5 text-indigo-600 animate-bounce group-hover:scale-110 transition-transform" />
+                        <span className="text-[11px] font-semibold tracking-tight font-sans">
+                          Click to Flip
+                        </span>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* Card Footer Response Controls */}

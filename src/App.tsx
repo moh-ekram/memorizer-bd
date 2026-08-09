@@ -1838,27 +1838,27 @@ const getActiveCourse = (
             setActiveTab('profile');
           }}
           data-active={['profile', 'dashboard', 'my_courses', 'flashcard'].includes(activeTab)}
-          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 p-2 md:px-4 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 text-xs font-bold ${
+          title="My Profile"
+          className={`p-2.5 md:px-3.5 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 flex items-center justify-center ${
             ['profile', 'dashboard', 'my_courses', 'flashcard'].includes(activeTab)
               ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/15'
               : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
           }`}
         >
           <User className="w-4 h-4 text-amber-300" />
-          <span>My Profile</span>
         </button>
 
         <button
           onClick={() => handleNavigateTab('revision')}
           data-active={activeTab === 'revision'}
-          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 p-2 md:px-4 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 text-xs font-bold ${
+          title="Revision"
+          className={`p-2.5 md:px-3.5 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 flex items-center justify-center ${
             activeTab === 'revision'
               ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/15'
               : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
           }`}
         >
           <RotateCcw className="w-4 h-4 text-emerald-400" />
-          <span>Revision</span>
         </button>
 
         <button

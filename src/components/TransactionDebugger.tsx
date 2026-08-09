@@ -87,39 +87,33 @@ export const TransactionDebugger: React.FC<TransactionDebuggerProps> = ({
   return (
     <div className="space-y-6 font-sans">
       {/* Debugger Header */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white border border-slate-800 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-indigo-500/20 border border-indigo-400/30 rounded-xl text-indigo-300">
-              <Bug className="w-5 h-5" />
-            </div>
-            <h2 className="text-xl font-extrabold tracking-tight text-white">
-              Firestore Transaction Debugger & Diagnostics
-            </h2>
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-4 text-white border border-slate-800 shadow-md flex flex-row items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 bg-indigo-500/20 border border-indigo-400/30 rounded-lg text-indigo-300">
+            <Bug className="w-4 h-4" />
           </div>
-          <p className="text-xs text-indigo-200 font-medium">
-            Inspect live database transactions, diagnose pending wallet recharges, and test atomic write rules.
-          </p>
+          <h2 className="text-sm sm:text-base font-extrabold tracking-tight text-white">
+            Tx Debugger
+          </h2>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onTestTransaction}
             disabled={isProcessing}
-            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+            className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1 disabled:opacity-50"
           >
-            <TerminalSquare className="w-4 h-4" />
-            <span>Test Firestore Write</span>
+            <TerminalSquare className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Test Write</span>
           </button>
 
           <button
             type="button"
             onClick={onRefreshRequests}
-            className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5"
+            className="p-1.5 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1"
           >
-            <RefreshCw className={`w-4 h-4 ${isProcessing ? 'animate-spin' : ''}`} />
-            <span>Refresh Requests</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${isProcessing ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
@@ -181,45 +175,41 @@ export const TransactionDebugger: React.FC<TransactionDebuggerProps> = ({
       </div>
 
       {/* Summary Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-1">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/80 shadow-2xs space-y-0.5">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider">Pending Recharge Value</span>
-            <Wallet className="w-4 h-4 text-amber-500" />
+            <span className="text-[10px] font-extrabold uppercase tracking-tight">Pending Value</span>
+            <Wallet className="w-3.5 h-3.5 text-amber-500" />
           </div>
-          <p className="text-2xl font-black text-slate-900 font-mono">৳{totalPendingValue} <span className="text-xs text-slate-400 font-normal">BDT</span></p>
-          <p className="text-[11px] text-amber-600 font-bold">{pendingRecharges.length} request(s) waiting for approval</p>
+          <p className="text-lg sm:text-xl font-black text-slate-900 font-mono">৳{totalPendingValue}</p>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-1">
+        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/80 shadow-2xs space-y-0.5">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider">Total Recharge Claims</span>
-            <Zap className="w-4 h-4 text-indigo-500" />
+            <span className="text-[10px] font-extrabold uppercase tracking-tight">Total Claims</span>
+            <Zap className="w-3.5 h-3.5 text-indigo-500" />
           </div>
-          <p className="text-2xl font-black text-slate-900 font-mono">{rechargeRequests.length}</p>
-          <p className="text-[11px] text-slate-500 font-semibold">Auto & manual claims total</p>
+          <p className="text-lg sm:text-xl font-black text-slate-900 font-mono">{rechargeRequests.length}</p>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-1">
+        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/80 shadow-2xs space-y-0.5">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider">Successful Write Tx</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            <span className="text-[10px] font-extrabold uppercase tracking-tight">Success Tx</span>
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
           </div>
-          <p className="text-2xl font-black text-emerald-700 font-mono">
+          <p className="text-lg sm:text-xl font-black text-emerald-700 font-mono">
             {transactionLogs.filter(l => l.status === 'success').length}
           </p>
-          <p className="text-[11px] text-emerald-600 font-semibold">Atomic transactions completed</p>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-1">
+        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/80 shadow-2xs space-y-0.5">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider">Failed Transactions</span>
-            <XCircle className="w-4 h-4 text-rose-500" />
+            <span className="text-[10px] font-extrabold uppercase tracking-tight">Failed Tx</span>
+            <XCircle className="w-3.5 h-3.5 text-rose-500" />
           </div>
-          <p className="text-2xl font-black text-rose-600 font-mono">
+          <p className="text-lg sm:text-xl font-black text-rose-600 font-mono">
             {transactionLogs.filter(l => l.status === 'failed').length}
           </p>
-          <p className="text-[11px] text-rose-500 font-semibold">Permission or concurrent errors</p>
         </div>
       </div>
 
