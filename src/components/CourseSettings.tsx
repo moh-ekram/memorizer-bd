@@ -47,6 +47,7 @@ import {
   downloadMcqExcelTemplate,
   parseMcqExcel
 } from '../lib/gameExcelUtils';
+import { ExcelImportStatsReport, ImportStatsReport } from './ExcelImportStatsReport';
 
 interface CourseSettingsProps {
   course: Course;
@@ -168,6 +169,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   const [vpExcelError, setVpExcelError] = useState<string | null>(null);
   const [vpExcelSuccess, setVpExcelSuccess] = useState<string | null>(null);
   const [vpSearchQuery, setVpSearchQuery] = useState('');
+  const [excelImportStats, setExcelImportStats] = useState<ImportStatsReport | null>(null);
 
   // --- ACCESS REQUESTS STATES & FUNCTIONS ---
   const [courseRequests, setCourseRequests] = useState<any[]>([]);
@@ -1536,6 +1538,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   const processWordsExcelFile = (file: File) => {
     setExcelError(null);
     setExcelSuccess(null);
+    setExcelImportStats(null);
 
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -1566,8 +1569,20 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
         }
 
         let updatedLocalWords = [...localWords];
+        const initialCourseWordsCount = localWords.length;
+
+        // Field change counters
+        let place1Changes = 0;
+        let place2Changes = 0;
+        let place3Changes = 0;
+        let place4Changes = 0;
+        let place5Changes = 0;
+        let place6Changes = 0;
+        let groupChanges = 0;
+
         let updatedCount = 0;
         let addedCount = 0;
+        let unchangedInImportCount = 0;
 
         for (const row of rawRows) {
           const rowKeys = Object.keys(row);
@@ -1661,46 +1676,56 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
           }
 
           if (existingIdx !== -1) {
-            // Update existing word
-            const existingWord = { ...updatedLocalWords[existingIdx] };
-            let wasUpdated = false;
+            // Compare & update existing word
+            const oldWord = updatedLocalWords[existingIdx];
+            const existingWord = { ...oldWord };
+            let wordWasChanged = false;
 
-            if (mnemonic) {
-              existingWord.mnemonic = mnemonic;
-              wasUpdated = true;
-            }
-            if (baseWord) {
+            if (baseWord && baseWord !== oldWord.word) {
               existingWord.word = baseWord;
-              wasUpdated = true;
+              place1Changes++;
+              wordWasChanged = true;
             }
-            if (banglaMeaning) {
+            if (banglaMeaning && banglaMeaning !== oldWord.meaning) {
               existingWord.meaning = banglaMeaning;
-              wasUpdated = true;
+              place2Changes++;
+              wordWasChanged = true;
             }
-            if (groupKey && row[groupKey] !== undefined) {
-              existingWord.group = group;
-              wasUpdated = true;
-            }
-            if (synonyms) {
-              existingWord.synonyms = synonyms;
-              wasUpdated = true;
-            }
-            if (extraWord) {
-              existingWord.extraWord = extraWord;
-              wasUpdated = true;
-            }
-            if (extraMeaning) {
-              existingWord.extraMeaning = extraMeaning;
-              wasUpdated = true;
-            }
-            if (example) {
+            if (example && example !== (oldWord.example || '')) {
               existingWord.example = example;
-              wasUpdated = true;
+              place3Changes++;
+              wordWasChanged = true;
+            }
+            if (extraWord && extraWord !== (oldWord.extraWord || '')) {
+              existingWord.extraWord = extraWord;
+              place4Changes++;
+              wordWasChanged = true;
+            }
+            if (synonyms && synonyms !== (oldWord.synonyms || '')) {
+              existingWord.synonyms = synonyms;
+              place5Changes++;
+              wordWasChanged = true;
+            } else if (extraMeaning && extraMeaning !== (oldWord.extraMeaning || '')) {
+              existingWord.extraMeaning = extraMeaning;
+              place5Changes++;
+              wordWasChanged = true;
+            }
+            if (mnemonic && mnemonic !== (oldWord.mnemonic || '')) {
+              existingWord.mnemonic = mnemonic;
+              place6Changes++;
+              wordWasChanged = true;
+            }
+            if (groupKey && row[groupKey] !== undefined && String(group) !== String(oldWord.group)) {
+              existingWord.group = group;
+              groupChanges++;
+              wordWasChanged = true;
             }
 
-            if (wasUpdated) {
+            if (wordWasChanged) {
               updatedLocalWords[existingIdx] = existingWord;
               updatedCount++;
+            } else {
+              unchangedInImportCount++;
             }
           } else {
             // New word insertion requires word & meaning
@@ -1726,21 +1751,206 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
           }
         }
 
-        if (updatedCount === 0 && addedCount === 0) {
-          setExcelError('No words were updated or added. Make sure your spreadsheet contains valid "Unique ID" matching existing words or new "Word" and "Meaning" columns.');
+        // --- GAME SHEETS & GAME QUESTIONS PROCESSING ---
+        let updatedBlankQuestions = [...courseBlankQuestions];
+        let blankAdded = 0;
+        let blankUpdated = 0;
+
+        let updatedOooQuestions = [...courseOooQuestions];
+        let oooAdded = 0;
+        let oooUpdated = 0;
+
+        let updatedAnalogyQuestions = [...courseAnalogyQuestions];
+        let analogyAdded = 0;
+        let analogyUpdated = 0;
+
+        let updatedMcqQuestions = [...courseMcqQuestions];
+        let mcqAdded = 0;
+        let mcqUpdated = 0;
+
+        workbook.SheetNames.forEach(sName => {
+          const lowerName = sName.toLowerCase().trim();
+          const ws = workbook.Sheets[sName];
+          if (!ws) return;
+          const sheetRows = utils.sheet_to_json(ws) as any[];
+          if (!sheetRows || sheetRows.length === 0) return;
+
+          // 1. Blank Filling
+          if (/blank|fill|gap|blanks|শূন্যস্থান/i.test(lowerName)) {
+            sheetRows.forEach((r: any) => {
+              const sentence = r.sentence || r.Question || r.Sentence || r['Sentence / Question'] || r.question;
+              const ans = r.answer || r.Answer || r.correct || r.Correct;
+              if (!sentence) return;
+              const opts = [r.opt1 || r['Option 1'], r.opt2 || r['Option 2'], r.opt3 || r['Option 3'], r.opt4 || r['Option 4']].filter(Boolean);
+              const exIdx = updatedBlankQuestions.findIndex(q => q.sentence.trim().toLowerCase() === String(sentence).trim().toLowerCase());
+              if (exIdx !== -1) {
+                blankUpdated++;
+              } else {
+                updatedBlankQuestions.push({
+                  id: r.id || `blank-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                  sentence: String(sentence).trim(),
+                  options: opts.length >= 2 ? opts : ['Opt A', 'Opt B'],
+                  answer: String(ans || opts[0] || '').trim(),
+                  explanation: r.explanation || r.Explanation || '',
+                  courseId: course.id
+                });
+                blankAdded++;
+              }
+            });
+          }
+
+          // 2. Odd One Out
+          if (/odd|ooo|অড/i.test(lowerName)) {
+            sheetRows.forEach((r: any) => {
+              const wordsStr = r.words || r.Words || r.options || r.Options;
+              const ans = r.answer || r.Answer;
+              let wordsArr: string[] = [];
+              if (Array.isArray(wordsStr)) wordsArr = wordsStr;
+              else if (typeof wordsStr === 'string') wordsArr = wordsStr.split(/[,;\t]+/).map(s => s.trim());
+              else {
+                wordsArr = [r.w1 || r['Word 1'], r.w2 || r['Word 2'], r.w3 || r['Word 3'], r.w4 || r['Word 4']].filter(Boolean);
+              }
+              if (wordsArr.length < 3) return;
+              const exIdx = updatedOooQuestions.findIndex(q => q.words.join(',').toLowerCase() === wordsArr.join(',').toLowerCase());
+              if (exIdx !== -1) {
+                oooUpdated++;
+              } else {
+                updatedOooQuestions.push({
+                  id: r.id || `ooo-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                  words: wordsArr,
+                  answer: String(ans || wordsArr[0]).trim(),
+                  reason: r.reason || r.Reason || r.explanation || '',
+                  courseId: course.id
+                });
+                oooAdded++;
+              }
+            });
+          }
+
+          // 3. Word Analogy
+          if (/analogy|analogies|এনালজি/i.test(lowerName)) {
+            sheetRows.forEach((r: any) => {
+              const analogy = r.analogy || r.Analogy || r.question || r.Question;
+              const ans = r.answer || r.Answer;
+              if (!analogy) return;
+              const opts = [r.opt1 || r['Option 1'], r.opt2 || r['Option 2'], r.opt3 || r['Option 3'], r.opt4 || r['Option 4']].filter(Boolean);
+              const exIdx = updatedAnalogyQuestions.findIndex(q => q.analogy.trim().toLowerCase() === String(analogy).trim().toLowerCase());
+              if (exIdx !== -1) {
+                analogyUpdated++;
+              } else {
+                updatedAnalogyQuestions.push({
+                  id: r.id || `analogy-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                  analogy: String(analogy).trim(),
+                  options: opts.length >= 2 ? opts : ['A : B', 'C : D'],
+                  answer: String(ans || opts[0] || '').trim(),
+                  explanation: r.explanation || r.Explanation || '',
+                  courseId: course.id
+                });
+                analogyAdded++;
+              }
+            });
+          }
+
+          // 4. MCQ Quiz
+          if (/mcq|quiz|প্রশ্ন/i.test(lowerName)) {
+            sheetRows.forEach((r: any) => {
+              const question = r.question || r.Question || r.q || r.Q;
+              const ans = r.answer || r.Answer;
+              if (!question) return;
+              const opts = [r.opt1 || r['Option 1'], r.opt2 || r['Option 2'], r.opt3 || r['Option 3'], r.opt4 || r['Option 4']].filter(Boolean);
+              const exIdx = updatedMcqQuestions.findIndex(q => q.question.trim().toLowerCase() === String(question).trim().toLowerCase());
+              if (exIdx !== -1) {
+                mcqUpdated++;
+              } else {
+                updatedMcqQuestions.push({
+                  id: r.id || `mcq-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                  question: String(question).trim(),
+                  options: opts.length >= 2 ? opts : ['Opt 1', 'Opt 2'],
+                  answer: String(ans || opts[0] || '').trim(),
+                  explanation: r.explanation || r.Explanation || '',
+                  courseId: course.id
+                });
+                mcqAdded++;
+              }
+            });
+          }
+        });
+
+        // Check if game states were modified
+        if (blankAdded > 0 || blankUpdated > 0) setCourseBlankQuestions(updatedBlankQuestions);
+        if (oooAdded > 0 || oooUpdated > 0) setCourseOooQuestions(updatedOooQuestions);
+        if (analogyAdded > 0 || analogyUpdated > 0) setCourseAnalogyQuestions(updatedAnalogyQuestions);
+        if (mcqAdded > 0 || mcqUpdated > 0) setCourseMcqQuestions(updatedMcqQuestions);
+
+        // Check for new game activations
+        const newGamesAddedList: string[] = [];
+        if (courseBlankQuestions.length === 0 && updatedBlankQuestions.length > 0) {
+          newGamesAddedList.push('Blank Filling Practice');
+        }
+        if (courseOooQuestions.length === 0 && updatedOooQuestions.length > 0) {
+          newGamesAddedList.push('Odd One Out Game');
+        }
+        if (courseAnalogyQuestions.length === 0 && updatedAnalogyQuestions.length > 0) {
+          newGamesAddedList.push('Word Analogy Game');
+        }
+        if (courseMcqQuestions.length === 0 && updatedMcqQuestions.length > 0) {
+          newGamesAddedList.push('MCQ Quiz Questions');
+        }
+
+        if (updatedCount === 0 && addedCount === 0 && blankAdded === 0 && oooAdded === 0 && analogyAdded === 0 && mcqAdded === 0) {
+          setExcelError('No words or games were updated or added. Make sure your spreadsheet contains valid "Unique ID" matching existing words or new "Word" and "Meaning" columns.');
           return;
         }
 
         setLocalWords(updatedLocalWords);
-        
+
+        const unchangedWordsOverall = initialCourseWordsCount > updatedCount 
+          ? initialCourseWordsCount - updatedCount 
+          : 0;
+
+        const report: ImportStatsReport = {
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          filename: file.name,
+          totalRowsProcessed: rawRows.length,
+          newWordsCount: addedCount,
+          updatedWordsCount: updatedCount,
+          unchangedWordsCount: unchangedWordsOverall,
+          totalWordsNow: updatedLocalWords.length,
+          placeChanges: {
+            place1: place1Changes,
+            place2: place2Changes,
+            place3: place3Changes,
+            place4: place4Changes,
+            place5: place5Changes,
+            place6: place6Changes,
+            group: groupChanges
+          },
+          gameStats: {
+            blankQuestions: { added: blankAdded, updated: blankUpdated, total: updatedBlankQuestions.length },
+            oddOneOut: { added: oooAdded, updated: oooUpdated, total: updatedOooQuestions.length },
+            wordAnalogy: { added: analogyAdded, updated: analogyUpdated, total: updatedAnalogyQuestions.length },
+            mcqQuiz: { added: mcqAdded, updated: mcqUpdated, total: updatedMcqQuestions.length },
+            newGamesAddedList,
+            totalGamesModifiedCount: blankAdded + blankUpdated + oooAdded + oooUpdated + analogyAdded + analogyUpdated + mcqAdded + mcqUpdated
+          },
+          placeLabels: detectedLabels
+        };
+
+        setExcelImportStats(report);
+
         let msg = 'Spreadsheet processed successfully! ';
         if (updatedCount > 0 && addedCount > 0) {
           msg += `Updated ${updatedCount} existing words and added ${addedCount} new words. `;
         } else if (updatedCount > 0) {
           msg += `Successfully updated ${updatedCount} existing words. `;
-        } else {
+        } else if (addedCount > 0) {
           msg += `Successfully added ${addedCount} new words. `;
         }
+
+        if (report.gameStats.totalGamesModifiedCount > 0) {
+          msg += `Parsed ${report.gameStats.totalGamesModifiedCount} game question updates! `;
+        }
+
         msg += '⚠️ Important: Click "Update Settings" at the bottom to save these changes permanently to the course database.';
 
         setExcelSuccess(msg);
@@ -3100,6 +3310,13 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                   </button>
                 </div>
 
+                {excelImportStats && (
+                  <ExcelImportStatsReport 
+                    stats={excelImportStats} 
+                    onClose={() => setExcelImportStats(null)} 
+                  />
+                )}
+
                 {wordlistSubTab === 'wordlist' && (
                   <div className="space-y-4 animate-fadeIn">
                     <div className="border-b border-slate-100 pb-3 mb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -3496,6 +3713,14 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                     </div>
                   </div>
 
+                  {excelImportStats && (
+                    <div className="mt-4">
+                      <ExcelImportStatsReport 
+                        stats={excelImportStats} 
+                        onClose={() => setExcelImportStats(null)} 
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             )}

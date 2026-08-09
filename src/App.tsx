@@ -1849,7 +1849,7 @@ const getActiveCourse = (
       {/* Unified Horizontal Menu Bar (Sits directly under the main banner) */}
       <div 
         ref={navContainerRef}
-        className="bg-white border-b border-slate-200/60 overflow-x-auto flex items-center justify-center gap-1.5 md:gap-2.5 p-2 md:px-8 md:py-3 scrollbar-none flex-shrink-0 relative w-full" 
+        className="bg-white border-b border-slate-200/60 overflow-x-auto flex items-center justify-center gap-2 sm:gap-3.5 p-2.5 md:px-8 md:py-3 scrollbar-none flex-shrink-0 relative w-full" 
         id="horizontal-menu-navigation"
       >
         <button
@@ -1858,94 +1858,69 @@ const getActiveCourse = (
           }}
           data-active={['profile', 'dashboard', 'my_courses', 'flashcard'].includes(activeTab)}
           title="My Profile"
-          className={`p-2.5 md:px-3.5 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 flex items-center justify-center ${
-            ['profile', 'dashboard', 'my_courses', 'flashcard'].includes(activeTab)
-              ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/15'
-              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-          }`}
+          className="p-2.5 rounded-2xl transition cursor-pointer flex-shrink-0 flex items-center justify-center bg-[#5241f3] text-white shadow-md shadow-indigo-500/20 active:scale-95"
         >
-          <User className="w-4 h-4 text-amber-300" />
+          <User className="w-5 h-5 text-white" />
         </button>
 
         <button
           onClick={() => handleNavigateTab('revision')}
           data-active={activeTab === 'revision'}
           title="Revision"
-          className={`p-2.5 md:px-3.5 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 flex items-center justify-center ${
-            activeTab === 'revision'
-              ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/15'
-              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-          }`}
+          className="p-2.5 rounded-2xl transition cursor-pointer flex-shrink-0 flex items-center justify-center hover:bg-slate-50 text-emerald-500 active:scale-95"
         >
-          <RotateCcw className="w-4 h-4 text-emerald-400" />
+          <RotateCcw className="w-5 h-5 text-emerald-500" />
         </button>
 
         <button
           onClick={() => handleNavigateTab('leaderboard')}
           data-active={activeTab === 'leaderboard'}
-          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 p-2 md:px-4 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 text-xs font-bold ${
-            activeTab === 'leaderboard'
-              ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/15'
-              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-          }`}
+          title="Leaderboard"
+          className="p-2.5 rounded-2xl transition cursor-pointer flex-shrink-0 flex items-center justify-center hover:bg-slate-50 text-amber-500 active:scale-95"
         >
-          <Trophy className="w-4 h-4 text-amber-500" />
-          <span className="hidden md:inline">Leaderboard</span>
+          <Trophy className="w-5 h-5 text-amber-500" />
         </button>
 
         <button
           onClick={() => handleNavigateTab('practice')}
           data-active={['practice', 'synonym', 'quiz', 'match'].includes(activeTab)}
-          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 p-2 md:px-4 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 text-xs font-bold ${
-            ['practice', 'synonym', 'quiz', 'match'].includes(activeTab)
-              ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/15'
-              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-          }`}
+          title="Games"
+          className="p-2.5 rounded-2xl transition cursor-pointer flex-shrink-0 flex items-center justify-center hover:bg-slate-50 text-slate-400 active:scale-95"
         >
-          <Gamepad2 className="w-4 h-4" />
-          <span className="hidden md:inline">Games</span>
+          <Gamepad2 className="w-5 h-5 text-slate-400" />
         </button>
 
         <button
           onClick={() => handleNavigateTab('study_tools')}
           data-active={['study_tools', 'dictionary', 'lists', 'planner', 'story'].includes(activeTab)}
-          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 p-2 md:px-4 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 text-xs font-bold ${
-            ['study_tools', 'dictionary', 'lists', 'planner', 'story'].includes(activeTab)
-              ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/15'
-              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-          }`}
+          title="Study Tools"
+          className="p-2.5 rounded-2xl transition cursor-pointer flex-shrink-0 flex items-center justify-center hover:bg-slate-50 text-slate-400 active:scale-95"
         >
-          <BookOpen className="w-4 h-4" />
-          <span className="hidden md:inline">Study Tools</span>
+          <BookOpen className="w-5 h-5 text-slate-400" />
         </button>
 
         <button
           onClick={() => setActiveTab('settings')}
           data-active={activeTab === 'settings'}
-          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 p-2 md:px-4 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 text-xs font-bold ${
-            activeTab === 'settings'
-              ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/15'
-              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-          }`}
+          title="Settings"
+          className="p-2.5 rounded-2xl transition cursor-pointer flex-shrink-0 flex items-center justify-center hover:bg-slate-50 text-slate-400 active:scale-95"
         >
-          <Settings className="w-4 h-4" />
-          <span className="hidden md:inline">Settings</span>
+          <Settings className="w-5 h-5 text-slate-400" />
         </button>
 
-        {user && user.email && ['mohammad.001ekram@gmail.com'].includes(user.email.trim().toLowerCase()) && (
-          <button
-            onClick={() => setActiveTab('admin')}
-            data-active={activeTab === 'admin'}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 p-2 md:px-4 md:py-2.5 rounded-xl transition cursor-pointer flex-shrink-0 text-xs font-bold border border-dashed border-rose-200 ${
-              activeTab === 'admin'
-                ? 'bg-rose-600 text-white shadow-sm shadow-rose-500/15 border-rose-500'
-                : 'text-rose-600 hover:bg-rose-50 hover:text-rose-700'
-            }`}
-          >
-            <FolderLock className="w-4 h-4" />
-            <span className="hidden md:inline">Admin Panel</span>
-          </button>
-        )}
+        <button
+          onClick={() => {
+            if (user && user.email && ['mohammad.001ekram@gmail.com'].includes(user.email.trim().toLowerCase())) {
+              setActiveTab('admin');
+            } else {
+              setActiveTab('settings');
+            }
+          }}
+          title="Custom Courses / Admin"
+          className="p-2.5 rounded-2xl transition cursor-pointer flex-shrink-0 flex items-center justify-center bg-rose-50 text-rose-500 border border-rose-100 hover:bg-rose-100 active:scale-95"
+        >
+          <FolderPlus className="w-5 h-5 text-rose-500" />
+        </button>
 
         {/* App Meta Info */}
         <div className="hidden xl:flex items-center gap-1 text-[10px] text-slate-400 font-mono absolute right-6 pointer-events-none">
@@ -2002,7 +1977,7 @@ const getActiveCourse = (
           {['profile', 'dashboard', 'my_courses', 'flashcard'].includes(activeTab) && (
             <div className="space-y-6">
               {/* My Profile Sub-Navigation Pills */}
-              <div className="bg-white p-1.5 sm:p-2 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-center gap-1 sm:gap-2 max-w-md mx-auto">
+              <div className="bg-slate-50/90 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-center gap-2 max-w-md mx-auto">
                 <button
                   type="button"
                   onClick={() => {
@@ -2015,10 +1990,10 @@ const getActiveCourse = (
                       setProfileSubTab('flashcard');
                     }
                   }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl font-extrabold text-xs transition cursor-pointer ${
+                  className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-extrabold text-sm transition cursor-pointer ${
                     profileSubTab === 'flashcard'
-                      ? 'bg-indigo-600 text-white shadow-xs shadow-indigo-500/20'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      ? 'bg-[#5241f3] text-white shadow-md shadow-indigo-500/25'
+                      : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200/60'
                   }`}
                 >
                   <CreditCard className="w-4 h-4" />
@@ -2031,10 +2006,10 @@ const getActiveCourse = (
                     setActiveTab('profile');
                     setProfileSubTab('my_courses');
                   }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl font-extrabold text-xs transition cursor-pointer ${
+                  className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-extrabold text-sm transition cursor-pointer ${
                     profileSubTab === 'my_courses'
-                      ? 'bg-indigo-600 text-white shadow-xs shadow-indigo-500/20'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      ? 'bg-[#5241f3] text-white shadow-md shadow-indigo-500/25'
+                      : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200/60'
                   }`}
                 >
                   <BookOpen className="w-4 h-4" />

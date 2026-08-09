@@ -731,12 +731,19 @@ export default function FlashcardViewer({
     (sentencesData[currentActiveWord.id] && sentencesData[currentActiveWord.id][0]) || 
     `Take the time to sit back and listen to ${currentActiveWord.word} and establish a routine for yourself.`;
 
+  // Calculate overview counts for stats display
+  const totalWordsCount = words.length;
+  const knowCount = words.filter(w => progress[w.id]?.status === 'know').length;
+  const confusionCount = words.filter(w => progress[w.id]?.status === 'confusion').length;
+  const dontKnowCount = words.filter(w => progress[w.id]?.status === 'dont_know').length;
+  const unratedCount = totalWordsCount - (knowCount + confusionCount + dontKnowCount);
+
   // =========================================================================
   // RENDER STAGE 1: INTERMEDIATE FILTER & SETUP SCREEN (isSessionActive = false)
   // =========================================================================
   if (!isSessionActive) {
     return (
-      <div className="space-y-4 max-w-5xl mx-auto" id="flashcard-setup-view">
+      <div className="space-y-4 max-w-2xl mx-auto" id="flashcard-setup-view">
         {/* Restricted Course Free Trial Notice Banner */}
         {isRestrictedLocked && (
           <div className="p-4 bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-indigo-500/10 border border-amber-400/40 rounded-2xl shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 font-sans">
@@ -772,165 +779,217 @@ export default function FlashcardViewer({
           </div>
         )}
 
-        {/* Header Hero Banner / Start Flashcard Button */}
+        {/* 1. Course Name Pill Banner */}
+        <div className="w-full max-w-lg mx-auto bg-[#342e6f] text-white py-3 px-6 rounded-full text-center shadow-md my-2 border border-indigo-900/30">
+          <span className="text-[11px] font-semibold text-indigo-200/90 block leading-tight">
+            You are on now @
+          </span>
+          <span className="text-xl sm:text-2xl font-black text-white leading-tight block tracking-tight">
+            {courseTitle || 'Course Name'}
+          </span>
+        </div>
+
+        {/* 2. Start Flashcard CTA Card with Animated Hand Icon */}
         <div
           onClick={() => {
             if (filteredWords.length > 0) {
               setIsSessionActive(true);
             }
           }}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if ((e.key === 'Enter' || e.key === ' ') && filteredWords.length > 0) {
-              setIsSessionActive(true);
-            }
-          }}
-          className={`w-full bg-gradient-to-r from-indigo-950 via-indigo-900 to-slate-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-indigo-700/60 flex flex-col sm:flex-row items-center justify-between gap-6 transition relative overflow-hidden group select-none min-h-[140px] sm:min-h-[160px] ${
-            filteredWords.length > 0
-              ? 'cursor-pointer hover:border-indigo-400/80 hover:shadow-indigo-900/40 active:scale-[0.995]'
-              : 'opacity-60 cursor-not-allowed'
+          className={`w-full max-w-lg mx-auto bg-[#773357] hover:bg-[#6c2d4f] text-white rounded-2xl p-4 shadow-lg border border-pink-900/20 flex items-center justify-between transition-all active:scale-[0.99] my-3 select-none ${
+            filteredWords.length > 0 ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'
           }`}
         >
-          {/* Background Glow Accents */}
-          <div className="absolute -left-10 -top-10 w-48 h-48 bg-indigo-500/15 rounded-full blur-2xl pointer-events-none" />
-          <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-amber-500/15 rounded-full blur-2xl pointer-events-none" />
+          {/* Left Side: Animated Clicking Hand Icon & Headline */}
+          <div className="flex items-center gap-3">
+            <motion.div
+              animate={{
+                scale: [1, 1.22, 0.94, 1.16, 1],
+                rotate: [0, -12, 6, -6, 0],
+                y: [0, -4, 2, -1, 0]
+              }}
+              transition={{
+                duration: 1.4,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
+              className="p-2.5 bg-pink-500/25 rounded-2xl text-white shrink-0 border border-pink-300/40 shadow-inner flex items-center justify-center relative"
+            >
+              <svg className="w-7 h-7 text-white drop-shadow-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
+                <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v6" />
+                <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+                <path d="M18 8a2 2 0 0 1 2 2v4a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+              </svg>
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-pink-400 rounded-full animate-ping opacity-75" />
+            </motion.div>
 
-          {/* Left Side: Flashcard Practice Title */}
-          <div className="flex items-center gap-4 text-left transition shrink-0">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="px-2.5 py-1 bg-indigo-800/60 text-indigo-200 border border-indigo-600/50 rounded-lg text-[11px] font-black tracking-wide uppercase">
-                  Course Deck
-                </span>
-              </div>
-              <h1 className="text-xl sm:text-2xl font-black tracking-tight font-sans text-white flex items-center gap-2 min-h-[32px]">
-                <AnimatePresence mode="wait">
-                  <motion.span
-                    key={showStartText ? 'start-text' : 'course-title'}
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -5 }}
-                    transition={{ duration: 0.35, ease: 'easeOut' }}
-                    className={`inline-block ${
-                      showStartText
-                        ? 'text-amber-300 font-extrabold tracking-wide'
-                        : 'text-white font-black'
-                    }`}
-                  >
-                    {showStartText ? 'Start Flashcard Practice' : (courseTitle || 'GRE Master Vocab')}
-                  </motion.span>
-                </AnimatePresence>
-              </h1>
-              <p className="text-xs sm:text-sm text-indigo-200 font-medium mt-1">
-                Flashcard Practice • <span className="font-bold text-amber-300">{filteredWords.length} words</span> selected in current deck
-              </p>
+            <div className="text-left">
+              <span className="text-[11px] font-semibold text-pink-200/90 block leading-none mb-1">
+                Click here to:
+              </span>
+              <h2 className="text-lg sm:text-xl font-black text-white leading-tight tracking-tight">
+                Start Flashcard
+              </h2>
             </div>
           </div>
 
-          {/* Center: Animated Stacked Flashcards Illustration with Stationary In-Place 3D Rotation */}
-          <motion.div 
-            animate={{ 
-              y: [0, -4, 0, 4, 0]
+          {/* Vertical Divider Line */}
+          <div className="h-9 w-[1px] bg-pink-300/30 shrink-0 mx-2" />
+
+          {/* Right Side: Filter & Customization Toggle */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsFilterExpanded(prev => !prev);
             }}
-            transition={{ 
-              y: { duration: 4.5, repeat: Infinity, repeatType: 'mirror', ease: 'easeInOut' }
-            }}
-            className="flex items-center justify-center group-hover:scale-105 transition-transform duration-300 my-1 sm:my-0 relative shrink-0"
-            title="Click anywhere to start practice"
-            style={{ perspective: '800px' }}
+            className="text-left text-xs font-extrabold text-pink-100 hover:text-white transition leading-snug cursor-pointer max-w-[110px]"
           >
-            <div className="relative w-16 h-20 sm:w-20 sm:h-24 flex items-center justify-center">
-              {[0, 1, 2].map((cardId) => {
-                const pos = (cardId - bannerRotationStep + 3) % 3;
-                const isTop = pos === 0;
-                const isMiddle = pos === 1;
+            Filter & Customization
+          </button>
+        </div>
 
-                let animateProps: any;
-                if (pos === 0) {
-                  // Top card (front): stays stationary in place, then receives next middle card transition
-                  animateProps = {
-                    zIndex: [20, 20, 30, 30],
-                    x: 0,
-                    y: [2, 2, 0, 0],
-                    rotate: [-6, -6, 0, 0],
-                    scale: [0.92, 0.92, 1, 1],
-                    opacity: [0.85, 0.85, 1, 1],
-                    transition: { duration: 4.5, times: [0, 0.4, 0.88, 1], ease: [0.25, 1, 0.5, 1] }
-                  };
-                } else if (pos === 1) {
-                  // Second card (middle): stays stationary in place, then moves up to middle
-                  animateProps = {
-                    zIndex: [10, 10, 20, 20],
-                    x: 0,
-                    y: [4, 4, 2, 2],
-                    rotate: [6, 6, -6, -6],
-                    scale: [0.84, 0.84, 0.92, 0.92],
-                    opacity: [0.65, 0.65, 0.85, 0.85],
-                    transition: { duration: 4.5, times: [0, 0.4, 0.88, 1], ease: [0.25, 1, 0.5, 1] }
-                  };
-                } else {
-                  // Third card (former top card): rotates in place stationary to back
-                  animateProps = {
-                    zIndex: [30, 30, 10, 10],
-                    x: 0,
-                    rotateY: [0, 0, 180, 0, 0],
-                    rotate: [0, 0, 12, 6, 6],
-                    scale: [1, 1, 0.88, 0.84, 0.84],
-                    opacity: [1, 1, 0.8, 0.65, 0.65],
-                    transition: { duration: 4.5, times: [0, 0.4, 0.68, 0.88, 1], ease: [0.33, 1, 0.68, 1] }
-                  };
-                }
-
-                return (
-                  <motion.div
-                    key={cardId}
-                    animate={animateProps}
-                    className={`absolute inset-0 rounded-xl p-2.5 sm:p-3 flex flex-col justify-center gap-1.5 transform-gpu origin-center border transition-colors ${
-                      isTop
-                        ? 'bg-white border-indigo-100 shadow-xl'
-                        : isMiddle
-                        ? 'bg-indigo-300/60 border-indigo-200/50 shadow-md'
-                        : 'bg-indigo-400/40 border-indigo-300/40 shadow-sm'
-                    }`}
-                  >
-                    {isTop ? (
-                      <div className="flex flex-col items-center justify-center h-full relative">
-                        {/* Synchronized Click Icon: Clicks on top card, then disappears before full shuffle */}
-                        <motion.div 
-                          key={`click-icon-step-${bannerRotationStep}`}
-                          initial={{ opacity: 0, scale: 0.6, y: 8 }}
-                          animate={{
-                            opacity: [0, 1, 1, 1, 0, 0],
-                            scale: [0.6, 1, 0.82, 1.18, 0.5, 0.5],
-                            y: [8, 0, 0, 0, -10, -10]
-                          }}
-                          transition={{
-                            duration: 4.5,
-                            times: [0, 0.08, 0.2, 0.3, 0.4, 1],
-                            ease: "easeInOut"
-                          }}
-                          className="p-2 sm:p-2.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 shadow-xs flex items-center justify-center relative"
-                        >
-                          <MousePointerClick className="w-6 h-6 sm:w-7 sm:h-7 text-indigo-600" />
-                          <motion.span 
-                            animate={{ scale: [0.8, 1.6, 0.8], opacity: [0, 0.7, 0] }}
-                            transition={{ duration: 0.9, times: [0, 0.5, 1], delay: 0.8 }}
-                            className="absolute inset-0 rounded-xl border-2 border-indigo-400 pointer-events-none"
-                          />
-                        </motion.div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center gap-1 opacity-40 h-full">
-                        <div className="h-1.5 w-10 rounded-full bg-indigo-300/60" />
-                        <div className="h-1 w-6 rounded-full bg-indigo-200/50" />
-                      </div>
-                    )}
-                  </motion.div>
-                );
-              })}
+        {/* 3. Statistics Donut Chart Card */}
+        <div className="w-full max-w-lg mx-auto bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs text-center space-y-4 my-3">
+          {/* Top Row: Total Words & Not Studied */}
+          <div className="flex items-center justify-center gap-2 text-center">
+            <div className="inline-flex flex-col items-center">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Total words
+              </span>
+              <span className="text-2xl font-black text-[#3a82f6] leading-tight font-sans">
+                {totalWordsCount}
+              </span>
             </div>
-          </motion.div>
+
+            <span className="text-slate-300 font-light text-xl mx-3">|</span>
+
+            <div className="inline-flex flex-col items-center">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Not studied
+              </span>
+              <span className="text-2xl font-black text-[#3a82f6] leading-tight font-sans">
+                {unratedCount}
+              </span>
+            </div>
+          </div>
+
+          {/* Bottom Row: 3 Donut Gauge Charts */}
+          <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+            {/* Know Donut Chart */}
+            <div className="flex flex-col items-center justify-center">
+              <div className="relative w-16 h-16 sm:w-18 sm:h-18">
+                <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                  <circle cx="50" cy="50" r="38" className="stroke-slate-100" strokeWidth="12" fill="transparent" />
+                  <circle 
+                    cx="50" 
+                    cy="50" 
+                    r="38" 
+                    className="text-[#0d9488]" 
+                    strokeWidth="12" 
+                    strokeDasharray="238.76" 
+                    strokeDashoffset={238.76 - (238.76 * (totalWordsCount > 0 ? (knowCount / totalWordsCount) * 100 : 0)) / 100}
+                    strokeLinecap="round" 
+                    stroke="currentColor" 
+                    fill="transparent" 
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-xs sm:text-sm font-black text-slate-900 font-sans">
+                    {totalWordsCount > 0 ? Math.round((knowCount / totalWordsCount) * 100) : 0}%
+                  </span>
+                </div>
+              </div>
+              <span className="text-xs font-black text-slate-800 mt-1 font-sans">
+                Know
+              </span>
+            </div>
+
+            {/* Confused Donut Chart */}
+            <div className="flex flex-col items-center justify-center">
+              <div className="relative w-16 h-16 sm:w-18 sm:h-18">
+                <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                  <circle cx="50" cy="50" r="38" className="stroke-slate-100" strokeWidth="12" fill="transparent" />
+                  <circle 
+                    cx="50" 
+                    cy="50" 
+                    r="38" 
+                    className="text-[#f97316]" 
+                    strokeWidth="12" 
+                    strokeDasharray="238.76" 
+                    strokeDashoffset={238.76 - (238.76 * (totalWordsCount > 0 ? (confusionCount / totalWordsCount) * 100 : 0)) / 100}
+                    strokeLinecap="round" 
+                    stroke="currentColor" 
+                    fill="transparent" 
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-xs sm:text-sm font-black text-slate-900 font-sans">
+                    {totalWordsCount > 0 ? Math.round((confusionCount / totalWordsCount) * 100) : 0}%
+                  </span>
+                </div>
+              </div>
+              <span className="text-xs font-black text-slate-800 mt-1 font-sans">
+                Confused
+              </span>
+            </div>
+
+            {/* Don't Know Donut Chart */}
+            <div className="flex flex-col items-center justify-center">
+              <div className="relative w-16 h-16 sm:w-18 sm:h-18">
+                <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                  <circle cx="50" cy="50" r="38" className="stroke-slate-100" strokeWidth="12" fill="transparent" />
+                  <circle 
+                    cx="50" 
+                    cy="50" 
+                    r="38" 
+                    className="text-[#ef4444]" 
+                    strokeWidth="12" 
+                    strokeDasharray="238.76" 
+                    strokeDashoffset={238.76 - (238.76 * (totalWordsCount > 0 ? (dontKnowCount / totalWordsCount) * 100 : 0)) / 100}
+                    strokeLinecap="round" 
+                    stroke="currentColor" 
+                    fill="transparent" 
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-xs sm:text-sm font-black text-slate-900 font-sans">
+                    {totalWordsCount > 0 ? Math.round((dontKnowCount / totalWordsCount) * 100) : 0}%
+                  </span>
+                </div>
+              </div>
+              <span className="text-xs font-black text-slate-800 mt-1 font-sans">
+                Don't Know
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* 4. Group Progression Badge */}
+        <div className="text-center my-4">
+          <span className="inline-block bg-[#342e6f] text-white px-8 py-2.5 rounded-full font-black text-xs shadow-xs uppercase tracking-wider">
+            Group Progression
+          </span>
+        </div>
+
+        {/* 5. Group Cards 5-Column Grid */}
+        <div className="w-full max-w-lg mx-auto grid grid-cols-5 gap-2.5 sm:gap-3 my-3">
+          {uniqueGroups.map((gVal) => {
+            return (
+              <button
+                key={gVal}
+                type="button"
+                onClick={() => {
+                  setSelectedGroups([gVal]);
+                  setIsSessionActive(true);
+                }}
+                className="bg-[#5241f3] hover:bg-[#4331e0] active:scale-95 text-white font-extrabold text-xs sm:text-sm py-3.5 px-2 rounded-xl text-center shadow-xs cursor-pointer transition flex items-center justify-center min-h-[48px] border border-indigo-400/20"
+              >
+                <span>Group {gVal}</span>
+              </button>
+            );
+          })}
         </div>
 
 
