@@ -14,7 +14,9 @@ import {
   saveBulkDocs,
   incrementCourseClickCount,
   onSnapshot,
-  clearCollectionDocs
+  clearCollectionDocs,
+  runTransaction,
+  writeBatch
 } from '../lib/db';
 import { VocabularyWord, UserProgress, Course, AccessRequest, BlankQuestion, AppSettings, VerifiedPayment } from '../types';
 import { read, utils } from 'xlsx';
@@ -184,6 +186,28 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const [globalVpPasteInput, setGlobalVpPasteInput] = useState('');
   const [isAutoVerifyingAll, setIsAutoVerifyingAll] = useState(false);
   const [autoVerifyResultMessage, setAutoVerifyResultMessage] = useState<string | null>(null);
+
+  const userPermissionDebug = () => {
+    const currentUser = auth.currentUser;
+    const email = currentUser?.email?.trim().toLowerCase() || '';
+    const hardcodedAdmins = ['mohammad.001ekram@gmail.com', 'ten.billion.neu@gmail.com'];
+    const settingAdmins = ((settings as any)?.adminEmails || []).map((e: string) => e.trim().toLowerCase());
+    const isAdmin = hardcodedAdmins.includes(email) || settingAdmins.includes(email);
+    const debugData = {
+      userId: currentUser?.uid || 'no-auth-uid',
+      userEmail: email,
+      isAdmin,
+      hardcodedAdminMatch: hardcodedAdmins.includes(email),
+      settingsAdminMatch: settingAdmins.includes(email),
+      provider: currentUser?.providerData?.[0]?.providerId || 'unknown'
+    };
+    console.log('🛡️ [userPermissionDebug] AdminPanel Entry Check:', debugData);
+    return debugData;
+  };
+
+  useEffect(() => {
+    userPermissionDebug();
+  }, []);
 
   useEffect(() => {
     if (onCoursesUpdated && hasFetchedCourses) {
@@ -434,241 +458,156 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     }
   };
 
-  const handleApproveAccessRequest = async (req: AccessRequest, overrideBalance?: number) => {
-    try {
-      const finalPrice = overrideBalance !== undefined ? overrideBalance : (req.totalPrice || req.price || 0);
-      const userEmail = req.email.toLowerCase().trim();
-      const nowISO = new Date().toISOString();
+  const validateWalletAndProcessRequest = async (req: AccessRequest, action: 'approve' | 'reject', overrideBalance?: number) => {
+    const finalPrice = overrideBalance !== undefined ? overrideBalance : (req.totalPrice || req.price || 0);
+    const userEmail = req.email.toLowerCase().trim();
+    const nowISO = new Date().toISOString();
+    const isRecharge = req.courseId === 'wallet_recharge' || 
+                       req.courseTitle?.toLowerCase().includes('recharge') ||
+                       req.courseTitle?.toLowerCase().includes('wallet');
 
-      // Immediately update local UI state so admin doesn't experience lag
-      setAccessRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved', spent: true, price: finalPrice, totalPrice: finalPrice } : r));
-
-      const tasks: Promise<any>[] = [];
-
-      // 1. Mark request status as 'approved' in Firestore
-      const reqRef = doc(db, 'access_requests', req.id);
-      tasks.push(updateDoc(reqRef, { 
-        status: 'approved',
-        spent: true,
-        spentAt: nowISO,
-        price: finalPrice,
-        totalPrice: finalPrice
-      }));
-
-      // 2. Lock used_transactions
-      if (req.trxId) {
-        const reqTrx = req.trxId.toLowerCase().trim();
-        tasks.push(setDoc(doc(db, 'used_transactions', reqTrx), {
-          trxId: reqTrx,
-          spent: true,
-          status: 'spent',
-          email: userEmail,
-          usedBy: userEmail,
-          bkashNumber: req.bkashNumber || '',
-          amount: finalPrice,
-          createdAt: nowISO,
-          usedAt: nowISO
-        }, { merge: true }));
+    if (action === 'reject') {
+      try {
+        const reqRef = doc(db, 'access_requests', req.id);
+        await updateDoc(reqRef, { status: 'rejected', updatedAt: nowISO });
+        setAccessRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'rejected' } : r));
+        showToast(`Request rejected for ${userEmail}`, 'info');
+      } catch (err: any) {
+        console.error('Error rejecting access request:', err);
+        showToast(`❌ Error rejecting request: ${err.message || String(err)}`, 'error');
       }
+      return;
+    }
 
-      // 3. Handle Wallet Recharge vs Course Access
-      const isRecharge = req.courseId === 'wallet_recharge' || 
-                         req.courseTitle?.toLowerCase().includes('recharge') ||
-                         req.courseTitle?.toLowerCase().includes('wallet');
-
-      if (isRecharge) {
-        const rechargeAmt = finalPrice;
+    setIsProcessingAction(true);
+    try {
+      // Execute Firestore transaction for atomic batching
+      await runTransaction(db, async (transaction) => {
+        const reqRef = doc(db, 'access_requests', req.id);
         const walletRef = doc(db, 'user_wallets', userEmail);
-        
-        // Fetch current wallet balance across user_wallets and users collection
-        const walletTask = (async () => {
-          const walletSnap = await getDoc(walletRef);
-          let curBal = walletSnap.exists() ? (walletSnap.data().balance ?? walletSnap.data().walletBalance ?? 0) : 0;
+        const userRef = doc(db, 'users', userEmail);
 
-          // Also check users collection for existing balance
-          try {
-            const uQuery = query(collection(db, 'users'), where('email', '==', userEmail));
-            const uSnap = await getDocs(uQuery);
-            if (!uSnap.empty) {
-              uSnap.forEach(uDoc => {
-                const b = uDoc.data().balance ?? uDoc.data().walletBalance ?? 0;
-                if (typeof b === 'number' && b > curBal) curBal = b;
-              });
-            }
-          } catch (_) {}
+        // Read wallet
+        const walletSnap = await transaction.get(walletRef);
+        const currentWalletBal = walletSnap.exists() ? (walletSnap.data().balance ?? walletSnap.data().walletBalance ?? 0) : 0;
 
-          const newBal = curBal + rechargeAmt;
-          
-          // Set user_wallets document with both balance and walletBalance
-          await setDoc(walletRef, {
+        if (isRecharge) {
+          const newBal = currentWalletBal + finalPrice;
+          transaction.set(walletRef, {
             email: userEmail,
             balance: newBal,
             walletBalance: newBal,
             updatedAt: nowISO
           }, { merge: true });
 
-          // Also update user document in users collection
-          try {
-            const uQuery = query(collection(db, 'users'), where('email', '==', userEmail));
-            const uSnap = await getDocs(uQuery);
-            if (!uSnap.empty) {
-              for (const uDoc of uSnap.docs) {
-                await setDoc(doc(db, 'users', uDoc.id), {
-                  email: userEmail,
-                  walletBalance: newBal,
-                  balance: newBal,
-                  updatedAt: nowISO
-                }, { merge: true });
-              }
-            } else {
-              await setDoc(doc(db, 'users', userEmail), {
-                email: userEmail,
-                walletBalance: newBal,
-                balance: newBal,
-                updatedAt: nowISO
-              }, { merge: true });
-            }
-          } catch (uErr) {
-            console.warn("Notice: users collection update exception:", uErr);
+          transaction.set(userRef, {
+            email: userEmail,
+            balance: newBal,
+            walletBalance: newBal,
+            updatedAt: nowISO
+          }, { merge: true });
+        } else {
+          // Course Access
+          const targetCourseIds = (req.courseIds && req.courseIds.length > 0) ? req.courseIds : [req.courseId];
+          const userSnap = await transaction.get(userRef);
+          let existingEnrolled: string[] = [];
+          if (userSnap.exists()) {
+            existingEnrolled = Array.isArray(userSnap.data().enrolledCourseIds) ? userSnap.data().enrolledCourseIds : [];
           }
 
-          return newBal;
-        })();
-        tasks.push(walletTask);
-      } else {
-        const targetCourseIds = (req.courseIds && req.courseIds.length > 0) 
-          ? req.courseIds 
-          : [req.courseId];
-
-        for (const courseId of targetCourseIds) {
-          if (!courseId || courseId === 'wallet_recharge') continue;
-          
-          const courseTask = (async () => {
-            let courseObj = customCourses.find(c => c.id === courseId);
-            let currentAllowed: string[] = courseObj?.allowedUsers || [];
-            let currentAllowedExpiry: Record<string, string> = courseObj?.allowedUsersExpiry || {};
-            let durationDays = courseObj?.accessDurationDays || 365;
-
-            if (!courseObj) {
-              const courseDoc = await getDoc(doc(db, 'courses', courseId));
-              if (courseDoc.exists()) {
-                const courseData = courseDoc.data() as Course;
-                currentAllowed = courseData.allowedUsers || [];
-                currentAllowedExpiry = courseData.allowedUsersExpiry || {};
-                if (courseData.accessDurationDays) durationDays = courseData.accessDurationDays;
-              }
+          const existingSet = new Set(existingEnrolled.map(id => typeof id === 'string' ? id.trim().toLowerCase() : ''));
+          const updatedEnrolled = [...existingEnrolled];
+          for (const cid of targetCourseIds) {
+            if (cid && cid !== 'wallet_recharge' && !existingSet.has(cid.trim().toLowerCase())) {
+              updatedEnrolled.push(cid);
+              existingSet.add(cid.trim().toLowerCase());
             }
+          }
 
-            const updatedAllowed = currentAllowed.includes(userEmail) ? currentAllowed : [...currentAllowed, userEmail];
-            const updatedExpiryMap = { ...currentAllowedExpiry };
-            const expDate = new Date();
-            expDate.setDate(expDate.getDate() + durationDays);
-            updatedExpiryMap[userEmail] = expDate.toISOString().split('T')[0];
-
-            await setDoc(doc(db, 'courses', courseId), { 
-              allowedUsers: updatedAllowed,
-              allowedUsersExpiry: updatedExpiryMap
-            }, { merge: true });
-
-            setCustomCourses(prev => prev.map(c => c.id === courseId ? { 
-              ...c, 
-              allowedUsers: updatedAllowed,
-              allowedUsersExpiry: updatedExpiryMap
-            } : c));
-          })();
-          tasks.push(courseTask);
+          transaction.set(userRef, {
+            email: userEmail,
+            enrolledCourseIds: updatedEnrolled,
+            updatedAt: nowISO
+          }, { merge: true });
         }
 
-        // Sync directly to the user's document
-        const userSyncTask = (async () => {
+        // Mark access_requests as approved & spent
+        transaction.set(reqRef, {
+          status: 'approved',
+          spent: true,
+          spentAt: nowISO,
+          price: finalPrice,
+          totalPrice: finalPrice,
+          updatedAt: nowISO
+        }, { merge: true });
+
+        // Lock used_transactions
+        if (req.trxId) {
+          const reqTrx = req.trxId.toLowerCase().trim();
+          const trxRef = doc(db, 'used_transactions', reqTrx);
+          transaction.set(trxRef, {
+            trxId: reqTrx,
+            spent: true,
+            status: 'spent',
+            email: userEmail,
+            usedBy: userEmail,
+            bkashNumber: req.bkashNumber || '',
+            amount: finalPrice,
+            createdAt: nowISO,
+            usedAt: nowISO
+          }, { merge: true });
+        }
+      });
+
+      // Synchronize course allowedUsers
+      if (!isRecharge) {
+        const targetCourseIds = (req.courseIds && req.courseIds.length > 0) ? req.courseIds : [req.courseId];
+        for (const cid of targetCourseIds) {
+          if (!cid || cid === 'wallet_recharge') continue;
           try {
-            const usersQuery = query(collection(db, 'users'), where('email', '==', userEmail));
-            const usersSnap = await getDocs(usersQuery);
-            for (const uDoc of usersSnap.docs) {
-              const uData = uDoc.data();
-              const existingEnrolled: string[] = Array.isArray(uData.enrolledCourseIds) ? uData.enrolledCourseIds : [];
-              const existingSet = new Set(existingEnrolled.map(id => typeof id === 'string' ? id.trim().toLowerCase() : ''));
-              let updated = false;
-              const updatedEnrolled = [...existingEnrolled];
-
-              const targetCourseIds = (req.courseIds && req.courseIds.length > 0) ? req.courseIds : [req.courseId];
-              for (const cid of targetCourseIds) {
-                if (cid && cid !== 'wallet_recharge' && !existingSet.has(cid.trim().toLowerCase())) {
-                  updatedEnrolled.push(cid);
-                  existingSet.add(cid.trim().toLowerCase());
-                  updated = true;
-                }
-              }
-
-              if (updated) {
-                await updateDoc(doc(db, 'users', uDoc.id), { enrolledCourseIds: updatedEnrolled, updatedAt: nowISO });
+            const courseRef = doc(db, 'courses', cid);
+            const courseDoc = await getDoc(courseRef);
+            if (courseDoc.exists()) {
+              const cData = courseDoc.data() as Course;
+              const allowed = cData.allowedUsers || [];
+              if (!allowed.includes(userEmail)) {
+                await updateDoc(courseRef, { allowedUsers: [...allowed, userEmail] });
               }
             }
-          } catch (uSyncErr) {
-            console.warn('Notice: Could not sync enrolledCourseIds to user doc:', uSyncErr);
+          } catch (cErr) {
+            console.warn(`Notice updating course allowedUsers for ${cid}:`, cErr);
           }
-        })();
-        tasks.push(userSyncTask);
+        }
       }
 
-      // Mark matching payment in global_verified_payments as spent
-      if (req.trxId) {
-        const vpTask = (async () => {
-          const globalDocRef = doc(db, 'system_settings', 'global_verified_payments');
-          const vpSnap = await getDoc(globalDocRef);
-          if (vpSnap.exists()) {
-            const vps = vpSnap.data().verifiedPayments || [];
-            if (Array.isArray(vps)) {
-              const reqTrx = req.trxId.toLowerCase().trim();
-              let updated = false;
-              const updatedVps = vps.map((vp: any) => {
-                if ((vp.trxId || '').toLowerCase().trim() === reqTrx) {
-                  updated = true;
-                  return {
-                    ...vp,
-                    spent: true,
-                    claimed: true,
-                    claimedBy: userEmail,
-                    claimedAt: nowISO,
-                    spentAt: nowISO
-                  };
-                }
-                return vp;
-              });
-              if (updated) {
-                await setDoc(globalDocRef, { verifiedPayments: updatedVps }, { merge: true });
-                setGlobalVerifiedPayments(updatedVps);
-              }
-            }
-          }
-        })();
-        tasks.push(vpTask);
-      }
-
-      // Wait for all parallel tasks to finish
-      await Promise.all(tasks);
-
-      // Explicit confirmation toast triggers ONLY after database update succeeds
+      setAccessRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved', spent: true, price: finalPrice, totalPrice: finalPrice } : r));
       showToast(
         isRecharge 
-          ? `✅ Server Confirmed: Recharged ৳${finalPrice} & updated balance for ${userEmail}!`
-          : `✅ Server Confirmed: Approved course access request for ${userEmail}!`,
+          ? `✅ Recharged ৳${finalPrice} BDT & updated balance for ${userEmail}!`
+          : `✅ Approved course access & updated enrolled courses for ${userEmail}!`,
         'success'
       );
-    } catch (err) {
-      console.error('Error approving request:', err);
-      // Revert optimistic UI state if server transaction fails
-      setAccessRequests(prev => prev.map(r => r.id === req.id ? req : r));
-      showToast('❌ Server Error: Failed to process request on database: ' + (err instanceof Error ? err.message : String(err)), 'error');
+    } catch (err: any) {
+      console.error('Error in validateWalletAndProcessRequest:', err);
+      showToast(`❌ Transaction failed: ${err.message || String(err)}`, 'error');
+    } finally {
+      setIsProcessingAction(false);
     }
+  };
+
+  const handleApproveAccessRequest = async (req: AccessRequest, overrideBalance?: number) => {
+    return validateWalletAndProcessRequest(req, 'approve', overrideBalance);
   };
 
   const handleRejectAccessRequest = async (reqId: string) => {
     if (!window.confirm('Are you sure you want to reject this request?')) return;
+    const foundReq = accessRequests.find(r => r.id === reqId);
+    if (foundReq) {
+      return validateWalletAndProcessRequest(foundReq, 'reject');
+    }
     try {
       const reqRef = doc(db, 'access_requests', reqId);
       await updateDoc(reqRef, { status: 'rejected' });
-      
       setAccessRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: 'rejected' } : r));
       showToast('✅ Server Confirmed: Request status set to Rejected.', 'info');
     } catch (err) {

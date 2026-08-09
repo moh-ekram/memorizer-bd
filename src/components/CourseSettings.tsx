@@ -35,7 +35,7 @@ import {
   Shuffle,
   Save
 } from 'lucide-react';
-import { db, doc, setDoc, getDoc, collection, getDocs, updateDoc, deleteDoc, saveBulkDocs, deleteBulkDocs, matchesCourseId, clearCollectionDocs } from '../lib/db';
+import { db, doc, setDoc, getDoc, collection, getDocs, updateDoc, deleteDoc, saveBulkDocs, deleteBulkDocs, matchesCourseId, clearCollectionDocs, query, where } from '../lib/db';
 import { read, utils, writeFile } from 'xlsx';
 import {
   downloadBlankExcelTemplate,

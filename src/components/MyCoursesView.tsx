@@ -448,12 +448,57 @@ export default function MyCoursesView({
 
       if (data.autoVerified) {
         setUserWalletBalance(data.newBalance || 0);
+        const reqId = `req_recharge_auto_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const nowISO = new Date().toISOString();
+        try {
+          await setDoc(doc(db, 'access_requests', reqId), {
+            id: reqId,
+            courseId: 'wallet_recharge',
+            courseTitle: `Wallet Recharge (৳${data.amountAdded || 50} BDT)`,
+            bkashNumber: cleanSender,
+            email: cleanEmail,
+            trxId: cleanTrx,
+            status: 'approved',
+            verificationMethod: 'auto',
+            spent: true,
+            spentAt: nowISO,
+            price: data.amountAdded || 50,
+            totalPrice: data.amountAdded || 50,
+            createdAt: nowISO,
+            requestedBy: user?.email || cleanEmail
+          }, { merge: true });
+        } catch (fErr) {
+          console.warn('Notice: Could not write auto recharge request to Firestore:', fErr);
+        }
+
         setRechargeMessage({
           type: 'success',
           text: data.message || `অটো-ভেরিফিকেশন সফল! ৳${data.amountAdded} BDT ওয়ালেটে জমা হয়েছে।`
         });
         setRechargeTrx('');
       } else {
+        const reqId = `req_recharge_manual_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const nowISO = new Date().toISOString();
+        try {
+          await setDoc(doc(db, 'access_requests', reqId), {
+            id: reqId,
+            courseId: 'wallet_recharge',
+            courseTitle: `Wallet Recharge Claim`,
+            bkashNumber: cleanSender,
+            email: cleanEmail,
+            trxId: cleanTrx,
+            status: 'pending',
+            verificationMethod: 'manual',
+            spent: false,
+            price: 0,
+            totalPrice: 0,
+            createdAt: nowISO,
+            requestedBy: user?.email || cleanEmail
+          }, { merge: true });
+        } catch (fErr) {
+          console.warn('Notice: Could not write manual recharge request to Firestore:', fErr);
+        }
+
         setRechargeMessage({
           type: 'info',
           text: data.message || `Request Sent: Your wallet recharge request has been submitted successfully.`

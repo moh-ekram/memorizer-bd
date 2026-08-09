@@ -48,15 +48,16 @@ import {
   doc,
   getDoc,
   setDoc,
+  writeBatch,
   onAuthStateChanged,
   signOut,
   collection,
   onSnapshot,
   getDocs,
   query,
-  where,
-  type User as DbUser
+  where
 } from './lib/db';
+import type { User as DbUser } from 'firebase/auth';
 import { Course } from './types';
 import { isCourseEnrolled, isCourseAccessible } from './lib/courseAccess';
 import AuthModal from './components/AuthModal';
@@ -1341,7 +1342,7 @@ const getActiveCourse = (
     if (match) return match;
 
     // 2. Course code match
-    match = courses.find(c => c && c.courseCode && c.courseCode.trim().toLowerCase() === norm);
+    match = courses.find(c => c && (c as any).courseCode && (c as any).courseCode.trim().toLowerCase() === norm);
     if (match) return match;
 
     // 3. Title match
@@ -2274,15 +2275,20 @@ const getActiveCourse = (
 
                 if (hasWriteAccess && Array.isArray(updatedCourses) && updatedCourses.length > 0) {
                   try {
+                    const batch = writeBatch(db);
+                    let validCount = 0;
                     for (const course of updatedCourses) {
                       if (course && course.id) {
-                        console.log(`[App.tsx onCoursesUpdated] Persisting course "${course.id}" ("${course.title}") to Firestore...`);
                         const courseRef = doc(db, 'courses', course.id);
-                        await setDoc(courseRef, course, { merge: true });
-                        console.log(`[App.tsx onCoursesUpdated] Course "${course.id}" persisted successfully.`);
+                        batch.set(courseRef, course, { merge: true });
+                        validCount++;
                       } else {
                         console.warn('[App.tsx onCoursesUpdated] Skipping invalid course item missing id:', course);
                       }
+                    }
+                    if (validCount > 0) {
+                      await batch.commit();
+                      console.log(`[App.tsx onCoursesUpdated] Atomically persisted ${validCount} course(s) to Firestore using writeBatch.`);
                     }
                   } catch (err) {
                     console.error('[App.tsx onCoursesUpdated] Error persisting course data to Firestore:', err);

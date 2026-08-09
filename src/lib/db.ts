@@ -11,7 +11,8 @@ import {
   query,
   where,
   limit,
-  writeBatch
+  writeBatch,
+  runTransaction
 } from 'firebase/firestore';
 import {
   signInWithEmailAndPassword,
@@ -34,6 +35,7 @@ export {
   where,
   limit,
   writeBatch,
+  runTransaction,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
