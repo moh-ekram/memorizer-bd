@@ -212,7 +212,7 @@ export default function App() {
     // Minimum swipe threshold: >= 55px horizontal distance, < 80px vertical drift, within 600ms
     if (Math.abs(deltaX) >= 55 && Math.abs(deltaY) < 80 && timeDiff < 600) {
       const currentPrimary = getPrimaryTab(activeTab);
-      const isAdmin = user && user.email && ['mohammad.001ekram@gmail.com', 'ten.billion.neu@gmail.com'].includes(user.email.trim().toLowerCase());
+      const isAdmin = user && user.email && ['mohammad.001ekram@gmail.com'].includes(user.email.trim().toLowerCase());
       const availableTabs = isAdmin
         ? [...MAIN_TABS, 'admin']
         : MAIN_TABS;
@@ -1913,7 +1913,7 @@ const getActiveCourse = (
           <span className="hidden md:inline">Settings</span>
         </button>
 
-        {user && user.email && ['mohammad.001ekram@gmail.com', 'ten.billion.neu@gmail.com'].includes(user.email.trim().toLowerCase()) && (
+        {user && user.email && ['mohammad.001ekram@gmail.com'].includes(user.email.trim().toLowerCase()) && (
           <button
             onClick={() => setActiveTab('admin')}
             data-active={activeTab === 'admin'}
@@ -2255,7 +2255,7 @@ const getActiveCourse = (
             />
           )}
 
-          {activeTab === 'admin' && user && user.email && ['mohammad.001ekram@gmail.com', 'ten.billion.neu@gmail.com'].includes(user.email.trim().toLowerCase()) && (
+          {activeTab === 'admin' && user && user.email && ['mohammad.001ekram@gmail.com'].includes(user.email.trim().toLowerCase()) && (
             <AdminPanel 
               words={activeWords} 
               settings={settings}
@@ -2266,7 +2266,7 @@ const getActiveCourse = (
                 safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(updatedCourses));
 
                 // Verify user write access permission and persist courses data to Firestore DB via setDoc
-                const adminEmails = ['mohammad.001ekram@gmail.com', 'ten.billion.neu@gmail.com'];
+                const adminEmails = ['mohammad.001ekram@gmail.com'];
                 const userEmail = user?.email?.trim().toLowerCase();
                 const hasWriteAccess = !!userEmail && (
                   adminEmails.includes(userEmail) || 

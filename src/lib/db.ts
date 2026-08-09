@@ -90,33 +90,40 @@ export async function getDoc(docRef: any) {
 }
 
 export async function getDocs(queryOrCollectionRef: any) {
+  const docsMap = new Map<string, any>();
+  const colName = queryOrCollectionRef.id || queryOrCollectionRef.path?.split('/')[0] || queryOrCollectionRef.collectionName;
+
+  // 1. Fetch from Firebase Firestore
   try {
     const snap = await fsGetDocs(queryOrCollectionRef);
-    if (snap && !snap.empty) {
-      return snap;
+    if (snap && snap.docs) {
+      snap.docs.forEach((docSnap: any) => {
+        docsMap.set(docSnap.id, docSnap.data());
+      });
     }
   } catch (err) {
     console.warn('Firebase getDocs warning, falling back:', err);
   }
 
-  // Fallback to server file API / localStorage
-  try {
-    const colName = queryOrCollectionRef.id || queryOrCollectionRef.path?.split('/')[0] || queryOrCollectionRef.collectionName;
-    if (colName) {
-      const docsMap = new Map<string, any>();
+  // 2. Fetch from server DB API backup & localStorage
+  if (colName) {
+    try {
       const res = await fetch(`/api/db/${encodeURIComponent(colName)}`);
       if (res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.docs)) {
           json.docs.forEach((docData: any) => {
             if (docData && docData.id) {
-              docsMap.set(String(docData.id), docData);
+              const existing = docsMap.get(String(docData.id));
+              docsMap.set(String(docData.id), existing ? { ...existing, ...docData } : docData);
             }
           });
         }
       }
+    } catch (_) {}
 
-      // Local storage check
+    // Local storage check
+    try {
       const prefix = `local_store_${colName}_`;
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -133,24 +140,22 @@ export async function getDocs(queryOrCollectionRef: any) {
           }
         }
       }
+    } catch (_) {}
+  }
 
-      const docs = Array.from(docsMap.entries()).map(([id, docData]) => ({
-        id,
-        data: () => docData,
-        exists: () => true
-      }));
+  const docs = Array.from(docsMap.entries()).map(([id, docData]) => ({
+    id,
+    data: () => docData,
+    exists: () => true
+  }));
 
-      return {
-        docs,
-        empty: docs.length === 0,
-        size: docs.length,
-        forEach: (callback: (doc: any) => void) => docs.forEach(callback),
-        exists: () => docs.length > 0
-      };
-    }
-  } catch (_) {}
-
-  return { docs: [], empty: true, size: 0, forEach: () => {}, exists: () => false };
+  return {
+    docs,
+    empty: docs.length === 0,
+    size: docs.length,
+    forEach: (callback: (doc: any) => void) => docs.forEach(callback),
+    exists: () => docs.length > 0
+  };
 }
 
 export async function setDoc(docRef: any, data: any, options?: { merge?: boolean }) {

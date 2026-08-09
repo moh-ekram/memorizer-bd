@@ -219,7 +219,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const userPermissionDebug = () => {
     const currentUser = auth.currentUser;
     const email = currentUser?.email?.trim().toLowerCase() || '';
-    const hardcodedAdmins = ['mohammad.001ekram@gmail.com', 'ten.billion.neu@gmail.com'];
+    const hardcodedAdmins = ['mohammad.001ekram@gmail.com'];
     const settingAdmins = ((settings as any)?.adminEmails || []).map((e: string) => e.trim().toLowerCase());
     const isAdmin = hardcodedAdmins.includes(email) || settingAdmins.includes(email);
     const debugData = {

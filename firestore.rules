@@ -20,10 +20,7 @@ service cloud.firestore {
       return isSignedIn() 
         && request.auth.token != null 
         && request.auth.token.email != null 
-        && (
-          request.auth.token.email.lower() == 'mohammad.001ekram@gmail.com' ||
-          request.auth.token.email.lower() == 'ten.billion.neu@gmail.com'
-        );
+        && request.auth.token.email.lower() == 'mohammad.001ekram@gmail.com';
     }
 
     function isValidId(id) {
@@ -140,8 +137,8 @@ service cloud.firestore {
 
     // 4. Access Requests Collection
     match /access_requests/{requestId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      allow read: if true;
+      allow create: if true;
       allow update, delete: if isAdmin();
     }
 

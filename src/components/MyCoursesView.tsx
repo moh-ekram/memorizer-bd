@@ -966,7 +966,7 @@ export default function MyCoursesView({
     setActiveCourseId(course.id);
   };
 
-  const adminEmails = ['mohammad.001ekram@gmail.com', 'ten.billion.neu@gmail.com'];
+  const adminEmails = ['mohammad.001ekram@gmail.com'];
   const isAdminUser = user?.email && adminEmails.includes(user.email.trim().toLowerCase());
 
   // Filter courses based on selections & admin hidden flag
