@@ -47,9 +47,16 @@ export {
   clearQuestionsCache
 };
 
+function withTimeout<T>(promise: Promise<T>, ms = 3500): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Firebase operation timed out after ${ms}ms`)), ms))
+  ]);
+}
+
 export async function getDoc(docRef: any) {
   try {
-    const snap = await fsGetDoc(docRef);
+    const snap = await withTimeout(fsGetDoc(docRef), 3000);
     if (snap.exists()) {
       return snap;
     }
@@ -95,7 +102,7 @@ export async function getDocs(queryOrCollectionRef: any) {
 
   // 1. Fetch from Firebase Firestore
   try {
-    const snap = await fsGetDocs(queryOrCollectionRef);
+    const snap = await withTimeout(fsGetDocs(queryOrCollectionRef), 3500);
     if (snap && snap.docs) {
       snap.docs.forEach((docSnap: any) => {
         docsMap.set(docSnap.id, docSnap.data());
@@ -162,12 +169,12 @@ export async function setDoc(docRef: any, data: any, options?: { merge?: boolean
   // Sync to Firebase
   try {
     if (options) {
-      await fsSetDoc(docRef, data, options);
+      await withTimeout(fsSetDoc(docRef, data, options), 3500);
     } else {
-      await fsSetDoc(docRef, data);
+      await withTimeout(fsSetDoc(docRef, data), 3500);
     }
   } catch (err) {
-    console.warn('Firebase setDoc error:', err);
+    console.warn('Firebase setDoc error or timeout:', err);
   }
 
   // Local & Server File Backup
@@ -187,18 +194,18 @@ export async function setDoc(docRef: any, data: any, options?: { merge?: boolean
 
 export async function updateDoc(docRef: any, data: any) {
   try {
-    await fsUpdateDoc(docRef, data);
+    await withTimeout(fsUpdateDoc(docRef, data), 3500);
   } catch (err) {
-    console.warn('Firebase updateDoc error, attempting merge setDoc:', err);
+    console.warn('Firebase updateDoc error or timeout, attempting merge setDoc:', err);
     await setDoc(docRef, data, { merge: true });
   }
 }
 
 export async function deleteDoc(docRef: any) {
   try {
-    await fsDeleteDoc(docRef);
+    await withTimeout(fsDeleteDoc(docRef), 3500);
   } catch (err) {
-    console.warn('Firebase deleteDoc error:', err);
+    console.warn('Firebase deleteDoc error or timeout:', err);
   }
 
   try {
@@ -269,7 +276,7 @@ export async function saveBulkDocs(collectionName: string, items: any[]) {
         const docRef = doc(db, collectionName, item.id);
         batch.set(docRef, item, { merge: true });
       });
-      await batch.commit().catch(err => console.warn('Batch commit warning:', err));
+      await withTimeout(batch.commit(), 3500).catch(err => console.warn('Batch commit warning:', err));
     }
 
     // Local & Server API backup
