@@ -46,13 +46,6 @@ export default function BlankFillingPractice({
   const [activeFilter, setActiveFilter] = useState<'yet_to_try' | 'incorrect' | 'done'>('yet_to_try');
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
-
-  // Question Paper view mode states
-  const [viewMode, setViewMode] = useState<'paper' | 'single'>('paper');
-  const [userAnswers, setUserAnswers] = useState<Record<string, { selectedOption: string; isCorrect: boolean }>>({});
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const questionsPerPage = 10;
-
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [isAnswered, setIsAnswered] = useState(false);
   const [score, setScore] = useState(0);
@@ -245,64 +238,43 @@ export default function BlankFillingPractice({
           </div>
         </div>
 
-        {/* Slim Segmented Filter Row & View Switcher */}
-        <div className="flex flex-col sm:flex-row items-center gap-2">
-          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200/55 text-[10px]">
-            <button
-              onClick={() => setViewMode('paper')}
-              className={`px-2.5 py-1.5 rounded-lg font-black transition cursor-pointer ${
-                viewMode === 'paper' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500'
-              }`}
-            >
-              📄 প্রশ্নপত্র (সব)
-            </button>
-            <button
-              onClick={() => setViewMode('single')}
-              className={`px-2.5 py-1.5 rounded-lg font-black transition cursor-pointer ${
-                viewMode === 'single' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500'
-              }`}
-            >
-              🎴 সিঙ্গেল
-            </button>
-          </div>
+        {/* Slim Segmented Filter Row */}
+        <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200/55">
+          <button
+            onClick={() => applyFilter('yet_to_try')}
+            className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
+              activeFilter === 'yet_to_try'
+                ? 'bg-white text-indigo-600 shadow-xs border border-indigo-100/30'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <HelpCircle className="w-3 h-3" />
+            <span>Yet to Try ({counts.yet_to_try})</span>
+          </button>
 
-          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200/55">
-            <button
-              onClick={() => applyFilter('yet_to_try')}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
-                activeFilter === 'yet_to_try'
-                  ? 'bg-white text-indigo-600 shadow-xs border border-indigo-100/30'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <HelpCircle className="w-3 h-3" />
-              <span>Yet to Try ({counts.yet_to_try})</span>
-            </button>
+          <button
+            onClick={() => applyFilter('incorrect')}
+            className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
+              activeFilter === 'incorrect'
+                ? 'bg-white text-rose-600 shadow-xs border border-rose-100/30'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <XCircle className="w-3 h-3 text-rose-500" />
+            <span>Incorrect ({counts.incorrect})</span>
+          </button>
 
-            <button
-              onClick={() => applyFilter('incorrect')}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
-                activeFilter === 'incorrect'
-                  ? 'bg-white text-rose-600 shadow-xs border border-rose-100/30'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <XCircle className="w-3 h-3 text-rose-500" />
-              <span>Incorrect ({counts.incorrect})</span>
-            </button>
-
-            <button
-              onClick={() => applyFilter('done')}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
-                activeFilter === 'done'
-                  ? 'bg-white text-emerald-600 shadow-xs border border-emerald-100/30'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <CheckCircle className="w-3 h-3 text-emerald-500" />
-              <span>Done ({counts.done})</span>
-            </button>
-          </div>
+          <button
+            onClick={() => applyFilter('done')}
+            className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
+              activeFilter === 'done'
+                ? 'bg-white text-emerald-600 shadow-xs border border-emerald-100/30'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <CheckCircle className="w-3 h-3 text-emerald-500" />
+            <span>Done ({counts.done})</span>
+          </button>
         </div>
       </div>
 
@@ -364,204 +336,8 @@ export default function BlankFillingPractice({
             <span>Restart Session</span>
           </button>
         </motion.div>
-      ) : viewMode === 'paper' ? (
-        /* Multi-question Question Paper Feed */
-        <div className="space-y-6 font-sans">
-          {(() => {
-            const totalPages = Math.ceil(questions.length / questionsPerPage);
-            const startIdx = (currentPage - 1) * questionsPerPage;
-            const endIdx = Math.min(startIdx + questionsPerPage, questions.length);
-            const currentBatch = questions.slice(startIdx, endIdx);
-            const bengaliOptionLabels = ['ক', 'খ', 'গ', 'ঘ', 'ঙ'];
-
-            return (
-              <>
-                <div className="space-y-5">
-                  {currentBatch.map((q, relativeIdx) => {
-                    const globalIdx = startIdx + relativeIdx;
-                    const ansState = userAnswers[q.id];
-                    const isAnsweredQ = !!ansState;
-                    const qSentenceParts = q.sentence ? q.sentence.split('___') : ['', ''];
-
-                    return (
-                      <div
-                        key={q.id || globalIdx}
-                        className={`p-5 sm:p-6 rounded-2xl border transition shadow-2xs space-y-4 ${
-                          isAnsweredQ
-                            ? ansState.isCorrect
-                              ? 'bg-emerald-50/20 border-emerald-200/80'
-                              : 'bg-rose-50/20 border-rose-200/80'
-                            : 'bg-white border-slate-200/80 hover:border-indigo-200'
-                        }`}
-                      >
-                        {/* Question Header */}
-                        <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
-                          <div className="flex items-start gap-2.5">
-                            <span className="px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-mono font-black rounded-lg shrink-0">
-                              #{globalIdx + 1}
-                            </span>
-                            <div className="text-sm sm:text-base font-extrabold text-slate-800 leading-relaxed">
-                              {qSentenceParts[0]}
-                              <span className={`inline-block px-2.5 py-0.5 mx-1 rounded-lg border font-mono text-xs font-black transition-all ${
-                                isAnsweredQ
-                                  ? (ansState.isCorrect
-                                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                                      : 'bg-rose-100 text-rose-800 border-rose-300')
-                                  : 'bg-indigo-50 text-indigo-700 border-dashed border-indigo-200 min-w-[50px] text-center'
-                              }`}>
-                                {isAnsweredQ ? ansState.selectedOption : '___'}
-                              </span>
-                              {qSentenceParts[1]}
-                            </div>
-                          </div>
-
-                          {isAnsweredQ && (
-                            <span
-                              className={`px-2.5 py-1 text-xs font-black rounded-lg flex items-center gap-1 shrink-0 ${
-                                ansState.isCorrect
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                  : 'bg-rose-100 text-rose-800 border border-rose-300'
-                              }`}
-                            >
-                              {ansState.isCorrect ? (
-                                <>
-                                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                                  সঠিক
-                                </>
-                              ) : (
-                                <>
-                                  <XCircle className="w-3.5 h-3.5 text-rose-600" />
-                                  ভুল
-                                </>
-                              )}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Options Cards */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                          {q.options.map((option, optIdx) => {
-                            const isSelectedOpt = ansState?.selectedOption === option;
-                            const isCorrectOpt = option === q.answer;
-                            const optLabel = bengaliOptionLabels[optIdx] || (optIdx + 1);
-
-                            let optionStyle = 'bg-white border-slate-200/80 hover:bg-slate-50 hover:border-indigo-300 text-slate-800';
-                            let labelStyle = 'bg-slate-100 text-slate-600 border-slate-200';
-
-                            if (isAnsweredQ) {
-                              if (isCorrectOpt) {
-                                optionStyle = 'bg-emerald-500/10 border-emerald-500 text-emerald-950 font-black ring-1 ring-emerald-500/30';
-                                labelStyle = 'bg-emerald-500 text-white border-emerald-500 font-black';
-                              } else if (isSelectedOpt) {
-                                optionStyle = 'bg-rose-500/10 border-rose-500 text-rose-950 font-bold ring-1 ring-rose-500/30';
-                                labelStyle = 'bg-rose-500 text-white border-rose-500 font-black';
-                              } else {
-                                optionStyle = 'bg-slate-50/50 border-slate-100 text-slate-400 opacity-50';
-                                labelStyle = 'bg-slate-200/60 text-slate-400 border-slate-200/60';
-                              }
-                            }
-
-                            return (
-                              <button
-                                key={optIdx}
-                                disabled={isAnsweredQ}
-                                onClick={() => {
-                                  if (isAnsweredQ) return;
-                                  const isCorrect = option === q.answer;
-                                  setUserAnswers(prev => ({
-                                    ...prev,
-                                    [q.id]: { selectedOption: option, isCorrect }
-                                  }));
-                                  if (isCorrect) setScore(s => s + 1);
-                                  onUpdateBlankProgress(q.id, isCorrect);
-                                }}
-                                className={`p-3 sm:p-3.5 rounded-xl border text-xs sm:text-sm transition flex items-center justify-between text-left gap-2.5 min-h-[48px] cursor-pointer ${optionStyle}`}
-                              >
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                  <span className={`w-6 h-6 rounded-full border text-[11px] font-black flex items-center justify-center shrink-0 ${labelStyle}`}>
-                                    {optLabel}
-                                  </span>
-                                  <span className="truncate">{option}</span>
-                                </div>
-
-                                {isAnsweredQ && isCorrectOpt && (
-                                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                                )}
-                                {isAnsweredQ && isSelectedOpt && !isCorrectOpt && (
-                                  <XCircle className="w-4 h-4 text-rose-500 shrink-0" />
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        {/* EXPLANATION CARD (ব্যাখ্যা) - Revealed immediately when answered */}
-                        {isAnsweredQ && (
-                          <div className="p-4 bg-slate-900 text-slate-100 rounded-xl border border-slate-800 text-xs space-y-2 animate-fadeIn">
-                            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                              <span className="font-extrabold uppercase tracking-wider text-[11px] text-indigo-400 flex items-center gap-1.5">
-                                <HelpCircle className="w-3.5 h-3.5 text-indigo-400" />
-                                ব্যাখ্যা (Explanation)
-                              </span>
-                              <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold">
-                                ✓ সঠিক উত্তর: {q.answer}
-                              </span>
-                            </div>
-
-                            <p className="font-medium text-slate-300 leading-relaxed">
-                              {q.explanation ? q.explanation : `শূন্যস্থানে সঠিক শব্দটি হবে "${q.answer}"।`}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Pagination Controls */}
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-200">
-                  <div className="flex items-center gap-2">
-                    <button
-                      disabled={currentPage === 1}
-                      onClick={() => {
-                        setCurrentPage(p => Math.max(1, p - 1));
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
-                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40 font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1"
-                    >
-                      <ArrowLeft className="w-3.5 h-3.5" />
-                      পূর্ববর্তী পেজ
-                    </button>
-                    <span className="text-xs font-black text-slate-600 px-3">
-                      পেজ {currentPage} / {totalPages}
-                    </span>
-                    <button
-                      disabled={currentPage === totalPages}
-                      onClick={() => {
-                        setCurrentPage(p => Math.min(totalPages, p + 1));
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
-                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40 font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1"
-                    >
-                      পরবর্তী পেজ
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={() => setSessionCompleted(true)}
-                    className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <Trophy className="w-4 h-4" />
-                    ফলাফল ও রিপোর্ট দেখুন
-                  </button>
-                </div>
-              </>
-            );
-          })()}
-        </div>
       ) : (
-        /* Main Single Question Card */
+        /* Main Question Card */
         <div className="bg-white p-8 sm:p-10 rounded-3xl border border-slate-200/60 shadow-sm space-y-8 relative overflow-hidden">
           {/* Absolute Background Accent */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />

@@ -18,9 +18,7 @@ import {
   runTransaction,
   writeBatch
 } from '../lib/db';
-import { VocabularyWord, UserProgress, Course, AccessRequest, BlankQuestion, OddOneOutQuestion, WordAnalogyQuestion, CustomMcqQuestion, AppSettings, VerifiedPayment } from '../types';
-import { parseMultiSheetCourseWorkbook } from '../lib/gameExcelUtils';
-import ExcelInstructionSection from './ExcelInstructionSection';
+import { VocabularyWord, UserProgress, Course, AccessRequest, BlankQuestion, AppSettings, VerifiedPayment } from '../types';
 import { read, utils } from 'xlsx';
 import { CourseSettings } from './CourseSettings';
 import TransactionHistoryView from './TransactionHistoryView';
@@ -66,7 +64,6 @@ import {
   Layers,
   Globe,
   Gamepad2,
-  Sparkles,
   DollarSign,
   Zap,
   Wallet,
@@ -249,23 +246,11 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
   // New course form states
   const [showCreateCourseModal, setShowCreateCourseModal] = useState(false);
-  const [modalTab, setModalTab] = useState<'creation' | 'games'>('creation');
   const [newCourseTitle, setNewCourseTitle] = useState('');
   const [newCourseId, setNewCourseId] = useState('');
   const [isSlugTouched, setIsSlugTouched] = useState(false);
   const [newCourseDesc, setNewCourseDesc] = useState('');
   const [uploadedWords, setUploadedWords] = useState<VocabularyWord[]>([]);
-  const [uploadedBlankQuestions, setUploadedBlankQuestions] = useState<BlankQuestion[]>([]);
-  const [uploadedOooQuestions, setUploadedOooQuestions] = useState<OddOneOutQuestion[]>([]);
-  const [uploadedAnalogyQuestions, setUploadedAnalogyQuestions] = useState<WordAnalogyQuestion[]>([]);
-  const [uploadedMcqQuestions, setUploadedMcqQuestions] = useState<CustomMcqQuestion[]>([]);
-  const [detectedSheetsInfo, setDetectedSheetsInfo] = useState<{
-    wordsSheet?: string;
-    blankSheet?: string;
-    oooSheet?: string;
-    analogySheet?: string;
-    mcqSheet?: string;
-  }>({});
   const [parsedPlaceLabels, setParsedPlaceLabels] = useState<Record<string, string>>({});
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -1124,58 +1109,161 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     }
   };
 
-  const processFile = async (file: File) => {
+  const processFile = (file: File) => {
     setUploadError(null);
     setUploadedWords([]);
-    setUploadedBlankQuestions([]);
-    setUploadedOooQuestions([]);
-    setUploadedAnalogyQuestions([]);
-    setUploadedMcqQuestions([]);
-    setDetectedSheetsInfo({});
-
-    const tempCourseId = newCourseId.trim() || `course-${Date.now()}`;
-
-    try {
-      const parseRes = await parseMultiSheetCourseWorkbook(file, tempCourseId);
-
-      if (parseRes.words.length === 0) {
-        setUploadError('No valid vocabulary words found in the uploaded file. Please make sure at least one sheet contains word and meaning columns.');
-        return;
-      }
-
-      // Auto-populate Course Title from Excel sheet name or filename if not touched yet
-      if (parseRes.suggestedCourseTitle && (!newCourseTitle.trim() || !isSlugTouched)) {
-        setNewCourseTitle(parseRes.suggestedCourseTitle);
-        const autoSlug = parseRes.suggestedCourseTitle
-          .toLowerCase()
-          .replace(/[^a-z0-9\u0980-\u09FF]+/g, '-')
-          .replace(/^-+|-+$/g, '');
-        const finalSlug = autoSlug || `course-${Date.now()}`;
-        setNewCourseId(finalSlug);
-        setIsSlugTouched(true);
-
-        // Sync courseId for questions
-        parseRes.blankQuestions.forEach(q => q.courseId = finalSlug);
-        parseRes.oddOneOutQuestions.forEach(q => q.courseId = finalSlug);
-        parseRes.wordAnalogyQuestions.forEach(q => q.courseId = finalSlug);
-        parseRes.mcqQuestions.forEach(q => q.courseId = finalSlug);
-      }
-
-      setUploadedWords(parseRes.words);
-      if (parseRes.placeLabels) setParsedPlaceLabels(parseRes.placeLabels);
-      if (parseRes.blankQuestions) setUploadedBlankQuestions(parseRes.blankQuestions);
-      if (parseRes.oddOneOutQuestions) setUploadedOooQuestions(parseRes.oddOneOutQuestions);
-      if (parseRes.wordAnalogyQuestions) setUploadedAnalogyQuestions(parseRes.wordAnalogyQuestions);
-      if (parseRes.mcqQuestions) setUploadedMcqQuestions(parseRes.mcqQuestions);
-      if (parseRes.sheetsFound) setDetectedSheetsInfo(parseRes.sheetsFound);
-
-      if (parseRes.notices && parseRes.notices.length > 0) {
-        console.warn('Workbook parse notices:', parseRes.notices);
-      }
-    } catch (err: any) {
-      console.error('Multi-sheet course workbook parse error:', err);
-      setUploadError(`Failed to process Excel workbook: ${err?.message || 'Invalid spreadsheet format'}`);
+    
+    if (!newCourseId) {
+      setUploadError('Please provide a course title before uploading files.');
+      return;
     }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const rawRows = utils.sheet_to_json(sheet) as any[];
+
+        if (rawRows.length === 0) {
+          setUploadError('No data found in the selected Excel sheet.');
+          return;
+        }
+
+        // Extract place labels from headers
+        let detectedLabels: Record<string, string> = {};
+        const firstRowKeys = Object.keys(rawRows[0]);
+        firstRowKeys.forEach(k => {
+          const match = k.match(/^place(1|2|3|4|5|6):(.*)$/i);
+          if (match) {
+            const num = match[1];
+            detectedLabels[`place${num}`] = match[2].trim();
+          }
+        });
+        setParsedPlaceLabels(detectedLabels);
+
+        const wordsList: VocabularyWord[] = [];
+        let index = 1;
+
+        for (const row of rawRows) {
+          // Normalise keys to lowercase, trimming whitespaces
+          const rowKeys = Object.keys(row);
+          const usedKeys = new Set<string>();
+          
+          const findKey = (candidates: string[], placePrefix?: string) => {
+            if (placePrefix) {
+              const placeKey = rowKeys.find(k => {
+                if (usedKeys.has(k)) return false;
+                const cleanK = k.toLowerCase().trim();
+                return new RegExp(`^${placePrefix.toLowerCase()}(\\s*[:_\\-]|\\s*$)`, 'i').test(cleanK);
+              });
+              if (placeKey) {
+                usedKeys.add(placeKey);
+                return placeKey;
+              }
+            }
+            const key = rowKeys.find(k => {
+              if (usedKeys.has(k)) return false;
+              const cleanK = k.toLowerCase().trim();
+              if (/^place[1-6](\s*[:_\-]|\s*$)/i.test(cleanK)) {
+                return false;
+              }
+              if (candidates.some(c => cleanK === c)) return true;
+              const normK = cleanK.replace(/[^a-z0-9\u0980-\u09FF]/g, '');
+              if (candidates.some(c => normK === c.replace(/[^a-z0-9\u0980-\u09FF]/g, ''))) return true;
+              return candidates.some(c => c.length >= 3 && (cleanK.includes(c) || c.includes(cleanK)));
+            });
+            if (key) usedKeys.add(key);
+            return key;
+          };
+
+          const idKey = findKey(['id', 'unique id', 'word id', 'uid', 'sl', 'serial']);
+          if (!idKey) {
+            setUploadError('The spreadsheet is missing the mandatory "id" column. Please make sure your spreadsheet has an "id" column.');
+            return;
+          }
+          const rawId = row[idKey] ? String(row[idKey]).trim() : '';
+          if (!rawId) {
+            setUploadError('Error parsing: A row is missing a unique ID in the mandatory "id" column.');
+            return;
+          }
+
+          const wordKey = findKey(['word', 'main word', 'english word'], 'place1');
+          const meaningKey = findKey(['meaning', 'bangla meaning', 'bengali meaning'], 'place2');
+          const groupKey = findKey(['group', 'level']);
+          const synonym1Key = findKey(['synonym1', 'synonm1', 'syn1'], 'place5');
+          const synonym2Key = findKey(['synonym2', 'synonm2', 'syn2']);
+          const synonymsKey = findKey(['synonyms', 'synonym']);
+          const extraWordKey = findKey(['extra word', 'derivative'], 'place4');
+          const extraMeaningKey = findKey(['extra meaning']);
+          const exampleKey = findKey(['example', 'example sentence'], 'place3');
+          const mnemonicKey = findKey(['place6', 'mnemonic', 'mnemonics', 'personal notes', 'personal note', 'notes', 'note', 'nemonik', 'nemoniq', 'নেমোনিক', 'mnemonic note', 'mnemonic notes'], 'place6');
+
+          const baseWord = wordKey ? String(row[wordKey]).trim() : '';
+          const banglaMeaning = meaningKey ? String(row[meaningKey]).trim() : '';
+
+          if (!baseWord || !banglaMeaning) {
+            continue; // Skip invalid rows
+          }
+
+          let group: string | number = 1;
+          if (groupKey && row[groupKey] !== undefined && row[groupKey] !== null) {
+            const rawGrp = String(row[groupKey]).trim();
+            if (rawGrp) {
+              const num = parseInt(rawGrp, 10);
+              if (!isNaN(num) && String(num) === rawGrp) {
+                group = num;
+              } else {
+                group = rawGrp;
+              }
+            }
+          }
+
+          let synonyms = '';
+          const synParts = [];
+          if (synonym1Key && row[synonym1Key]) synParts.push(String(row[synonym1Key]).trim());
+          if (synonym2Key && row[synonym2Key]) synParts.push(String(row[synonym2Key]).trim());
+
+          if (synParts.length > 0) {
+            synonyms = synParts.join(', ');
+          } else if (synonymsKey && row[synonymsKey]) {
+            synonyms = String(row[synonymsKey]).trim();
+          }
+
+          const example = exampleKey ? String(row[exampleKey]).trim() : '';
+          const extraWord = extraWordKey ? String(row[extraWordKey]).trim() : '';
+          const extraMeaning = extraMeaningKey ? String(row[extraMeaningKey]).trim() : '';
+          const mnemonic = mnemonicKey ? String(row[mnemonicKey]).trim() : '';
+
+          wordsList.push({
+            id: rawId,
+            group,
+            word: baseWord,
+            meaning: banglaMeaning,
+            synonyms,
+            extraWord: extraWord,
+            extraMeaning: extraMeaning,
+            example,
+            mnemonic
+          });
+
+          index++;
+        }
+
+        if (wordsList.length === 0) {
+          setUploadError('Columns did not match! Please make sure you have at least "main word" and "bangla meaning" columns.');
+          return;
+        }
+
+        setUploadedWords(wordsList);
+      } catch (err) {
+        console.error(err);
+        setUploadError('Failed to process Excel file. Please use a valid spreadsheet format.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
   };
 
   const processPastedText = (text: string) => {
@@ -1403,30 +1491,11 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       };
 
       await setDoc(doc(db, 'courses', newCourseId), courseData);
-
-      // Bulk save game questions if uploaded via multi-sheet Excel
-      if (uploadedBlankQuestions.length > 0) {
-        await saveBulkDocs('blank_questions', uploadedBlankQuestions.map(q => ({ ...q, courseId: newCourseId })));
-      }
-      if (uploadedOooQuestions.length > 0) {
-        await saveBulkDocs('odd_one_out_questions', uploadedOooQuestions.map(q => ({ ...q, courseId: newCourseId })));
-      }
-      if (uploadedAnalogyQuestions.length > 0) {
-        await saveBulkDocs('word_analogy_questions', uploadedAnalogyQuestions.map(q => ({ ...q, courseId: newCourseId })));
-      }
-      if (uploadedMcqQuestions.length > 0) {
-        await saveBulkDocs('mcq_questions', uploadedMcqQuestions.map(q => ({ ...q, courseId: newCourseId })));
-      }
       
       setSaveStatus('saved');
       setNewCourseTitle('');
       setNewCourseDesc('');
       setUploadedWords([]);
-      setUploadedBlankQuestions([]);
-      setUploadedOooQuestions([]);
-      setUploadedAnalogyQuestions([]);
-      setUploadedMcqQuestions([]);
-      setDetectedSheetsInfo({});
       setParsedPlaceLabels({});
       setPasteInputText('');
       setNewCourseIsDefault(false);
@@ -2043,63 +2112,63 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       </div>
 
       {/* Stats Cards Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 lg:gap-5" id="admin-stats-row">
-        <div className="bg-white p-2.5 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl border border-slate-200/60 shadow-2xs sm:shadow-xs flex items-center gap-2.5 sm:gap-4">
-          <div className="p-2 sm:p-3 bg-indigo-50 text-indigo-600 rounded-lg sm:rounded-xl shrink-0">
-            <Users className="w-4 h-4 sm:w-6 sm:h-6" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3" id="admin-stats-row">
+        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/60 shadow-2xs flex items-center gap-2.5">
+          <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+            <Users className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div className="min-w-0">
-            <span className="text-[10px] sm:text-xs text-slate-400 font-extrabold uppercase tracking-tight block truncate">Total Users</span>
-            <span className="text-base sm:text-2xl font-black text-slate-800 font-mono">{totalUsers}</span>
+            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-tight block truncate">Total Users</span>
+            <span className="text-base sm:text-lg font-black text-slate-800 font-mono">{totalUsers}</span>
           </div>
         </div>
 
-        <div className="bg-white p-2.5 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl border border-slate-200/60 shadow-2xs sm:shadow-xs flex items-center gap-2.5 sm:gap-4">
-          <div className="p-2 sm:p-3 bg-amber-50 text-amber-600 rounded-lg sm:rounded-xl shrink-0">
-            <Flame className="w-4 h-4 sm:w-6 sm:h-6" />
+        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/60 shadow-2xs flex items-center gap-2.5">
+          <div className="p-2 bg-amber-50 text-amber-600 rounded-lg shrink-0">
+            <Flame className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div className="min-w-0">
-            <span className="text-[10px] sm:text-xs text-slate-400 font-extrabold uppercase tracking-tight block truncate">Avg Streak</span>
-            <span className="text-base sm:text-2xl font-black text-slate-800 font-mono">{averageStreak}d</span>
+            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-tight block truncate">Avg Streak</span>
+            <span className="text-base sm:text-lg font-black text-slate-800 font-mono">{averageStreak}d</span>
           </div>
         </div>
 
-        <div className="bg-white p-2.5 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl border border-slate-200/60 shadow-2xs sm:shadow-xs flex items-center gap-2.5 sm:gap-4">
-          <div className="p-2 sm:p-3 bg-emerald-50 text-emerald-600 rounded-lg sm:rounded-xl shrink-0">
-            <Award className="w-4 h-4 sm:w-6 sm:h-6" />
+        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/60 shadow-2xs flex items-center gap-2.5">
+          <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg shrink-0">
+            <Award className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div className="min-w-0">
-            <span className="text-[10px] sm:text-xs text-slate-400 font-extrabold uppercase tracking-tight block truncate">Avg Words</span>
-            <span className="text-base sm:text-2xl font-black text-slate-800 font-mono">{averageWordsKnown}</span>
+            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-tight block truncate">Avg Words</span>
+            <span className="text-base sm:text-lg font-black text-slate-800 font-mono">{averageWordsKnown}</span>
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 text-white p-2.5 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl shadow-2xs sm:shadow-xs flex items-center justify-between gap-2 sm:gap-3">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <div className="p-2 sm:p-3 bg-emerald-500/10 text-emerald-400 rounded-lg sm:rounded-xl shrink-0">
-              <Database className="w-4 h-4 sm:w-6 sm:h-6" />
+        <div className="bg-slate-900 border border-slate-800 text-white p-2.5 sm:p-3 rounded-xl shadow-2xs flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg shrink-0">
+              <Database className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div className="min-w-0">
-              <span className="text-[10px] sm:text-xs text-slate-400 font-extrabold uppercase tracking-tight block truncate">Database</span>
-              <span className="text-xs sm:text-base font-black text-emerald-400 truncate block">Active</span>
+              <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-tight block truncate">Database</span>
+              <span className="text-xs sm:text-sm font-black text-emerald-400 truncate block">Active</span>
             </div>
           </div>
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             <button
               type="button"
               onClick={() => setShowSupabaseRlsModal(true)}
-              className="p-1 sm:p-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer"
+              className="p-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer"
               title="Copy RLS Script"
             >
-              <Code className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <Code className="w-3.5 h-3.5" />
             </button>
             <button
               type="button"
               onClick={handlePurgeAllGameData}
-              className="p-1 sm:p-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer"
+              className="p-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer"
               title="Purge Games"
             >
-              <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -4857,21 +4926,17 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
       {/* Create New Course Modal */}
       {showCreateCourseModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in text-slate-700 p-3 sm:p-4 font-sans">
-          <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl relative font-sans overflow-hidden border border-slate-100 flex flex-col max-h-[92vh]">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in text-slate-700 p-4">
+          <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl relative font-sans overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-indigo-600 text-white rounded-2xl shadow-xs">
+                <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-2xl">
                   <Plus className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-900 text-base sm:text-lg tracking-tight">
-                    Create & Publish Course
-                  </h3>
-                  <p className="text-xs text-slate-500 font-medium hidden sm:block">
-                    Add new vocabulary course, configure settings and batch upload game questions
-                  </p>
+                  <h3 className="font-extrabold text-slate-900 text-base">Create & Publish New Course</h3>
+                  <p className="text-xs text-slate-400 font-medium">Upload Excel spreadsheet or paste word list to create a new course</p>
                 </div>
               </div>
               <button
@@ -4882,410 +4947,182 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               </button>
             </div>
 
-            {/* Modal Navigation Tabs */}
-            <div className="bg-slate-100/70 p-1.5 border-b border-slate-200 flex items-center gap-2 px-4 sm:px-6">
-              <button
-                type="button"
-                onClick={() => setModalTab('creation')}
-                className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer flex items-center justify-center gap-2 ${
-                  modalTab === 'creation'
-                    ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/60'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-                }`}
-              >
-                <BookOpen className="w-4 h-4 text-indigo-600" />
-                <span>১. কোর্স তথ্য ও শব্দাবলী (Course Creation)</span>
-                {uploadedWords.length > 0 && (
-                  <span className="px-2 py-0.5 text-[10px] font-black bg-indigo-100 text-indigo-800 rounded-full">
-                    {uploadedWords.length} Words
-                  </span>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setModalTab('games')}
-                className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer flex items-center justify-center gap-2 ${
-                  modalTab === 'games'
-                    ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/60'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-                }`}
-              >
-                <Gamepad2 className="w-4 h-4 text-emerald-600" />
-                <span>২. ব্যাচ গেমস আপলোড (Batch Game Uploads)</span>
-                {(uploadedBlankQuestions.length + uploadedOooQuestions.length + uploadedAnalogyQuestions.length + uploadedMcqQuestions.length) > 0 && (
-                  <span className="px-2 py-0.5 text-[10px] font-black bg-emerald-100 text-emerald-800 rounded-full">
-                    {uploadedBlankQuestions.length + uploadedOooQuestions.length + uploadedAnalogyQuestions.length + uploadedMcqQuestions.length} Questions
-                  </span>
-                )}
-              </button>
-            </div>
-
-            {/* Modal Content Area */}
-            <div className="p-4 sm:p-6 overflow-y-auto space-y-6">
-              {modalTab === 'creation' ? (
-                /* TAB 1: COURSE CREATION & WORDS */
-                <div className="space-y-5 animate-fade-in">
-                  {/* Title, Slug & Order */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="text-xs font-extrabold text-slate-800 block mb-1">
-                        Course Title *
-                      </label>
-                      <input
-                        type="text"
-                        value={newCourseTitle}
-                        onChange={(e) => setNewCourseTitle(e.target.value)}
-                        placeholder="e.g. BCS Special Wordlist"
-                        className="w-full text-xs font-bold text-slate-900 border border-slate-200 focus:border-indigo-500 rounded-xl p-3 outline-none transition shadow-2xs"
-                      />
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        💡 এক্সেল ফাইলের শিটের নাম অনুযায়ী অটোমেটিক টাইটেল বসে যাবে।
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-extrabold text-slate-800 block mb-1">
-                        Course ID / Slug *
-                      </label>
-                      <input
-                        type="text"
-                        value={newCourseId}
-                        onChange={(e) => {
-                          setNewCourseId(e.target.value);
-                          setIsSlugTouched(true);
-                        }}
-                        placeholder="bcs-special-wordlist"
-                        className="w-full text-xs font-bold font-mono text-indigo-900 border border-slate-200 focus:border-indigo-500 rounded-xl p-3 outline-none transition shadow-2xs"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-extrabold text-slate-800 block mb-1">
-                        Order Index (Sort Position)
-                      </label>
-                      <input
-                        type="number"
-                        value={newCourseOrder}
-                        onChange={(e) => setNewCourseOrder(Number(e.target.value))}
-                        placeholder="1"
-                        className="w-full text-xs font-bold font-mono text-slate-900 border border-slate-200 focus:border-indigo-500 rounded-xl p-3 outline-none transition shadow-2xs"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-extrabold text-slate-800 block mb-1">
-                      Course Description
-                    </label>
-                    <input
-                      type="text"
-                      value={newCourseDesc}
-                      onChange={(e) => setNewCourseDesc(e.target.value)}
-                      placeholder="Brief overview of course content..."
-                      className="w-full text-xs text-slate-800 border border-slate-200 focus:border-indigo-500 rounded-xl p-3 outline-none transition shadow-2xs"
-                    />
-                  </div>
-
-                  {/* Access Toggles */}
-                  <div className="flex flex-wrap items-center gap-6 p-4 bg-slate-50/90 rounded-2xl border border-slate-200/80">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={newCourseIsDefault}
-                        onChange={(e) => setNewCourseIsDefault(e.target.checked)}
-                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
-                      />
-                      <span className="text-xs font-bold text-slate-800">Set as Default Course</span>
-                    </label>
-
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={newCourseIsRestricted}
-                        onChange={(e) => setNewCourseIsRestricted(e.target.checked)}
-                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
-                      />
-                      <span className="text-xs font-bold text-slate-800">Restricted Course (Specific Emails Only)</span>
-                    </label>
-                  </div>
-
-                  {newCourseIsRestricted && (
-                    <div>
-                      <label className="text-xs font-extrabold text-slate-800 block mb-1">Allowed Student Emails (One email per line)</label>
-                      <textarea
-                        rows={3}
-                        value={newCourseAllowedUsersText}
-                        onChange={(e) => setNewCourseAllowedUsersText(e.target.value)}
-                        placeholder="student1@gmail.com&#10;student2@gmail.com"
-                        className="w-full text-xs font-mono text-slate-800 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none"
-                      />
-                    </div>
-                  )}
-
-                  {/* Words Content Upload / Paste */}
-                  <div className="space-y-3 pt-2 border-t border-slate-100">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                        শব্দাবলী ফাইল নির্বাচন / পেস্ট করুন:
-                      </h4>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setCreationMethod('excel')}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                            creationMethod === 'excel'
-                              ? 'bg-indigo-600 text-white shadow-xs'
-                              : 'text-slate-500 hover:bg-slate-100'
-                          }`}
-                        >
-                          Excel File (.xlsx / .xls)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setCreationMethod('paste')}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                            creationMethod === 'paste'
-                              ? 'bg-indigo-600 text-white shadow-xs'
-                              : 'text-slate-500 hover:bg-slate-100'
-                          }`}
-                        >
-                          Paste Text / TSV
-                        </button>
-                      </div>
-                    </div>
-
-                    {creationMethod === 'excel' ? (
-                      <div className="space-y-3">
-                        <ExcelInstructionSection defaultExpanded={false} />
-                        <label className="block cursor-pointer bg-slate-50/80 hover:bg-indigo-50/40 border-2 border-dashed border-slate-300 hover:border-indigo-500 p-6 rounded-2xl text-center transition group">
-                          <input
-                            type="file"
-                            accept=".xlsx, .xls, .csv"
-                            onChange={handleFileInputChange}
-                            className="hidden"
-                          />
-                          <UploadCloud className="w-8 h-8 text-indigo-500 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-                          <span className="text-xs font-extrabold text-slate-800 block">
-                            Click or Drag & Drop Excel File
-                          </span>
-                          <span className="text-[10px] text-slate-500 block mt-0.5">
-                            কলামের নাম: <code className="font-mono text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded">place1:Label</code>, <code className="font-mono text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded">place2:Label</code> ইত্যাদি।
-                          </span>
-                        </label>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <textarea
-                          rows={5}
-                          value={pasteInputText}
-                          onChange={(e) => {
-                            setPasteInputText(e.target.value);
-                            processPastedText(e.target.value);
-                          }}
-                          placeholder="Paste tab-separated or comma-separated word list here..."
-                          className="w-full text-xs font-mono text-slate-800 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Parsed Words Summary List */}
-                  {uploadedWords.length > 0 && (
-                    <div className="bg-indigo-50/60 p-4 rounded-2xl border border-indigo-100 space-y-3">
-                      <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
-                        <span className="text-xs font-black text-indigo-950 flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                          আপলোডকৃত ভোকাবুলারি লিস্ট ({uploadedWords.length} টি শব্দ):
-                        </span>
-                        <span className="text-[10px] font-bold font-mono text-indigo-700 bg-indigo-100 px-2.5 py-0.5 rounded-full">
-                          {new Set(uploadedWords.map(w => w.group)).size} Groups Detected
-                        </span>
-                      </div>
-
-                      <div className="max-h-40 overflow-y-auto space-y-1.5 scrollbar-thin pr-1">
-                        {uploadedWords.slice(0, 8).map((w, idx) => (
-                          <div key={idx} className="bg-white p-2 rounded-xl border border-slate-200 text-xs flex items-center justify-between shadow-2xs">
-                            <div className="flex items-center gap-2">
-                              <span className="font-extrabold text-slate-900">{w.word}</span>
-                              <span className="text-[10px] font-mono text-slate-400">({w.id})</span>
-                            </div>
-                            <span className="text-slate-600 font-medium truncate max-w-xs">{w.meaning}</span>
-                            <span className="text-[10px] font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
-                              Group {w.group}
-                            </span>
-                          </div>
-                        ))}
-                        {uploadedWords.length > 8 && (
-                          <p className="text-[10px] font-extrabold text-slate-400 text-center pt-1">
-                            ...এবং আরও {uploadedWords.length - 8} টি শব্দ
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto space-y-6">
+              {/* Title, Slug & Order */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs font-extrabold text-slate-700 block mb-1">Course Title *</label>
+                  <input
+                    type="text"
+                    value={newCourseTitle}
+                    onChange={(e) => setNewCourseTitle(e.target.value)}
+                    placeholder="e.g. BCS Special Wordlist"
+                    className="w-full text-xs font-bold text-slate-900 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none"
+                  />
                 </div>
-              ) : (
-                /* TAB 2: BATCH GAME UPLOADS */
-                <div className="space-y-5 animate-fade-in">
-                  {/* Game Sheet Rules Guidance Banner */}
-                  <div className="p-4 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl space-y-2 text-xs">
-                    <div className="flex items-center gap-2 text-emerald-900 font-extrabold">
-                      <Sparkles className="w-4 h-4 text-emerald-600" />
-                      <span>ব্যাচ গেমস আপলোড নির্দেশাবলী (Batch Game Upload Rules)</span>
-                    </div>
-                    <ul className="list-disc list-inside text-slate-700 space-y-1 text-[11px] font-medium leading-relaxed">
-                      <li>
-                        <strong>শীটের নাম (Sheet Names):</strong> বাধ্যতামুলকভাবে স্যাম্পল নামের অনুরুপ হতে হবে:
-                        <code className="bg-white text-emerald-800 px-1.5 py-0.5 rounded font-mono font-bold border border-emerald-200 ml-1">Blank_Filling_Questions</code>,
-                        <code className="bg-white text-emerald-800 px-1.5 py-0.5 rounded font-mono font-bold border border-emerald-200 ml-1">Odd_One_Out_Questions</code>,
-                        <code className="bg-white text-emerald-800 px-1.5 py-0.5 rounded font-mono font-bold border border-emerald-200 ml-1">Word_Analogy_Questions</code>,
-                        <code className="bg-white text-emerald-800 px-1.5 py-0.5 rounded font-mono font-bold border border-emerald-200 ml-1">MCQ_Questions</code>।
-                      </li>
-                      <li>
-                        <strong>কারেক্ট অ্যানসার ইন্ডিকেটর (<code className="text-rose-600">#</code>):</strong> যদি অপশনগুলোর কোনটাতে <code className="font-mono text-rose-600 font-black">#</code> ইউজ করা হয় (যেমন: <code className="font-mono text-indigo-700">soporific#</code>) তবে স্বয়ংক্রিয়ভাবে সেটি সঠিক উত্তর হিসেবে মার্ক হবে। আলাদা অ্যানসার কলাম প্রয়োজন নেই।
-                      </li>
-                      <li>
-                        <strong>কলাম টাইটেল (Column Titles):</strong> প্রথম সারিতে কলাম টাইটেল (Header Row) বাধ্যতামূলক।
-                      </li>
-                      <li>
-                        <strong>স্বয়ংক্রিয় প্রসেসিং:</strong> এক্সেল ফাইলের যেসব শিট থাকবে শুধুমাত্র সেসব শিটের গেম ডাটাবেজে যুক্ত হবে।
-                      </li>
-                    </ul>
-                  </div>
 
-                  {/* Excel Upload Area for Games */}
-                  <label className="block cursor-pointer bg-slate-50/80 hover:bg-emerald-50/40 border-2 border-dashed border-slate-300 hover:border-emerald-500 p-6 rounded-2xl text-center transition group">
+                <div>
+                  <label className="text-xs font-extrabold text-slate-700 block mb-1">Course ID / Slug *</label>
+                  <input
+                    type="text"
+                    value={newCourseId}
+                    onChange={(e) => {
+                      setNewCourseId(e.target.value);
+                      setIsSlugTouched(true);
+                    }}
+                    placeholder="bcs-special-wordlist"
+                    className="w-full text-xs font-bold font-mono text-indigo-900 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-extrabold text-slate-700 block mb-1">Order Index (Sort Position)</label>
+                  <input
+                    type="number"
+                    value={newCourseOrder}
+                    onChange={(e) => setNewCourseOrder(Number(e.target.value))}
+                    placeholder="1"
+                    className="w-full text-xs font-bold font-mono text-slate-900 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-extrabold text-slate-700 block mb-1">Course Description</label>
+                <input
+                  type="text"
+                  value={newCourseDesc}
+                  onChange={(e) => setNewCourseDesc(e.target.value)}
+                  placeholder="Brief overview of course content..."
+                  className="w-full text-xs text-slate-800 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none"
+                />
+              </div>
+
+              {/* Toggles */}
+              <div className="flex flex-wrap items-center gap-6 p-4 bg-slate-50 rounded-2xl border border-slate-200/80">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newCourseIsDefault}
+                    onChange={(e) => setNewCourseIsDefault(e.target.checked)}
+                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                  />
+                  <span className="text-xs font-bold text-slate-800">Set as Default Course</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newCourseIsRestricted}
+                    onChange={(e) => setNewCourseIsRestricted(e.target.checked)}
+                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                  />
+                  <span className="text-xs font-bold text-slate-800">Restricted Course (Specific Emails Only)</span>
+                </label>
+              </div>
+
+              {newCourseIsRestricted && (
+                <div>
+                  <label className="text-xs font-extrabold text-slate-700 block mb-1">Allowed Student Emails (One email per line)</label>
+                  <textarea
+                    rows={3}
+                    value={newCourseAllowedUsersText}
+                    onChange={(e) => setNewCourseAllowedUsersText(e.target.value)}
+                    placeholder="student1@gmail.com&#10;student2@gmail.com"
+                    className="w-full text-xs font-mono text-slate-800 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none"
+                  />
+                </div>
+              )}
+
+              {/* Upload / Paste Tabs */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                  <button
+                    type="button"
+                    onClick={() => setCreationMethod('excel')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      creationMethod === 'excel'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-slate-500 hover:bg-slate-100'
+                    }`}
+                  >
+                    Excel File (.xlsx / .xls)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCreationMethod('paste')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      creationMethod === 'paste'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-slate-500 hover:bg-slate-100'
+                    }`}
+                  >
+                    Paste Text / TSV
+                  </button>
+                </div>
+
+                {creationMethod === 'excel' ? (
+                  <label className="block cursor-pointer bg-slate-50 border-2 border-dashed border-slate-300 hover:border-indigo-500 p-6 rounded-2xl text-center transition group">
                     <input
                       type="file"
                       accept=".xlsx, .xls, .csv"
                       onChange={handleFileInputChange}
                       className="hidden"
                     />
-                    <Gamepad2 className="w-8 h-8 text-emerald-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-                    <span className="text-xs font-extrabold text-slate-800 block">
-                      গেমস শিট যুক্ত এক্সেল ফাইল আপলোড করুন
-                    </span>
-                    <span className="text-[10px] text-slate-500 block mt-0.5">
-                      (.xlsx / .xls স্যাম্পল ফাইলের ন্যায় একাধিক শিটের গেম কন্টেন্ট রিড করবে)
-                    </span>
+                    <UploadCloud className="w-8 h-8 text-indigo-500 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                    <span className="text-xs font-bold text-slate-800 block">Click or Drag & Drop Excel File</span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Supports .xlsx and .xls files with columns: id, word, meaning, group, etc.</span>
                   </label>
+                ) : (
+                  <div className="space-y-2">
+                    <textarea
+                      rows={5}
+                      value={pasteInputText}
+                      onChange={(e) => {
+                        setPasteInputText(e.target.value);
+                        processPastedText(e.target.value);
+                      }}
+                      placeholder="Paste tab-separated or comma-separated word list here..."
+                      className="w-full text-xs font-mono text-slate-800 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none"
+                    />
+                  </div>
+                )}
 
-                  {/* Question Count Badges Grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-center">
-                      <span className="text-[10px] font-extrabold text-emerald-700 block uppercase tracking-wider">
-                        Blank Filling
-                      </span>
-                      <span className="text-xl font-black text-emerald-900 font-mono">
-                        {uploadedBlankQuestions.length}
-                      </span>
-                      <span className="text-[9px] text-emerald-600 block mt-0.5 font-bold">
-                        {detectedSheetsInfo.blankSheet ? `Sheet: ${detectedSheetsInfo.blankSheet}` : 'No Sheet Detected'}
-                      </span>
-                    </div>
+                {uploadError && (
+                  <p className="text-xs font-bold text-rose-600 bg-rose-50 p-3 rounded-xl border border-rose-200">
+                    {uploadError}
+                  </p>
+                )}
+              </div>
 
-                    <div className="p-3 bg-sky-50 border border-sky-200 rounded-2xl text-center">
-                      <span className="text-[10px] font-extrabold text-sky-700 block uppercase tracking-wider">
-                        Odd One Out
-                      </span>
-                      <span className="text-xl font-black text-sky-900 font-mono">
-                        {uploadedOooQuestions.length}
-                      </span>
-                      <span className="text-[9px] text-sky-600 block mt-0.5 font-bold">
-                        {detectedSheetsInfo.oooSheet ? `Sheet: ${detectedSheetsInfo.oooSheet}` : 'No Sheet Detected'}
-                      </span>
-                    </div>
-
-                    <div className="p-3 bg-purple-50 border border-purple-200 rounded-2xl text-center">
-                      <span className="text-[10px] font-extrabold text-purple-700 block uppercase tracking-wider">
-                        Word Analogy
-                      </span>
-                      <span className="text-xl font-black text-purple-900 font-mono">
-                        {uploadedAnalogyQuestions.length}
-                      </span>
-                      <span className="text-[9px] text-purple-600 block mt-0.5 font-bold">
-                        {detectedSheetsInfo.analogySheet ? `Sheet: ${detectedSheetsInfo.analogySheet}` : 'No Sheet Detected'}
-                      </span>
-                    </div>
-
-                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-center">
-                      <span className="text-[10px] font-extrabold text-amber-700 block uppercase tracking-wider">
-                        MCQ Quiz
-                      </span>
-                      <span className="text-xl font-black text-amber-900 font-mono">
-                        {uploadedMcqQuestions.length}
-                      </span>
-                      <span className="text-[9px] text-amber-600 block mt-0.5 font-bold">
-                        {detectedSheetsInfo.mcqSheet ? `Sheet: ${detectedSheetsInfo.mcqSheet}` : 'No Sheet Detected'}
-                      </span>
-                    </div>
+              {/* Parsed Words Summary & Preview */}
+              {uploadedWords.length > 0 && (
+                <div className="space-y-3 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-indigo-900">
+                      Parsed {uploadedWords.length} Words successfully!
+                    </span>
+                    <span className="text-[10px] font-bold font-mono text-indigo-700 bg-indigo-100 px-2.5 py-0.5 rounded-full">
+                      {new Set(uploadedWords.map(w => w.group)).size} Groups Detected
+                    </span>
                   </div>
 
-                  {/* Game Questions Previews */}
-                  {(uploadedBlankQuestions.length > 0 || uploadedOooQuestions.length > 0 || uploadedAnalogyQuestions.length > 0 || uploadedMcqQuestions.length > 0) ? (
-                    <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                      <h5 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        <span>শনাক্তকৃত গেমের প্রশ্নাবলী প্রিভিউ:</span>
-                      </h5>
-
-                      {/* Blank Filling Sample */}
-                      {uploadedBlankQuestions.length > 0 && (
-                        <div className="bg-white p-3 rounded-xl border border-slate-200 text-xs space-y-1">
-                          <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                            Blank Filling Sample
-                          </span>
-                          <p className="font-bold text-slate-900">{uploadedBlankQuestions[0].sentence}</p>
-                          <p className="text-[11px] text-slate-600">Answer: <strong className="text-emerald-700">{uploadedBlankQuestions[0].answer}</strong></p>
-                        </div>
-                      )}
-
-                      {/* OOO Sample */}
-                      {uploadedOooQuestions.length > 0 && (
-                        <div className="bg-white p-3 rounded-xl border border-slate-200 text-xs space-y-1">
-                          <span className="text-[10px] font-extrabold text-sky-700 bg-sky-50 px-2 py-0.5 rounded">
-                            Odd One Out Sample
-                          </span>
-                          <p className="font-bold text-slate-900">Words: {uploadedOooQuestions[0].words.join(', ')}</p>
-                          <p className="text-[11px] text-slate-600">Odd Word: <strong className="text-sky-700">{uploadedOooQuestions[0].answer}</strong></p>
-                        </div>
-                      )}
-
-                      {/* Analogy Sample */}
-                      {uploadedAnalogyQuestions.length > 0 && (
-                        <div className="bg-white p-3 rounded-xl border border-slate-200 text-xs space-y-1">
-                          <span className="text-[10px] font-extrabold text-purple-700 bg-purple-50 px-2 py-0.5 rounded">
-                            Word Analogy Sample
-                          </span>
-                          <p className="font-bold text-slate-900">Stem: {uploadedAnalogyQuestions[0].analogy}</p>
-                          <p className="text-[11px] text-slate-600">Answer: <strong className="text-purple-700">{uploadedAnalogyQuestions[0].answer}</strong></p>
-                        </div>
-                      )}
-
-                      {/* MCQ Sample */}
-                      {uploadedMcqQuestions.length > 0 && (
-                        <div className="bg-white p-3 rounded-xl border border-slate-200 text-xs space-y-1">
-                          <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
-                            MCQ Quiz Sample
-                          </span>
-                          <p className="font-bold text-slate-900">{uploadedMcqQuestions[0].question}</p>
-                          <p className="text-[11px] text-slate-600">Answer: <strong className="text-amber-700">{uploadedMcqQuestions[0].answer}</strong></p>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="p-8 text-center text-slate-400 font-bold border-2 border-dashed border-slate-200 rounded-2xl text-xs">
-                      এখনো কোনো গেম কন্টেন্ট আপলোড করা হয়নি। ফাইল নির্বাচন করুন।
-                    </div>
-                  )}
+                  <div className="max-h-40 overflow-y-auto space-y-1.5 scrollbar-thin pr-1">
+                    {uploadedWords.slice(0, 10).map((w, idx) => (
+                      <div key={idx} className="bg-white p-2.5 rounded-xl border border-slate-200 text-xs flex items-center justify-between shadow-2xs">
+                        <span className="font-extrabold text-slate-900">{w.word}</span>
+                        <span className="text-slate-600 font-medium">{w.meaning}</span>
+                        <span className="text-[10px] font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">G{w.group}</span>
+                      </div>
+                    ))}
+                    {uploadedWords.length > 10 && (
+                      <p className="text-[10px] font-extrabold text-slate-400 text-center pt-1">
+                        ...and {uploadedWords.length - 10} more words
+                      </p>
+                    )}
+                  </div>
                 </div>
-              )}
-
-              {uploadError && (
-                <p className="text-xs font-bold text-rose-600 bg-rose-50 p-3 rounded-xl border border-rose-200">
-                  {uploadError}
-                </p>
               )}
 
               {saveError && (
@@ -5296,33 +5133,28 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
-              <div className="text-[11px] text-slate-400 font-medium">
-                {modalTab === 'creation' ? '১/২ ধাপ - কোর্স ও ভোকাবুলারি' : '২/২ ধাপ - ব্যাচ গেমস প্রসেসিং'}
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateCourseModal(false)}
-                  className="px-4 py-2 text-slate-600 hover:bg-slate-200/60 rounded-xl text-xs font-bold transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={saveStatus === 'saving' || !newCourseTitle.trim() || !newCourseId.trim() || uploadedWords.length === 0}
-                  onClick={async () => {
-                    await handleSaveCourse();
-                    if (saveStatus !== 'error') {
-                      setShowCreateCourseModal(false);
-                    }
-                  }}
-                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 transition shadow-md cursor-pointer disabled:opacity-50"
-                >
-                  {saveStatus === 'saving' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  <span>Save & Publish Course</span>
-                </button>
-              </div>
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCreateCourseModal(false)}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-200/60 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saveStatus === 'saving' || !newCourseTitle.trim() || !newCourseId.trim() || uploadedWords.length === 0}
+                onClick={async () => {
+                  await handleSaveCourse();
+                  if (saveStatus !== 'error') {
+                    setShowCreateCourseModal(false);
+                  }
+                }}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 transition shadow-md cursor-pointer disabled:opacity-50"
+              >
+                {saveStatus === 'saving' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                <span>Save & Publish Course</span>
+              </button>
             </div>
           </div>
         </div>

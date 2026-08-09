@@ -85,25 +85,25 @@ export default function TransactionHistoryView({
   return (
     <div className="space-y-6">
       {/* Transaction Overview Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 lg:gap-5">
-        <div className="bg-white p-2.5 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl border border-slate-200/80 shadow-2xs sm:shadow-xs space-y-1">
-          <span className="text-[10px] sm:text-xs font-extrabold text-slate-400 uppercase tracking-tight block">Total Tx</span>
-          <p className="text-lg sm:text-2xl font-black text-slate-800 font-mono">{stats.total}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/80 shadow-2xs space-y-0.5">
+          <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-tight block">Total Tx</span>
+          <p className="text-lg sm:text-xl font-black text-slate-800 font-mono">{stats.total}</p>
         </div>
 
-        <div className="bg-emerald-50/60 p-2.5 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl border border-emerald-200/60 shadow-2xs sm:shadow-xs space-y-1">
-          <span className="text-[10px] sm:text-xs font-extrabold text-emerald-700 uppercase tracking-tight block">Approved</span>
-          <p className="text-lg sm:text-2xl font-black text-emerald-900 font-mono">৳{stats.approvedRechargeAmount}</p>
+        <div className="bg-emerald-50/60 p-2.5 sm:p-3 rounded-xl border border-emerald-200/60 shadow-2xs space-y-0.5">
+          <span className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-tight block">Approved</span>
+          <p className="text-lg sm:text-xl font-black text-emerald-900 font-mono">৳{stats.approvedRechargeAmount}</p>
         </div>
 
-        <div className="bg-amber-50/60 p-2.5 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl border border-amber-200/60 shadow-2xs sm:shadow-xs space-y-1">
-          <span className="text-[10px] sm:text-xs font-extrabold text-amber-700 uppercase tracking-tight block">Pending</span>
-          <p className="text-lg sm:text-2xl font-black text-amber-900 font-mono">{stats.pending}</p>
+        <div className="bg-amber-50/60 p-2.5 sm:p-3 rounded-xl border border-amber-200/60 shadow-2xs space-y-0.5">
+          <span className="text-[10px] font-extrabold text-amber-700 uppercase tracking-tight block">Pending</span>
+          <p className="text-lg sm:text-xl font-black text-amber-900 font-mono">{stats.pending}</p>
         </div>
 
-        <div className="bg-rose-50/60 p-2.5 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl border border-rose-200/60 shadow-2xs sm:shadow-xs space-y-1">
-          <span className="text-[10px] sm:text-xs font-extrabold text-rose-700 uppercase tracking-tight block">Rejected</span>
-          <p className="text-lg sm:text-2xl font-black text-rose-900 font-mono">{stats.rejected}</p>
+        <div className="bg-rose-50/60 p-2.5 sm:p-3 rounded-xl border border-rose-200/60 shadow-2xs space-y-0.5">
+          <span className="text-[10px] font-extrabold text-rose-700 uppercase tracking-tight block">Rejected</span>
+          <p className="text-lg sm:text-xl font-black text-rose-900 font-mono">{stats.rejected}</p>
         </div>
       </div>
 

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Course, VocabularyWord, BlankQuestion, OddOneOutQuestion, WordAnalogyQuestion, CustomMcqQuestion, StoryItem } from '../types';
-import ExcelInstructionSection from './ExcelInstructionSection';
 import { extractTextFromWordFile, parseStoriesFromRawText } from '../utils/storyParser';
 import { 
   X, 
@@ -3445,7 +3444,16 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                         <span className="text-xs font-black text-slate-800">2. Bulk Import Excel</span>
                       </div>
 
-                      <ExcelInstructionSection defaultExpanded={false} className="mt-3" />
+                      <div className="leading-relaxed mt-2 space-y-1">
+                        <p className="font-extrabold text-slate-700 text-xs">Excel Column Guidelines:</p>
+                        <p style={settingInstructionStyle}>* <strong className="text-rose-600 font-extrabold">id</strong> (Unique ID)</p>
+                        <p style={settingInstructionStyle}>* <strong className="text-indigo-600 font-extrabold">place1:###</strong> — Front Main Display</p>
+                        <p style={settingInstructionStyle}>* <strong className="text-indigo-600 font-extrabold">place2:###</strong> — Back Main Display</p>
+                        <p style={settingInstructionStyle}>* <strong className="text-indigo-600 font-extrabold">place3:###</strong> — Back Secondary Display</p>
+                        <p style={settingInstructionStyle}>* <strong className="text-indigo-600 font-extrabold">place4:###</strong> — Front Sub-Header</p>
+                        <p style={settingInstructionStyle}>* <strong className="text-indigo-600 font-extrabold">place5:###</strong> — Back Extra Section 1</p>
+                        <p style={settingInstructionStyle}>* <strong className="text-slate-600 font-bold">group</strong> (Optional Group Name/Number)</p>
+                      </div>
 
                       {excelError && (
                         <div className="p-3 mt-3 bg-rose-50 border border-rose-100 text-rose-700 font-bold text-xs rounded-xl">
