@@ -4377,7 +4377,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       <div key={idx} className="p-3">
                         <p className="font-bold text-slate-850"><span className="text-slate-400 mr-1">#{idx + 1}</span> {q.sentence}</p>
                         <div className="grid grid-cols-2 gap-1.5 mt-1.5 font-mono text-[11px] text-slate-500">
-                          {q.options.map((opt, oIdx) => (
+                          {(Array.from(new Set((q.options || []).map(o => o.trim()))) as string[]).filter(Boolean).map((opt, oIdx) => (
                             <span key={oIdx} className={opt === q.answer ? 'text-emerald-600 font-extrabold bg-emerald-50/50 px-1 rounded' : ''}>
                               {opt} {opt === q.answer ? '✓' : ''}
                             </span>

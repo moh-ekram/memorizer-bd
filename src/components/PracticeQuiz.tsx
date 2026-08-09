@@ -108,13 +108,16 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
       pool.sort(() => Math.random() - 0.5);
       const selectedBatch = pool.slice(0, Math.min(quizLength, pool.length));
 
-      const generatedQuestions: Question[] = selectedBatch.map(q => ({
-        questionTitle: q.question,
-        options: [...q.options].sort(() => Math.random() - 0.5),
-        correctAnswer: q.answer,
-        explanation: q.explanation,
-        word: { id: q.id, word: q.question, meaning: q.answer, group: 1 } as VocabularyWord
-      }));
+      const generatedQuestions: Question[] = selectedBatch.map(q => {
+        const cleanOpts = Array.from(new Set((q.options || []).map(o => o.trim()))).filter(Boolean);
+        return {
+          questionTitle: q.question,
+          options: [...cleanOpts].sort(() => Math.random() - 0.5),
+          correctAnswer: q.answer,
+          explanation: q.explanation,
+          word: { id: q.id, word: q.question, meaning: q.answer, group: 1 } as VocabularyWord
+        };
+      });
 
       setQuestions(generatedQuestions);
       setCurrentQuestionIndex(0);

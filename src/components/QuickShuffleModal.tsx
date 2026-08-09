@@ -303,7 +303,7 @@ export default function QuickShuffleModal({
                   </p>
 
                   <div className="grid grid-cols-1 gap-2.5">
-                    {currentQ.options.map((optionText, oIdx) => {
+                    {(Array.from(new Set((currentQ.options || []).map(o => o.trim()))) as string[]).filter(Boolean).map((optionText, oIdx) => {
                       const optionLetter = String.fromCharCode(65 + oIdx);
                       const isSelected = selectedOption === optionText;
                       const isCorrectAnswer = optionText.trim() === currentQ.correctAnswer.trim();

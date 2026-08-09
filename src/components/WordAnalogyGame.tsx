@@ -330,7 +330,7 @@ export default function WordAnalogyGame({
 
           {/* Options Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {currentQuestion.options.map((option, index) => {
+            {(Array.from(new Set((currentQuestion.options || []).map(o => o.trim()))) as string[]).filter(Boolean).map((option, index) => {
               const isSelected = selectedOption === option;
               const isCorrect = option === currentQuestion.answer;
               

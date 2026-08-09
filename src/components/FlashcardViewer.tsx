@@ -410,7 +410,7 @@ export default function FlashcardViewer({
     let result = [...activeWordsList];
 
     if (selectedGroups.length < uniqueGroups.length) {
-      result = result.filter(w => selectedGroups.includes(w.group));
+      result = result.filter(w => selectedGroups.some(g => String(g) === String(w.group)));
     }
 
     if (selectedStatuses.length < 4) {
@@ -846,9 +846,262 @@ export default function FlashcardViewer({
             }}
             className="text-left text-xs font-extrabold text-pink-100 hover:text-white transition leading-snug cursor-pointer max-w-[110px]"
           >
-            Filter & Customization
+            Filter & Customization {isFilterExpanded ? '▲' : '▼'}
           </button>
         </div>
+
+        {/* Filter Configuration Controls (Expanding right under the CTA card) */}
+        {isFilterExpanded && (
+          <div className="w-full max-w-lg mx-auto bg-white rounded-3xl border border-pink-200/80 shadow-xl overflow-hidden transition-all duration-200 my-3 animate-in fade-in slide-in-from-top-2">
+            <div className="p-4 sm:p-5 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 className="flex items-center gap-1.5 font-black text-slate-900 text-sm">
+                  <SlidersHorizontal className="w-4 h-4 text-pink-600" />
+                  <span>Filter & Customization</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedGroups(uniqueGroups);
+                    setSelectedStatuses(['know', 'dont_know', 'confusion', 'unrated']);
+                    setSelectedFolder('all');
+                    setStudyOrder('random');
+                  }}
+                  className="text-[11px] font-bold text-pink-600 hover:text-pink-700 cursor-pointer hover:underline"
+                >
+                  Reset All Filters
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Group Selection */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Vocabulary Groups ({selectedGroups.length}/{uniqueGroups.length})
+                    </label>
+                    <div className="flex gap-1.5 text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedGroups(uniqueGroups)}
+                        className="text-indigo-600 font-bold hover:underline cursor-pointer"
+                      >
+                        Select All
+                      </button>
+                      <span className="text-slate-300">|</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedGroups([])}
+                        className="text-rose-600 font-bold hover:underline cursor-pointer"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-5 sm:grid-cols-6 gap-1 max-h-36 overflow-y-auto p-1.5 bg-slate-50 border border-slate-200/60 rounded-xl scrollbar-thin">
+                    {uniqueGroups.map((gVal) => {
+                      const isSelected = selectedGroups.some(x => String(x) === String(gVal));
+                      return (
+                        <button
+                          key={gVal}
+                          type="button"
+                          onClick={() => {
+                            setSelectedGroups(prev => {
+                              const exists = prev.some(x => String(x) === String(gVal));
+                              if (exists) {
+                                return prev.filter(x => String(x) !== String(gVal));
+                              } else {
+                                return [...prev, gVal];
+                              }
+                            });
+                          }}
+                          className={`py-1 text-[11px] font-semibold rounded-lg transition cursor-pointer ${
+                            isSelected
+                              ? 'bg-indigo-600 text-white shadow-2xs'
+                              : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/60'
+                          }`}
+                        >
+                          {gVal}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Status Tags Selection */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Tag Status Filter
+                    </label>
+                    <div className="flex gap-1.5 text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedStatuses(['know', 'dont_know', 'confusion', 'unrated']);
+                          setUserHasManuallyChangedStatuses(true);
+                        }}
+                        className="text-indigo-600 font-bold hover:underline cursor-pointer"
+                      >
+                        All Tags
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {[
+                      { key: 'unrated', label: 'Unrated (Gray)', color: 'bg-slate-400' },
+                      { key: 'dont_know', label: 'Not Learned (Red)', color: 'bg-rose-500' },
+                      { key: 'confusion', label: 'Confused (Yellow)', color: 'bg-amber-500' },
+                      { key: 'know', label: 'Learned (Green)', color: 'bg-emerald-500' }
+                    ].map(st => {
+                      const isSelected = selectedStatuses.includes(st.key);
+                      return (
+                        <button
+                          key={st.key}
+                          type="button"
+                          style={{ touchAction: 'manipulation' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedStatuses(prev => 
+                              prev.includes(st.key)
+                                ? prev.filter(x => x !== st.key)
+                                : [...prev, st.key]
+                            );
+                            setUserHasManuallyChangedStatuses(true);
+                          }}
+                          className={`p-2 rounded-xl text-[11px] font-semibold flex items-center justify-between transition cursor-pointer select-none border active:scale-95 ${
+                            isSelected ? 'bg-indigo-50 border-indigo-200 text-indigo-900' : 'bg-slate-50 border-slate-200/60 text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span className={`w-2.5 h-2.5 rounded-full ${st.color}`} />
+                            <span>{st.label}</span>
+                          </div>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+                {/* Bookmark Folder */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                    Bookmark Collection
+                  </label>
+                  <select
+                    value={selectedFolder}
+                    onChange={(e) => setSelectedFolder(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200/80 rounded-xl p-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                  >
+                    <option value="all">All Words (No Folder Limit)</option>
+                    {folders.map(f => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Study Order */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                    Sequence / Order
+                  </label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setStudyOrder('serial')}
+                      className={`py-2 text-[11px] font-semibold rounded-xl border transition cursor-pointer flex items-center justify-center gap-1 ${
+                        studyOrder === 'serial' ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <ArrowUpDown className="w-3 h-3" />
+                      <span>Serial</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStudyOrder('alphabetical')}
+                      className={`py-2 text-[11px] font-semibold rounded-xl border transition cursor-pointer flex items-center justify-center gap-1 ${
+                        studyOrder === 'alphabetical' ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span className="font-mono text-[9px] font-black">A-Z</span>
+                      <span>Alphabetical</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStudyOrder('random')}
+                      className={`py-2 text-[11px] font-semibold rounded-xl border transition cursor-pointer flex items-center justify-center gap-1 ${
+                        studyOrder === 'random' ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <Sparkles className="w-3 h-3 text-amber-300" />
+                      <span>Shuffle</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Flip Animation Style Selector */}
+                <div className="space-y-1.5 col-span-1 sm:col-span-2 pt-2 border-t border-slate-100">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Card Flip Animation
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    {[
+                      { id: 'shuffle', label: 'Shuffle', icon: '🔀' },
+                      { id: 'flip-h', label: 'Horizontal (H)', icon: '🔄' },
+                      { id: 'flip-v', label: 'Vertical (V)', icon: '↕️' },
+                      { id: 'diagonal', label: 'Diagonal 3D', icon: '✨' },
+                    ].map((anim) => (
+                      <button
+                        key={anim.id}
+                        type="button"
+                        onClick={() => handleSelectAnimation(anim.id as FlipAnimationKey)}
+                        className={`py-2 px-1 text-[10px] sm:text-[11px] font-semibold rounded-xl border transition cursor-pointer flex items-center justify-center gap-1 ${
+                          effectiveAnimSetting === anim.id
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span className="text-xs">{anim.icon}</span>
+                        <span>{anim.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Footer */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-500">
+                  Matching Words: <span className="text-indigo-600 font-extrabold">{filteredWords.length}</span>
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsFilterExpanded(false)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
+                  >
+                    Done
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsSessionActive(true)}
+                    disabled={filteredWords.length === 0}
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-extrabold rounded-xl transition cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Start Deck ({filteredWords.length})</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 3. Statistics Donut Chart Card */}
         <div className="w-full max-w-lg mx-auto bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs text-center space-y-4 my-3">
@@ -990,319 +1243,6 @@ export default function FlashcardViewer({
               </button>
             );
           })}
-        </div>
-
-
-
-        {/* Filter Configuration Controls (Compact Expanding Div) */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden transition-all duration-200">
-          {/* Compact Toggle Header */}
-          <button
-            type="button"
-            onClick={() => setIsFilterExpanded(prev => !prev)}
-            className="w-full py-2.5 px-3.5 sm:px-4 flex items-center justify-between gap-3 text-left hover:bg-slate-50/80 transition cursor-pointer"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="p-1.5 bg-indigo-50 border border-indigo-100 rounded-lg text-indigo-600 shrink-0">
-                <SlidersHorizontal className="w-3.5 h-3.5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-extrabold text-slate-900 text-xs sm:text-sm">
-                    Filter & Customization
-                  </h3>
-                  <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-bold text-[10px] rounded-md border border-indigo-200">
-                    {isFilterExpanded ? 'Collapse' : 'Expand'}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  {selectedGroups.length}/{uniqueGroups.length} Groups • {selectedStatuses.length} Statuses • {studyOrder === 'random' ? 'Shuffle' : studyOrder === 'alphabetical' ? 'A-Z' : 'Serial'}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="hidden sm:inline-block text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100">
-                {isFilterExpanded ? 'Hide Filters' : 'Show Filters'}
-              </span>
-              <div className="p-1.5 rounded-lg bg-slate-100 text-slate-600">
-                {isFilterExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              </div>
-            </div>
-          </button>
-
-          {/* Expanding Options Body */}
-          {isFilterExpanded && (
-            <div className="p-4 sm:p-5 pt-2 border-t border-slate-100 space-y-4 animate-in fade-in duration-200">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <h3 className="flex items-center gap-1.5">
-                  <Filter className="w-4 h-4 text-indigo-600" />
-                  <span style={{
-                    fontFamily: 'Poppins, Inter, ui-sans-serif, system-ui, sans-serif',
-                    fontSize: '10px',
-                    color: 'oklch(0.704 0.04 256.788)',
-                    fontWeight: 500,
-                    lineHeight: '10px',
-                    letterSpacing: '-0.25px',
-                  }}>Study Deck Filters</span>
-                </h3>
-                <button
-                  onClick={() => {
-                    setSelectedGroups(uniqueGroups);
-                    setSelectedStatuses(['know', 'dont_know', 'confusion', 'unrated']);
-                    setSelectedFolder('all');
-                    setStudyOrder('random');
-                  }}
-                  className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 cursor-pointer hover:underline"
-                >
-                  Reset All Filters
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Group Selection */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label style={{
-                      fontFamily: 'Poppins, Inter, ui-sans-serif, system-ui, sans-serif',
-                      fontSize: '10px',
-                      color: 'oklch(0.704 0.04 256.788)',
-                      fontWeight: 500,
-                      lineHeight: '10px',
-                      letterSpacing: '-0.25px',
-                    }} className="uppercase">
-                      Vocabulary Groups ({selectedGroups.length}/{uniqueGroups.length})
-                    </label>
-                    <div className="flex gap-1.5 text-[10px]">
-                      <button
-                        onClick={() => setSelectedGroups(uniqueGroups)}
-                        className="text-indigo-600 font-bold hover:underline"
-                      >
-                        Select All
-                      </button>
-                      <span className="text-slate-300">|</span>
-                      <button
-                        onClick={() => setSelectedGroups([])}
-                        className="text-rose-600 font-bold hover:underline"
-                      >
-                        Clear All
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-5 sm:grid-cols-6 gap-1 max-h-36 overflow-y-auto p-1 bg-slate-50 border border-slate-200/60 rounded-xl scrollbar-thin">
-                    {uniqueGroups.map((gVal) => {
-                      const isSelected = selectedGroups.includes(gVal);
-                      return (
-                        <button
-                          key={gVal}
-                          type="button"
-                          onClick={() => {
-                            setSelectedGroups(prev => 
-                              prev.includes(gVal) ? prev.filter(x => x !== gVal) : [...prev, gVal]
-                            );
-                          }}
-                          className={`py-1 text-[11px] font-semibold rounded-lg transition cursor-pointer ${
-                            isSelected
-                              ? 'bg-indigo-600 text-white shadow-2xs'
-                              : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/60'
-                          }`}
-                        >
-                          {gVal}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Status Tags Selection */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label style={{
-                      fontFamily: 'Poppins, Inter, ui-sans-serif, system-ui, sans-serif',
-                      fontSize: '10px',
-                      color: 'oklch(0.704 0.04 256.788)',
-                      fontWeight: 500,
-                      lineHeight: '10px',
-                      letterSpacing: '-0.25px',
-                    }} className="uppercase">
-                      Tag Status Filter
-                    </label>
-                    <div className="flex gap-1.5 text-[10px]">
-                      <button
-                        onClick={() => {
-                          setSelectedStatuses(['know', 'dont_know', 'confusion', 'unrated']);
-                          setUserHasManuallyChangedStatuses(true);
-                        }}
-                        className="text-indigo-600 font-bold hover:underline"
-                      >
-                        All Tags
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {[
-                      { key: 'unrated', label: 'Unrated (Gray)', color: 'bg-slate-400' },
-                      { key: 'dont_know', label: 'Not Learned (Red)', color: 'bg-rose-500' },
-                      { key: 'confusion', label: 'Confused (Yellow)', color: 'bg-amber-500' },
-                      { key: 'know', label: 'Learned (Green)', color: 'bg-emerald-500' }
-                    ].map(st => {
-                      const isSelected = selectedStatuses.includes(st.key);
-                      return (
-                        <button
-                          key={st.key}
-                          type="button"
-                          style={{ touchAction: 'manipulation' }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedStatuses(prev => 
-                              prev.includes(st.key)
-                                ? prev.filter(x => x !== st.key)
-                                : [...prev, st.key]
-                            );
-                            setUserHasManuallyChangedStatuses(true);
-                          }}
-                          className={`p-2 rounded-xl text-[11px] font-semibold flex items-center justify-between transition cursor-pointer select-none border active:scale-95 ${
-                            isSelected ? 'bg-indigo-50 border-indigo-200 text-indigo-900' : 'bg-slate-50 border-slate-200/60 text-slate-600 hover:bg-slate-100'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <span className={`w-2.5 h-2.5 rounded-full ${st.color}`} />
-                            <span>{st.label}</span>
-                          </div>
-                          {isSelected && <Check className="w-3.5 h-3.5 text-indigo-600" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
-                {/* Bookmark Folder */}
-                <div className="space-y-1.5">
-                  <label style={{
-                    fontFamily: 'Poppins, Inter, ui-sans-serif, system-ui, sans-serif',
-                    fontSize: '10px',
-                    color: 'oklch(0.704 0.04 256.788)',
-                    fontWeight: 500,
-                    lineHeight: '10px',
-                    letterSpacing: '-0.25px',
-                  }} className="uppercase block">Bookmark Collection</label>
-                  <select
-                    value={selectedFolder}
-                    onChange={(e) => setSelectedFolder(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200/80 rounded-xl p-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
-                  >
-                    <option value="all">All Words (No Folder Limit)</option>
-                    {folders.map(f => (
-                      <option key={f.id} value={f.id}>{f.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Study Order */}
-                <div className="space-y-1.5">
-                  <label style={{
-                    fontFamily: 'Poppins, Inter, ui-sans-serif, system-ui, sans-serif',
-                    fontSize: '10px',
-                    color: 'oklch(0.704 0.04 256.788)',
-                    fontWeight: 500,
-                    lineHeight: '10px',
-                    letterSpacing: '-0.25px',
-                  }} className="uppercase block">Sequence / Order</label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setStudyOrder('serial')}
-                      className={`py-2 text-[11px] font-semibold rounded-xl border transition cursor-pointer flex items-center justify-center gap-1 ${
-                        studyOrder === 'serial' ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      <ArrowUpDown className="w-3 h-3" />
-                      <span>Serial</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setStudyOrder('alphabetical')}
-                      className={`py-2 text-[11px] font-semibold rounded-xl border transition cursor-pointer flex items-center justify-center gap-1 ${
-                        studyOrder === 'alphabetical' ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      <span className="font-mono text-[9px] font-black">A-Z</span>
-                      <span>Alphabetical</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setStudyOrder('random')}
-                      className={`py-2 text-[11px] font-semibold rounded-xl border transition cursor-pointer flex items-center justify-center gap-1 ${
-                        studyOrder === 'random' ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      <Sparkles className="w-3 h-3 text-amber-300" />
-                      <span>Shuffle</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Flip Animation Style Selector */}
-                <div className="space-y-1.5 col-span-1 sm:col-span-2 pt-2 border-t border-slate-100">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Card Flip Animation
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                    {[
-                      { id: 'shuffle', label: 'Shuffle', icon: '🔀' },
-                      { id: 'flip-h', label: 'Horizontal (H)', icon: '🔄' },
-                      { id: 'flip-v', label: 'Vertical (V)', icon: '↕️' },
-                      { id: 'diagonal', label: 'Diagonal 3D', icon: '✨' },
-                    ].map((anim) => (
-                      <button
-                        key={anim.id}
-                        type="button"
-                        onClick={() => handleSelectAnimation(anim.id as FlipAnimationKey)}
-                        className={`py-2 px-1 text-[10px] sm:text-[11px] font-semibold rounded-xl border transition cursor-pointer flex items-center justify-center gap-1 ${
-                          effectiveAnimSetting === anim.id
-                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
-                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        <span className="text-xs">{anim.icon}</span>
-                        <span>{anim.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Footer */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-500">
-                  Matching Words: <span className="text-indigo-600 font-extrabold">{filteredWords.length}</span>
-                </span>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsFilterExpanded(false)}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
-                  >
-                    Done
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsSessionActive(true)}
-                    disabled={filteredWords.length === 0}
-                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-extrabold rounded-xl transition cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                  >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>Start Deck ({filteredWords.length})</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     );

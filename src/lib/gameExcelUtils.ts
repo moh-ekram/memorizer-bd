@@ -108,70 +108,98 @@ export async function parseBlankExcel(file: File, courseId: string): Promise<{ q
             id = `blank-${Date.now()}-${i + 1}-${Math.random().toString(36).substr(2, 4)}`;
           }
 
-          const rawOpts: string[] = [];
+          const first4Opts: string[] = [];
           let hashAnswer = '';
 
-          // Read options from col 2 to 6
-          for (let col = 2; col <= 6; col++) {
+          // Read options from col 2 to 5 (4 options)
+          for (let col = 2; col <= 5; col++) {
             const val = cleanText(row[col]);
             if (val) {
               if (val.includes('#')) {
                 const cleaned = val.replace(/#/g, '').trim();
-                rawOpts.push(cleaned);
+                first4Opts.push(cleaned);
                 hashAnswer = cleaned;
               } else {
-                rawOpts.push(val);
+                first4Opts.push(val);
               }
             }
           }
 
-          if (rawOpts.length < 2) {
+          const col6Val = cleanText(row[6]);
+          const col7Val = cleanText(row[7]);
+
+          // Check if col 6 is an Answer column or Option 5
+          let col6IsAnswer = false;
+          let col6IsOption5 = false;
+
+          const headerCol6 = hasHeader ? cleanText(row0[6] || '').toLowerCase() : '';
+          if (headerCol6.includes('answer') || headerCol6.includes('correct') || headerCol6.includes('uttor') || headerCol6.includes('উত্তর') || headerCol6.includes('ans')) {
+            col6IsAnswer = true;
+          }
+
+          if (!col6IsAnswer && col6Val) {
+            if (col6Val.includes('#')) {
+              col6IsOption5 = true;
+            } else if (first4Opts.some(o => o.toLowerCase() === col6Val.toLowerCase())) {
+              col6IsAnswer = true;
+            } else if (/^[1-5]$/.test(col6Val) || /^[a-eA-E]$/.test(col6Val)) {
+              col6IsAnswer = true;
+            } else {
+              col6IsOption5 = true;
+            }
+          }
+
+          const rawOpts = [...first4Opts];
+          if (col6IsOption5 && col6Val) {
+            const cleaned5 = col6Val.replace(/#/g, '').trim();
+            rawOpts.push(cleaned5);
+            if (col6Val.includes('#')) {
+              hashAnswer = cleaned5;
+            }
+          }
+
+          // Deduplicate options while preserving non-empty strings
+          const cleanOpts = Array.from(new Set(rawOpts.map(o => cleanText(o)))).filter(Boolean);
+
+          if (cleanOpts.length < 2) {
             notices.push(`Row ${i + 1}: Skipped due to having fewer than 2 options.`);
             continue;
           }
 
           let answer = hashAnswer;
-
-          // Check col 6 or 7 for explicit Answer column
           if (!answer) {
-            const colAns = cleanText(row[6]) || cleanText(row[7]);
+            const colAns = col6IsAnswer ? col6Val : (col7Val || col6Val);
             if (colAns) {
-              // 1. Is it numeric index 1, 2, 3, 4?
               const numIdx = parseInt(colAns, 10);
-              if (!isNaN(numIdx) && numIdx >= 1 && numIdx <= rawOpts.length) {
-                answer = rawOpts[numIdx - 1];
-              }
-              // 2. Is it A, B, C, D?
-              else if (/^[a-eA-E]$/.test(colAns)) {
+              if (!isNaN(numIdx) && numIdx >= 1 && numIdx <= cleanOpts.length) {
+                answer = cleanOpts[numIdx - 1];
+              } else if (/^[a-eA-E]$/.test(colAns)) {
                 const charCode = colAns.toUpperCase().charCodeAt(0) - 65;
-                if (charCode >= 0 && charCode < rawOpts.length) {
-                  answer = rawOpts[charCode];
+                if (charCode >= 0 && charCode < cleanOpts.length) {
+                  answer = cleanOpts[charCode];
                 }
-              }
-              // 3. Match text against options
-              else {
-                const matched = rawOpts.find(o => cleanText(o).toLowerCase() === colAns.toLowerCase());
+              } else {
+                const matched = cleanOpts.find(o => cleanText(o).toLowerCase() === colAns.toLowerCase());
                 if (matched) {
                   answer = matched;
                 } else {
-                  // Partial match fallback
-                  const partial = rawOpts.find(o => o.toLowerCase().includes(colAns.toLowerCase()) || colAns.toLowerCase().includes(o.toLowerCase()));
-                  answer = partial || rawOpts[0];
+                  const partial = cleanOpts.find(o => o.toLowerCase().includes(colAns.toLowerCase()) || colAns.toLowerCase().includes(o.toLowerCase()));
+                  answer = partial || cleanOpts[0];
                 }
               }
             }
           }
 
           if (!answer) {
-            answer = rawOpts[0]; // Fallback to first option if no answer specified
+            answer = cleanOpts[0];
           }
 
-          const explanation = cleanText(row[7]) || cleanText(row[8]) || '';
+          const explanation = col6IsAnswer ? col7Val : (cleanText(row[7]) || cleanText(row[8]) || '');
 
           questions.push({
             id,
             sentence,
-            options: rawOpts,
+            options: cleanOpts,
             answer,
             explanation,
             courseId,
@@ -426,50 +454,95 @@ export async function parseAnalogyExcel(file: File, courseId: string): Promise<{
             id = `ana-${Date.now()}-${i + 1}-${Math.random().toString(36).substr(2, 4)}`;
           }
 
-          const rawOpts: string[] = [];
+          const first4Opts: string[] = [];
           let hashAnswer = '';
 
-          for (let col = 2; col <= 6; col++) {
+          for (let col = 2; col <= 5; col++) {
             const val = cleanText(row[col]);
             if (val) {
               if (val.includes('#')) {
                 const cleaned = val.replace(/#/g, '').trim();
-                rawOpts.push(cleaned);
+                first4Opts.push(cleaned);
                 hashAnswer = cleaned;
               } else {
-                rawOpts.push(val);
+                first4Opts.push(val);
               }
             }
           }
 
-          if (rawOpts.length < 2) {
+          const col6Val = cleanText(row[6]);
+          const col7Val = cleanText(row[7]);
+
+          let col6IsAnswer = false;
+          let col6IsOption5 = false;
+
+          const headerCol6 = hasHeader ? cleanText(row0[6] || '').toLowerCase() : '';
+          if (headerCol6.includes('answer') || headerCol6.includes('correct') || headerCol6.includes('uttor') || headerCol6.includes('উত্তর') || headerCol6.includes('ans')) {
+            col6IsAnswer = true;
+          }
+
+          if (!col6IsAnswer && col6Val) {
+            if (col6Val.includes('#')) {
+              col6IsOption5 = true;
+            } else if (first4Opts.some(o => o.toLowerCase() === col6Val.toLowerCase())) {
+              col6IsAnswer = true;
+            } else if (/^[1-5]$/.test(col6Val) || /^[a-eA-E]$/.test(col6Val)) {
+              col6IsAnswer = true;
+            } else {
+              col6IsOption5 = true;
+            }
+          }
+
+          const rawOpts = [...first4Opts];
+          if (col6IsOption5 && col6Val) {
+            const cleaned5 = col6Val.replace(/#/g, '').trim();
+            rawOpts.push(cleaned5);
+            if (col6Val.includes('#')) {
+              hashAnswer = cleaned5;
+            }
+          }
+
+          const cleanOpts = Array.from(new Set(rawOpts.map(o => cleanText(o)))).filter(Boolean);
+
+          if (cleanOpts.length < 2) {
             notices.push(`Row ${i + 1}: Skipped due to having fewer than 2 analogy option pairs.`);
             continue;
           }
 
           let answer = hashAnswer;
-          const colAns = cleanText(row[6]) || cleanText(row[7]);
-
-          if (!answer && colAns) {
-            const numIdx = parseInt(colAns, 10);
-            if (!isNaN(numIdx) && numIdx >= 1 && numIdx <= rawOpts.length) {
-              answer = rawOpts[numIdx - 1];
-            } else {
-              const matched = rawOpts.find(o => cleanText(o).toLowerCase() === colAns.toLowerCase());
-              answer = matched || rawOpts[0];
+          if (!answer) {
+            const colAns = col6IsAnswer ? col6Val : (col7Val || col6Val);
+            if (colAns) {
+              const numIdx = parseInt(colAns, 10);
+              if (!isNaN(numIdx) && numIdx >= 1 && numIdx <= cleanOpts.length) {
+                answer = cleanOpts[numIdx - 1];
+              } else if (/^[a-eA-E]$/.test(colAns)) {
+                const charCode = colAns.toUpperCase().charCodeAt(0) - 65;
+                if (charCode >= 0 && charCode < cleanOpts.length) {
+                  answer = cleanOpts[charCode];
+                }
+              } else {
+                const matched = cleanOpts.find(o => cleanText(o).toLowerCase() === colAns.toLowerCase());
+                if (matched) {
+                  answer = matched;
+                } else {
+                  const partial = cleanOpts.find(o => o.toLowerCase().includes(colAns.toLowerCase()) || colAns.toLowerCase().includes(o.toLowerCase()));
+                  answer = partial || cleanOpts[0];
+                }
+              }
             }
           }
 
           if (!answer) {
-            answer = rawOpts[0];
+            answer = cleanOpts[0];
           }
 
-          const explanation = cleanText(row[7]) || cleanText(row[8]) || '';
+          const explanation = col6IsAnswer ? col7Val : (cleanText(row[7]) || cleanText(row[8]) || '');
 
           questions.push({
             id,
             analogy,
-            options: rawOpts,
+            options: cleanOpts,
             answer,
             explanation,
             courseId,
@@ -570,50 +643,95 @@ export async function parseMcqExcel(file: File, courseId: string): Promise<{ que
             id = `mcq-${Date.now()}-${i + 1}-${Math.random().toString(36).substr(2, 4)}`;
           }
 
-          const rawOpts: string[] = [];
+          const first4Opts: string[] = [];
           let hashAnswer = '';
 
-          for (let col = 2; col <= 6; col++) {
+          for (let col = 2; col <= 5; col++) {
             const val = cleanText(row[col]);
             if (val) {
               if (val.includes('#')) {
                 const cleaned = val.replace(/#/g, '').trim();
-                rawOpts.push(cleaned);
+                first4Opts.push(cleaned);
                 hashAnswer = cleaned;
               } else {
-                rawOpts.push(val);
+                first4Opts.push(val);
               }
             }
           }
 
-          if (rawOpts.length < 2) {
+          const col6Val = cleanText(row[6]);
+          const col7Val = cleanText(row[7]);
+
+          let col6IsAnswer = false;
+          let col6IsOption5 = false;
+
+          const headerCol6 = hasHeader ? cleanText(row0[6] || '').toLowerCase() : '';
+          if (headerCol6.includes('answer') || headerCol6.includes('correct') || headerCol6.includes('uttor') || headerCol6.includes('উত্তর') || headerCol6.includes('ans')) {
+            col6IsAnswer = true;
+          }
+
+          if (!col6IsAnswer && col6Val) {
+            if (col6Val.includes('#')) {
+              col6IsOption5 = true;
+            } else if (first4Opts.some(o => o.toLowerCase() === col6Val.toLowerCase())) {
+              col6IsAnswer = true;
+            } else if (/^[1-5]$/.test(col6Val) || /^[a-eA-E]$/.test(col6Val)) {
+              col6IsAnswer = true;
+            } else {
+              col6IsOption5 = true;
+            }
+          }
+
+          const rawOpts = [...first4Opts];
+          if (col6IsOption5 && col6Val) {
+            const cleaned5 = col6Val.replace(/#/g, '').trim();
+            rawOpts.push(cleaned5);
+            if (col6Val.includes('#')) {
+              hashAnswer = cleaned5;
+            }
+          }
+
+          const cleanOpts = Array.from(new Set(rawOpts.map(o => cleanText(o)))).filter(Boolean);
+
+          if (cleanOpts.length < 2) {
             notices.push(`Row ${i + 1}: Skipped due to having fewer than 2 options.`);
             continue;
           }
 
           let answer = hashAnswer;
-          const colAns = cleanText(row[6]) || cleanText(row[7]);
-
-          if (!answer && colAns) {
-            const numIdx = parseInt(colAns, 10);
-            if (!isNaN(numIdx) && numIdx >= 1 && numIdx <= rawOpts.length) {
-              answer = rawOpts[numIdx - 1];
-            } else {
-              const matched = rawOpts.find(o => cleanText(o).toLowerCase() === colAns.toLowerCase());
-              answer = matched || rawOpts[0];
+          if (!answer) {
+            const colAns = col6IsAnswer ? col6Val : (col7Val || col6Val);
+            if (colAns) {
+              const numIdx = parseInt(colAns, 10);
+              if (!isNaN(numIdx) && numIdx >= 1 && numIdx <= cleanOpts.length) {
+                answer = cleanOpts[numIdx - 1];
+              } else if (/^[a-eA-E]$/.test(colAns)) {
+                const charCode = colAns.toUpperCase().charCodeAt(0) - 65;
+                if (charCode >= 0 && charCode < cleanOpts.length) {
+                  answer = cleanOpts[charCode];
+                }
+              } else {
+                const matched = cleanOpts.find(o => cleanText(o).toLowerCase() === colAns.toLowerCase());
+                if (matched) {
+                  answer = matched;
+                } else {
+                  const partial = cleanOpts.find(o => o.toLowerCase().includes(colAns.toLowerCase()) || colAns.toLowerCase().includes(o.toLowerCase()));
+                  answer = partial || cleanOpts[0];
+                }
+              }
             }
           }
 
           if (!answer) {
-            answer = rawOpts[0];
+            answer = cleanOpts[0];
           }
 
-          const explanation = cleanText(row[7]) || cleanText(row[8]) || '';
+          const explanation = col6IsAnswer ? col7Val : (cleanText(row[7]) || cleanText(row[8]) || '');
 
           questions.push({
             id,
             question: questionText,
-            options: rawOpts,
+            options: cleanOpts,
             answer,
             explanation,
             courseId,
