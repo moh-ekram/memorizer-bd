@@ -661,7 +661,7 @@ export function parseWordsSheet(sheet: any): { words: VocabularyWord[]; placeLab
   let detectedLabels: Record<string, string> = {};
   const firstRowKeys = Object.keys(rawRows[0] || {});
   firstRowKeys.forEach(k => {
-    const match = k.match(/^place(1|2|3|4|5|6)[:_\-\s]*(.*)$/i);
+    const match = k.match(/^place(1|2|3|4|5|6)[#:_\\-\s]*(.*)$/i);
     if (match) {
       const num = match[1];
       const lbl = match[2] ? match[2].trim() : '';
@@ -670,6 +670,23 @@ export function parseWordsSheet(sheet: any): { words: VocabularyWord[]; placeLab
       }
     }
   });
+
+  // Ensure default place labels are populated so flashcards and games always have place field definitions
+  const defaultPlaceLabels: Record<string, string> = {
+    place1: 'Main Word',
+    place2: 'Bangla Meaning',
+    place3: 'Example Sentence',
+    place4: 'Extra Word',
+    place5: 'Synonyms',
+    place6: 'Mnemonic Note'
+  };
+
+  for (let i = 1; i <= 6; i++) {
+    const pKey = `place${i}`;
+    if (!detectedLabels[pKey]) {
+      detectedLabels[pKey] = defaultPlaceLabels[pKey];
+    }
+  }
 
   const wordsList: VocabularyWord[] = [];
   const notices: string[] = [];
@@ -684,7 +701,7 @@ export function parseWordsSheet(sheet: any): { words: VocabularyWord[]; placeLab
         const placeKey = rowKeys.find(k => {
           if (usedKeys.has(k)) return false;
           const cleanK = k.toLowerCase().trim();
-          return new RegExp(`^${placePrefix.toLowerCase()}(\\s*[:_\\-]|\\s*$)`, 'i').test(cleanK);
+          return new RegExp(`^${placePrefix.toLowerCase()}([#:_\\-\\s]|$)`, 'i').test(cleanK);
         });
         if (placeKey) {
           usedKeys.add(placeKey);
@@ -694,7 +711,7 @@ export function parseWordsSheet(sheet: any): { words: VocabularyWord[]; placeLab
       const key = rowKeys.find(k => {
         if (usedKeys.has(k)) return false;
         const cleanK = k.toLowerCase().trim();
-        if (/^place[1-6](\s*[:_\-]|\s*$)/i.test(cleanK)) return false;
+        if (/^place[1-6]([#:_\\-\\s]|$)/i.test(cleanK)) return false;
         if (candidates.some(c => cleanK === c)) return true;
         const normK = cleanK.replace(/[^a-z0-9\u0980-\u09FF]/g, '');
         if (candidates.some(c => normK === c.replace(/[^a-z0-9\u0980-\u09FF]/g, ''))) return true;

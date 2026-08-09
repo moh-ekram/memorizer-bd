@@ -66,6 +66,7 @@ import {
   Layers,
   Globe,
   Gamepad2,
+  Sparkles,
   DollarSign,
   Zap,
   Wallet,
