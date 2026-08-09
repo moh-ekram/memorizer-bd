@@ -613,44 +613,127 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
     setIsProcessingAction(true);
     try {
-      await runTransaction(db, async (transaction) => {
+      try {
+        await runTransaction(db, async (transaction) => {
+          const reqRef = doc(db, 'access_requests', req.id);
+          const walletRef = doc(db, 'user_wallets', userEmail);
+          const userRef = doc(db, 'users', userEmail);
+
+          // Read request state
+          const reqSnap = await transaction.get(reqRef);
+          if (reqSnap.exists() && reqSnap.data().status === 'approved') {
+            throw new Error('This request has already been approved.');
+          }
+
+          // Read wallet state
+          const walletSnap = await transaction.get(walletRef);
+          const currentWalletBal = walletSnap.exists() ? (walletSnap.data().balance ?? walletSnap.data().walletBalance ?? 0) : 0;
+
+          if (isRecharge) {
+            const newBal = currentWalletBal + finalPrice;
+            transaction.set(walletRef, {
+              email: userEmail,
+              balance: newBal,
+              walletBalance: newBal,
+              updatedAt: nowISO
+            }, { merge: true });
+
+            transaction.set(userRef, {
+              email: userEmail,
+              balance: newBal,
+              walletBalance: newBal,
+              updatedAt: nowISO
+            }, { merge: true });
+          } else {
+            // Course Access Enrollment
+            const targetCourseIds = (req.courseIds && req.courseIds.length > 0) ? req.courseIds : [req.courseId];
+            const userSnap = await transaction.get(userRef);
+            let existingEnrolled: string[] = [];
+            if (userSnap.exists()) {
+              existingEnrolled = Array.isArray(userSnap.data().enrolledCourseIds) ? userSnap.data().enrolledCourseIds : [];
+            }
+
+            const existingSet = new Set(existingEnrolled.map(id => typeof id === 'string' ? id.trim().toLowerCase() : ''));
+            const updatedEnrolled = [...existingEnrolled];
+            for (const cid of targetCourseIds) {
+              if (cid && cid !== 'wallet_recharge' && !existingSet.has(cid.trim().toLowerCase())) {
+                updatedEnrolled.push(cid);
+                existingSet.add(cid.trim().toLowerCase());
+              }
+            }
+
+            transaction.set(userRef, {
+              email: userEmail,
+              enrolledCourseIds: updatedEnrolled,
+              updatedAt: nowISO
+            }, { merge: true });
+          }
+
+          // Update request status
+          transaction.set(reqRef, {
+            status: 'approved',
+            spent: true,
+            spentAt: nowISO,
+            price: finalPrice,
+            totalPrice: finalPrice,
+            updatedAt: nowISO
+          }, { merge: true });
+
+          // Lock in used_transactions
+          if (req.trxId) {
+            const reqTrx = req.trxId.toLowerCase().trim();
+            const trxRef = doc(db, 'used_transactions', reqTrx);
+            transaction.set(trxRef, {
+              trxId: reqTrx,
+              spent: true,
+              status: 'spent',
+              email: userEmail,
+              usedBy: userEmail,
+              bkashNumber: req.bkashNumber || '',
+              amount: finalPrice,
+              createdAt: nowISO,
+              usedAt: nowISO
+            }, { merge: true });
+          }
+        });
+      } catch (txnErr) {
+        console.warn('runTransaction failed or threw, using direct fallback setDoc calls:', txnErr);
         const reqRef = doc(db, 'access_requests', req.id);
         const walletRef = doc(db, 'user_wallets', userEmail);
         const userRef = doc(db, 'users', userEmail);
 
-        // Read request state
-        const reqSnap = await transaction.get(reqRef);
-        if (reqSnap.exists() && reqSnap.data().status === 'approved') {
-          throw new Error('This request has already been approved.');
-        }
-
-        // Read wallet state
-        const walletSnap = await transaction.get(walletRef);
-        const currentWalletBal = walletSnap.exists() ? (walletSnap.data().balance ?? walletSnap.data().walletBalance ?? 0) : 0;
-
         if (isRecharge) {
+          let currentWalletBal = 0;
+          try {
+            const walletSnap = await getDoc(walletRef);
+            if (walletSnap.exists()) {
+              currentWalletBal = walletSnap.data().balance ?? walletSnap.data().walletBalance ?? 0;
+            }
+          } catch (_) {}
+
           const newBal = currentWalletBal + finalPrice;
-          transaction.set(walletRef, {
+          await setDoc(walletRef, {
             email: userEmail,
             balance: newBal,
             walletBalance: newBal,
             updatedAt: nowISO
           }, { merge: true });
 
-          transaction.set(userRef, {
+          await setDoc(userRef, {
             email: userEmail,
             balance: newBal,
             walletBalance: newBal,
             updatedAt: nowISO
           }, { merge: true });
         } else {
-          // Course Access Enrollment
           const targetCourseIds = (req.courseIds && req.courseIds.length > 0) ? req.courseIds : [req.courseId];
-          const userSnap = await transaction.get(userRef);
           let existingEnrolled: string[] = [];
-          if (userSnap.exists()) {
-            existingEnrolled = Array.isArray(userSnap.data().enrolledCourseIds) ? userSnap.data().enrolledCourseIds : [];
-          }
+          try {
+            const userSnap = await getDoc(userRef);
+            if (userSnap.exists()) {
+              existingEnrolled = Array.isArray(userSnap.data().enrolledCourseIds) ? userSnap.data().enrolledCourseIds : [];
+            }
+          } catch (_) {}
 
           const existingSet = new Set(existingEnrolled.map(id => typeof id === 'string' ? id.trim().toLowerCase() : ''));
           const updatedEnrolled = [...existingEnrolled];
@@ -661,15 +744,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             }
           }
 
-          transaction.set(userRef, {
+          await setDoc(userRef, {
             email: userEmail,
             enrolledCourseIds: updatedEnrolled,
             updatedAt: nowISO
           }, { merge: true });
         }
 
-        // Update request status
-        transaction.set(reqRef, {
+        await setDoc(reqRef, {
           status: 'approved',
           spent: true,
           spentAt: nowISO,
@@ -678,11 +760,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           updatedAt: nowISO
         }, { merge: true });
 
-        // Lock in used_transactions
         if (req.trxId) {
           const reqTrx = req.trxId.toLowerCase().trim();
           const trxRef = doc(db, 'used_transactions', reqTrx);
-          transaction.set(trxRef, {
+          await setDoc(trxRef, {
             trxId: reqTrx,
             spent: true,
             status: 'spent',
@@ -694,7 +775,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             usedAt: nowISO
           }, { merge: true });
         }
-      });
+      }
 
       // Course allowedUsers synchronization
       if (!isRecharge) {
