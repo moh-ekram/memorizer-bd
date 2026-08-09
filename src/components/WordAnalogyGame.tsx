@@ -40,7 +40,7 @@ export default function WordAnalogyGame({
   const [isAnswered, setIsAnswered] = useState(false);
   const [score, setScore] = useState(0);
   const [sessionCompleted, setSessionCompleted] = useState(false);
-  const [showFeedbackPopup, setShowFeedbackPopup] = useState(false);
+  const [userAnswers, setUserAnswers] = useState<Record<string, { selectedOption: string; isCorrect: boolean }>>({});
 
   // Compute counts for filtering tabs
   const counts = React.useMemo(() => {
@@ -109,9 +109,9 @@ export default function WordAnalogyGame({
     setCurrentIndex(0);
     setSelectedOption(null);
     setIsAnswered(false);
+    setUserAnswers({});
     setScore(0);
     setSessionCompleted(false);
-    setShowFeedbackPopup(false);
   };
 
   useEffect(() => {
@@ -169,6 +169,22 @@ export default function WordAnalogyGame({
   const totalCorrectInHistory = Object.values(progress).filter(p => p.correct).length;
   const totalQuestionsInDatabase = allQuestions.length;
 
+  const handleSelectOptionForQuestion = (q: WordAnalogyQuestion, option: string) => {
+    if (userAnswers[q.id]) return;
+
+    const isCorrect = option === q.answer;
+    setUserAnswers(prev => ({
+      ...prev,
+      [q.id]: { selectedOption: option, isCorrect }
+    }));
+
+    if (isCorrect) {
+      setScore(prev => prev + 1);
+    }
+
+    onUpdateProgress(q.id, isCorrect);
+  };
+
   const handleSelectOption = (option: string) => {
     if (isAnswered) return;
     setSelectedOption(option);
@@ -179,7 +195,6 @@ export default function WordAnalogyGame({
       setScore(prev => prev + 1);
     }
     onUpdateProgress(currentQuestion.id, isCorrect);
-    setShowFeedbackPopup(true);
   };
 
   const handleNext = () => {
@@ -316,163 +331,95 @@ export default function WordAnalogyGame({
           </button>
         </motion.div>
       ) : (
-        <div className="bg-white p-8 sm:p-10 rounded-3xl border border-slate-200/60 shadow-sm space-y-8 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
-
-          <div className="space-y-2 text-center py-4">
-            <h3 className="text-xs font-extrabold text-indigo-600 tracking-wider uppercase font-mono">Word Analogy</h3>
-            <p className="text-sm text-slate-500">Select the pair of words that best matches the relationship of the given pair:</p>
-            
-            <div className="my-6 inline-block bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4">
-              <span className="text-xl font-black text-indigo-900 font-mono tracking-tight">{currentQuestion.analogy}</span>
+        /* Vertical List of Word Analogy Questions */
+        <div className="space-y-6">
+          {/* Header Stats Bar */}
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between gap-3 font-sans sticky top-2 z-10">
+            <div className="flex items-center gap-3 text-xs font-bold text-slate-700">
+              <span className="bg-white px-3 py-1.5 rounded-xl border border-slate-200/60 shadow-2xs">
+                Answered: <strong className="text-indigo-600">{Object.keys(userAnswers).length}</strong> / {questions.length}
+              </span>
+              <span className="bg-emerald-50 text-emerald-800 px-3 py-1.5 rounded-xl border border-emerald-200/60 font-black">
+                Score: {score}
+              </span>
             </div>
+            <button
+              onClick={() => setSessionCompleted(true)}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl transition shadow-xs cursor-pointer flex items-center gap-1"
+            >
+              <span>Finish Session</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
           </div>
 
-          {/* Options Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {(Array.from(new Set((currentQuestion.options || []).map(o => o.trim()))) as string[]).filter(Boolean).map((option, index) => {
-              const isSelected = selectedOption === option;
-              const isCorrect = option === currentQuestion.answer;
-              
-              let btnClass = "bg-slate-50 hover:bg-slate-100/70 border-slate-200 text-slate-700 hover:border-indigo-200";
-              if (isAnswered) {
-                if (isCorrect) {
-                  btnClass = "bg-emerald-100 border-emerald-500 text-emerald-950 font-black";
-                } else if (isSelected) {
-                  btnClass = "bg-rose-50 border-rose-300 text-rose-700 font-black";
-                } else {
-                  btnClass = "bg-slate-50/50 border-slate-100 text-slate-400 opacity-60";
-                }
-              }
+          <div className="space-y-6">
+            {questions.map((q, qIdx) => {
+              const qAns = userAnswers[q.id];
+              const isAnswered = !!qAns;
+              const options = (Array.from(new Set((q.options || []).map(o => o.trim()))) as string[]).filter(Boolean);
 
               return (
-                <button
-                  key={index}
-                  onClick={() => handleSelectOption(option)}
-                  disabled={isAnswered}
-                  className={`p-4 rounded-xl border-2 text-left text-sm font-bold font-mono transition duration-200 flex items-center justify-between cursor-pointer ${btnClass}`}
-                >
-                  <span>{option}</span>
-                  {isAnswered && isCorrect && <CheckCircle className="w-4 h-4 text-emerald-600" />}
-                  {isAnswered && !isCorrect && isSelected && <XCircle className="w-4 h-4 text-rose-600" />}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Explanation & Next */}
-          <AnimatePresence>
-            {isAnswered && (
-              <motion.div 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                className="space-y-6 pt-6 border-t border-slate-100"
-              >
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed">
-                  <span className="font-extrabold text-slate-800 block mb-1">Explanation / Analogy Logic:</span>
-                  {currentQuestion.explanation ? currentQuestion.explanation : "Explanation not found"}
-                </div>
-
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    {selectedOption === currentQuestion.answer ? (
-                      <span className="flex items-center gap-1 text-emerald-600 font-extrabold bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 text-xs">
-                        <Check className="w-3.5 h-3.5" /> Correct
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-rose-600 font-extrabold bg-rose-50 px-3 py-1.5 rounded-xl border border-rose-100 text-xs">
-                        <X className="w-3.5 h-3.5" /> Incorrect
-                      </span>
-                    )}
+                <div key={q.id || qIdx} className="bg-white p-5 sm:p-7 rounded-2xl border border-slate-200/70 shadow-2xs space-y-4 font-sans text-left relative">
+                  {/* Question Title & Analogy Pair */}
+                  <div className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-7 h-7 bg-indigo-50 text-indigo-700 text-xs font-black rounded-lg flex items-center justify-center border border-indigo-100/80 mt-0.5 font-mono">
+                      {qIdx + 1}
+                    </span>
+                    <div className="space-y-1">
+                      <div className="inline-block bg-indigo-50/80 px-3 py-1 rounded-lg border border-indigo-100">
+                        <span className="text-sm font-black text-indigo-950 font-mono">{q.analogy}</span>
+                      </div>
+                      <p className="text-xs text-slate-400">Select the pair of words that matches the relationship above.</p>
+                    </div>
                   </div>
 
-                  <button
-                    onClick={handleNext}
-                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-xl transition cursor-pointer shadow-xs flex items-center gap-1.5"
-                  >
-                    <span>{currentIndex === questions.length - 1 ? 'Finish' : 'Next Question'}</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
+                  {/* Options Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pl-0 sm:pl-10">
+                    {options.map((option, optIdx) => {
+                      const isSelected = qAns?.selectedOption === option;
+                      const isCorrect = option === q.answer;
 
-      {/* Feedback Popup Modal */}
-      <AnimatePresence>
-        {showFeedbackPopup && currentQuestion && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full overflow-hidden relative"
-            >
-              {/* Top Banner indicating success/fail */}
-              <div className={`p-6 text-center relative ${
-                selectedOption === currentQuestion.answer 
-                  ? 'bg-emerald-50 text-emerald-850 border-b border-emerald-100' 
-                  : 'bg-rose-50 text-rose-800 border-b border-rose-100'
-              }`}>
-                {/* Close Button top-right */}
-                <button
-                  onClick={() => setShowFeedbackPopup(false)}
-                  className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-black/5 text-slate-450 hover:text-slate-750 transition cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                      let btnStyle = 'border-slate-200/80 hover:border-indigo-300 hover:bg-indigo-50/20 text-slate-700 bg-slate-50/50';
+                      if (isAnswered) {
+                        if (isCorrect) {
+                          btnStyle = 'border-emerald-500 bg-emerald-100 text-emerald-950 font-black';
+                        } else if (isSelected) {
+                          btnStyle = 'border-rose-400 bg-rose-50 text-rose-800 font-bold';
+                        } else {
+                          btnStyle = 'border-slate-100 bg-slate-50/30 text-slate-400 opacity-60';
+                        }
+                      }
 
-                <div className="flex justify-center mb-3">
-                  {selectedOption === currentQuestion.answer ? (
-                    <div className="w-12 h-12 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-md">
-                      <Check className="w-6 h-6 stroke-[3]" />
-                    </div>
-                  ) : (
-                    <div className="w-12 h-12 bg-rose-500 text-white rounded-full flex items-center justify-center shadow-md">
-                      <X className="w-6 h-6 stroke-[3]" />
+                      return (
+                        <button
+                          key={optIdx}
+                          disabled={isAnswered}
+                          onClick={() => handleSelectOptionForQuestion(q, option)}
+                          className={`p-3.5 text-left rounded-xl border text-xs sm:text-sm font-mono font-bold transition flex items-center justify-between cursor-pointer min-h-[48px] ${btnStyle}`}
+                        >
+                          <span>{option}</span>
+                          {isAnswered && isCorrect && <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0 ml-2" />}
+                          {isAnswered && isSelected && !isCorrect && <XCircle className="w-4 h-4 text-rose-500 flex-shrink-0 ml-2" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Inline Explanation Box */}
+                  {isAnswered && (
+                    <div className="ml-0 sm:ml-10 p-4 bg-amber-50/80 border border-amber-200/80 text-amber-900 text-xs rounded-xl space-y-1 animate-fadeIn">
+                      <span className="font-extrabold uppercase tracking-wider text-[10px] text-amber-800 block">ব্যাখ্যা / Reason:</span>
+                      <p className="font-medium leading-relaxed">
+                        {q.explanation || `সঠিক উত্তর: "${q.answer}"`}
+                      </p>
                     </div>
                   )}
                 </div>
-
-                <h4 className="text-3xl font-extrabold tracking-tight font-sans">
-                  {selectedOption === currentQuestion.answer ? 'Correct' : 'Incorrect'}
-                </h4>
-                <div className="mt-4 px-6 py-2.5 bg-white/60 dark:bg-black/25 rounded-2xl inline-block border border-white/50 dark:border-white/5 shadow-inner">
-                  <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1 font-sans">Correct Answer</div>
-                  <div className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-850 dark:text-white font-sans select-all">
-                    {currentQuestion.answer}
-                  </div>
-                </div>
-              </div>
-
-              {/* Middle Explanation */}
-              <div className="p-6 space-y-3">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Explanation</span>
-                <div className="bg-slate-50 border border-slate-200/60 p-4 rounded-2xl text-xs font-semibold text-slate-600 leading-relaxed max-h-[200px] overflow-y-auto">
-                  {currentQuestion.explanation ? currentQuestion.explanation : "No explanation available for this question."}
-                </div>
-              </div>
-
-              {/* Bottom Next Button */}
-              <div className="p-6 pt-0 flex justify-end">
-                <button
-                  onClick={() => {
-                    setShowFeedbackPopup(false);
-                    handleNext();
-                  }}
-                  className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-sm rounded-xl transition cursor-pointer shadow-sm shadow-indigo-500/10 flex items-center justify-center gap-2"
-                >
-                  <span>{currentIndex === questions.length - 1 ? 'Finish' : 'Next Question'}</span>
-                  <ChevronRight className="w-4 h-4 stroke-[3]" />
-                </button>
-              </div>
-            </motion.div>
+              );
+            })}
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
     </div>
   );
 }

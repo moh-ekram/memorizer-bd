@@ -92,6 +92,7 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [typedAnswer, setTypedAnswer] = useState<string>('');
   const [answerSubmitted, setAnswerSubmitted] = useState(false);
+  const [answersRecord, setAnswersRecord] = useState<Record<number, { selectedOption: string; isCorrect: boolean }>>({});
 
   // Scoring
   const [score, setScore] = useState(0);
@@ -124,6 +125,7 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
       setSelectedAnswer(null);
       setTypedAnswer('');
       setAnswerSubmitted(false);
+      setAnswersRecord({});
       setScore(0);
       setIncorrectWords([]);
       setHintsUsed(0);
@@ -195,10 +197,36 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
     setSelectedAnswer(null);
     setTypedAnswer('');
     setAnswerSubmitted(false);
+    setAnswersRecord({});
     setScore(0);
     setIncorrectWords([]);
     setHintsUsed(0);
     setGameState('playing');
+  };
+
+  const handleMCQOptionClickForIndex = (qIdx: number, option: string) => {
+    if (answersRecord[qIdx]) return;
+
+    const targetQ = questions[qIdx];
+    if (!targetQ) return;
+    const isCorrect = option === targetQ.correctAnswer;
+
+    setAnswersRecord(prev => ({
+      ...prev,
+      [qIdx]: { selectedOption: option, isCorrect }
+    }));
+
+    if (isCorrect) {
+      setScore(prev => prev + 1);
+      if (targetQ.word?.id) {
+        onRateWord(targetQ.word.id, 'know');
+      }
+    } else {
+      if (targetQ.word) {
+        setIncorrectWords(prev => [...prev, targetQ.word!]);
+        onRateWord(targetQ.word.id, 'dont_know');
+      }
+    }
   };
 
   const handleMCQOptionClick = (option: string) => {
@@ -580,154 +608,146 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
       })()}
 
       {/* 2. PLAYING GAME */}
-      {gameState === 'playing' && questions[currentQuestionIndex] && (
+      {gameState === 'playing' && questions.length > 0 && (
         <div className="space-y-6 animate-fadeIn">
-          {/* Header Stats */}
-          <div className="flex justify-between items-center text-xs font-semibold text-slate-400 font-sans border-b border-slate-100 pb-3">
-            <span>Question {currentQuestionIndex + 1} / {questions.length}</span>
-            <div className="flex items-center gap-2">
-              <span className="text-indigo-600">Score: {score}</span>
-              <div className="w-24 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                <div className="bg-indigo-600 h-full transition-all duration-300" style={{ width: `${progressPercent}%` }}></div>
-              </div>
+          {/* Top Sticky Header Stats */}
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between gap-3 font-sans sticky top-2 z-10">
+            <div className="flex items-center gap-3 text-xs font-bold text-slate-700">
+              <span className="bg-white px-3 py-1.5 rounded-xl border border-slate-200/60 shadow-2xs">
+                Answered: <strong className="text-indigo-600">{Object.keys(answersRecord).length}</strong> / {questions.length}
+              </span>
+              <span className="bg-emerald-50 text-emerald-800 px-3 py-1.5 rounded-xl border border-emerald-200/60 font-black">
+                Score: {score}
+              </span>
             </div>
+            <button
+              onClick={() => {
+                setGameState('summary');
+                if (onQuizComplete) onQuizComplete(score, questions.length);
+              }}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl transition shadow-xs cursor-pointer flex items-center gap-1"
+            >
+              <span>Complete Quiz</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
           </div>
 
-          {/* Question display */}
-          <div className="bg-slate-50/50 p-8 rounded-2xl border border-slate-200/60 text-center space-y-4">
-            <span className="px-3 py-1 bg-indigo-50 text-indigo-800 text-[10px] font-extrabold uppercase rounded-full tracking-wider font-sans">
-              {quizType === 'mcq_bn_en' ? (placeLabels?.place2 || 'Meaning') : (placeLabels?.place1 || 'English Word')}
-            </span>
-
-            <h1 className="text-2xl md:text-3xl font-black text-slate-800 leading-tight">
-              {questions[currentQuestionIndex].questionTitle || (
-                quizType === 'mcq_bn_en'
-                  ? questions[currentQuestionIndex].word?.meaning
-                  : questions[currentQuestionIndex].word?.word
-              )}
-            </h1>
-
-            {/* Display synonyms context removed as requested */}
-          </div>
-
-          {/* MCQ Options representation */}
+          {/* MCQ Vertical Questions List */}
           {quizType !== 'typing_spelling' ? (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 font-sans">
-                {questions[currentQuestionIndex].options.map((option, idx) => {
-                  const isSelected = selectedAnswer === option;
-                  const isCorrectOpt = option === questions[currentQuestionIndex].correctAnswer;
+            <div className="space-y-6">
+              {questions.map((q, qIdx) => {
+                const qAns = answersRecord[qIdx];
+                const isAnswered = !!qAns;
+                const questionTitle = q.questionTitle || (
+                  quizType === 'mcq_bn_en'
+                    ? q.word?.meaning
+                    : q.word?.word
+                );
+                const options = (Array.from(new Set((q.options || []).map(o => o.trim()))) as string[]).filter(Boolean);
 
-                  let btnStyle = 'border-slate-200/60 hover:border-indigo-300 hover:bg-indigo-50/10 text-slate-700 bg-white';
-                  if (answerSubmitted) {
-                    if (isCorrectOpt) {
-                      btnStyle = 'border-emerald-500 bg-emerald-100 text-emerald-950 font-black';
-                    } else if (isSelected) {
-                      btnStyle = 'border-rose-500 bg-rose-50 text-rose-800';
-                    } else {
-                      btnStyle = 'border-slate-100 bg-slate-50/50 text-slate-400 opacity-60';
-                    }
-                  } else if (isSelected) {
-                    btnStyle = 'border-indigo-500 ring-2 ring-indigo-500/10 bg-indigo-50/30 text-indigo-950 font-bold';
-                  }
+                return (
+                  <div key={qIdx} className="bg-white p-5 sm:p-7 rounded-2xl border border-slate-200/70 shadow-2xs space-y-4 font-sans text-left">
+                    {/* Question Title */}
+                    <div className="flex items-start gap-3">
+                      <span className="flex-shrink-0 w-7 h-7 bg-indigo-50 text-indigo-700 text-xs font-black rounded-lg flex items-center justify-center border border-indigo-100/80 mt-0.5 font-mono">
+                        {qIdx + 1}
+                      </span>
+                      <h3 className="text-base sm:text-lg font-extrabold text-slate-850 leading-snug pt-0.5">
+                        {questionTitle}
+                      </h3>
+                    </div>
 
-                  return (
-                    <button
-                      key={idx}
-                      disabled={answerSubmitted}
-                      onClick={() => handleMCQOptionClick(option)}
-                      className={`p-4 text-left rounded-xl border text-sm transition flex items-center justify-between min-h-14 ${btnStyle}`}
-                    >
-                      <span>{option}</span>
-                      {answerSubmitted && isCorrectOpt && <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />}
-                      {answerSubmitted && isSelected && !isCorrectOpt && <XCircle className="w-5 h-5 text-rose-500 flex-shrink-0" />}
-                    </button>
-                  );
-                })}
-              </div>
-              {answerSubmitted && questions[currentQuestionIndex]?.explanation && (
-                <div className="p-4 bg-amber-50/80 border border-amber-200/80 text-amber-900 text-xs rounded-xl font-sans space-y-1">
-                  <span className="font-extrabold uppercase tracking-wider text-[10px] text-amber-800 block">Reason / Explanation:</span>
-                  <p className="font-medium leading-relaxed">{questions[currentQuestionIndex].explanation}</p>
-                </div>
-              )}
+                    {/* Options Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pl-0 sm:pl-10">
+                      {options.map((option, oIdx) => {
+                        const isSelected = qAns?.selectedOption === option;
+                        const isCorrectOpt = option === q.correctAnswer;
+
+                        let btnStyle = 'border-slate-200/80 hover:border-indigo-300 hover:bg-indigo-50/20 text-slate-700 bg-slate-50/50';
+                        if (isAnswered) {
+                          if (isCorrectOpt) {
+                            btnStyle = 'border-emerald-500 bg-emerald-100 text-emerald-950 font-black';
+                          } else if (isSelected) {
+                            btnStyle = 'border-rose-400 bg-rose-50 text-rose-800 font-bold';
+                          } else {
+                            btnStyle = 'border-slate-100 bg-slate-50/30 text-slate-400 opacity-60';
+                          }
+                        }
+
+                        return (
+                          <button
+                            key={oIdx}
+                            disabled={isAnswered}
+                            onClick={() => handleMCQOptionClickForIndex(qIdx, option)}
+                            className={`p-3.5 text-left rounded-xl border text-xs sm:text-sm transition flex items-center justify-between cursor-pointer min-h-[48px] ${btnStyle}`}
+                          >
+                            <span className="font-medium">{option}</span>
+                            {isAnswered && isCorrectOpt && <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 ml-2" />}
+                            {isAnswered && isSelected && !isCorrectOpt && <XCircle className="w-4 h-4 text-rose-500 flex-shrink-0 ml-2" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Inline Explanation Box */}
+                    {isAnswered && (
+                      <div className="ml-0 sm:ml-10 p-4 bg-amber-50/80 border border-amber-200/80 text-amber-900 text-xs rounded-xl space-y-1 animate-fadeIn">
+                        <span className="font-extrabold uppercase tracking-wider text-[10px] text-amber-800 block">ব্যাখ্যা / Reason:</span>
+                        <p className="font-medium leading-relaxed">
+                          {q.explanation || `সঠিক উত্তর: "${q.correctAnswer}"`}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
-            /* Spelling Typing Mode input fields */
-            <div className="space-y-4">
-              <div className="space-y-1 font-sans">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Type {placeLabels?.place1 || 'English'} Spelling</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    disabled={answerSubmitted}
-                    placeholder="Enter spelling..."
-                    value={typedAnswer}
-                    onChange={(e) => setTypedAnswer(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && typedAnswer.trim()) {
-                        submitAnswer();
-                      }
-                    }}
-                    className={`w-full p-4 border rounded-xl text-lg font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 transition ${
-                      answerSubmitted
-                        ? typedAnswer.trim().toLowerCase() === questions[currentQuestionIndex].correctAnswer
-                          ? 'border-indigo-500 bg-indigo-50/30 text-indigo-800'
-                          : 'border-rose-500 bg-rose-50 text-rose-800'
-                        : 'border-slate-200'
-                    }`}
-                  />
-                </div>
-              </div>
-
-              {/* Hint Support */}
-              {!answerSubmitted && (
-                <div className="flex justify-between items-center font-sans">
+            /* Single card for spelling mode */
+            <div className="bg-slate-50/50 p-8 rounded-2xl border border-slate-200/60 text-center space-y-4">
+              <span className="px-3 py-1 bg-indigo-50 text-indigo-800 text-[10px] font-extrabold uppercase rounded-full tracking-wider font-sans">
+                Spelling Test ({currentQuestionIndex + 1} / {questions.length})
+              </span>
+              <h1 className="text-2xl md:text-3xl font-black text-slate-800 leading-tight">
+                {questions[currentQuestionIndex]?.word?.meaning}
+              </h1>
+              <div className="space-y-4 max-w-md mx-auto pt-2 font-sans">
+                <input
+                  type="text"
+                  disabled={answerSubmitted}
+                  placeholder="Enter spelling..."
+                  value={typedAnswer}
+                  onChange={(e) => setTypedAnswer(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && typedAnswer.trim()) submitAnswer();
+                  }}
+                  className={`w-full p-4 border rounded-xl text-lg font-bold text-center focus:outline-none transition ${
+                    answerSubmitted
+                      ? typedAnswer.trim().toLowerCase() === questions[currentQuestionIndex].correctAnswer
+                        ? 'border-emerald-500 bg-emerald-50/40 text-emerald-900'
+                        : 'border-rose-500 bg-rose-50 text-rose-800'
+                      : 'border-slate-200'
+                  }`}
+                />
+                {!answerSubmitted ? (
                   <button
-                    onClick={getTypingHint}
-                    className="text-xs font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-1.5"
+                    onClick={submitAnswer}
+                    disabled={!typedAnswer.trim()}
+                    className="w-full py-3 bg-indigo-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm"
                   >
-                    <HelpIcon className="w-4 h-4" />
-                    <span>Spelling Hint</span>
+                    Verify Answer
                   </button>
-                  <span className="text-[11px] text-slate-400">Total characters: {questions[currentQuestionIndex].correctAnswer.length}</span>
-                </div>
-              )}
+                ) : (
+                  <button
+                    onClick={handleNext}
+                    className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl text-sm"
+                  >
+                    Next Question
+                  </button>
+                )}
+              </div>
             </div>
           )}
-
-          {/* Action Controllers */}
-          <div className="pt-4 border-t border-slate-100 flex justify-end gap-3 font-sans">
-            {quizType === 'typing_spelling' ? (
-              !answerSubmitted ? (
-                <button
-                  onClick={submitAnswer}
-                  disabled={!typedAnswer.trim()}
-                  className="px-6 py-3 bg-indigo-600 disabled:opacity-50 hover:bg-indigo-700 text-white font-bold rounded-xl transition text-sm"
-                >
-                  Verify Answer
-                </button>
-              ) : (
-                <button
-                  onClick={handleNext}
-                  className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition text-sm flex items-center gap-1.5"
-                >
-                  <span>{currentQuestionIndex === questions.length - 1 ? 'Show Results' : 'Next Question'}</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              )
-            ) : (
-              answerSubmitted && (
-                <button
-                  onClick={handleNext}
-                  className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition text-sm flex items-center gap-1.5"
-                >
-                  <span>{currentQuestionIndex === questions.length - 1 ? 'Show Results' : 'Next Question'}</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              )
-            )}
-          </div>
         </div>
       )}
 

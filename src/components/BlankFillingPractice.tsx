@@ -51,6 +51,7 @@ export default function BlankFillingPractice({
   const [score, setScore] = useState(0);
   const [sessionCompleted, setSessionCompleted] = useState(false);
   const [showFeedbackPopup, setShowFeedbackPopup] = useState(false);
+  const [userAnswers, setUserAnswers] = useState<Record<string, { selectedOption: string; isCorrect: boolean }>>({});
 
   // Compute question counts for each category
   const counts = React.useMemo(() => {
@@ -120,6 +121,7 @@ export default function BlankFillingPractice({
     setCurrentIndex(0);
     setSelectedOption(null);
     setIsAnswered(false);
+    setUserAnswers({});
     setScore(0);
     setSessionCompleted(false);
     setShowFeedbackPopup(false);
@@ -182,6 +184,22 @@ export default function BlankFillingPractice({
   // Calculate total progress stats based on current database
   const totalCorrectInHistory = Object.values(blankProgress).filter(p => p.correct).length;
   const totalQuestionsInDatabase = allQuestions.length;
+
+  const handleSelectOptionForQuestion = (q: BlankQuestion, option: string) => {
+    if (userAnswers[q.id]) return;
+
+    const isCorrect = option === q.answer;
+    setUserAnswers(prev => ({
+      ...prev,
+      [q.id]: { selectedOption: option, isCorrect }
+    }));
+
+    if (isCorrect) {
+      setScore(prev => prev + 1);
+    }
+
+    onUpdateBlankProgress(q.id, isCorrect);
+  };
 
   const handleSelectOption = (option: string) => {
     if (isAnswered) return;
@@ -337,104 +355,101 @@ export default function BlankFillingPractice({
           </button>
         </motion.div>
       ) : (
-        /* Main Question Card */
-        <div className="bg-white p-8 sm:p-10 rounded-3xl border border-slate-200/60 shadow-sm space-y-8 relative overflow-hidden">
-          {/* Absolute Background Accent */}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
-
-          {/* Sentence display with styled blank */}
-          <div className="text-base sm:text-lg font-extrabold text-slate-800 leading-relaxed text-center py-4">
-            {sentenceParts[0]}
-            <span className={`inline-block px-3 py-1 mx-1.5 rounded-xl border-2 font-mono text-xs sm:text-sm transition-all duration-300 ${
-              isAnswered 
-              ? (selectedOption === currentQuestion.answer 
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300' 
-                  : 'bg-rose-50 text-rose-700 border-rose-300')
-              : 'bg-indigo-50/50 text-indigo-600 border-dashed border-indigo-200 min-w-[70px] text-center'
-            }`}>
-              {isAnswered ? selectedOption : '___'}
-            </span>
-            {sentenceParts[1]}
+        /* Vertical List of Blank Filling Questions */
+        <div className="space-y-6">
+          {/* Header Stats Bar */}
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between gap-3 font-sans sticky top-2 z-10">
+            <div className="flex items-center gap-3 text-xs font-bold text-slate-700">
+              <span className="bg-white px-3 py-1.5 rounded-xl border border-slate-200/60 shadow-2xs">
+                Answered: <strong className="text-indigo-600">{Object.keys(userAnswers).length}</strong> / {questions.length}
+              </span>
+              <span className="bg-emerald-50 text-emerald-800 px-3 py-1.5 rounded-xl border border-emerald-200/60 font-black">
+                Score: {score}
+              </span>
+            </div>
+            <button
+              onClick={() => setSessionCompleted(true)}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl transition shadow-xs cursor-pointer flex items-center gap-1"
+            >
+              <span>Finish Session</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
           </div>
 
-          {/* Options Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {(Array.from(new Set((currentQuestion.options || []).map(o => o.trim()))) as string[]).filter(Boolean).map((option, index) => {
-              const isSelected = selectedOption === option;
-              const isCorrect = option === currentQuestion.answer;
-              
-              let btnClass = "bg-slate-50 hover:bg-slate-100/70 border-slate-200 text-slate-700 hover:border-indigo-200";
-              if (isAnswered) {
-                if (isCorrect) {
-                  btnClass = "bg-emerald-100 border-emerald-500 text-emerald-950 font-black";
-                } else if (isSelected) {
-                  btnClass = "bg-rose-50 border-rose-300 text-rose-700 font-black";
-                } else {
-                  btnClass = "bg-slate-50/50 border-slate-100 text-slate-400 opacity-60";
-                }
-              }
+          <div className="space-y-6">
+            {questions.map((q, qIdx) => {
+              const qAns = userAnswers[q.id];
+              const isAnswered = !!qAns;
+              const parts = q.sentence.split('___');
+              const cleanOpts = (Array.from(new Set((q.options || []).map(o => o.trim()))) as string[]).filter(Boolean);
 
               return (
-                <button
-                  key={index}
-                  onClick={() => handleSelectOption(option)}
-                  disabled={isAnswered}
-                  className={`p-4 rounded-xl border-2 text-left text-xs font-bold transition duration-200 flex items-center justify-between cursor-pointer ${btnClass}`}
-                >
-                  <span>{option}</span>
-                  {isAnswered && isCorrect && <CheckCircle className="w-4 h-4 text-emerald-600" />}
-                  {isAnswered && !isCorrect && isSelected && <XCircle className="w-4 h-4 text-rose-600" />}
-                </button>
+                <div key={q.id || qIdx} className="bg-white p-5 sm:p-7 rounded-2xl border border-slate-200/70 shadow-2xs space-y-4 font-sans text-left relative">
+                  {/* Question Number & Sentence */}
+                  <div className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-7 h-7 bg-indigo-50 text-indigo-700 text-xs font-black rounded-lg flex items-center justify-center border border-indigo-100/80 mt-0.5 font-mono">
+                      {qIdx + 1}
+                    </span>
+                    <div className="text-base sm:text-lg font-extrabold text-slate-850 leading-relaxed pt-0.5">
+                      {parts[0]}
+                      <span className={`inline-block px-2.5 py-0.5 mx-1.5 rounded-lg border font-mono text-xs sm:text-sm font-bold transition-all ${
+                        isAnswered
+                          ? qAns.isCorrect
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                            : 'bg-rose-50 text-rose-700 border-rose-300'
+                          : 'bg-indigo-50/50 text-indigo-600 border-dashed border-indigo-200 min-w-[60px] text-center'
+                      }`}>
+                        {isAnswered ? qAns.selectedOption : '___'}
+                      </span>
+                      {parts[1]}
+                    </div>
+                  </div>
+
+                  {/* Options Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pl-0 sm:pl-10">
+                    {cleanOpts.map((option, optIdx) => {
+                      const isSelected = qAns?.selectedOption === option;
+                      const isCorrect = option === q.answer;
+
+                      let btnStyle = 'border-slate-200/80 hover:border-indigo-300 hover:bg-indigo-50/20 text-slate-700 bg-slate-50/50';
+                      if (isAnswered) {
+                        if (isCorrect) {
+                          btnStyle = 'border-emerald-500 bg-emerald-100 text-emerald-950 font-black';
+                        } else if (isSelected) {
+                          btnStyle = 'border-rose-400 bg-rose-50 text-rose-800 font-bold';
+                        } else {
+                          btnStyle = 'border-slate-100 bg-slate-50/30 text-slate-400 opacity-60';
+                        }
+                      }
+
+                      return (
+                        <button
+                          key={optIdx}
+                          disabled={isAnswered}
+                          onClick={() => handleSelectOptionForQuestion(q, option)}
+                          className={`p-3.5 text-left rounded-xl border text-xs sm:text-sm transition flex items-center justify-between cursor-pointer min-h-[48px] ${btnStyle}`}
+                        >
+                          <span className="font-medium">{option}</span>
+                          {isAnswered && isCorrect && <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0 ml-2" />}
+                          {isAnswered && isSelected && !isCorrect && <XCircle className="w-4 h-4 text-rose-500 flex-shrink-0 ml-2" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Inline Explanation Box */}
+                  {isAnswered && (
+                    <div className="ml-0 sm:ml-10 p-4 bg-amber-50/80 border border-amber-200/80 text-amber-900 text-xs rounded-xl space-y-1 animate-fadeIn">
+                      <span className="font-extrabold uppercase tracking-wider text-[10px] text-amber-800 block">ব্যাখ্যা / Reason:</span>
+                      <p className="font-medium leading-relaxed">
+                        {q.explanation || `সঠিক উত্তর: "${q.answer}"`}
+                      </p>
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
-
-          {/* Answer feedback / Next Button */}
-          <AnimatePresence>
-            {isAnswered && (
-              <motion.div 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                className="space-y-4 pt-6 border-t border-slate-100"
-              >
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-2.5 text-xs">
-                    {selectedOption === currentQuestion.answer ? (
-                      <span className="flex items-center gap-1 text-emerald-600 font-extrabold bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100">
-                        <Check className="w-3.5 h-3.5" />
-                        Correct Answer
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-rose-600 font-extrabold bg-rose-50 px-3 py-1.5 rounded-xl border border-rose-100">
-                        <X className="w-3.5 h-3.5" />
-                        Incorrect! Correct answer is: {currentQuestion.answer}
-                      </span>
-                    )}
-                  </div>
-
-                  <button
-                    onClick={handleNext}
-                    className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-xl transition cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
-                  >
-                    <span>{currentIndex === questions.length - 1 ? 'Finish' : 'Next Question'}</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Explainer Div */}
-                <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-xl text-xs space-y-1">
-                  <p className="font-extrabold text-slate-700 flex items-center gap-1.5">
-                    <HelpCircle className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Explanation</span>
-                  </p>
-                  <p className="text-slate-500 font-medium">
-                    {currentQuestion.explanation ? currentQuestion.explanation : "Explanation not found"}
-                  </p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
       )}
 
