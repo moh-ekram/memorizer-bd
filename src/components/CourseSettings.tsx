@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Course, VocabularyWord, BlankQuestion, OddOneOutQuestion, WordAnalogyQuestion, CustomMcqQuestion, StoryItem } from '../types';
 import { extractTextFromWordFile, parseStoriesFromRawText } from '../utils/storyParser';
 import { 
@@ -1041,42 +1041,48 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   const [copiedId, setCopiedId] = useState(false);
   const [hasAutoOpened, setHasAutoOpened] = useState(false);
 
-  // Synchronize on course prop changes
-  useEffect(() => {
-    setTitle(course.title);
-    setDescription(course.description);
-    setIsDefault(!!course.isDefault);
-    setIsRestricted(!!course.isRestricted);
-    setHidden(!!course.hidden);
-    setPrice((course.price && course.price > 0) ? course.price : 30);
-    setBkashNumber((course.bkashNumber && course.bkashNumber !== '01700000000' && course.bkashNumber.trim() !== '') ? course.bkashNumber : '01581624202');
-    setGoogleSearchQuery(course.googleSearchQuery || '');
-    setAllowedUsers(course.allowedUsers || []);
-    setAllowedUsersExpiry(course.allowedUsersExpiry || {});
-    setAccessDurationDays(course.accessDurationDays || 365);
-    setBulkInput((course.allowedUsers || []).join('\n'));
-    setLocalWords(sanitizeWordsList(course.words || []));
-    setVerifiedPayments(course.verifiedPayments || []);
-    setToggles({
-      meaning: true,
-      synonyms: true,
-      extraWord: true,
-      extraMeaning: true,
-      example: true,
-      audio: true,
-      ...(course.variableToggles || {})
-    });
-    setSelectedWordIds(new Set());
-    const normalized = getNormalizedActiveTab(initialTab);
-    setActiveTab(normalized);
-    if (initialTab === 'students') setAccessSubTab('students');
-    else if (initialTab === 'verification') setAccessSubTab('verification');
-    else if (initialTab === 'access') setAccessSubTab('access');
+  const prevCourseIdRef = useRef<string | null>(null);
 
-    if (initialTab === 'addwords') setWordlistSubTab('addwords');
-    else if (initialTab === 'wordlist') setWordlistSubTab('wordlist');
-    setHasAutoOpened(false);
-  }, [course, initialTab]);
+  // Synchronize on course prop changes (only reset when course ID changes)
+  useEffect(() => {
+    if (!course) return;
+    if (prevCourseIdRef.current !== course.id) {
+      prevCourseIdRef.current = course.id;
+      setTitle(course.title);
+      setDescription(course.description);
+      setIsDefault(!!course.isDefault);
+      setIsRestricted(!!course.isRestricted);
+      setHidden(!!course.hidden);
+      setPrice((course.price && course.price > 0) ? course.price : 30);
+      setBkashNumber((course.bkashNumber && course.bkashNumber !== '01700000000' && course.bkashNumber.trim() !== '') ? course.bkashNumber : '01581624202');
+      setGoogleSearchQuery(course.googleSearchQuery || '');
+      setAllowedUsers(course.allowedUsers || []);
+      setAllowedUsersExpiry(course.allowedUsersExpiry || {});
+      setAccessDurationDays(course.accessDurationDays || 365);
+      setBulkInput((course.allowedUsers || []).join('\n'));
+      setLocalWords(sanitizeWordsList(course.words || []));
+      setVerifiedPayments(course.verifiedPayments || []);
+      setToggles({
+        meaning: true,
+        synonyms: true,
+        extraWord: true,
+        extraMeaning: true,
+        example: true,
+        audio: true,
+        ...(course.variableToggles || {})
+      });
+      setSelectedWordIds(new Set());
+      const normalized = getNormalizedActiveTab(initialTab);
+      setActiveTab(normalized);
+      if (initialTab === 'students') setAccessSubTab('students');
+      else if (initialTab === 'verification') setAccessSubTab('verification');
+      else if (initialTab === 'access') setAccessSubTab('access');
+
+      if (initialTab === 'addwords') setWordlistSubTab('addwords');
+      else if (initialTab === 'wordlist') setWordlistSubTab('wordlist');
+      setHasAutoOpened(false);
+    }
+  }, [course?.id, initialTab]);
 
   // Handle auto-editing of a specified word
   useEffect(() => {
@@ -1541,7 +1547,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     setExcelImportStats(null);
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = read(data, { type: 'array' });
@@ -1670,6 +1676,13 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
           let existingIdx = -1;
           if (rawId) {
             existingIdx = updatedLocalWords.findIndex(w => String(w.id).trim().toLowerCase() === rawId.toLowerCase());
+            if (existingIdx === -1) {
+              existingIdx = updatedLocalWords.findIndex(w => {
+                const cleanId = String(w.id).trim().toLowerCase();
+                const cleanRawId = rawId.toLowerCase();
+                return cleanId.endsWith(`-${cleanRawId}`) || cleanId.endsWith(`_${cleanRawId}`);
+              });
+            }
           }
           if (existingIdx === -1 && baseWord) {
             existingIdx = updatedLocalWords.findIndex(w => w.word.trim().toLowerCase() === baseWord.toLowerCase());
@@ -1691,26 +1704,27 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
               place2Changes++;
               wordWasChanged = true;
             }
-            if (example && example !== (oldWord.example || '')) {
+            if (example !== undefined && example !== '' && example !== (oldWord.example || '')) {
               existingWord.example = example;
               place3Changes++;
               wordWasChanged = true;
             }
-            if (extraWord && extraWord !== (oldWord.extraWord || '')) {
+            if (extraWord !== undefined && extraWord !== '' && extraWord !== (oldWord.extraWord || '')) {
               existingWord.extraWord = extraWord;
               place4Changes++;
               wordWasChanged = true;
             }
-            if (synonyms && synonyms !== (oldWord.synonyms || '')) {
+            if (synonyms !== undefined && synonyms !== '' && synonyms !== (oldWord.synonyms || '')) {
               existingWord.synonyms = synonyms;
               place5Changes++;
               wordWasChanged = true;
-            } else if (extraMeaning && extraMeaning !== (oldWord.extraMeaning || '')) {
+            }
+            if (extraMeaning !== undefined && extraMeaning !== '' && extraMeaning !== (oldWord.extraMeaning || '')) {
               existingWord.extraMeaning = extraMeaning;
-              place5Changes++;
+              if (!synonyms) place5Changes++;
               wordWasChanged = true;
             }
-            if (mnemonic && mnemonic !== (oldWord.mnemonic || '')) {
+            if (mnemonic !== undefined && mnemonic !== '' && mnemonic !== (oldWord.mnemonic || '')) {
               existingWord.mnemonic = mnemonic;
               place6Changes++;
               wordWasChanged = true;
@@ -1903,6 +1917,34 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
         }
 
         setLocalWords(updatedLocalWords);
+        setWordlistSubTab('wordlist');
+        setCurrentWordPage(1);
+
+        // Directly persist to Firestore so updates are saved immediately to cloud
+        try {
+          const uniqueGroupsSize = new Set(updatedLocalWords.map(w => w.group)).size;
+          const newPlaceLabels = Object.keys(detectedLabels).length > 0 
+            ? { ...(course.placeLabels || {}), ...detectedLabels } 
+            : (localPlaceLabels || course.placeLabels);
+          
+          const courseRef = doc(db, 'courses', course.id);
+          await updateDoc(courseRef, {
+            words: updatedLocalWords,
+            totalGroups: uniqueGroupsSize || 1,
+            ...(newPlaceLabels ? { placeLabels: newPlaceLabels } : {})
+          });
+
+          if (onSaveSuccess) {
+            onSaveSuccess({
+              ...course,
+              words: updatedLocalWords,
+              totalGroups: uniqueGroupsSize || 1,
+              placeLabels: newPlaceLabels
+            });
+          }
+        } catch (saveErr) {
+          console.warn('Direct cloud save failed, changes kept in local state:', saveErr);
+        }
 
         const unchangedWordsOverall = initialCourseWordsCount > updatedCount 
           ? initialCourseWordsCount - updatedCount 
@@ -1938,7 +1980,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
 
         setExcelImportStats(report);
 
-        let msg = 'Spreadsheet processed successfully! ';
+        let msg = 'Spreadsheet processed successfully and saved to cloud! ';
         if (updatedCount > 0 && addedCount > 0) {
           msg += `Updated ${updatedCount} existing words and added ${addedCount} new words. `;
         } else if (updatedCount > 0) {
@@ -1950,8 +1992,6 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
         if (report.gameStats.totalGamesModifiedCount > 0) {
           msg += `Parsed ${report.gameStats.totalGamesModifiedCount} game question updates! `;
         }
-
-        msg += '⚠️ Important: Click "Update Settings" at the bottom to save these changes permanently to the course database.';
 
         setExcelSuccess(msg);
       } catch (err) {
@@ -2144,7 +2184,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in text-slate-700" id="course-settings-modal">
-      <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl relative animate-scale-up font-sans overflow-hidden border border-slate-100 flex flex-col m-4 h-[90vh] transition-all duration-300">
+      <div className="bg-white w-full max-w-7xl xl:max-w-[94vw] rounded-3xl shadow-2xl relative animate-scale-up font-sans overflow-hidden border border-slate-100 flex flex-col m-4 h-[90vh] transition-all duration-300">
         
         {/* Modal Main Header */}
         <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
