@@ -1247,9 +1247,9 @@ export default function FlashcardViewer({
   // RENDER STAGE 2: IMMERSIVE FULL-SCREEN FLASHCARD FOCUS MODE (isSessionActive = true)
   // =========================================================================
   return (
-    <div className="fixed inset-0 z-50 bg-gradient-to-b from-indigo-950 via-slate-900 to-indigo-950 text-white flex flex-col h-screen w-screen overflow-hidden animate-fadeIn select-none font-sans" id="flashcard-fullscreen-view">
+    <div className="fixed inset-0 z-50 bg-gradient-to-b from-indigo-950 via-slate-900 to-indigo-950 text-white flex flex-col items-center h-screen w-screen overflow-hidden animate-fadeIn select-none font-sans" id="flashcard-fullscreen-view">
       {/* 1. Fullscreen Top Header Bar */}
-      <header className="h-14 sm:h-16 px-4 sm:px-8 border-b border-white/10 flex items-center justify-between flex-shrink-0 bg-slate-950/60 backdrop-blur-md z-30">
+      <header className="w-full h-14 sm:h-16 px-4 sm:px-8 border-b border-white/10 flex items-center justify-between flex-shrink-0 bg-slate-950/60 backdrop-blur-md z-30">
         <button
           onClick={() => setIsSessionActive(false)}
           className="flex items-center gap-2 text-xs sm:text-sm font-bold text-indigo-200 hover:text-white bg-white/10 hover:bg-white/20 p-2 sm:p-2.5 rounded-full transition cursor-pointer border border-white/10"
@@ -1540,7 +1540,7 @@ export default function FlashcardViewer({
       )}
 
       {/* 2. Main Flashcard Canvas Area */}
-      <main className="flex-1 overflow-x-hidden overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden px-4 py-4 sm:py-6 flex flex-col items-center justify-between max-w-xl mx-auto w-full gap-4">
+      <main className="flex-1 overflow-x-hidden overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden px-4 py-4 sm:py-6 flex flex-col items-center justify-center max-w-md sm:max-w-lg mx-auto w-full gap-4">
         
         {/* Filtered Flashcard Progress Line - Single line, zero space occupancy */}
         <div className="w-full shrink-0 space-y-1 my-0.5">
@@ -1585,7 +1585,7 @@ export default function FlashcardViewer({
         </div>
 
         {/* Flashcard Stage */}
-        <div className="w-full relative my-auto perspective overflow-hidden p-0.5">
+        <div className="w-full max-w-md sm:max-w-lg mx-auto relative my-auto perspective overflow-hidden p-0.5">
 
           {/* Active Card Container - 3D Inner Wrapper */}
           <div
@@ -1599,7 +1599,7 @@ export default function FlashcardViewer({
             }}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
-            className={`relative w-full h-[455px] sm:h-[475px] z-10 cursor-pointer transform-style-3d anim-${activeAnimKey} ${
+            className={`relative w-full max-w-md sm:max-w-lg mx-auto h-[460px] sm:h-[490px] max-h-[70vh] z-10 cursor-pointer transform-style-3d anim-${activeAnimKey} ${
               isFlipped ? 'is-flipped' : ''
             }`}
           >
