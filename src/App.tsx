@@ -25,6 +25,7 @@ import {
   CalendarCheck2,
   BookOpen,
   FolderLock,
+  FolderPlus,
   RotateCcw,
   Sparkle,
   Cloud,
