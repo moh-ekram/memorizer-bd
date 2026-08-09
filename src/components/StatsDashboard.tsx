@@ -659,116 +659,112 @@ export default function StatsDashboard({
         className="grid grid-cols-1 gap-6" 
         id="charts-and-goals"
       >
-        {/* Progress Representation */}
-        <div className="flex flex-col gap-6 p-0 border-0 shadow-none bg-transparent">
-          {/* Desktop Row, Mobile Centered Column container */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 md:gap-8 w-full border-b border-slate-100 pb-6 md:pb-4">
-            {/* Large Beautiful English Numbers for Total Words & Unread */}
-            <div className="flex flex-row items-center justify-center md:justify-start gap-12 py-3">
-              <div className="flex flex-col items-center md:items-start">
-                <span className="text-[11px] font-black text-slate-400 tracking-widest uppercase font-sans">TOTAL WORDS</span>
-                <span className="text-4xl md:text-5xl font-black text-indigo-600 tracking-tight font-sans mt-1 leading-none">{totalWords}</span>
+        {/* Progress Representation Card */}
+        <div className="bg-white p-5 sm:p-7 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col lg:flex-row items-center justify-between gap-6 sm:gap-8 w-full">
+          {/* Stats Badges for Total Words & Not Studied */}
+          <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 w-full lg:w-auto">
+            <div className="bg-indigo-50/80 p-4 sm:p-5 rounded-2xl border border-indigo-100 flex flex-col items-center sm:items-start min-w-[150px] shadow-2xs">
+              <span className="text-[11px] font-black text-indigo-500 tracking-wider uppercase font-sans">TOTAL WORDS</span>
+              <span className="text-3xl sm:text-4xl font-black text-indigo-700 tracking-tight font-sans mt-1 leading-none">{totalWords}</span>
+            </div>
+            <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200/80 flex flex-col items-center sm:items-start min-w-[150px] shadow-2xs">
+              <span className="text-[11px] font-black text-slate-400 tracking-wider uppercase font-sans">NOT STUDIED</span>
+              <span className="text-3xl sm:text-4xl font-black text-slate-600 tracking-tight font-sans mt-1 leading-none">{unratedCount}</span>
+            </div>
+          </div>
+
+          {/* Three Status Circular Progress Cards */}
+          <div className="grid grid-cols-3 gap-3 sm:gap-4 w-full lg:max-w-md">
+            {/* Know progress circle card */}
+            <div className="flex flex-col items-center text-center p-3 sm:p-4 rounded-2xl bg-slate-50/80 border border-slate-200/70 shadow-2xs hover:bg-white transition min-h-[145px] justify-center">
+              <div className="relative w-18 h-18 sm:w-20 sm:h-20 mb-2.5 p-1 rounded-full bg-white border border-slate-100 shadow-inner shrink-0">
+                <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                  <circle cx="50" cy="50" r="38" className="stroke-slate-200/50" strokeWidth="10" fill="transparent" />
+                  <motion.circle 
+                    cx="50" 
+                    cy="50" 
+                    r="38" 
+                    className="text-emerald-500" 
+                    strokeWidth="11" 
+                    strokeDasharray="238.76" 
+                    initial={{ strokeDashoffset: 238.76 }}
+                    animate={{ strokeDashoffset: 238.76 - (238.76 * (totalWords > 0 ? (knowCount / totalWords) * 100 : 0)) / 100 }}
+                    transition={{ type: "spring", stiffness: 60, damping: 13 }}
+                    strokeLinecap="round" 
+                    stroke="currentColor" 
+                    fill="transparent" 
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-sm sm:text-base font-black text-emerald-600 font-sans leading-none">{knowCount}</span>
+                  <span className="text-[9px] text-slate-400 font-bold font-sans mt-0.5">{totalWords > 0 ? Math.round((knowCount / totalWords) * 100) : 0}%</span>
+                </div>
               </div>
-              <div className="h-10 w-[1.5px] bg-slate-200" />
-              <div className="flex flex-col items-center md:items-start">
-                <span className="text-[11px] font-black text-slate-400 tracking-widest uppercase font-sans">NOT STUDIED</span>
-                <span className="text-4xl md:text-5xl font-black text-slate-500 tracking-tight font-sans mt-1 leading-none">{unratedCount}</span>
+              <div className="flex items-center gap-1 text-[11px] font-black text-emerald-700 font-sans">
+                <CheckCircle className="w-3.5 h-3.5" />
+                <span>Known</span>
               </div>
             </div>
 
-            {/* Three large circular progress bars for status */}
-            <div className="flex flex-row gap-2 sm:gap-4 pt-4 w-full max-w-md justify-center md:justify-end mx-auto md:mx-0">
-              {/* Know progress circle */}
-              <div className="flex flex-col items-center text-center transition group flex-1">
-                <div className="relative w-24 h-24 sm:w-28 sm:h-28 mb-3 p-1 rounded-full bg-slate-50 border border-slate-100/50 shadow-inner">
-                  <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
-                    <circle cx="50" cy="50" r="38" className="stroke-slate-200/50" strokeWidth="10" fill="transparent" />
-                    <motion.circle 
-                      cx="50" 
-                      cy="50" 
-                      r="38" 
-                      className="text-emerald-500" 
-                      strokeWidth="11" 
-                      strokeDasharray="238.76" 
-                      initial={{ strokeDashoffset: 238.76 }}
-                      animate={{ strokeDashoffset: 238.76 - (238.76 * (totalWords > 0 ? (knowCount / totalWords) * 100 : 0)) / 100 }}
-                      transition={{ type: "spring", stiffness: 60, damping: 13 }}
-                      strokeLinecap="round" 
-                      stroke="currentColor" 
-                      fill="transparent" 
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-base sm:text-xl font-black text-emerald-600 font-sans leading-none">{knowCount}</span>
-                    <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold font-sans mt-0.5 sm:mt-1">{totalWords > 0 ? Math.round((knowCount / totalWords) * 100) : 0}%</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 text-[10px] sm:text-xs font-black text-emerald-700 font-sans">
-                  <CheckCircle className="w-3.5 h-3.5" />
-                  <span>Known</span>
+            {/* Confusion progress circle card */}
+            <div className="flex flex-col items-center text-center p-3 sm:p-4 rounded-2xl bg-slate-50/80 border border-slate-200/70 shadow-2xs hover:bg-white transition min-h-[145px] justify-center">
+              <div className="relative w-18 h-18 sm:w-20 sm:h-20 mb-2.5 p-1 rounded-full bg-white border border-slate-100 shadow-inner shrink-0">
+                <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                  <circle cx="50" cy="50" r="38" className="stroke-slate-200/50" strokeWidth="10" fill="transparent" />
+                  <motion.circle 
+                    cx="50" 
+                    cy="50" 
+                    r="38" 
+                    className="text-amber-500" 
+                    strokeWidth="11" 
+                    strokeDasharray="238.76" 
+                    initial={{ strokeDashoffset: 238.76 }}
+                    animate={{ strokeDashoffset: 238.76 - (238.76 * (totalWords > 0 ? (confusionCount / totalWords) * 100 : 0)) / 100 }}
+                    transition={{ type: "spring", stiffness: 60, damping: 13 }}
+                    strokeLinecap="round" 
+                    stroke="currentColor" 
+                    fill="transparent" 
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-sm sm:text-base font-black text-amber-600 font-sans leading-none">{confusionCount}</span>
+                  <span className="text-[9px] text-slate-400 font-bold font-sans mt-0.5">{totalWords > 0 ? Math.round((confusionCount / totalWords) * 100) : 0}%</span>
                 </div>
               </div>
+              <div className="flex items-center gap-1 text-[11px] font-black text-amber-700 font-sans">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                <span>Confused</span>
+              </div>
+            </div>
 
-              {/* Confusion progress circle */}
-              <div className="flex flex-col items-center text-center transition group flex-1">
-                <div className="relative w-24 h-24 sm:w-28 sm:h-28 mb-3 p-1 rounded-full bg-slate-50 border border-slate-100/50 shadow-inner">
-                  <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
-                    <circle cx="50" cy="50" r="38" className="stroke-slate-200/50" strokeWidth="10" fill="transparent" />
-                    <motion.circle 
-                      cx="50" 
-                      cy="50" 
-                      r="38" 
-                      className="text-amber-500" 
-                      strokeWidth="11" 
-                      strokeDasharray="238.76" 
-                      initial={{ strokeDashoffset: 238.76 }}
-                      animate={{ strokeDashoffset: 238.76 - (238.76 * (totalWords > 0 ? (confusionCount / totalWords) * 100 : 0)) / 100 }}
-                      transition={{ type: "spring", stiffness: 60, damping: 13 }}
-                      strokeLinecap="round" 
-                      stroke="currentColor" 
-                      fill="transparent" 
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-base sm:text-xl font-black text-amber-600 font-sans leading-none">{confusionCount}</span>
-                    <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold font-sans mt-0.5 sm:mt-1">{totalWords > 0 ? Math.round((confusionCount / totalWords) * 100) : 0}%</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 text-[10px] sm:text-xs font-black text-amber-700 font-sans">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  <span>Confused</span>
+            {/* Don't Know progress circle card */}
+            <div className="flex flex-col items-center text-center p-3 sm:p-4 rounded-2xl bg-slate-50/80 border border-slate-200/70 shadow-2xs hover:bg-white transition min-h-[145px] justify-center">
+              <div className="relative w-18 h-18 sm:w-20 sm:h-20 mb-2.5 p-1 rounded-full bg-white border border-slate-100 shadow-inner shrink-0">
+                <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                  <circle cx="50" cy="50" r="38" className="stroke-slate-200/50" strokeWidth="10" fill="transparent" />
+                  <motion.circle 
+                    cx="50" 
+                    cy="50" 
+                    r="38" 
+                    className="text-rose-500" 
+                    strokeWidth="11" 
+                    strokeDasharray="238.76" 
+                    initial={{ strokeDashoffset: 238.76 }}
+                    animate={{ strokeDashoffset: 238.76 - (238.76 * (totalWords > 0 ? (dontKnowCount / totalWords) * 100 : 0)) / 100 }}
+                    transition={{ type: "spring", stiffness: 60, damping: 13 }}
+                    strokeLinecap="round" 
+                    stroke="currentColor" 
+                    fill="transparent" 
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-sm sm:text-base font-black text-rose-600 font-sans leading-none">{dontKnowCount}</span>
+                  <span className="text-[9px] text-slate-400 font-bold font-sans mt-0.5">{totalWords > 0 ? Math.round((dontKnowCount / totalWords) * 100) : 0}%</span>
                 </div>
               </div>
-
-              {/* Don't Know progress circle */}
-              <div className="flex flex-col items-center text-center transition group flex-1">
-                <div className="relative w-24 h-24 sm:w-28 sm:h-28 mb-3 p-1 rounded-full bg-slate-50 border border-slate-100/50 shadow-inner">
-                  <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
-                    <circle cx="50" cy="50" r="38" className="stroke-slate-200/50" strokeWidth="10" fill="transparent" />
-                    <motion.circle 
-                      cx="50" 
-                      cy="50" 
-                      r="38" 
-                      className="text-rose-500" 
-                      strokeWidth="11" 
-                      strokeDasharray="238.76" 
-                      initial={{ strokeDashoffset: 238.76 }}
-                      animate={{ strokeDashoffset: 238.76 - (238.76 * (totalWords > 0 ? (dontKnowCount / totalWords) * 100 : 0)) / 100 }}
-                      transition={{ type: "spring", stiffness: 60, damping: 13 }}
-                      strokeLinecap="round" 
-                      stroke="currentColor" 
-                      fill="transparent" 
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-base sm:text-xl font-black text-rose-600 font-sans leading-none">{dontKnowCount}</span>
-                    <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold font-sans mt-0.5 sm:mt-1">{totalWords > 0 ? Math.round((dontKnowCount / totalWords) * 100) : 0}%</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 text-[10px] sm:text-xs font-black text-rose-700 font-sans">
-                  <XCircle className="w-3.5 h-3.5" />
-                  <span>Don't Know</span>
-                </div>
+              <div className="flex items-center gap-1 text-[11px] font-black text-rose-700 font-sans">
+                <XCircle className="w-3.5 h-3.5" />
+                <span>Don't Know</span>
               </div>
             </div>
           </div>
@@ -808,54 +804,62 @@ export default function StatsDashboard({
         {/* Group Cards Grid */}
         <motion.div 
           variants={containerVariants}
-          className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2.5" 
+          className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-4" 
           id="group-grid"
         >
           {filteredGroups.map((g) => (
-            <div key={g.group} className="relative group/card flex items-center">
-              <motion.button
-                 variants={itemVariants}
-                 whileHover={{ scale: 1.02 }}
-                 whileTap={{ scale: 0.98 }}
-                 onClick={() => {
-                   setBatchGroup(g.group);
-                   setSelectedWordIds([]);
-                   setGroupSearchTerm('');
-                   setGroupStatusFilter('all');
-                 }}
-                 className="w-full relative overflow-hidden rounded-2xl border border-slate-200 hover:border-emerald-400 hover:shadow-md bg-slate-50/50 hover:bg-white transition flex items-center justify-between pl-3 pr-8 py-2.5 h-11 cursor-pointer"
-                 title={`G ${g.group}: Click to manage words & batch update status`}
+            <div key={g.group} className="relative group/card">
+              <motion.div
+                variants={itemVariants}
+                whileHover={{ y: -2 }}
+                onClick={() => {
+                  setBatchGroup(g.group);
+                  setSelectedWordIds([]);
+                  setGroupSearchTerm('');
+                  setGroupStatusFilter('all');
+                }}
+                className="w-full relative overflow-hidden rounded-2xl border border-slate-200/90 hover:border-indigo-400/90 hover:shadow-md bg-slate-50/70 hover:bg-white transition-all p-4 sm:p-5 flex flex-col justify-between gap-3 cursor-pointer min-h-[92px]"
+                title={`Group ${g.group}: Click to manage words & batch update status`}
               >
-                {/* Progress background fill */}
+                {/* Progress background fill line at bottom */}
                 <div 
-                  className="absolute top-0 left-0 bottom-0 bg-emerald-500/15 group-hover/card:bg-emerald-500/25 transition-all duration-300" 
+                  className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-emerald-500 to-indigo-500 transition-all duration-300" 
                   style={{ width: `${g.percent}%` }} 
                 />
                 
-                {/* Content */}
-                <div className="relative z-10 flex items-center justify-between w-full font-sans pr-1">
-                  <span className="font-extrabold text-[8px] text-slate-800 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                    G {g.group}
-                  </span>
-                  <div className="flex items-center gap-1 font-sans">
-                    <span className="text-[9px] text-slate-400 font-semibold">({g.total})</span>
-                    <span className="text-[10px] font-black text-emerald-600 ml-0.5">{g.percent}%</span>
+                {/* Content Header */}
+                <div className="flex items-center justify-between w-full font-sans">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 shrink-0 shadow-2xs" />
+                    <span className="font-extrabold text-sm sm:text-base text-slate-900">
+                      Group {g.group}
+                    </span>
                   </div>
+                  <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                    {g.percent}%
+                  </span>
                 </div>
-              </motion.button>
 
-              {/* Direct Study Icon Button */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelectGroup(g.group);
-                }}
-                className="absolute right-1.5 z-20 p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white transition cursor-pointer"
-                title={`Start Flashcard Study for G ${g.group}`}
-              >
-                <BookOpen className="w-3.5 h-3.5" />
-              </button>
+                {/* Progress Subtitle & Action Bar */}
+                <div className="flex items-center justify-between w-full pt-1 border-t border-slate-100">
+                  <span className="text-xs text-slate-500 font-medium">
+                    {g.know} / {g.total} Learned
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectGroup(g.group);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                    title={`Start Flashcard Study for Group ${g.group}`}
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>Study</span>
+                  </button>
+                </div>
+              </motion.div>
             </div>
           ))}
 

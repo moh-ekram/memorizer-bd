@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { VocabularyWord, WordStatus, UserProgress, CustomFolder, AppSettings } from '../types';
 import { getGoogleSearchUrl } from '../lib/searchUtils';
@@ -160,8 +160,11 @@ export default function FlashcardViewer({
     }
   }, [initialGroup]);
 
-  // Track previous course signature to reset filter states on course switch
-  const courseSignature = `${courseTitle || ''}_${words.length}_${words[0]?.id || ''}`;
+  // Track previous course signature to reset filter states on course switch or word data updates
+  const wordsContentHash = useMemo(() => {
+    return (words || []).map(w => `${w.id}:${w.word}:${w.meaning}`).join('|');
+  }, [words]);
+  const courseSignature = `${courseTitle || ''}_${words.length}_${words[0]?.id || ''}_${wordsContentHash}`;
   const prevCourseSig = useRef(courseSignature);
 
   useEffect(() => {
@@ -459,11 +462,9 @@ export default function FlashcardViewer({
     extraMeaning: ''
   };
 
-  // Keep back face card content updated when card flips open
+  // Keep back face card content updated when card flips open or when word data changes
   useEffect(() => {
-    if (isFlipped && currentActiveWord?.id) {
-      setDisplayedBackWord(currentActiveWord);
-    } else if (!displayedBackWord.id && currentActiveWord?.id) {
+    if (currentActiveWord?.id) {
       setDisplayedBackWord(currentActiveWord);
     }
   }, [isFlipped, currentActiveWord]);
@@ -785,20 +786,25 @@ export default function FlashcardViewer({
               setIsSessionActive(true);
             }
           }}
-          className={`w-full bg-gradient-to-r from-indigo-950 via-indigo-900 to-slate-950 text-white rounded-2xl p-4 sm:p-5 shadow-lg border border-indigo-700/50 flex flex-col sm:flex-row items-center justify-between gap-4 transition relative overflow-hidden group select-none ${
+          className={`w-full bg-gradient-to-r from-indigo-950 via-indigo-900 to-slate-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-indigo-700/60 flex flex-col sm:flex-row items-center justify-between gap-6 transition relative overflow-hidden group select-none min-h-[140px] sm:min-h-[160px] ${
             filteredWords.length > 0
               ? 'cursor-pointer hover:border-indigo-400/80 hover:shadow-indigo-900/40 active:scale-[0.995]'
               : 'opacity-60 cursor-not-allowed'
           }`}
         >
           {/* Background Glow Accents */}
-          <div className="absolute -left-10 -top-10 w-36 h-36 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-          <div className="absolute -right-10 -bottom-10 w-36 h-36 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute -left-10 -top-10 w-48 h-48 bg-indigo-500/15 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-amber-500/15 rounded-full blur-2xl pointer-events-none" />
 
           {/* Left Side: Flashcard Practice Title */}
-          <div className="flex items-center gap-3.5 text-left transition shrink-0">
+          <div className="flex items-center gap-4 text-left transition shrink-0">
             <div>
-              <h1 className="text-base sm:text-lg font-black tracking-tight font-sans text-white flex items-center gap-2 min-h-[28px]">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="px-2.5 py-1 bg-indigo-800/60 text-indigo-200 border border-indigo-600/50 rounded-lg text-[11px] font-black tracking-wide uppercase">
+                  Course Deck
+                </span>
+              </div>
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight font-sans text-white flex items-center gap-2 min-h-[32px]">
                 <AnimatePresence mode="wait">
                   <motion.span
                     key={showStartText ? 'start-text' : 'course-title'}
@@ -812,12 +818,12 @@ export default function FlashcardViewer({
                         : 'text-white font-black'
                     }`}
                   >
-                    {showStartText ? 'Start Flashcard Now' : (courseTitle || 'GRE Master Vocab')}
+                    {showStartText ? 'Start Flashcard Practice' : (courseTitle || 'GRE Master Vocab')}
                   </motion.span>
                 </AnimatePresence>
               </h1>
-              <p className="text-xs text-indigo-200 font-medium mt-0.5">
-                Flashcard Practice • {filteredWords.length} words selected in current deck
+              <p className="text-xs sm:text-sm text-indigo-200 font-medium mt-1">
+                Flashcard Practice • <span className="font-bold text-amber-300">{filteredWords.length} words</span> selected in current deck
               </p>
             </div>
           </div>
