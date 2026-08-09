@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AccessRequest } from '../types';
+import { WalletDebugger } from './WalletDebugger';
 import { 
   Bug, 
   RefreshCw, 
@@ -14,7 +15,9 @@ import {
   Wallet, 
   TerminalSquare,
   ChevronRight,
-  Info
+  Info,
+  Lock,
+  RotateCcw
 } from 'lucide-react';
 
 export interface TransactionLogItem {
@@ -48,6 +51,7 @@ export const TransactionDebugger: React.FC<TransactionDebuggerProps> = ({
   isProcessing,
   adminUserEmail
 }) => {
+  const [debuggerMode, setDebuggerMode] = useState<'diagnostics' | 'wallet-inspector'>('diagnostics');
   const [logFilter, setLogFilter] = useState<'all' | 'success' | 'failed'>('all');
   const [requestSearch, setRequestSearch] = useState('');
 
@@ -120,8 +124,48 @@ export const TransactionDebugger: React.FC<TransactionDebuggerProps> = ({
         </div>
       </div>
 
-      {/* Admin Auth Status Card */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
+      {/* Mode Switcher Tabs */}
+      <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <button
+          type="button"
+          onClick={() => setDebuggerMode('diagnostics')}
+          className={`px-4 py-2 text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-2 ${
+            debuggerMode === 'diagnostics'
+              ? 'bg-indigo-600 text-white shadow-2xs'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Bug className="w-4 h-4 text-amber-300" />
+          <span>Transaction Diagnostics & Logs</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setDebuggerMode('wallet-inspector')}
+          className={`px-4 py-2 text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-2 ${
+            debuggerMode === 'wallet-inspector'
+              ? 'bg-indigo-600 text-white shadow-2xs'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Wallet className="w-4 h-4 text-emerald-400" />
+          <span>Real-time Wallet & Locks Inspector (WalletDebugger)</span>
+        </button>
+      </div>
+
+      {debuggerMode === 'wallet-inspector' ? (
+        <WalletDebugger
+          accessRequests={accessRequests}
+          transactionLogs={transactionLogs}
+          onRetryTransaction={onProcessRequest}
+          onRefreshRequests={onRefreshRequests}
+          isProcessing={isProcessing}
+          adminUserEmail={adminUserEmail}
+        />
+      ) : (
+        <>
+          {/* Admin Auth Status Card */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-emerald-600" />
           <span className="font-extrabold text-slate-700">Logged in Admin:</span>
@@ -398,6 +442,8 @@ export const TransactionDebugger: React.FC<TransactionDebuggerProps> = ({
           </div>
         )}
       </div>
-    </div>
-  );
+    </>
+  )}
+</div>
+);
 };
