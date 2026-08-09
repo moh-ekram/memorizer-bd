@@ -405,6 +405,7 @@ export default function App() {
 
   // --- CLOUD SYNC & AUTH STATES ---
   const [user, setUser] = useState<DbUser | null>(null);
+  const [isAuthInitializing, setIsAuthInitializing] = useState<boolean>(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
   const isSyncingFromCloud = useRef(false);
@@ -1084,6 +1085,7 @@ export default function App() {
           console.error('Error fetching user data from Firestore:', err);
           setSyncStatus('error');
         } finally {
+          setIsAuthInitializing(false);
           setTimeout(() => {
             isSyncingFromCloud.current = false;
           }, 500);
@@ -1096,6 +1098,7 @@ export default function App() {
         isSyncingFromCloud.current = false;
         setHasLoadedFromCloud(false);
         setSyncStatus('idle');
+        setIsAuthInitializing(false);
       }
     });
 
@@ -1722,6 +1725,22 @@ const getActiveCourse = (
       alert('All progress has been successfully deleted.');
     }
   };
+
+  if (isAuthInitializing) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-4 font-sans">
+        <div className="flex flex-col items-center gap-4 animate-pulse">
+          <div className="p-4 bg-indigo-600 rounded-2xl text-white shadow-xl shadow-indigo-500/20">
+            <BookOpen className="w-8 h-8" />
+          </div>
+          <div className="text-center space-y-1">
+            <h1 className="text-2xl font-black uppercase tracking-tight text-white">Memorizer</h1>
+            <p className="text-xs text-indigo-200">Checking session & loading account...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return (

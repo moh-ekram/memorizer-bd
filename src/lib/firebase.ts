@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from 'firebase/auth';
 
 const metaEnv = (import.meta as any).env || {};
 
@@ -17,5 +17,11 @@ const firebaseConfig = {
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
+
+// Explicitly ensure persistence is set to browserLocalPersistence so users stay logged in across app closes & browser restarts
+setPersistence(auth, browserLocalPersistence).catch((err) => {
+  console.warn("Failed to set Firebase Auth browserLocalPersistence:", err);
+});
+
 export const googleProvider = new GoogleAuthProvider();
 export default app;
