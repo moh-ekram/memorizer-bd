@@ -88,7 +88,13 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
 
-  // User input states
+  // Question Paper view state (multi-question sheet format)
+  const [viewMode, setViewMode] = useState<'paper' | 'single'>('paper');
+  const [userAnswers, setUserAnswers] = useState<Record<number, { selectedAnswer: string | null; typedAnswer?: string; isAnswered: boolean; isCorrect?: boolean }>>({});
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const questionsPerPage = 10;
+
+  // User input states (for single card mode & legacy handlers)
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [typedAnswer, setTypedAnswer] = useState<string>('');
   const [answerSubmitted, setAnswerSubmitted] = useState(false);
@@ -102,6 +108,9 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
 
   // Generate Questions when game starts
   const startQuiz = () => {
+    setUserAnswers({});
+    setCurrentPage(1);
+
     // If admin uploaded custom MCQ questions for this course, use those instead of auto-generating
     if (customMcqQuestions && customMcqQuestions.length > 0 && quizType !== 'typing_spelling') {
       const pool = [...customMcqQuestions];
@@ -196,6 +205,66 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
     setIncorrectWords([]);
     setHintsUsed(0);
     setGameState('playing');
+  };
+
+  const handleOptionClickForIndex = (qIdx: number, option: string) => {
+    if (userAnswers[qIdx]?.isAnswered) return;
+
+    const q = questions[qIdx];
+    if (!q) return;
+
+    const isCorrect = option === q.correctAnswer;
+
+    setUserAnswers(prev => ({
+      ...prev,
+      [qIdx]: {
+        selectedAnswer: option,
+        isAnswered: true,
+        isCorrect
+      }
+    }));
+
+    if (isCorrect) {
+      setScore(prev => prev + 1);
+      if (q.word?.id) {
+        onRateWord(q.word.id, 'know');
+      }
+    } else {
+      if (q.word) {
+        setIncorrectWords(prev => [...prev, q.word!]);
+        onRateWord(q.word.id, 'dont_know');
+      }
+    }
+  };
+
+  const handleTypingSubmitForIndex = (qIdx: number, inputVal: string) => {
+    if (userAnswers[qIdx]?.isAnswered) return;
+    const q = questions[qIdx];
+    if (!q) return;
+
+    const isCorrect = inputVal.trim().toLowerCase() === q.correctAnswer.toLowerCase();
+
+    setUserAnswers(prev => ({
+      ...prev,
+      [qIdx]: {
+        selectedAnswer: inputVal,
+        typedAnswer: inputVal,
+        isAnswered: true,
+        isCorrect
+      }
+    }));
+
+    if (isCorrect) {
+      setScore(prev => prev + 1);
+      if (q.word?.id) {
+        onRateWord(q.word.id, 'know');
+      }
+    } else {
+      if (q.word) {
+        setIncorrectWords(prev => [...prev, q.word!]);
+        onRateWord(q.word.id, 'dont_know');
+      }
+    }
   };
 
   const handleMCQOptionClick = (option: string) => {
@@ -577,154 +646,439 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
       })()}
 
       {/* 2. PLAYING GAME */}
-      {gameState === 'playing' && questions[currentQuestionIndex] && (
+      {gameState === 'playing' && questions.length > 0 && (
         <div className="space-y-6 animate-fadeIn">
-          {/* Header Stats */}
-          <div className="flex justify-between items-center text-xs font-semibold text-slate-400 font-sans border-b border-slate-100 pb-3">
-            <span>Question {currentQuestionIndex + 1} / {questions.length}</span>
+          {/* Header Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3 font-sans">
             <div className="flex items-center gap-2">
-              <span className="text-indigo-600">Score: {score}</span>
-              <div className="w-24 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                <div className="bg-indigo-600 h-full transition-all duration-300" style={{ width: `${progressPercent}%` }}></div>
+              <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-black rounded-lg">
+                প্রশ্নপত্র (Question Sheet)
+              </span>
+              <span className="text-xs font-bold text-slate-500">
+                মোট প্রশ্ন: {questions.length} | উত্তর প্রদান: {Object.keys(userAnswers).length}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between sm:justify-end gap-3">
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('paper')}
+                  className={`px-3 py-1 rounded-lg transition cursor-pointer ${
+                    viewMode === 'paper' ? 'bg-white text-indigo-700 shadow-2xs font-black' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  📄 প্রশ্নপত্র ভিউ (সব একসাথে)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('single')}
+                  className={`px-3 py-1 rounded-lg transition cursor-pointer ${
+                    viewMode === 'single' ? 'bg-white text-indigo-700 shadow-2xs font-black' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  🎴 সিঙ্গেল পেজ
+                </button>
+              </div>
+
+              <div className="text-xs font-black text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200/60">
+                স্কোর: {score} / {questions.length}
               </div>
             </div>
           </div>
 
-          {/* Question display */}
-          <div className="bg-slate-50/50 p-8 rounded-2xl border border-slate-200/60 text-center space-y-4">
-            <span className="px-3 py-1 bg-indigo-50 text-indigo-800 text-[10px] font-extrabold uppercase rounded-full tracking-wider font-sans">
-              {quizType === 'mcq_bn_en' ? (placeLabels?.place2 || 'Meaning') : (placeLabels?.place1 || 'English Word')}
-            </span>
+          {/* MODE A: MULTI-QUESTION PAPER FEED (১০-১৫টি প্রশ্নপত্র ভিউ) */}
+          {viewMode === 'paper' ? (
+            <div className="space-y-6 font-sans">
+              {(() => {
+                const totalPages = Math.ceil(questions.length / questionsPerPage);
+                const startIdx = (currentPage - 1) * questionsPerPage;
+                const endIdx = Math.min(startIdx + questionsPerPage, questions.length);
+                const currentBatch = questions.slice(startIdx, endIdx);
+                const bengaliOptionLabels = ['ক', 'খ', 'গ', 'ঘ', 'ঙ', 'চ'];
 
-            <h1 className="text-2xl md:text-3xl font-black text-slate-800 leading-tight">
-              {questions[currentQuestionIndex].questionTitle || (
-                quizType === 'mcq_bn_en'
-                  ? questions[currentQuestionIndex].word?.meaning
-                  : questions[currentQuestionIndex].word?.word
-              )}
-            </h1>
+                return (
+                  <>
+                    <div className="space-y-5">
+                      {currentBatch.map((q, relativeIdx) => {
+                        const globalIdx = startIdx + relativeIdx;
+                        const ansState = userAnswers[globalIdx];
+                        const isAnswered = ansState?.isAnswered;
 
-            {/* Display synonyms context removed as requested */}
-          </div>
+                        return (
+                          <div
+                            key={globalIdx}
+                            id={`question-card-${globalIdx}`}
+                            className={`p-5 md:p-6 rounded-2xl border transition shadow-2xs space-y-4 ${
+                              isAnswered
+                                ? ansState.isCorrect
+                                  ? 'bg-emerald-50/20 border-emerald-200/80'
+                                  : 'bg-rose-50/20 border-rose-200/80'
+                                : 'bg-white border-slate-200/80 hover:border-indigo-200'
+                            }`}
+                          >
+                            {/* Question Header */}
+                            <div className="flex items-start justify-between gap-3 border-b border-slate-100/80 pb-3">
+                              <div className="flex items-start gap-2.5">
+                                <span className="px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-mono font-black rounded-lg shrink-0">
+                                  #{globalIdx + 1}
+                                </span>
+                                <div>
+                                  <h3 className="text-base sm:text-lg font-black text-slate-850 leading-snug">
+                                    {q.questionTitle || (
+                                      quizType === 'mcq_bn_en'
+                                        ? q.word?.meaning
+                                        : q.word?.word
+                                    )}
+                                  </h3>
+                                  <span className="text-[11px] text-slate-400 font-semibold block mt-0.5">
+                                    {quizType === 'mcq_bn_en'
+                                      ? `${placeLabels?.place2 || 'অর্থ'} দেখে সঠিক ${placeLabels?.place1 || 'ইংরেজি শব্দ'} বাছাই করুন`
+                                      : `${placeLabels?.place1 || 'শব্দ'} এর সঠিক ${placeLabels?.place2 || 'অর্থ'} নির্বাচন করুন`}
+                                  </span>
+                                </div>
+                              </div>
 
-          {/* MCQ Options representation */}
-          {quizType !== 'typing_spelling' ? (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 font-sans">
-                {questions[currentQuestionIndex].options.map((option, idx) => {
-                  const isSelected = selectedAnswer === option;
-                  const isCorrectOpt = option === questions[currentQuestionIndex].correctAnswer;
+                              {isAnswered && (
+                                <span
+                                  className={`px-2.5 py-1 text-xs font-extrabold rounded-lg flex items-center gap-1 shrink-0 ${
+                                    ansState.isCorrect
+                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300/80'
+                                      : 'bg-rose-100 text-rose-800 border border-rose-300/80'
+                                  }`}
+                                >
+                                  {ansState.isCorrect ? (
+                                    <>
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      সঠিক
+                                    </>
+                                  ) : (
+                                    <>
+                                      <XCircle className="w-3.5 h-3.5" />
+                                      ভুল
+                                    </>
+                                  )}
+                                </span>
+                              )}
+                            </div>
 
-                  let btnStyle = 'border-slate-200/60 hover:border-indigo-300 hover:bg-indigo-50/10 text-slate-700 bg-white';
-                  if (answerSubmitted) {
-                    if (isCorrectOpt) {
-                      btnStyle = 'border-emerald-500 bg-emerald-100 text-emerald-950 font-black';
-                    } else if (isSelected) {
-                      btnStyle = 'border-rose-500 bg-rose-50 text-rose-800';
-                    } else {
-                      btnStyle = 'border-slate-100 bg-slate-50/50 text-slate-400 opacity-60';
-                    }
-                  } else if (isSelected) {
-                    btnStyle = 'border-indigo-500 ring-2 ring-indigo-500/10 bg-indigo-50/30 text-indigo-950 font-bold';
-                  }
+                            {/* MCQ Options */}
+                            {quizType !== 'typing_spelling' ? (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                {q.options.map((option, optIdx) => {
+                                  const isSelected = ansState?.selectedAnswer === option;
+                                  const isCorrectOpt = option === q.correctAnswer;
+                                  const optLabel = bengaliOptionLabels[optIdx] || (optIdx + 1);
 
-                  return (
-                    <button
-                      key={idx}
-                      disabled={answerSubmitted}
-                      onClick={() => handleMCQOptionClick(option)}
-                      className={`p-4 text-left rounded-xl border text-sm transition flex items-center justify-between min-h-14 ${btnStyle}`}
-                    >
-                      <span>{option}</span>
-                      {answerSubmitted && isCorrectOpt && <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />}
-                      {answerSubmitted && isSelected && !isCorrectOpt && <XCircle className="w-5 h-5 text-rose-500 flex-shrink-0" />}
-                    </button>
-                  );
-                })}
-              </div>
-              {answerSubmitted && questions[currentQuestionIndex]?.explanation && (
-                <div className="p-4 bg-amber-50/80 border border-amber-200/80 text-amber-900 text-xs rounded-xl font-sans space-y-1">
-                  <span className="font-extrabold uppercase tracking-wider text-[10px] text-amber-800 block">Reason / Explanation:</span>
-                  <p className="font-medium leading-relaxed">{questions[currentQuestionIndex].explanation}</p>
-                </div>
-              )}
+                                  let optionStyle = 'bg-white border-slate-200/80 hover:bg-slate-50 hover:border-indigo-300 text-slate-800';
+                                  let labelStyle = 'bg-slate-100 text-slate-600 border-slate-200';
+
+                                  if (isAnswered) {
+                                    if (isCorrectOpt) {
+                                      optionStyle = 'bg-emerald-500/10 border-emerald-500 text-emerald-950 font-black ring-1 ring-emerald-500/30';
+                                      labelStyle = 'bg-emerald-500 text-white border-emerald-500 font-black';
+                                    } else if (isSelected) {
+                                      optionStyle = 'bg-rose-500/10 border-rose-500 text-rose-950 font-bold ring-1 ring-rose-500/30';
+                                      labelStyle = 'bg-rose-500 text-white border-rose-500 font-black';
+                                    } else {
+                                      optionStyle = 'bg-slate-50/50 border-slate-100 text-slate-400 opacity-50';
+                                      labelStyle = 'bg-slate-200/60 text-slate-400 border-slate-200/60';
+                                    }
+                                  }
+
+                                  return (
+                                    <button
+                                      key={optIdx}
+                                      disabled={isAnswered}
+                                      onClick={() => handleOptionClickForIndex(globalIdx, option)}
+                                      className={`p-3 sm:p-3.5 rounded-xl border text-xs sm:text-sm transition flex items-center justify-between text-left gap-2.5 min-h-[48px] cursor-pointer ${optionStyle}`}
+                                    >
+                                      <div className="flex items-center gap-2.5 min-w-0">
+                                        <span className={`w-6 h-6 rounded-full border text-[11px] font-extrabold flex items-center justify-center shrink-0 ${labelStyle}`}>
+                                          {optLabel}
+                                        </span>
+                                        <span className="truncate">{option}</span>
+                                      </div>
+
+                                      {isAnswered && isCorrectOpt && (
+                                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                      )}
+                                      {isAnswered && isSelected && !isCorrectOpt && (
+                                        <XCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              /* Spelling Typing Mode for this question */
+                              <div className="space-y-2">
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    disabled={isAnswered}
+                                    placeholder="বানান লিখুন..."
+                                    value={ansState?.typedAnswer || ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setUserAnswers(prev => ({
+                                        ...prev,
+                                        [globalIdx]: { ...prev[globalIdx], typedAnswer: val, selectedAnswer: val, isAnswered: false }
+                                      }));
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' && (ansState?.typedAnswer || '').trim()) {
+                                        handleTypingSubmitForIndex(globalIdx, ansState?.typedAnswer || '');
+                                      }
+                                    }}
+                                    className="flex-1 p-3 border border-slate-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                  />
+                                  {!isAnswered && (
+                                    <button
+                                      onClick={() => handleTypingSubmitForIndex(globalIdx, ansState?.typedAnswer || '')}
+                                      disabled={!(ansState?.typedAnswer || '').trim()}
+                                      className="px-4 py-2.5 bg-indigo-600 text-white font-bold text-xs rounded-xl disabled:opacity-50"
+                                    >
+                                      যাচাই করুন
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* EXPLANATION CARD (ব্যাখ্যা) - Revealed immediately on click */}
+                            {isAnswered && (
+                              <div className="p-4 bg-slate-900 text-slate-100 rounded-xl border border-slate-800 text-xs space-y-2.5 animate-fadeIn">
+                                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                                  <span className="font-extrabold uppercase tracking-wider text-[11px] text-indigo-400 flex items-center gap-1.5">
+                                    <HelpIcon className="w-3.5 h-3.5 text-indigo-400" />
+                                    ব্যাখ্যা (Explanation)
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold">
+                                      ✓ {ansState.isCorrect ? 'সঠিক উত্তর' : 'সঠিক: ' + q.correctAnswer}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {q.explanation ? (
+                                  <p className="font-medium text-slate-300 leading-relaxed">{q.explanation}</p>
+                                ) : q.word ? (
+                                  <div className="space-y-1.5 text-slate-300">
+                                    <p className="font-bold text-white text-sm">
+                                      {q.word.word} <span className="text-slate-400 font-normal">=</span> {q.word.meaning}
+                                    </p>
+                                    {q.word.example && (
+                                      <p className="italic text-slate-400">
+                                        <strong className="not-italic text-slate-300">উদাহরণ:</strong> "{q.word.example}"
+                                      </p>
+                                    )}
+                                    {q.word.synonyms && (
+                                      <p className="text-indigo-300">
+                                        <strong>সমার্থক শব্দ:</strong> {q.word.synonyms}
+                                      </p>
+                                    )}
+                                    {(q.word.mnemonic || q.word.notes) && (
+                                      <p className="text-amber-300 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
+                                        <strong>নেমোনিক নোট:</strong> {q.word.mnemonic || q.word.notes}
+                                      </p>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <p className="font-bold text-emerald-400">সঠিক উত্তর: {q.correctAnswer}</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Pagination Bar */}
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-200/80">
+                      <div className="flex items-center gap-2">
+                        <button
+                          disabled={currentPage === 1}
+                          onClick={() => {
+                            setCurrentPage(p => Math.max(1, p - 1));
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40 font-bold text-xs rounded-xl transition flex items-center gap-1 cursor-pointer"
+                        >
+                          <ArrowLeft className="w-3.5 h-3.5" />
+                          পূর্ববর্তী পেজ
+                        </button>
+                        <span className="text-xs font-black text-slate-600 px-3">
+                          পেজ {currentPage} / {totalPages}
+                        </span>
+                        <button
+                          disabled={currentPage === totalPages}
+                          onClick={() => {
+                            setCurrentPage(p => Math.min(totalPages, p + 1));
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40 font-bold text-xs rounded-xl transition flex items-center gap-1 cursor-pointer"
+                        >
+                          পরবর্তী পেজ
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setGameState('summary');
+                          if (onQuizComplete) {
+                            onQuizComplete(score, questions.length);
+                          }
+                        }}
+                        className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-md shadow-indigo-600/10 transition cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <Award className="w-4 h-4" />
+                        পরীক্ষার ফলাফল ও রিপোর্ট দেখুন
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           ) : (
-            /* Spelling Typing Mode input fields */
-            <div className="space-y-4">
-              <div className="space-y-1 font-sans">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Type {placeLabels?.place1 || 'English'} Spelling</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    disabled={answerSubmitted}
-                    placeholder="Enter spelling..."
-                    value={typedAnswer}
-                    onChange={(e) => setTypedAnswer(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && typedAnswer.trim()) {
-                        submitAnswer();
-                      }
-                    }}
-                    className={`w-full p-4 border rounded-xl text-lg font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 transition ${
-                      answerSubmitted
-                        ? typedAnswer.trim().toLowerCase() === questions[currentQuestionIndex].correctAnswer
-                          ? 'border-indigo-500 bg-indigo-50/30 text-indigo-800'
-                          : 'border-rose-500 bg-rose-50 text-rose-800'
-                        : 'border-slate-200'
-                    }`}
-                  />
-                </div>
+            /* MODE B: SINGLE CARD VIEW (একটির পর একটি প্রশ্ন) */
+            <div className="space-y-6">
+              {/* Question display */}
+              <div className="bg-slate-50/50 p-8 rounded-2xl border border-slate-200/60 text-center space-y-4">
+                <span className="px-3 py-1 bg-indigo-50 text-indigo-800 text-[10px] font-extrabold uppercase rounded-full tracking-wider font-sans">
+                  {quizType === 'mcq_bn_en' ? (placeLabels?.place2 || 'Meaning') : (placeLabels?.place1 || 'English Word')}
+                </span>
+
+                <h1 className="text-2xl md:text-3xl font-black text-slate-800 leading-tight">
+                  {questions[currentQuestionIndex].questionTitle || (
+                    quizType === 'mcq_bn_en'
+                      ? questions[currentQuestionIndex].word?.meaning
+                      : questions[currentQuestionIndex].word?.word
+                  )}
+                </h1>
               </div>
 
-              {/* Hint Support */}
-              {!answerSubmitted && (
-                <div className="flex justify-between items-center font-sans">
-                  <button
-                    onClick={getTypingHint}
-                    className="text-xs font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-1.5"
-                  >
-                    <HelpIcon className="w-4 h-4" />
-                    <span>Spelling Hint</span>
-                  </button>
-                  <span className="text-[11px] text-slate-400">Total characters: {questions[currentQuestionIndex].correctAnswer.length}</span>
+              {/* MCQ Options representation */}
+              {quizType !== 'typing_spelling' ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 font-sans">
+                    {questions[currentQuestionIndex].options.map((option, idx) => {
+                      const isSelected = selectedAnswer === option;
+                      const isCorrectOpt = option === questions[currentQuestionIndex].correctAnswer;
+
+                      let btnStyle = 'border-slate-200/60 hover:border-indigo-300 hover:bg-indigo-50/10 text-slate-700 bg-white';
+                      if (answerSubmitted) {
+                        if (isCorrectOpt) {
+                          btnStyle = 'border-emerald-500 bg-emerald-100 text-emerald-950 font-black';
+                        } else if (isSelected) {
+                          btnStyle = 'border-rose-500 bg-rose-50 text-rose-800';
+                        } else {
+                          btnStyle = 'border-slate-100 bg-slate-50/50 text-slate-400 opacity-60';
+                        }
+                      } else if (isSelected) {
+                        btnStyle = 'border-indigo-500 ring-2 ring-indigo-500/10 bg-indigo-50/30 text-indigo-950 font-bold';
+                      }
+
+                      return (
+                        <button
+                          key={idx}
+                          disabled={answerSubmitted}
+                          onClick={() => handleMCQOptionClick(option)}
+                          className={`p-4 text-left rounded-xl border text-sm transition flex items-center justify-between min-h-14 ${btnStyle}`}
+                        >
+                          <span>{option}</span>
+                          {answerSubmitted && isCorrectOpt && <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />}
+                          {answerSubmitted && isSelected && !isCorrectOpt && <XCircle className="w-5 h-5 text-rose-500 flex-shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {answerSubmitted && questions[currentQuestionIndex]?.explanation && (
+                    <div className="p-4 bg-amber-50/80 border border-amber-200/80 text-amber-900 text-xs rounded-xl font-sans space-y-1">
+                      <span className="font-extrabold uppercase tracking-wider text-[10px] text-amber-800 block">Reason / Explanation:</span>
+                      <p className="font-medium leading-relaxed">{questions[currentQuestionIndex].explanation}</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Spelling Typing Mode input fields */
+                <div className="space-y-4">
+                  <div className="space-y-1 font-sans">
+                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Type {placeLabels?.place1 || 'English'} Spelling</label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        disabled={answerSubmitted}
+                        placeholder="Enter spelling..."
+                        value={typedAnswer}
+                        onChange={(e) => setTypedAnswer(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && typedAnswer.trim()) {
+                            submitAnswer();
+                          }
+                        }}
+                        className={`w-full p-4 border rounded-xl text-lg font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 transition ${
+                          answerSubmitted
+                            ? typedAnswer.trim().toLowerCase() === questions[currentQuestionIndex].correctAnswer
+                              ? 'border-indigo-500 bg-indigo-50/30 text-indigo-800'
+                              : 'border-rose-500 bg-rose-50 text-rose-800'
+                            : 'border-slate-200'
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Hint Support */}
+                  {!answerSubmitted && (
+                    <div className="flex justify-between items-center font-sans">
+                      <button
+                        onClick={getTypingHint}
+                        className="text-xs font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-1.5"
+                      >
+                        <HelpIcon className="w-4 h-4" />
+                        <span>Spelling Hint</span>
+                      </button>
+                      <span className="text-[11px] text-slate-400">Total characters: {questions[currentQuestionIndex].correctAnswer.length}</span>
+                    </div>
+                  )}
                 </div>
               )}
+
+              {/* Action Controllers */}
+              <div className="pt-4 border-t border-slate-100 flex justify-end gap-3 font-sans">
+                {quizType === 'typing_spelling' ? (
+                  !answerSubmitted ? (
+                    <button
+                      onClick={submitAnswer}
+                      disabled={!typedAnswer.trim()}
+                      className="px-6 py-3 bg-indigo-600 disabled:opacity-50 hover:bg-indigo-700 text-white font-bold rounded-xl transition text-sm"
+                    >
+                      Verify Answer
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleNext}
+                      className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition text-sm flex items-center gap-1.5"
+                    >
+                      <span>{currentQuestionIndex === questions.length - 1 ? 'Show Results' : 'Next Question'}</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  )
+                ) : (
+                  answerSubmitted && (
+                    <button
+                      onClick={handleNext}
+                      className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition text-sm flex items-center gap-1.5"
+                    >
+                      <span>{currentQuestionIndex === questions.length - 1 ? 'Show Results' : 'Next Question'}</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  )
+                )}
+              </div>
             </div>
           )}
-
-          {/* Action Controllers */}
-          <div className="pt-4 border-t border-slate-100 flex justify-end gap-3 font-sans">
-            {quizType === 'typing_spelling' ? (
-              !answerSubmitted ? (
-                <button
-                  onClick={submitAnswer}
-                  disabled={!typedAnswer.trim()}
-                  className="px-6 py-3 bg-indigo-600 disabled:opacity-50 hover:bg-indigo-700 text-white font-bold rounded-xl transition text-sm"
-                >
-                  Verify Answer
-                </button>
-              ) : (
-                <button
-                  onClick={handleNext}
-                  className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition text-sm flex items-center gap-1.5"
-                >
-                  <span>{currentQuestionIndex === questions.length - 1 ? 'Show Results' : 'Next Question'}</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              )
-            ) : (
-              answerSubmitted && (
-                <button
-                  onClick={handleNext}
-                  className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition text-sm flex items-center gap-1.5"
-                >
-                  <span>{currentQuestionIndex === questions.length - 1 ? 'Show Results' : 'Next Question'}</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              )
-            )}
-          </div>
         </div>
       )}
 
