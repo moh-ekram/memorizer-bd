@@ -2043,63 +2043,63 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       </div>
 
       {/* Stats Cards Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3" id="admin-stats-row">
-        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/60 shadow-2xs flex items-center gap-2.5">
-          <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
-            <Users className="w-4 h-4 sm:w-5 sm:h-5" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 lg:gap-5" id="admin-stats-row">
+        <div className="bg-white p-2.5 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl border border-slate-200/60 shadow-2xs sm:shadow-xs flex items-center gap-2.5 sm:gap-4">
+          <div className="p-2 sm:p-3 bg-indigo-50 text-indigo-600 rounded-lg sm:rounded-xl shrink-0">
+            <Users className="w-4 h-4 sm:w-6 sm:h-6" />
           </div>
           <div className="min-w-0">
-            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-tight block truncate">Total Users</span>
-            <span className="text-base sm:text-lg font-black text-slate-800 font-mono">{totalUsers}</span>
+            <span className="text-[10px] sm:text-xs text-slate-400 font-extrabold uppercase tracking-tight block truncate">Total Users</span>
+            <span className="text-base sm:text-2xl font-black text-slate-800 font-mono">{totalUsers}</span>
           </div>
         </div>
 
-        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/60 shadow-2xs flex items-center gap-2.5">
-          <div className="p-2 bg-amber-50 text-amber-600 rounded-lg shrink-0">
-            <Flame className="w-4 h-4 sm:w-5 sm:h-5" />
+        <div className="bg-white p-2.5 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl border border-slate-200/60 shadow-2xs sm:shadow-xs flex items-center gap-2.5 sm:gap-4">
+          <div className="p-2 sm:p-3 bg-amber-50 text-amber-600 rounded-lg sm:rounded-xl shrink-0">
+            <Flame className="w-4 h-4 sm:w-6 sm:h-6" />
           </div>
           <div className="min-w-0">
-            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-tight block truncate">Avg Streak</span>
-            <span className="text-base sm:text-lg font-black text-slate-800 font-mono">{averageStreak}d</span>
+            <span className="text-[10px] sm:text-xs text-slate-400 font-extrabold uppercase tracking-tight block truncate">Avg Streak</span>
+            <span className="text-base sm:text-2xl font-black text-slate-800 font-mono">{averageStreak}d</span>
           </div>
         </div>
 
-        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/60 shadow-2xs flex items-center gap-2.5">
-          <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg shrink-0">
-            <Award className="w-4 h-4 sm:w-5 sm:h-5" />
+        <div className="bg-white p-2.5 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl border border-slate-200/60 shadow-2xs sm:shadow-xs flex items-center gap-2.5 sm:gap-4">
+          <div className="p-2 sm:p-3 bg-emerald-50 text-emerald-600 rounded-lg sm:rounded-xl shrink-0">
+            <Award className="w-4 h-4 sm:w-6 sm:h-6" />
           </div>
           <div className="min-w-0">
-            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-tight block truncate">Avg Words</span>
-            <span className="text-base sm:text-lg font-black text-slate-800 font-mono">{averageWordsKnown}</span>
+            <span className="text-[10px] sm:text-xs text-slate-400 font-extrabold uppercase tracking-tight block truncate">Avg Words</span>
+            <span className="text-base sm:text-2xl font-black text-slate-800 font-mono">{averageWordsKnown}</span>
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 text-white p-2.5 sm:p-3 rounded-xl shadow-2xs flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg shrink-0">
-              <Database className="w-4 h-4 sm:w-5 sm:h-5" />
+        <div className="bg-slate-900 border border-slate-800 text-white p-2.5 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl shadow-2xs sm:shadow-xs flex items-center justify-between gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="p-2 sm:p-3 bg-emerald-500/10 text-emerald-400 rounded-lg sm:rounded-xl shrink-0">
+              <Database className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
             <div className="min-w-0">
-              <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-tight block truncate">Database</span>
-              <span className="text-xs sm:text-sm font-black text-emerald-400 truncate block">Active</span>
+              <span className="text-[10px] sm:text-xs text-slate-400 font-extrabold uppercase tracking-tight block truncate">Database</span>
+              <span className="text-xs sm:text-base font-black text-emerald-400 truncate block">Active</span>
             </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             <button
               type="button"
               onClick={() => setShowSupabaseRlsModal(true)}
-              className="p-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer"
+              className="p-1 sm:p-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer"
               title="Copy RLS Script"
             >
-              <Code className="w-3.5 h-3.5" />
+              <Code className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
             <button
               type="button"
               onClick={handlePurgeAllGameData}
-              className="p-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer"
+              className="p-1 sm:p-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer"
               title="Purge Games"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
           </div>
         </div>

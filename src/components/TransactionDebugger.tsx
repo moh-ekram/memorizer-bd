@@ -175,39 +175,39 @@ export const TransactionDebugger: React.FC<TransactionDebuggerProps> = ({
       </div>
 
       {/* Summary Cards Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/80 shadow-2xs space-y-0.5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 lg:gap-5">
+        <div className="bg-white p-2.5 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl border border-slate-200/80 shadow-2xs sm:shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[10px] font-extrabold uppercase tracking-tight">Pending Value</span>
-            <Wallet className="w-3.5 h-3.5 text-amber-500" />
+            <span className="text-[10px] sm:text-xs font-extrabold uppercase tracking-tight">Pending Value</span>
+            <Wallet className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-amber-500" />
           </div>
-          <p className="text-lg sm:text-xl font-black text-slate-900 font-mono">৳{totalPendingValue}</p>
+          <p className="text-lg sm:text-2xl font-black text-slate-900 font-mono">৳{totalPendingValue}</p>
         </div>
 
-        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/80 shadow-2xs space-y-0.5">
+        <div className="bg-white p-2.5 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl border border-slate-200/80 shadow-2xs sm:shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[10px] font-extrabold uppercase tracking-tight">Total Claims</span>
-            <Zap className="w-3.5 h-3.5 text-indigo-500" />
+            <span className="text-[10px] sm:text-xs font-extrabold uppercase tracking-tight">Total Claims</span>
+            <Zap className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-indigo-500" />
           </div>
-          <p className="text-lg sm:text-xl font-black text-slate-900 font-mono">{rechargeRequests.length}</p>
+          <p className="text-lg sm:text-2xl font-black text-slate-900 font-mono">{rechargeRequests.length}</p>
         </div>
 
-        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/80 shadow-2xs space-y-0.5">
+        <div className="bg-white p-2.5 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl border border-slate-200/80 shadow-2xs sm:shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[10px] font-extrabold uppercase tracking-tight">Success Tx</span>
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+            <span className="text-[10px] sm:text-xs font-extrabold uppercase tracking-tight">Success Tx</span>
+            <CheckCircle2 className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-emerald-500" />
           </div>
-          <p className="text-lg sm:text-xl font-black text-emerald-700 font-mono">
+          <p className="text-lg sm:text-2xl font-black text-emerald-700 font-mono">
             {transactionLogs.filter(l => l.status === 'success').length}
           </p>
         </div>
 
-        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/80 shadow-2xs space-y-0.5">
+        <div className="bg-white p-2.5 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl border border-slate-200/80 shadow-2xs sm:shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[10px] font-extrabold uppercase tracking-tight">Failed Tx</span>
-            <XCircle className="w-3.5 h-3.5 text-rose-500" />
+            <span className="text-[10px] sm:text-xs font-extrabold uppercase tracking-tight">Failed Tx</span>
+            <XCircle className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-rose-500" />
           </div>
-          <p className="text-lg sm:text-xl font-black text-rose-600 font-mono">
+          <p className="text-lg sm:text-2xl font-black text-rose-600 font-mono">
             {transactionLogs.filter(l => l.status === 'failed').length}
           </p>
         </div>
