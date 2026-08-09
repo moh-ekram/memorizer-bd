@@ -26,7 +26,8 @@ import { logAdminActivity } from '../lib/activityLogger';
 import { BulkCsvStudentModal } from './BulkCsvStudentModal';
 import { ActivityLogsView } from './ActivityLogsView';
 import { SupabaseRlsModal } from './SupabaseRlsModal';
-import { Code } from 'lucide-react';
+import { TransactionDebugger, TransactionLogItem } from './TransactionDebugger';
+import { Code, Bug, TerminalSquare, AlertCircle } from 'lucide-react';
 import { 
   Users, 
   ShieldCheck, 
@@ -154,11 +155,39 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const [activeWordFilter, setActiveWordFilter] = useState<'all' | 'know' | 'confusion' | 'dont_know'>('all');
 
   // Course management and upload states
-  const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'courses' | 'reports' | 'access-requests' | 'autoverify' | 'system-settings' | 'blank-questions' | 'activity-logs'>('courses');
-  const [requestsSubTab, setRequestsSubTab] = useState<'pending' | 'autoverify' | 'history'>('pending');
+  const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'courses' | 'reports' | 'access-requests' | 'autoverify' | 'system-settings' | 'blank-questions' | 'activity-logs' | 'transaction-debugger'>('courses');
+  const [requestsSubTab, setRequestsSubTab] = useState<'pending' | 'autoverify' | 'history' | 'debugger'>('pending');
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [bulkCsvCourse, setBulkCsvCourse] = useState<Course | null>(null);
   const [showSupabaseRlsModal, setShowSupabaseRlsModal] = useState(false);
+
+  // Transaction Debugger Logs state
+  const [transactionLogs, setTransactionLogs] = useState<TransactionLogItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('admin_tx_logs');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const addTransactionLog = (item: TransactionLogItem) => {
+    setTransactionLogs(prev => {
+      const updated = [item, ...prev].slice(0, 100);
+      try {
+        localStorage.setItem('admin_tx_logs', JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
+    });
+  };
+
+  const handleClearTransactionLogs = () => {
+    setTransactionLogs([]);
+    try {
+      localStorage.removeItem('admin_tx_logs');
+    } catch (_) {}
+    showToast('Transaction logs cleared', 'info');
+  };
 
   const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToastMessage({ text, type });
@@ -458,7 +487,85 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     }
   };
 
-  const validateWalletAndProcessRequest = async (req: AccessRequest, action: 'approve' | 'reject', overrideBalance?: number) => {
+  const updateUserWallet = async (email: string, amountChange: number, isAbsolute = false): Promise<boolean> => {
+    const emailLower = email.toLowerCase().trim();
+    if (!emailLower) {
+      showToast('❌ Invalid email provided for wallet update', 'error');
+      return false;
+    }
+
+    setIsProcessingAction(true);
+    const nowISO = new Date().toISOString();
+    let newBalance = 0;
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const walletRef = doc(db, 'user_wallets', emailLower);
+        const userRef = doc(db, 'users', emailLower);
+
+        const walletSnap = await transaction.get(walletRef);
+        const currentBal = walletSnap.exists()
+          ? (walletSnap.data().balance ?? walletSnap.data().walletBalance ?? 0)
+          : 0;
+
+        newBalance = isAbsolute ? amountChange : currentBal + amountChange;
+        if (newBalance < 0) {
+          throw new Error(`Insufficient balance. Resulting wallet balance would be ৳${newBalance}`);
+        }
+
+        transaction.set(walletRef, {
+          email: emailLower,
+          balance: newBalance,
+          walletBalance: newBalance,
+          updatedAt: nowISO
+        }, { merge: true });
+
+        transaction.set(userRef, {
+          email: emailLower,
+          balance: newBalance,
+          walletBalance: newBalance,
+          updatedAt: nowISO
+        }, { merge: true });
+      });
+
+      addTransactionLog({
+        id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: nowISO,
+        type: 'wallet',
+        userEmail: emailLower,
+        details: `${isAbsolute ? 'Set balance to' : 'Adjusted balance by ' + (amountChange >= 0 ? '+' : '') + amountChange} -> New balance: ৳${newBalance} BDT`,
+        status: 'success'
+      });
+
+      showToast(`✅ Wallet transaction successful for ${emailLower}! New balance: ৳${newBalance} BDT`, 'success');
+      return true;
+    } catch (err: any) {
+      console.error('Error in updateUserWallet transaction:', err);
+      let errMsg = err.message || String(err);
+      if (err?.code === 'permission-denied') {
+        errMsg = 'Permission Denied: Your account lacks Firestore write privileges for user_wallets or users.';
+      } else if (err?.code === 'aborted' || err?.code === 'failed-precondition') {
+        errMsg = 'Concurrent Modification Error: Wallet document was updated concurrently by another operation. Please retry.';
+      }
+
+      addTransactionLog({
+        id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: nowISO,
+        type: 'wallet',
+        userEmail: emailLower,
+        details: `Failed wallet update (${amountChange}): ${errMsg}`,
+        status: 'failed',
+        error: errMsg
+      });
+
+      showToast(`❌ Wallet Transaction Failed: ${errMsg}`, 'error');
+      return false;
+    } finally {
+      setIsProcessingAction(false);
+    }
+  };
+
+  const processAccessRequest = async (req: AccessRequest, action: 'approve' | 'reject', overrideBalance?: number): Promise<boolean> => {
     const finalPrice = overrideBalance !== undefined ? overrideBalance : (req.totalPrice || req.price || 0);
     const userEmail = req.email.toLowerCase().trim();
     const nowISO = new Date().toISOString();
@@ -471,23 +578,53 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         const reqRef = doc(db, 'access_requests', req.id);
         await updateDoc(reqRef, { status: 'rejected', updatedAt: nowISO });
         setAccessRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'rejected' } : r));
+        
+        addTransactionLog({
+          id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          timestamp: nowISO,
+          type: 'access_request',
+          userEmail,
+          details: `Rejected access/recharge request ${req.id} (${req.courseTitle || req.courseId})`,
+          status: 'success'
+        });
+
         showToast(`Request rejected for ${userEmail}`, 'info');
+        return true;
       } catch (err: any) {
         console.error('Error rejecting access request:', err);
-        showToast(`❌ Error rejecting request: ${err.message || String(err)}`, 'error');
+        const errMsg = err?.code === 'permission-denied'
+          ? 'Permission Denied: Admin user cannot update access_requests in Firestore.'
+          : (err.message || String(err));
+        
+        addTransactionLog({
+          id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          timestamp: nowISO,
+          type: 'access_request',
+          userEmail,
+          details: `Failed to reject request ${req.id}: ${errMsg}`,
+          status: 'failed',
+          error: errMsg
+        });
+
+        showToast(`❌ Error rejecting request: ${errMsg}`, 'error');
+        return false;
       }
-      return;
     }
 
     setIsProcessingAction(true);
     try {
-      // Execute Firestore transaction for atomic batching
       await runTransaction(db, async (transaction) => {
         const reqRef = doc(db, 'access_requests', req.id);
         const walletRef = doc(db, 'user_wallets', userEmail);
         const userRef = doc(db, 'users', userEmail);
 
-        // Read wallet
+        // Read request state
+        const reqSnap = await transaction.get(reqRef);
+        if (reqSnap.exists() && reqSnap.data().status === 'approved') {
+          throw new Error('This request has already been approved.');
+        }
+
+        // Read wallet state
         const walletSnap = await transaction.get(walletRef);
         const currentWalletBal = walletSnap.exists() ? (walletSnap.data().balance ?? walletSnap.data().walletBalance ?? 0) : 0;
 
@@ -507,7 +644,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             updatedAt: nowISO
           }, { merge: true });
         } else {
-          // Course Access
+          // Course Access Enrollment
           const targetCourseIds = (req.courseIds && req.courseIds.length > 0) ? req.courseIds : [req.courseId];
           const userSnap = await transaction.get(userRef);
           let existingEnrolled: string[] = [];
@@ -531,7 +668,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           }, { merge: true });
         }
 
-        // Mark access_requests as approved & spent
+        // Update request status
         transaction.set(reqRef, {
           status: 'approved',
           spent: true,
@@ -541,7 +678,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           updatedAt: nowISO
         }, { merge: true });
 
-        // Lock used_transactions
+        // Lock in used_transactions
         if (req.trxId) {
           const reqTrx = req.trxId.toLowerCase().trim();
           const trxRef = doc(db, 'used_transactions', reqTrx);
@@ -559,7 +696,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         }
       });
 
-      // Synchronize course allowedUsers
+      // Course allowedUsers synchronization
       if (!isRecharge) {
         const targetCourseIds = (req.courseIds && req.courseIds.length > 0) ? req.courseIds : [req.courseId];
         for (const cid of targetCourseIds) {
@@ -581,38 +718,119 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       }
 
       setAccessRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved', spent: true, price: finalPrice, totalPrice: finalPrice } : r));
+
+      addTransactionLog({
+        id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: nowISO,
+        type: 'access_request',
+        userEmail,
+        details: isRecharge 
+          ? `Approved recharge request ৳${finalPrice} BDT` 
+          : `Approved course access request (${req.courseTitle || req.courseId})`,
+        status: 'success'
+      });
+
       showToast(
         isRecharge 
           ? `✅ Recharged ৳${finalPrice} BDT & updated balance for ${userEmail}!`
           : `✅ Approved course access & updated enrolled courses for ${userEmail}!`,
         'success'
       );
+      return true;
     } catch (err: any) {
-      console.error('Error in validateWalletAndProcessRequest:', err);
-      showToast(`❌ Transaction failed: ${err.message || String(err)}`, 'error');
+      console.error('Error in processAccessRequest transaction:', err);
+      let errMsg = err.message || String(err);
+      if (err?.code === 'permission-denied') {
+        errMsg = 'Permission Denied: Your account lacks Firestore write permissions for access_requests or user_wallets.';
+      } else if (err?.code === 'aborted' || err?.code === 'failed-precondition') {
+        errMsg = 'Concurrent Modification Error: Request or wallet was updated concurrently by another session. Please retry.';
+      }
+
+      addTransactionLog({
+        id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: nowISO,
+        type: 'access_request',
+        userEmail,
+        details: `Failed to process request ${req.id}: ${errMsg}`,
+        status: 'failed',
+        error: errMsg
+      });
+
+      showToast(`❌ Request Transaction Failed: ${errMsg}`, 'error');
+      return false;
     } finally {
       setIsProcessingAction(false);
     }
   };
 
+  const validateWalletAndProcessRequest = processAccessRequest;
+
   const handleApproveAccessRequest = async (req: AccessRequest, overrideBalance?: number) => {
-    return validateWalletAndProcessRequest(req, 'approve', overrideBalance);
+    return processAccessRequest(req, 'approve', overrideBalance);
   };
 
   const handleRejectAccessRequest = async (reqId: string) => {
     if (!window.confirm('Are you sure you want to reject this request?')) return;
     const foundReq = accessRequests.find(r => r.id === reqId);
     if (foundReq) {
-      return validateWalletAndProcessRequest(foundReq, 'reject');
+      return processAccessRequest(foundReq, 'reject');
     }
     try {
       const reqRef = doc(db, 'access_requests', reqId);
       await updateDoc(reqRef, { status: 'rejected' });
       setAccessRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: 'rejected' } : r));
       showToast('✅ Server Confirmed: Request status set to Rejected.', 'info');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error rejecting request:', err);
-      showToast('❌ Server Error: Failed to reject request.', 'error');
+      showToast(`❌ Server Error: Failed to reject request (${err.message || String(err)})`, 'error');
+    }
+  };
+
+  const handleTestTransaction = async () => {
+    const adminEmail = auth.currentUser?.email?.toLowerCase().trim() || 'admin_test@domain.com';
+    const testDocId = `test_health_check`;
+    const nowISO = new Date().toISOString();
+    showToast('Running diagnostic Firestore write transaction...', 'info');
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const testRef = doc(db, 'user_wallets', testDocId);
+        const snap = await transaction.get(testRef);
+        const count = snap.exists() ? (snap.data().testCount || 0) + 1 : 1;
+        transaction.set(testRef, {
+          testCount: count,
+          lastTestedBy: adminEmail,
+          updatedAt: nowISO
+        }, { merge: true });
+      });
+
+      addTransactionLog({
+        id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: nowISO,
+        type: 'test_write',
+        userEmail: adminEmail,
+        details: `Test transaction succeeded on user_wallets/${testDocId}`,
+        status: 'success'
+      });
+
+      showToast('✅ Firestore Transaction Health Check: SUCCESS! Write privileges verified.', 'success');
+    } catch (err: any) {
+      console.error('Test transaction error:', err);
+      const errMsg = err?.code === 'permission-denied' 
+        ? 'Permission Denied: Current user is not authorized to write to user_wallets in Firestore.' 
+        : (err.message || String(err));
+
+      addTransactionLog({
+        id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: nowISO,
+        type: 'test_write',
+        userEmail: adminEmail,
+        details: `Test transaction failed: ${errMsg}`,
+        status: 'failed',
+        error: errMsg
+      });
+
+      showToast(`❌ Firestore Transaction Health Check FAILED: ${errMsg}`, 'error');
     }
   };
 
@@ -1885,7 +2103,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       </div>
 
       {/* Admin Tab Navigation - Responsive Wrapping Pill Grid */}
-      <div className="bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5">
+      <div className="bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-1.5">
         <button
           onClick={() => setActiveAdminTab('courses')}
           className={`px-3 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center ${
@@ -1966,6 +2184,18 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         >
           <Sliders className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
           <span className="truncate">Settings</span>
+        </button>
+
+        <button
+          onClick={() => setActiveAdminTab('transaction-debugger')}
+          className={`px-3 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center ${
+            activeAdminTab === 'transaction-debugger'
+              ? 'bg-indigo-600 text-white shadow-xs font-black border border-indigo-700'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+          }`}
+        >
+          <Bug className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+          <span className="truncate">Tx Debugger</span>
         </button>
       </div>
 
@@ -2568,6 +2798,19 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               >
                 <History className="w-4 h-4 text-emerald-600" />
                 <span>📜 Transaction History ({accessRequests.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRequestsSubTab('debugger')}
+                className={`px-4 py-2 text-xs font-black rounded-lg transition cursor-pointer flex items-center gap-2 ${
+                  requestsSubTab === 'debugger'
+                    ? 'bg-indigo-600 text-white shadow-2xs border border-indigo-700'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Bug className="w-4 h-4 text-amber-300" />
+                <span>🛠️ Tx Debugger ({transactionLogs.length})</span>
               </button>
             </div>
 
@@ -3177,6 +3420,17 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             )}
           </div>
         </div>
+      ) : requestsSubTab === 'debugger' ? (
+        <TransactionDebugger
+          accessRequests={accessRequests}
+          transactionLogs={transactionLogs}
+          onClearLogs={handleClearTransactionLogs}
+          onTestTransaction={handleTestTransaction}
+          onProcessRequest={processAccessRequest}
+          onRefreshRequests={fetchAccessRequests}
+          isProcessing={isProcessingAction}
+          adminUserEmail={auth.currentUser?.email || ''}
+        />
       ) : (
         <TransactionHistoryView 
           requests={accessRequests} 
@@ -3188,6 +3442,21 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       )}
     </div>
   )}
+
+      {activeAdminTab === 'transaction-debugger' && (
+        <div className="space-y-6 animate-fade-in">
+          <TransactionDebugger
+            accessRequests={accessRequests}
+            transactionLogs={transactionLogs}
+            onClearLogs={handleClearTransactionLogs}
+            onTestTransaction={handleTestTransaction}
+            onProcessRequest={processAccessRequest}
+            onRefreshRequests={fetchAccessRequests}
+            isProcessing={isProcessingAction}
+            adminUserEmail={auth.currentUser?.email || ''}
+          />
+        </div>
+      )}
 
       {activeAdminTab === 'system-settings' && (
         <div className="space-y-6 animate-fade-in">
@@ -4477,6 +4746,64 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                           ? 'Disabled (0)'
                           : '2 Times / Day'}
                       </span>
+                    </div>
+
+                    <div className="p-4 space-y-3 bg-indigo-50/50">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-slate-800 flex items-center gap-1.5">
+                          <Wallet className="w-4 h-4 text-indigo-600" />
+                          Wallet Balance Management
+                        </span>
+                        <span className="font-bold font-mono text-indigo-700 bg-white px-2.5 py-1 rounded-lg border border-indigo-200">
+                          ৳{selectedUser.walletBalance ?? selectedUser.balance ?? 0} BDT
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 font-normal">
+                        Executes atomic Firestore transactions on <code className="font-mono text-indigo-600">user_wallets</code> and <code className="font-mono text-indigo-600">users</code> documents.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const success = await updateUserWallet(selectedUser.email, 50, false);
+                            if (success) {
+                              setSelectedUser(prev => prev ? { ...prev, walletBalance: (prev.walletBalance || prev.balance || 0) + 50 } : null);
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-2xs transition cursor-pointer"
+                        >
+                          +৳50 BDT
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const success = await updateUserWallet(selectedUser.email, 100, false);
+                            if (success) {
+                              setSelectedUser(prev => prev ? { ...prev, walletBalance: (prev.walletBalance || prev.balance || 0) + 100 } : null);
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-2xs transition cursor-pointer"
+                        >
+                          +৳100 BDT
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const input = prompt('Enter custom balance adjustment (e.g., 200 or -50) or set absolute amount:');
+                            if (input && !isNaN(Number(input))) {
+                              const val = Number(input);
+                              const isAbs = window.confirm(`Set absolute balance to ৳${val} BDT? (Cancel to add/subtract ৳${val} BDT)`);
+                              const success = await updateUserWallet(selectedUser.email, val, isAbs);
+                              if (success) {
+                                setSelectedUser(prev => prev ? { ...prev, walletBalance: isAbs ? val : (prev.walletBalance || prev.balance || 0) + val } : null);
+                              }
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs rounded-xl transition cursor-pointer"
+                        >
+                          Custom...
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
