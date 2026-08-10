@@ -20,6 +20,8 @@ import {
   signOut,
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider
 } from 'firebase/auth';
 import { normalizeCourseId, matchesCourseId, clearQuestionsCache } from './courseUtils';
@@ -41,6 +43,8 @@ export {
   signOut,
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   normalizeCourseId,
   matchesCourseId,

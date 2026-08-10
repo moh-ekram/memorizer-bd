@@ -51,6 +51,7 @@ import {
   setDoc,
   writeBatch,
   onAuthStateChanged,
+  getRedirectResult,
   signOut,
   collection,
   onSnapshot,
@@ -1097,6 +1098,11 @@ export default function App() {
 
   // Auth State Listener - INSTANT UNLOCK
   useEffect(() => {
+    // Process redirect sign-in results if coming back from OAuth redirect flow
+    getRedirectResult(auth).catch((err) => {
+      console.warn("getRedirectResult warning:", err);
+    });
+
     // Safety fallback timer to guarantee UI unlocks within 200ms
     const fallbackTimer = setTimeout(() => {
       setIsAuthInitializing(false);

@@ -13,7 +13,8 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   GoogleAuthProvider, 
-  signInWithPopup 
+  signInWithPopup,
+  signInWithRedirect
 } from '../lib/db';
 import { Course, AppSettings } from '../types';
 import MyCoursesView from './MyCoursesView';
@@ -409,11 +410,31 @@ export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse
         setLoading(false);
         return;
       }
-      let errMsg = 'Failed to sign in with Google.';
+
+      // If popup is blocked in mobile WebView, attempt redirect fallback
+      if (err.code === 'auth/popup-blocked' || err.code === 'auth/cancelled-popup-request') {
+        try {
+          await signInWithRedirect(auth, provider);
+          return;
+        } catch (redirectErr: any) {
+          console.error('Google Redirect Error:', redirectErr);
+        }
+      }
+
+      let errMsg = 'গুগল সাইন-ইন সম্পন্ন করা যায়নি।';
       if (err.code === 'auth/unauthorized-domain') {
-        errMsg = 'This domain is not authorized for Google Sign-In.';
+        const currentDomain = window.location.hostname;
+        errMsg = `এই ডোমেইনটি (${currentDomain}) ফায়ারবেসে অনুমোদিত নয় (Unauthorized Domain)।`;
+      } else if (
+        err.message?.includes('missing initial state') ||
+        err.code === 'auth/web-storage-unsupported' ||
+        err.message?.includes('sessionStorage')
+      ) {
+        errMsg = 'মোবাইল অ্যাপ/ইন-অ্যাপ ব্রাউজারে (WebView) স্টোরেজ নিরাপত্তার কারণে Google Sign-In বাধাগ্রস্ত হতে পারে। সমাধান: ১) নিচে ইমেইল ও পাসওয়ার্ড দিয়ে সাইন-ইন/রেজিস্টার করুন, অথবা ২) ব্রাউজারের ৩-ডট মেনু থেকে "Open in Chrome" সিলেক্ট করুন।';
+      } else if (err.code) {
+        errMsg = `${errMsg} (${err.code})`;
       } else if (err.message) {
-        errMsg = err.message;
+        errMsg = `${errMsg} (${err.message})`;
       }
       setError(errMsg);
     } finally {
