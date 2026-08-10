@@ -255,7 +255,7 @@ export default function SearchDictionary({
   };
 
   return (
-    <div className="bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-xs space-y-6" id="vocabulary-catalog-container">
+    <div className="bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-xs space-y-6 max-w-6xl mx-auto" id="vocabulary-catalog-container">
       {/* Invisible backdrop to dismiss bookmark dropdown on click outside */}
       {activeBookmarkWordId && (
         <div className="fixed inset-0 z-10" onClick={() => setActiveBookmarkWordId(null)} />

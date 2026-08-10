@@ -417,7 +417,7 @@ export default function GameAnalyticsDashboard({
   }, [gameMetrics, filterGrade]);
 
   return (
-    <div className="space-y-6 animate-fadeIn" id="game-analytics-dashboard">
+    <div className="space-y-6 animate-fadeIn max-w-5xl mx-auto" id="game-analytics-dashboard">
       {/* Dashboard Top Header Banner */}
       <div className="bg-slate-900 text-white p-6 sm:p-8 rounded-3xl relative overflow-hidden shadow-xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="absolute right-0 top-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />

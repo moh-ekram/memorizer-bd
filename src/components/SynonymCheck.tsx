@@ -510,7 +510,7 @@ export default function SynonymCheck({
   const activeStatus = synonymProgress[currentActiveWord.id];
 
   return (
-    <div className="space-y-4" id="synonym-check-container">
+    <div className="space-y-4 max-w-5xl mx-auto" id="synonym-check-container">
       {/* Top Filter and Customization Bar (Identical to FlashcardViewer) */}
       <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200/60 shadow-xs flex flex-wrap gap-4 items-center justify-between" id="synonym-filters">
         <div className="flex flex-wrap items-center gap-3">

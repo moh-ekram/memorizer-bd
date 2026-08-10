@@ -2020,7 +2020,7 @@ const getActiveCourse = (
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <div className="max-w-7xl mx-auto">
+        <div className={activeTab === 'admin' ? "w-full" : "max-w-7xl mx-auto"}>
           {['profile', 'dashboard', 'my_courses', 'flashcard'].includes(activeTab) && (
             <div className="space-y-6">
               {/* My Profile Sub-Navigation Pills */}

@@ -142,7 +142,7 @@ export default function GlobalLeaderboard() {
   if (podium[2]) sortedPodium.push(podium[2]); // 3rd
 
   return (
-    <div className="space-y-6 animate-fadeIn font-sans" id="global-leaderboard-panel">
+    <div className="space-y-6 animate-fadeIn font-sans max-w-4xl mx-auto" id="global-leaderboard-panel">
       
       {/* Header banner with My Current Rank status integrated */}
       <div className="bg-gradient-to-r from-indigo-900 via-indigo-850 to-indigo-950 text-white rounded-3xl p-6 md:p-8 shadow-md border border-indigo-950 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">

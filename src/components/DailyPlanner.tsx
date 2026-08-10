@@ -50,7 +50,7 @@ export default function DailyPlanner({ words, progress, goal, setGoal, onLaunchP
   });
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fadeIn" id="daily-planner-container">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fadeIn max-w-5xl mx-auto" id="daily-planner-container">
       {/* Left 2 Columns: Task Planner & Recommendations */}
       <div className="md:col-span-2 space-y-6">
         {/* Daily Study Planner List */}

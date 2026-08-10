@@ -1161,7 +1161,7 @@ export default function MyCoursesView({
   };
 
   return (
-    <div className="space-y-5" id="my-courses-view-root" style={{ fontFamily: "'Poppins', sans-serif" }}>
+    <div className="space-y-5 max-w-3xl mx-auto" id="my-courses-view-root" style={{ fontFamily: "'Poppins', sans-serif" }}>
       {/* Active Course Feedback Toast */}
       <AnimatePresence>
         {activeCourseToast && (

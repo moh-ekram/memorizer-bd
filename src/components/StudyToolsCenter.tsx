@@ -156,7 +156,7 @@ export default function StudyToolsCenter({
   };
 
   return (
-    <div className="space-y-6" id="study-tools-center-wrapper">
+    <div className="space-y-6 max-w-5xl mx-auto" id="study-tools-center-wrapper">
       {/* Top Bar navigation when inside a specific study tool */}
       {subTab !== 'hub' && (
         <div className="bg-white p-4 rounded-2xl border border-slate-250/60 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
