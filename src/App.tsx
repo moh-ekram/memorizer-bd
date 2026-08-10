@@ -405,8 +405,20 @@ export default function App() {
   });
 
   // --- CLOUD SYNC & AUTH STATES ---
-  const [user, setUser] = useState<DbUser | null>(null);
-  const [isAuthInitializing, setIsAuthInitializing] = useState<boolean>(true);
+  const [user, setUser] = useState<DbUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('vocab_memorizer_cached_user');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return null;
+  });
+  const [isAuthInitializing, setIsAuthInitializing] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('vocab_memorizer_cached_user');
+      if (saved) return false;
+    } catch (e) {}
+    return true;
+  });
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
   const isSyncingFromCloud = useRef(false);
@@ -849,261 +861,280 @@ export default function App() {
     }
   }, [filteredCustomCourses]);
 
-  // Auth State Listener
+  // Background cloud data synchronization helper function
+  const fetchUserDataFromCloud = async (currentUser: DbUser) => {
+    setSyncStatus('syncing');
+    setHasLoadedFromCloud(false);
+    isSyncingFromCloud.current = true;
+    try {
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      
+      let data: any = null;
+      const docSnap = await getDoc(userDocRef);
+      if (docSnap.exists()) {
+        data = docSnap.data();
+      }
+
+      if (data) {
+        // Merge state from cloud data with existing local progress to prevent overwriting locally rated words
+        setProgress(prev => {
+          const cloudProg = (data.progress && typeof data.progress === 'object') ? data.progress : {};
+          const merged = { ...cloudProg };
+          Object.keys(prev).forEach(wordId => {
+            if (!merged[wordId]) {
+              merged[wordId] = prev[wordId];
+            } else {
+              const localTime = new Date(prev[wordId].updatedAt || 0).getTime();
+              const cloudTime = new Date(merged[wordId].updatedAt || 0).getTime();
+              if (localTime > cloudTime) {
+                merged[wordId] = prev[wordId];
+              }
+            }
+          });
+          return merged;
+        });
+        setFolders(Array.isArray(data.folders) && data.folders.length > 0 ? data.folders : [
+          { id: '1', name: 'Important Words (High Priority)', color: '#ef4444' },
+          { id: '2', name: 'Hard Synonyms', color: '#f59e0b' }
+        ]);
+
+        const rawGoal = data.goal && typeof data.goal === 'object' ? data.goal : {};
+        setGoal({
+          dailyTarget: typeof rawGoal.dailyTarget === 'number' ? rawGoal.dailyTarget : 15,
+          streak: typeof rawGoal.streak === 'number' ? rawGoal.streak : 1,
+          lastStudyDate: typeof rawGoal.lastStudyDate === 'string' ? rawGoal.lastStudyDate : new Date().toISOString().split('T')[0],
+          history: rawGoal.history && typeof rawGoal.history === 'object' ? rawGoal.history : {}
+        });
+
+        setSynonymProgress(data.synonymProgress && typeof data.synonymProgress === 'object' ? data.synonymProgress : {});
+        setBlankProgress(data.blankProgress && typeof data.blankProgress === 'object' ? data.blankProgress : {});
+        setOooProgress(data.oooProgress && typeof data.oooProgress === 'object' ? data.oooProgress : {});
+        setAnalogyProgress(data.analogyProgress && typeof data.analogyProgress === 'object' ? data.analogyProgress : {});
+        if (data.settings && typeof data.settings === 'object') {
+          setSettings(prev => ({
+            ...prev,
+            ...data.settings,
+            practiceItemsOrder: Array.isArray(data.settings?.practiceItemsOrder) ? data.settings.practiceItemsOrder : prev.practiceItemsOrder,
+            studyToolsItemsOrder: Array.isArray(data.settings?.studyToolsItemsOrder) ? data.settings.studyToolsItemsOrder : prev.studyToolsItemsOrder,
+            landingDisplayCourses: Array.isArray(data.settings?.landingDisplayCourses) ? data.settings.landingDisplayCourses : prev.landingDisplayCourses
+          }));
+        }
+        const userEnrolled = Array.isArray(data.enrolledCourseIds) ? data.enrolledCourseIds : [];
+
+        // Auto-sync any course access requests or allowedUsers entries matching currentUser.email
+        let autoSyncedPurchased: string[] = [];
+        try {
+          const cleanUserEmail = (currentUser.email || '').trim().toLowerCase();
+          if (cleanUserEmail) {
+            const foundIds = new Set<string>();
+            const reqsQuery = query(
+              collection(db, 'access_requests'),
+              where('email', '==', cleanUserEmail),
+              where('status', '==', 'approved')
+            );
+            const reqsSnap = await getDocs(reqsQuery);
+            reqsSnap.docs.forEach(docSnap => {
+              const rd = docSnap.data() as any;
+              if (rd.courseId && rd.courseId !== 'wallet_recharge' && rd.courseId !== 'multi_cart') {
+                foundIds.add(rd.courseId.trim().toLowerCase());
+              }
+              if (Array.isArray(rd.courseIds)) {
+                rd.courseIds.forEach((cid: string) => {
+                  if (cid && cid !== 'wallet_recharge' && cid !== 'multi_cart') {
+                    foundIds.add(cid.trim().toLowerCase());
+                  }
+                });
+              }
+            });
+
+            const coursesSnap = await getDocs(collection(db, 'courses'));
+            coursesSnap.docs.forEach(cSnap => {
+              const cData = cSnap.data();
+              if (Array.isArray(cData.allowedUsers)) {
+                const isAllowed = cData.allowedUsers.some(
+                  (u: string) => typeof u === 'string' && u.trim().toLowerCase() === cleanUserEmail
+                );
+                if (isAllowed) {
+                  foundIds.add(cSnap.id.trim().toLowerCase());
+                }
+              }
+            });
+            autoSyncedPurchased = Array.from(foundIds);
+          }
+        } catch (syncErr) {
+          console.warn("Auto-sync course purchases error:", syncErr);
+        }
+
+        const mergedEnrolled = Array.from(new Set([...userEnrolled, ...autoSyncedPurchased]));
+        setEnrolledCourseIds(mergedEnrolled);
+        // Sync active course from cloud: prefer cloud active course if available and valid
+        setActiveCourseId(prev => {
+          if (data.activeCourseId) return data.activeCourseId;
+          return prev || (mergedEnrolled[0] || 'gre');
+        });
+        setQuizScore(typeof data.quizScore === 'number' ? data.quizScore : 0);
+        setQuizTaken(typeof data.quizTaken === 'number' ? data.quizTaken : 0);
+        
+        if (mergedEnrolled.length > userEnrolled.length) {
+          try {
+            await setDoc(userDocRef, { enrolledCourseIds: mergedEnrolled }, { merge: true });
+          } catch (setErr) {
+            console.warn("Failed to update user enrolledCourseIds in cloud:", setErr);
+          }
+        }
+
+        setSyncStatus('synced');
+        setHasLoadedFromCloud(true);
+        const loadedCount = Object.keys(data.progress || {}).length;
+        addSyncLog('cloud_fetch', `Restored ${loadedCount} progress item${loadedCount === 1 ? '' : 's'} from Cloud snapshot`, 'success', loadedCount);
+      } else {
+        // New user signup: create clean user record with auto-synced purchases if any
+        const cleanProgress = {};
+        const cleanFolders = [
+          { id: '1', name: 'Important Words (High Priority)', color: '#ef4444' },
+          { id: '2', name: 'Hard Synonyms', color: '#f59e0b' }
+        ];
+        const cleanGoal = {
+          dailyTarget: 15,
+          streak: 1,
+          lastStudyDate: new Date().toISOString().split('T')[0],
+          history: {}
+        };
+
+        let cleanEnrolled: string[] = [];
+        try {
+          const cleanUserEmail = (currentUser.email || '').trim().toLowerCase();
+          if (cleanUserEmail) {
+            const foundIds = new Set<string>();
+            const reqsQuery = query(
+              collection(db, 'access_requests'),
+              where('email', '==', cleanUserEmail),
+              where('status', '==', 'approved')
+            );
+            const reqsSnap = await getDocs(reqsQuery);
+            reqsSnap.docs.forEach(docSnap => {
+              const rd = docSnap.data() as any;
+              if (rd.courseId && rd.courseId !== 'wallet_recharge' && rd.courseId !== 'multi_cart') {
+                foundIds.add(rd.courseId.trim().toLowerCase());
+              }
+              if (Array.isArray(rd.courseIds)) {
+                rd.courseIds.forEach((cid: string) => {
+                  if (cid && cid !== 'wallet_recharge' && cid !== 'multi_cart') {
+                    foundIds.add(cid.trim().toLowerCase());
+                  }
+                });
+              }
+            });
+
+            const coursesSnap = await getDocs(collection(db, 'courses'));
+            coursesSnap.docs.forEach(cSnap => {
+              const cData = cSnap.data();
+              if (Array.isArray(cData.allowedUsers)) {
+                const isAllowed = cData.allowedUsers.some(
+                  (u: string) => typeof u === 'string' && u.trim().toLowerCase() === cleanUserEmail
+                );
+                if (isAllowed) {
+                  foundIds.add(cSnap.id.trim().toLowerCase());
+                }
+              }
+            });
+            cleanEnrolled = Array.from(foundIds);
+          }
+        } catch (syncErr) {
+          console.warn("Auto-sync course purchases error on signup:", syncErr);
+        }
+
+        const cleanActive = cleanEnrolled[0] || 'gre';
+
+        setProgress(cleanProgress);
+        setFolders(cleanFolders);
+        setGoal(cleanGoal);
+        setSynonymProgress({});
+        setBlankProgress({});
+        setOooProgress({});
+        setAnalogyProgress({});
+        setEnrolledCourseIds(cleanEnrolled);
+        setActiveCourseId(cleanActive);
+        setQuizScore(0);
+        setQuizTaken(0);
+
+        // Direct new user to 'My Courses' if they have no enrolled courses on initial load
+        if (cleanEnrolled.length === 0 && !hasLoadedFromCloud) {
+          setActiveTab('profile');
+          setProfileSubTab('my_courses');
+        }
+
+        await setDoc(userDocRef, {
+          progress: cleanProgress,
+          folders: cleanFolders,
+          goal: cleanGoal,
+          synonymProgress: {},
+          blankProgress: {},
+          oooProgress: {},
+          analogyProgress: {},
+          settings,
+          enrolledCourseIds: cleanEnrolled,
+          activeCourseId: cleanActive,
+          quizScore: 0,
+          quizTaken: 0,
+          email: currentUser.email,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+        setSyncStatus('synced');
+        setHasLoadedFromCloud(true);
+      }
+    } catch (err) {
+      console.error('Error fetching user data from Firestore:', err);
+      setSyncStatus('error');
+    } finally {
+      setTimeout(() => {
+        isSyncingFromCloud.current = false;
+      }, 500);
+    }
+  };
+
+  // Auth State Listener - INSTANT UNLOCK
   useEffect(() => {
+    // Safety fallback timer to guarantee UI unlocks within 200ms
+    const fallbackTimer = setTimeout(() => {
+      setIsAuthInitializing(false);
+    }, 200);
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      clearTimeout(fallbackTimer);
       setUser(currentUser);
+      setIsAuthInitializing(false);
+
       if (currentUser) {
         try {
+          safeSetLocalStorage('vocab_memorizer_cached_user', JSON.stringify({
+            uid: currentUser.uid,
+            email: currentUser.email,
+            displayName: currentUser.displayName
+          }));
           await saveMetaValue('uid', currentUser.uid);
         } catch (e) {
           console.warn('Error saving uid to IDB:', e);
         }
 
-        setSyncStatus('syncing');
-        setHasLoadedFromCloud(false);
-        isSyncingFromCloud.current = true;
-        try {
-          const userDocRef = doc(db, 'users', currentUser.uid);
-          
-          let data: any = null;
-          const docSnap = await getDoc(userDocRef);
-          if (docSnap.exists()) {
-            data = docSnap.data();
-          }
-
-          if (data) {
-
-            // Merge state from cloud data with existing local progress to prevent overwriting locally rated words
-            setProgress(prev => {
-              const cloudProg = (data.progress && typeof data.progress === 'object') ? data.progress : {};
-              const merged = { ...cloudProg };
-              Object.keys(prev).forEach(wordId => {
-                if (!merged[wordId]) {
-                  merged[wordId] = prev[wordId];
-                } else {
-                  const localTime = new Date(prev[wordId].updatedAt || 0).getTime();
-                  const cloudTime = new Date(merged[wordId].updatedAt || 0).getTime();
-                  if (localTime > cloudTime) {
-                    merged[wordId] = prev[wordId];
-                  }
-                }
-              });
-              return merged;
-            });
-            setFolders(Array.isArray(data.folders) && data.folders.length > 0 ? data.folders : [
-              { id: '1', name: 'Important Words (High Priority)', color: '#ef4444' },
-              { id: '2', name: 'Hard Synonyms', color: '#f59e0b' }
-            ]);
-
-            const rawGoal = data.goal && typeof data.goal === 'object' ? data.goal : {};
-            setGoal({
-              dailyTarget: typeof rawGoal.dailyTarget === 'number' ? rawGoal.dailyTarget : 15,
-              streak: typeof rawGoal.streak === 'number' ? rawGoal.streak : 1,
-              lastStudyDate: typeof rawGoal.lastStudyDate === 'string' ? rawGoal.lastStudyDate : new Date().toISOString().split('T')[0],
-              history: rawGoal.history && typeof rawGoal.history === 'object' ? rawGoal.history : {}
-            });
-
-            setSynonymProgress(data.synonymProgress && typeof data.synonymProgress === 'object' ? data.synonymProgress : {});
-            setBlankProgress(data.blankProgress && typeof data.blankProgress === 'object' ? data.blankProgress : {});
-            setOooProgress(data.oooProgress && typeof data.oooProgress === 'object' ? data.oooProgress : {});
-            setAnalogyProgress(data.analogyProgress && typeof data.analogyProgress === 'object' ? data.analogyProgress : {});
-            if (data.settings && typeof data.settings === 'object') {
-              setSettings(prev => ({
-                ...prev,
-                ...data.settings,
-                practiceItemsOrder: Array.isArray(data.settings?.practiceItemsOrder) ? data.settings.practiceItemsOrder : prev.practiceItemsOrder,
-                studyToolsItemsOrder: Array.isArray(data.settings?.studyToolsItemsOrder) ? data.settings.studyToolsItemsOrder : prev.studyToolsItemsOrder,
-                landingDisplayCourses: Array.isArray(data.settings?.landingDisplayCourses) ? data.settings.landingDisplayCourses : prev.landingDisplayCourses
-              }));
-            }
-            const userEnrolled = Array.isArray(data.enrolledCourseIds) ? data.enrolledCourseIds : [];
-
-            // Auto-sync any course access requests or allowedUsers entries matching currentUser.email
-            let autoSyncedPurchased: string[] = [];
-            try {
-              const cleanUserEmail = (currentUser.email || '').trim().toLowerCase();
-              if (cleanUserEmail) {
-                const foundIds = new Set<string>();
-                const reqsQuery = query(
-                  collection(db, 'access_requests'),
-                  where('email', '==', cleanUserEmail),
-                  where('status', '==', 'approved')
-                );
-                const reqsSnap = await getDocs(reqsQuery);
-                reqsSnap.docs.forEach(docSnap => {
-                  const rd = docSnap.data() as any;
-                  if (rd.courseId && rd.courseId !== 'wallet_recharge' && rd.courseId !== 'multi_cart') {
-                    foundIds.add(rd.courseId.trim().toLowerCase());
-                  }
-                  if (Array.isArray(rd.courseIds)) {
-                    rd.courseIds.forEach((cid: string) => {
-                      if (cid && cid !== 'wallet_recharge' && cid !== 'multi_cart') {
-                        foundIds.add(cid.trim().toLowerCase());
-                      }
-                    });
-                  }
-                });
-
-                const coursesSnap = await getDocs(collection(db, 'courses'));
-                coursesSnap.docs.forEach(cSnap => {
-                  const cData = cSnap.data();
-                  if (Array.isArray(cData.allowedUsers)) {
-                    const isAllowed = cData.allowedUsers.some(
-                      (u: string) => typeof u === 'string' && u.trim().toLowerCase() === cleanUserEmail
-                    );
-                    if (isAllowed) {
-                      foundIds.add(cSnap.id.trim().toLowerCase());
-                    }
-                  }
-                });
-                autoSyncedPurchased = Array.from(foundIds);
-              }
-            } catch (syncErr) {
-              console.warn("Auto-sync course purchases error:", syncErr);
-            }
-
-            const mergedEnrolled = Array.from(new Set([...userEnrolled, ...autoSyncedPurchased]));
-            setEnrolledCourseIds(mergedEnrolled);
-            // Sync active course from cloud: prefer cloud active course if available and valid
-            setActiveCourseId(prev => {
-              if (data.activeCourseId) return data.activeCourseId;
-              return prev || (mergedEnrolled[0] || 'gre');
-            });
-            setQuizScore(typeof data.quizScore === 'number' ? data.quizScore : 0);
-            setQuizTaken(typeof data.quizTaken === 'number' ? data.quizTaken : 0);
-            
-            if (mergedEnrolled.length > userEnrolled.length) {
-              try {
-                await setDoc(userDocRef, { enrolledCourseIds: mergedEnrolled }, { merge: true });
-              } catch (setErr) {
-                console.warn("Failed to update user enrolledCourseIds in cloud:", setErr);
-              }
-            }
-
-            setSyncStatus('synced');
-            setHasLoadedFromCloud(true);
-            const loadedCount = Object.keys(data.progress || {}).length;
-            addSyncLog('cloud_fetch', `Restored ${loadedCount} progress item${loadedCount === 1 ? '' : 's'} from Cloud snapshot`, 'success', loadedCount);
-          } else {
-            // New user signup: create clean user record with auto-synced purchases if any
-            const cleanProgress = {};
-            const cleanFolders = [
-              { id: '1', name: 'Important Words (High Priority)', color: '#ef4444' },
-              { id: '2', name: 'Hard Synonyms', color: '#f59e0b' }
-            ];
-            const cleanGoal = {
-              dailyTarget: 15,
-              streak: 1,
-              lastStudyDate: new Date().toISOString().split('T')[0],
-              history: {}
-            };
-
-            let cleanEnrolled: string[] = [];
-            try {
-              const cleanUserEmail = (currentUser.email || '').trim().toLowerCase();
-              if (cleanUserEmail) {
-                const foundIds = new Set<string>();
-                const reqsQuery = query(
-                  collection(db, 'access_requests'),
-                  where('email', '==', cleanUserEmail),
-                  where('status', '==', 'approved')
-                );
-                const reqsSnap = await getDocs(reqsQuery);
-                reqsSnap.docs.forEach(docSnap => {
-                  const rd = docSnap.data() as any;
-                  if (rd.courseId && rd.courseId !== 'wallet_recharge' && rd.courseId !== 'multi_cart') {
-                    foundIds.add(rd.courseId.trim().toLowerCase());
-                  }
-                  if (Array.isArray(rd.courseIds)) {
-                    rd.courseIds.forEach((cid: string) => {
-                      if (cid && cid !== 'wallet_recharge' && cid !== 'multi_cart') {
-                        foundIds.add(cid.trim().toLowerCase());
-                      }
-                    });
-                  }
-                });
-
-                const coursesSnap = await getDocs(collection(db, 'courses'));
-                coursesSnap.docs.forEach(cSnap => {
-                  const cData = cSnap.data();
-                  if (Array.isArray(cData.allowedUsers)) {
-                    const isAllowed = cData.allowedUsers.some(
-                      (u: string) => typeof u === 'string' && u.trim().toLowerCase() === cleanUserEmail
-                    );
-                    if (isAllowed) {
-                      foundIds.add(cSnap.id.trim().toLowerCase());
-                    }
-                  }
-                });
-                cleanEnrolled = Array.from(foundIds);
-              }
-            } catch (syncErr) {
-              console.warn("Auto-sync course purchases error on signup:", syncErr);
-            }
-
-            const cleanActive = cleanEnrolled[0] || 'gre';
-
-            setProgress(cleanProgress);
-            setFolders(cleanFolders);
-            setGoal(cleanGoal);
-            setSynonymProgress({});
-            setBlankProgress({});
-            setOooProgress({});
-            setAnalogyProgress({});
-            setEnrolledCourseIds(cleanEnrolled);
-            setActiveCourseId(cleanActive);
-            setQuizScore(0);
-            setQuizTaken(0);
-
-            // Direct new user to 'My Courses' if they have no enrolled courses on initial load
-            if (cleanEnrolled.length === 0 && !hasLoadedFromCloud) {
-              setActiveTab('profile');
-              setProfileSubTab('my_courses');
-            }
-
-            await setDoc(userDocRef, {
-              progress: cleanProgress,
-              folders: cleanFolders,
-              goal: cleanGoal,
-              synonymProgress: {},
-              blankProgress: {},
-              oooProgress: {},
-              analogyProgress: {},
-              settings,
-              enrolledCourseIds: cleanEnrolled,
-              activeCourseId: cleanActive,
-              quizScore: 0,
-              quizTaken: 0,
-              email: currentUser.email,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            });
-            setSyncStatus('synced');
-            setHasLoadedFromCloud(true);
-          }
-        } catch (err) {
-          console.error('Error fetching user data from Firestore:', err);
-          setSyncStatus('error');
-        } finally {
-          setIsAuthInitializing(false);
-          setTimeout(() => {
-            isSyncingFromCloud.current = false;
-          }, 500);
-        }
+        // Run cloud sync in background silently
+        fetchUserDataFromCloud(currentUser);
       } else {
-        // Logged out
         try {
+          localStorage.removeItem('vocab_memorizer_cached_user');
           await saveMetaValue('uid', null);
         } catch (e) {}
         isSyncingFromCloud.current = false;
         setHasLoadedFromCloud(false);
         setSyncStatus('idle');
-        setIsAuthInitializing(false);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(fallbackTimer);
+      unsubscribe();
+    };
   }, []);
 
   // Sync to Cloud whenever state changes and user is logged in (debounced)

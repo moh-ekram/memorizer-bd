@@ -102,7 +102,7 @@ export async function getDocs(queryOrCollectionRef: any) {
 
   // 1. Fetch from Firebase Firestore
   try {
-    const snap = await withTimeout(fsGetDocs(queryOrCollectionRef), 3500);
+    const snap = await withTimeout(fsGetDocs(queryOrCollectionRef), 6000);
     if (snap && snap.docs) {
       snap.docs.forEach((docSnap: any) => {
         docsMap.set(docSnap.id, docSnap.data());
@@ -112,7 +112,7 @@ export async function getDocs(queryOrCollectionRef: any) {
     console.warn('Firebase getDocs warning, falling back:', err);
   }
 
-  // 2. Fetch from server DB API backup & localStorage
+  // 2. Fetch from server DB API backup & localStorage ONLY for missing documents
   if (colName) {
     try {
       const res = await fetch(`/api/db/${encodeURIComponent(colName)}`);
@@ -122,7 +122,9 @@ export async function getDocs(queryOrCollectionRef: any) {
           json.docs.forEach((docData: any) => {
             if (docData && docData.id) {
               const existing = docsMap.get(String(docData.id));
-              docsMap.set(String(docData.id), existing ? { ...existing, ...docData } : docData);
+              if (!existing) {
+                docsMap.set(String(docData.id), docData);
+              }
             }
           });
         }
@@ -169,9 +171,9 @@ export async function setDoc(docRef: any, data: any, options?: { merge?: boolean
   // Sync to Firebase
   try {
     if (options) {
-      await withTimeout(fsSetDoc(docRef, data, options), 3500);
+      await withTimeout(fsSetDoc(docRef, data, options), 12000);
     } else {
-      await withTimeout(fsSetDoc(docRef, data), 3500);
+      await withTimeout(fsSetDoc(docRef, data), 12000);
     }
   } catch (err) {
     console.warn('Firebase setDoc error or timeout:', err);
@@ -194,7 +196,7 @@ export async function setDoc(docRef: any, data: any, options?: { merge?: boolean
 
 export async function updateDoc(docRef: any, data: any) {
   try {
-    await withTimeout(fsUpdateDoc(docRef, data), 3500);
+    await withTimeout(fsUpdateDoc(docRef, data), 12000);
   } catch (err) {
     console.warn('Firebase updateDoc error or timeout, attempting merge setDoc:', err);
     await setDoc(docRef, data, { merge: true });
