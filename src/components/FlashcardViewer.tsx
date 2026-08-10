@@ -1219,31 +1219,7 @@ export default function FlashcardViewer({
           </div>
         </div>
 
-        {/* 4. Group Progression Badge */}
-        <div className="text-center my-4">
-          <span className="inline-block bg-[#342e6f] text-white px-8 py-2.5 rounded-full font-black text-xs shadow-xs uppercase tracking-wider">
-            Group Progression
-          </span>
-        </div>
 
-        {/* 5. Group Cards 5-Column Grid */}
-        <div className="w-full max-w-lg mx-auto grid grid-cols-5 gap-2.5 sm:gap-3 my-3">
-          {uniqueGroups.map((gVal) => {
-            return (
-              <button
-                key={gVal}
-                type="button"
-                onClick={() => {
-                  setSelectedGroups([gVal]);
-                  setIsSessionActive(true);
-                }}
-                className="bg-[#5241f3] hover:bg-[#4331e0] active:scale-95 text-white font-extrabold text-xs sm:text-sm py-3.5 px-2 rounded-xl text-center shadow-xs cursor-pointer transition flex items-center justify-center min-h-[48px] border border-indigo-400/20"
-              >
-                <span>Group {gVal}</span>
-              </button>
-            );
-          })}
-        </div>
       </div>
     );
   }
