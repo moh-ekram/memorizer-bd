@@ -494,46 +494,44 @@ export default function PracticeCenter({
                   variants={itemVariants}
                   whileHover={{ scale: 1.008 }}
                   onClick={item.action}
-                  className="group relative transition-all duration-300 flex flex-row items-center justify-between p-2.5 sm:p-3.5 px-3.5 sm:px-4 rounded-2xl sm:rounded-3xl gap-3 sm:gap-4 overflow-hidden cursor-pointer bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 text-white shadow-md shadow-indigo-950/15 hover:brightness-105 border border-indigo-800/40"
+                  className="group relative transition-all duration-300 flex flex-row items-center justify-between p-2 sm:p-3 px-3 sm:px-4 rounded-xl sm:rounded-2xl gap-2.5 sm:gap-3.5 overflow-hidden cursor-pointer bg-gradient-to-r from-[#477B4D] to-[#5A9E60] text-white shadow-md shadow-[#477B4D]/20 hover:brightness-105 border border-white/20"
                   style={{ fontFamily: "'Poppins', sans-serif" }}
                 >
                   {/* Left Side: Icon Container */}
-                  <div className="w-10 sm:w-12 h-10 sm:h-12 rounded-xl sm:rounded-2xl bg-white/10 border border-white/15 text-indigo-200 flex items-center justify-center shrink-0 shadow-2xs group-hover:bg-white/20 transition-all">
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-white/15 border border-white/20 text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:bg-white/25 transition-all [&>svg]:w-4 [&>svg]:h-4 [&>svg]:text-white">
                     {item.icon}
                   </div>
 
                   {/* Middle Side: Game Title & Progress */}
-                  <div className="flex-1 min-w-0 font-poppins space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-sm sm:text-base font-extrabold text-white leading-tight truncate">
-                        {item.title}
-                      </h3>
-                      <span className="text-[11px] font-bold text-indigo-200/90 font-mono shrink-0">
-                        {stats.completed}/{stats.total} Qs ({stats.percent}%)
-                      </span>
+                  <div className="flex-1 min-w-0 font-poppins space-y-0.5 sm:space-y-1">
+                    <h3 className="text-xs sm:text-sm font-extrabold text-white leading-snug">
+                      {item.title}
+                    </h3>
+                    <div className="text-[10px] sm:text-[11px] font-normal text-emerald-100/90 font-mono tracking-tight">
+                      {stats.completed}/{stats.total} Qs ({stats.percent}%)
                     </div>
 
                     {/* Progress Bar Track */}
-                    <div className="w-full h-1.5 bg-black/30 rounded-full overflow-hidden p-0.5">
+                    <div className="w-full h-1 bg-black/20 rounded-full overflow-hidden">
                       <div 
-                        className="h-full bg-amber-400 rounded-full transition-all duration-500 ease-out"
+                        className="h-full bg-amber-300 rounded-full transition-all duration-500 ease-out"
                         style={{ width: `${stats.percent}%` }}
                       />
                     </div>
                   </div>
 
                   {/* Right Side: Action Button */}
-                  <div className="shrink-0 ml-1">
+                  <div className="shrink-0 ml-0.5 sm:ml-1">
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         item.action();
                       }}
-                      className="px-3 sm:px-3.5 py-1.5 rounded-xl bg-white/15 hover:bg-white text-white hover:text-indigo-950 font-extrabold text-xs transition flex items-center gap-1 cursor-pointer border border-white/20 shadow-2xs"
+                      className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl bg-white/20 hover:bg-white text-white hover:text-[#38663D] font-extrabold text-[11px] sm:text-xs transition flex items-center gap-0.5 sm:gap-1 cursor-pointer border border-white/30 shadow-2xs"
                     >
                       <span>{item.btnText}</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
+                      <ChevronRight className="w-3 h-3" />
                     </button>
                   </div>
                 </motion.div>
