@@ -9,6 +9,8 @@ interface PracticeQuizProps {
   activeGroup: number | string | null;
   settings?: AppSettings;
   customMcqQuestions?: CustomMcqQuestion[];
+  mcqProgress?: Record<string, { correct: boolean; updatedAt: string }>;
+  onUpdateMcqProgress?: (questionId: string, correct: boolean) => void;
   onQuizComplete?: (score: number, totalQuestions: number) => void;
   onBack?: () => void;
   placeLabels?: {
@@ -31,7 +33,7 @@ interface Question {
   explanation?: string;
 }
 
-export default function PracticeQuiz({ words, progress, onRateWord, activeGroup, settings, customMcqQuestions, onQuizComplete, onBack, placeLabels }: PracticeQuizProps) {
+export default function PracticeQuiz({ words, progress, onRateWord, activeGroup, settings, customMcqQuestions, mcqProgress, onUpdateMcqProgress, onQuizComplete, onBack, placeLabels }: PracticeQuizProps) {
   // Quiz states
   const [quizType, setQuizType] = useState<QuizType>(() => {
     return settings?.defaultQuizType || 'mcq_en_bn';
@@ -220,11 +222,13 @@ export default function PracticeQuiz({ words, progress, onRateWord, activeGroup,
       setScore(prev => prev + 1);
       if (targetQ.word?.id) {
         onRateWord(targetQ.word.id, 'know');
+        onUpdateMcqProgress?.(targetQ.word.id, true);
       }
     } else {
       if (targetQ.word) {
         setIncorrectWords(prev => [...prev, targetQ.word!]);
         onRateWord(targetQ.word.id, 'dont_know');
+        onUpdateMcqProgress?.(targetQ.word.id, false);
       }
     }
   };

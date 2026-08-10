@@ -33,7 +33,7 @@ export default function OddOneOutGame({
 }: OddOneOutGameProps) {
   const [allQuestions, setAllQuestions] = useState<OddOneOutQuestion[]>([]);
   const [questions, setQuestions] = useState<OddOneOutQuestion[]>([]);
-  const [activeFilter, setActiveFilter] = useState<'yet_to_try' | 'incorrect' | 'done'>('yet_to_try');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'yet_to_try' | 'incorrect' | 'done'>('yet_to_try');
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
@@ -57,7 +57,7 @@ export default function OddOneOutGame({
         done++;
       }
     });
-    return { yet_to_try: yetToTry, incorrect, done };
+    return { all: allQuestions.length, yet_to_try: yetToTry, incorrect, done };
   }, [allQuestions, progress]);
 
   // Fetch from Firestore/Supabase DB or auto-generate on course/words change
@@ -92,11 +92,13 @@ export default function OddOneOutGame({
     fetchQuestions();
   }, [activeCourseId]);
 
-  const applyFilter = (filterType: 'yet_to_try' | 'incorrect' | 'done', pool = allQuestions) => {
+  const applyFilter = (filterType: 'all' | 'yet_to_try' | 'incorrect' | 'done', pool = allQuestions) => {
     setActiveFilter(filterType);
     const filtered = pool.filter(q => {
       const prog = progress[q.id];
-      if (filterType === 'yet_to_try') {
+      if (filterType === 'all') {
+        return true;
+      } else if (filterType === 'yet_to_try') {
         return !prog;
       } else if (filterType === 'incorrect') {
         return prog && !prog.correct;
@@ -234,22 +236,33 @@ export default function OddOneOutGame({
         </div>
 
         {/* Slim Segmented Filter Row */}
-        <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200/55">
+        <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200/55 flex-wrap">
+          <button
+            onClick={() => applyFilter('all')}
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
+              activeFilter === 'all'
+                ? 'bg-white text-slate-800 shadow-xs border border-slate-200'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <span>All ({counts.all})</span>
+          </button>
+
           <button
             onClick={() => applyFilter('yet_to_try')}
-            className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
               activeFilter === 'yet_to_try'
                 ? 'bg-white text-indigo-600 shadow-xs border border-indigo-100/30'
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             <HelpCircle className="w-3 h-3" />
-            <span>Yet to Try ({counts.yet_to_try})</span>
+            <span>Unattempted ({counts.yet_to_try})</span>
           </button>
 
           <button
             onClick={() => applyFilter('incorrect')}
-            className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
               activeFilter === 'incorrect'
                 ? 'bg-white text-rose-600 shadow-xs border border-rose-100/30'
                 : 'text-slate-500 hover:text-slate-700'
@@ -261,7 +274,7 @@ export default function OddOneOutGame({
 
           <button
             onClick={() => applyFilter('done')}
-            className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
               activeFilter === 'done'
                 ? 'bg-white text-emerald-600 shadow-xs border border-emerald-100/30'
                 : 'text-slate-500 hover:text-slate-700'
@@ -365,10 +378,11 @@ export default function OddOneOutGame({
                       {qIdx + 1}
                     </span>
                     <div>
-                      <h3 className="text-base sm:text-lg font-extrabold text-slate-850 leading-snug pt-0.5">
-                        Identify the Odd One Out
-                      </h3>
-                      <p className="text-xs text-slate-400 mt-0.5">Find the word that does not belong with the others.</p>
+                      {q.question ? (
+                        <h3 className="text-sm font-bold text-slate-800 leading-snug pt-0.5">
+                          {q.question}
+                        </h3>
+                      ) : null}
                     </div>
                   </div>
 

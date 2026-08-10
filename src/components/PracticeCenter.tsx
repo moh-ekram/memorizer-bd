@@ -105,6 +105,8 @@ interface PracticeCenterProps {
   onUpdateOooProgress: (questionId: string, correct: boolean) => void;
   analogyProgress: Record<string, { correct: boolean; updatedAt: string }>;
   onUpdateAnalogyProgress: (questionId: string, correct: boolean) => void;
+  mcqProgress?: Record<string, { correct: boolean; updatedAt: string }>;
+  onUpdateMcqProgress?: (questionId: string, correct: boolean) => void;
   activeGroup: number | string | null;
   settings: AppSettings;
   onQuizComplete: (score: number, totalQuestions: number) => void;
@@ -137,6 +139,8 @@ export default function PracticeCenter({
   onUpdateOooProgress,
   analogyProgress,
   onUpdateAnalogyProgress,
+  mcqProgress,
+  onUpdateMcqProgress,
   activeGroup,
   settings,
   onQuizComplete,
@@ -674,6 +678,8 @@ export default function PracticeCenter({
           activeGroup={activeGroup}
           settings={settings}
           customMcqQuestions={mcqQs}
+          mcqProgress={mcqProgress}
+          onUpdateMcqProgress={onUpdateMcqProgress}
           onQuizComplete={onQuizComplete}
           onBack={() => setSubTab('hub')}
           placeLabels={placeLabels}

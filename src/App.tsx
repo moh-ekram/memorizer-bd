@@ -967,10 +967,11 @@ export default function App() {
 
         const mergedEnrolled = Array.from(new Set([...userEnrolled, ...autoSyncedPurchased]));
         setEnrolledCourseIds(mergedEnrolled);
-        // Sync active course from cloud: prefer cloud active course if available and valid
+        // Sync active course from cloud: prefer local selection if already set, else cloud activeCourseId
         setActiveCourseId(prev => {
+          if (prev && prev.trim() !== '') return prev;
           if (data.activeCourseId) return data.activeCourseId;
-          return prev || (mergedEnrolled[0] || 'gre');
+          return mergedEnrolled[0] || 'gre';
         });
         setQuizScore(typeof data.quizScore === 'number' ? data.quizScore : 0);
         setQuizTaken(typeof data.quizTaken === 'number' ? data.quizTaken : 0);
@@ -1400,24 +1401,38 @@ const getActiveCourse = (
   useEffect(() => {
     if (!allCourses || allCourses.length === 0) return;
 
-    const resolvedCourse = getActiveCourse(activeCourseId, allCourses, defaultGreCourse);
-    
-    // Automatically ensure activeCourseId stays in sync with canonical course ID
-    if (resolvedCourse && resolvedCourse.id && resolvedCourse.id !== activeCourseId) {
-      setActiveCourseId(resolvedCourse.id);
+    const norm = activeCourseId?.trim().toLowerCase();
+    if (!norm) {
+      if (allCourses[0]) {
+        setActiveCourseId(allCourses[0].id);
+      }
+      return;
     }
 
-    const canonicalId = resolvedCourse ? resolvedCourse.id : 'gre';
-    setEnrolledCourseIds(prev => {
-      if (!prev || prev.length === 0) {
-        return [canonicalId];
-      }
-      if (!prev.some(id => id.trim().toLowerCase() === canonicalId.trim().toLowerCase())) {
-        return [canonicalId, ...prev];
-      }
-      return prev;
-    });
-  }, [allCourses, activeCourseId, defaultGreCourse]);
+    // Check if activeCourseId matches any course in allCourses
+    const matched = allCourses.find(c => 
+      c.id.trim().toLowerCase() === norm ||
+      ((c as any).courseCode && (c as any).courseCode.trim().toLowerCase() === norm) ||
+      (c.title && c.title.trim().toLowerCase() === norm)
+    );
+
+    if (matched && matched.id !== activeCourseId) {
+      setActiveCourseId(matched.id);
+    }
+
+    const canonicalId = matched ? matched.id : activeCourseId;
+    if (canonicalId) {
+      setEnrolledCourseIds(prev => {
+        if (!prev || prev.length === 0) {
+          return [canonicalId];
+        }
+        if (!prev.some(id => id.trim().toLowerCase() === canonicalId.trim().toLowerCase())) {
+          return [canonicalId, ...prev];
+        }
+        return prev;
+      });
+    }
+  }, [allCourses, activeCourseId]);
 
   const handleImportCourse = (course: Course) => {
     setImportedCourses(prev => {

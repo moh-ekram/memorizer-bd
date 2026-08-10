@@ -43,7 +43,7 @@ export default function BlankFillingPractice({
 }: BlankFillingPracticeProps) {
   const [allQuestions, setAllQuestions] = useState<BlankQuestion[]>([]);
   const [questions, setQuestions] = useState<BlankQuestion[]>([]);
-  const [activeFilter, setActiveFilter] = useState<'yet_to_try' | 'incorrect' | 'done'>('yet_to_try');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'yet_to_try' | 'incorrect' | 'done'>('yet_to_try');
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
@@ -68,7 +68,7 @@ export default function BlankFillingPractice({
         done++;
       }
     });
-    return { yet_to_try: yetToTry, incorrect, done };
+    return { all: allQuestions.length, yet_to_try: yetToTry, incorrect, done };
   }, [allQuestions, blankProgress]);
 
   // Fetch blank questions from Supabase/DB on mount/activeCourseId change
@@ -105,11 +105,13 @@ export default function BlankFillingPractice({
   }, [activeCourseId, words]);
 
   // Function to apply a filter on allQuestions
-  const applyFilter = (filterType: 'yet_to_try' | 'incorrect' | 'done', pool = allQuestions) => {
+  const applyFilter = (filterType: 'all' | 'yet_to_try' | 'incorrect' | 'done', pool = allQuestions) => {
     setActiveFilter(filterType);
     const filtered = pool.filter(q => {
       const prog = blankProgress[q.id];
-      if (filterType === 'yet_to_try') {
+      if (filterType === 'all') {
+        return true;
+      } else if (filterType === 'yet_to_try') {
         return !prog;
       } else if (filterType === 'incorrect') {
         return prog && !prog.correct;
@@ -257,22 +259,33 @@ export default function BlankFillingPractice({
         </div>
 
         {/* Slim Segmented Filter Row */}
-        <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200/55">
+        <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200/55 flex-wrap">
+          <button
+            onClick={() => applyFilter('all')}
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
+              activeFilter === 'all'
+                ? 'bg-white text-slate-800 shadow-xs border border-slate-200'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <span>All ({counts.all})</span>
+          </button>
+
           <button
             onClick={() => applyFilter('yet_to_try')}
-            className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
               activeFilter === 'yet_to_try'
                 ? 'bg-white text-indigo-600 shadow-xs border border-indigo-100/30'
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             <HelpCircle className="w-3 h-3" />
-            <span>Yet to Try ({counts.yet_to_try})</span>
+            <span>Unattempted ({counts.yet_to_try})</span>
           </button>
 
           <button
             onClick={() => applyFilter('incorrect')}
-            className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
               activeFilter === 'incorrect'
                 ? 'bg-white text-rose-600 shadow-xs border border-rose-100/30'
                 : 'text-slate-500 hover:text-slate-700'
@@ -284,14 +297,14 @@ export default function BlankFillingPractice({
 
           <button
             onClick={() => applyFilter('done')}
-            className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
               activeFilter === 'done'
                 ? 'bg-white text-emerald-600 shadow-xs border border-emerald-100/30'
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             <CheckCircle className="w-3 h-3 text-emerald-500" />
-            <span>Done ({counts.done})</span>
+            <span>Correct ({counts.done})</span>
           </button>
         </div>
       </div>
