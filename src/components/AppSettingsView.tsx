@@ -68,6 +68,7 @@ interface AppSettingsViewProps {
   userEmail?: string | null;
   syncStatus: string;
   onForceSync?: () => void;
+  onReloadFromCloud?: () => void;
   syncLogs?: SyncLogEntry[];
   allCourses?: Course[];
 }
@@ -79,6 +80,7 @@ export default function AppSettingsView({
   userEmail,
   syncStatus,
   onForceSync,
+  onReloadFromCloud,
   syncLogs = [],
   allCourses = []
 }: AppSettingsViewProps) {
@@ -842,14 +844,29 @@ export default function AppSettingsView({
                     <span>{syncStatus === 'synced' ? 'Synced with Cloud' : syncStatus === 'syncing' ? 'Syncing Changes...' : 'Local Storage'}</span>
                   </span>
 
-                  {userEmail && onForceSync && (
-                    <button
-                      onClick={onForceSync}
-                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
-                    >
-                      <UploadCloud className="w-3.5 h-3.5" />
-                      <span>Backup Now</span>
-                    </button>
+                  {userEmail && (
+                    <div className="flex items-center gap-2">
+                      {onForceSync && (
+                        <button
+                          onClick={onForceSync}
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                          title="Backup device data to Cloud"
+                        >
+                          <UploadCloud className="w-3.5 h-3.5" />
+                          <span>Backup Now</span>
+                        </button>
+                      )}
+                      {onReloadFromCloud && (
+                        <button
+                          onClick={onReloadFromCloud}
+                          className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer border border-slate-600"
+                          title="Restore latest data from Cloud"
+                        >
+                          <DownloadCloud className="w-3.5 h-3.5 text-sky-400" />
+                          <span>Restore Cloud Data</span>
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

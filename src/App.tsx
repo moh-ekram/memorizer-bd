@@ -1223,6 +1223,43 @@ export default function App() {
     }
   };
 
+  const reloadFromCloud = async () => {
+    if (!user) return;
+    setSyncStatus('syncing');
+    try {
+      const userDocRef = doc(db, 'users', user.uid);
+      const docSnap = await getDoc(userDocRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.progress && typeof data.progress === 'object') setProgress(data.progress);
+        if (Array.isArray(data.folders)) setFolders(data.folders);
+        if (data.goal && typeof data.goal === 'object') setGoal(data.goal);
+        if (data.synonymProgress) setSynonymProgress(data.synonymProgress);
+        if (data.blankProgress) setBlankProgress(data.blankProgress);
+        if (data.oooProgress) setOooProgress(data.oooProgress);
+        if (data.analogyProgress) setAnalogyProgress(data.analogyProgress);
+        if (data.settings && typeof data.settings === 'object') setSettings(prev => ({ ...prev, ...data.settings }));
+        if (Array.isArray(data.enrolledCourseIds)) setEnrolledCourseIds(data.enrolledCourseIds);
+        if (data.activeCourseId) setActiveCourseId(data.activeCourseId);
+        if (typeof data.quizScore === 'number') setQuizScore(data.quizScore);
+        if (typeof data.quizTaken === 'number') setQuizTaken(data.quizTaken);
+        
+        setSyncStatus('synced');
+        setHasLoadedFromCloud(true);
+        const count = Object.keys(data.progress || {}).length;
+        addSyncLog('cloud_fetch', `Directly restored ${count} progress items from Cloud snapshot`, 'success', count);
+        alert('ক্লাউড (সার্ভার) থেকে আপনার সকল তথ্য রিলোড হয়ে গেছে!');
+      } else {
+        alert('সার্ভারে কোনো সেভ করা ডেটা পাওয়া যায়নি।');
+        setSyncStatus('synced');
+      }
+    } catch (err) {
+      console.error('Failed to reload from cloud:', err);
+      setSyncStatus('error');
+      alert('ক্লাউড থেকে ডেটা আনতে ব্যর্থ হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন যাচাই করুন।');
+    }
+  };
+
   const handleLogOut = async () => {
     if (confirm('Are you sure you want to log out?')) {
       try {
@@ -2297,6 +2334,7 @@ const getActiveCourse = (
               userEmail={user?.email}
               syncStatus={syncStatus}
               onForceSync={forceSyncToCloud}
+              onReloadFromCloud={reloadFromCloud}
               syncLogs={syncLogs}
               allCourses={customCourses}
             />
