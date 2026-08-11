@@ -69,6 +69,7 @@ interface AppSettingsViewProps {
   syncStatus: string;
   onForceSync?: () => void;
   onReloadFromCloud?: () => void;
+  onRunDiagnostic?: () => void;
   syncLogs?: SyncLogEntry[];
   allCourses?: Course[];
 }
@@ -81,6 +82,7 @@ export default function AppSettingsView({
   syncStatus,
   onForceSync,
   onReloadFromCloud,
+  onRunDiagnostic,
   syncLogs = [],
   allCourses = []
 }: AppSettingsViewProps) {
@@ -864,6 +866,16 @@ export default function AppSettingsView({
                         >
                           <DownloadCloud className="w-3.5 h-3.5 text-sky-400" />
                           <span>Restore Cloud Data</span>
+                        </button>
+                      )}
+                      {onRunDiagnostic && (
+                        <button
+                          onClick={onRunDiagnostic}
+                          className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                          title="Run deeper synchronization verification check"
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Run Diagnostic</span>
                         </button>
                       )}
                     </div>

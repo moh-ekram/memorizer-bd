@@ -71,7 +71,8 @@ import {
   clearSyncQueue,
   saveMetaValue,
   getMetaValue,
-  clearIndexedDBCache
+  clearIndexedDBCache,
+  verifySyncIntegrity
 } from './lib/offlineDb';
 
 const LOCAL_STORAGE_PROGRESS_KEY = 'vocab_memorizer_progress_v2';
@@ -1108,6 +1109,17 @@ export default function App() {
         setHasLoadedFromCloud(true);
         const loadedCount = Object.keys(data.progress || {}).length;
         addSyncLog('cloud_fetch', `Restored ${loadedCount} progress item${loadedCount === 1 ? '' : 's'} from Cloud snapshot`, 'success', loadedCount);
+
+        try {
+          const diag = await verifySyncIntegrity(progress, data.progress || {});
+          if (diag.discrepancies.length > 0) {
+            addSyncLog('cloud_fetch', `Diagnostic Notice: ${diag.discrepancies.length} word discrepancy item(s) logged between local cache and cloud snapshot`, 'error', diag.discrepancies.length);
+          } else {
+            addSyncLog('cloud_fetch', `Sync Integrity Verified: Local (${diag.localRatedCount} rated) matches Cloud 100%`, 'success', diag.localRatedCount);
+          }
+        } catch (diagErr) {
+          console.warn("Notice during background sync verification:", diagErr);
+        }
       } else {
         // New user signup: create clean user record with auto-synced purchases if any
         const cleanProgress = {};
@@ -1376,6 +1388,65 @@ export default function App() {
       console.error('Failed to reload from cloud:', err);
       setSyncStatus('error');
       alert('ক্লাউড থেকে ডেটা আনতে ব্যর্থ হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন যাচাই করুন।');
+    }
+  };
+
+  // Diagnostic Synchronization Check between Local Device and Cloud Firestore
+  const runSyncDiagnosticScan = async () => {
+    try {
+      let cloudProg: Record<string, UserProgress> = {};
+      let cloudData: any = null;
+
+      if (user) {
+        const userDocRef = doc(db, 'users', user.uid);
+        const docSnap = await getDoc(userDocRef);
+        if (docSnap.exists()) {
+          cloudData = docSnap.data();
+          cloudProg = cloudData.progress || {};
+        }
+      }
+
+      const idbProgress = (await getProgressFromIndexedDB()) || {};
+      const currentLocalProg = { ...idbProgress, ...progress };
+
+      const diag = await verifySyncIntegrity(currentLocalProg, cloudProg);
+
+      // Log verification diagnostic result to Sync Logs UI
+      addSyncLog(
+        'manual',
+        diag.summaryMessage,
+        diag.discrepancies.length > 0 ? 'error' : 'success',
+        diag.localRatedCount
+      );
+
+      if (diag.discrepancies.length > 0) {
+        const localSummary = {
+          wordsCount: diag.localRatedCount,
+          knowCount: diag.localKnowCount,
+          foldersCount: folders.length,
+          lastUpdated: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        const cloudSummary = {
+          wordsCount: diag.cloudRatedCount,
+          knowCount: diag.cloudKnowCount,
+          foldersCount: Array.isArray(cloudData?.folders) ? cloudData.folders.length : 0,
+          lastUpdated: cloudData?.updatedAt ? new Date(cloudData.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Cloud Snapshot'
+        };
+
+        setConflictModalData({
+          localSummary,
+          cloudSummary,
+          cloudRawData: cloudData || { progress: cloudProg },
+          localRawData: { progress: currentLocalProg, folders, goal },
+          discrepancies: diag.discrepancies
+        });
+        setIsConflictModalOpen(true);
+      } else {
+        alert(`Diagnostic Scan Passed! All ${diag.localRatedCount} rated words on your local device match Cloud Firestore 100%.`);
+      }
+    } catch (err) {
+      console.error("Diagnostic scan error:", err);
+      addSyncLog('manual', 'Diagnostic Scan Error: Unable to complete cloud verification', 'error');
     }
   };
 
@@ -2454,6 +2525,7 @@ const getActiveCourse = (
               syncStatus={syncStatus}
               onForceSync={forceSyncToCloud}
               onReloadFromCloud={reloadFromCloud}
+              onRunDiagnostic={runSyncDiagnosticScan}
               syncLogs={syncLogs}
               allCourses={customCourses}
             />
@@ -2519,6 +2591,7 @@ const getActiveCourse = (
       <SyncConflictModal
         isOpen={isConflictModalOpen}
         conflictData={conflictModalData}
+        words={activeWords}
         onClose={() => setIsConflictModalOpen(false)}
         onKeepLocal={async () => {
           setIsConflictModalOpen(false);
@@ -2534,23 +2607,25 @@ const getActiveCourse = (
           if (data.goal) setGoal(data.goal);
           addSyncLog('cloud_fetch', 'Resolved Conflict: Replaced local device with Cloud Backup', 'success');
         }}
-        onMergeBoth={async () => {
-          if (!conflictModalData?.cloudRawData) return;
-          const data = conflictModalData.cloudRawData;
+        onMergeBoth={async (customMergedProgress) => {
           setIsConflictModalOpen(false);
-          const cloudProg = (data.progress && typeof data.progress === 'object') ? data.progress : {};
-          const merged = { ...cloudProg };
-          Object.keys(progress).forEach(wordId => {
-            if (!merged[wordId]) {
-              merged[wordId] = progress[wordId];
-            } else {
-              const localTime = new Date(progress[wordId].updatedAt || 0).getTime();
-              const cloudTime = new Date(merged[wordId].updatedAt || 0).getTime();
-              if (localTime >= cloudTime) {
-                merged[wordId] = progress[wordId];
+          let merged = customMergedProgress;
+          if (!merged) {
+            const data = conflictModalData?.cloudRawData;
+            const cloudProg = (data?.progress && typeof data.progress === 'object') ? data.progress : {};
+            merged = { ...cloudProg };
+            Object.keys(progress).forEach(wordId => {
+              if (!merged![wordId]) {
+                merged![wordId] = progress[wordId];
+              } else {
+                const localTime = new Date(progress[wordId].updatedAt || 0).getTime();
+                const cloudTime = new Date(merged![wordId].updatedAt || 0).getTime();
+                if (localTime >= cloudTime) {
+                  merged![wordId] = progress[wordId];
+                }
               }
-            }
-          });
+            });
+          }
           setProgress(merged);
           if (user) {
             try {
@@ -2560,7 +2635,7 @@ const getActiveCourse = (
               }, { merge: true });
             } catch (e) {}
           }
-          addSyncLog('manual', 'Resolved Conflict: Merged local & cloud progress', 'success');
+          addSyncLog('manual', `Resolved Conflict: Merged ${Object.keys(merged).length} word progress items`, 'success', Object.keys(merged).length);
         }}
       />
     </div>

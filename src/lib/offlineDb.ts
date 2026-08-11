@@ -181,3 +181,146 @@ export async function getMetaValue(key: string): Promise<any> {
   }
 }
 
+export interface WordDiscrepancy {
+  wordId: string;
+  localStatus?: string;
+  localUpdatedAt?: string;
+  cloudStatus?: string;
+  cloudUpdatedAt?: string;
+  issue: 'local_only' | 'cloud_only' | 'status_mismatch' | 'timestamp_mismatch';
+}
+
+export interface SyncDiagnosticResult {
+  hasDiscrepancy: boolean;
+  localTotalWords: number;
+  cloudTotalWords: number;
+  localRatedCount: number;
+  cloudRatedCount: number;
+  localKnowCount: number;
+  cloudKnowCount: number;
+  localOnlyCount: number;
+  cloudOnlyCount: number;
+  statusMismatchCount: number;
+  timestampMismatchCount: number;
+  queuedSyncCount: number;
+  discrepancies: WordDiscrepancy[];
+  summaryMessage: string;
+}
+
+export async function verifySyncIntegrity(
+  localProgress: Record<string, UserProgress> = {},
+  cloudProgress: Record<string, UserProgress> = {}
+): Promise<SyncDiagnosticResult> {
+  const queuedItems = await getQueuedSyncItems();
+  const queuedSyncCount = queuedItems.length;
+
+  const localKeys = Object.keys(localProgress || {});
+  const cloudKeys = Object.keys(cloudProgress || {});
+  const allWordIds = Array.from(new Set([...localKeys, ...cloudKeys]));
+
+  const discrepancies: WordDiscrepancy[] = [];
+  let localRatedCount = 0;
+  let cloudRatedCount = 0;
+  let localKnowCount = 0;
+  let cloudKnowCount = 0;
+
+  let localOnlyCount = 0;
+  let cloudOnlyCount = 0;
+  let statusMismatchCount = 0;
+  let timestampMismatchCount = 0;
+
+  for (const wordId of allWordIds) {
+    const local = localProgress[wordId];
+    const cloud = cloudProgress[wordId];
+
+    const localIsRated = !!(local && local.status && local.status !== 'unrated');
+    const cloudIsRated = !!(cloud && cloud.status && cloud.status !== 'unrated');
+
+    if (localIsRated) {
+      localRatedCount++;
+      if (local.status === 'know') localKnowCount++;
+    }
+    if (cloudIsRated) {
+      cloudRatedCount++;
+      if (cloud.status === 'know') cloudKnowCount++;
+    }
+
+    if (localIsRated && !cloudIsRated) {
+      localOnlyCount++;
+      discrepancies.push({
+        wordId,
+        localStatus: local.status,
+        localUpdatedAt: local.updatedAt,
+        cloudStatus: cloud?.status || 'unrated',
+        cloudUpdatedAt: cloud?.updatedAt,
+        issue: 'local_only'
+      });
+    } else if (!localIsRated && cloudIsRated) {
+      cloudOnlyCount++;
+      discrepancies.push({
+        wordId,
+        localStatus: local?.status || 'unrated',
+        localUpdatedAt: local?.updatedAt,
+        cloudStatus: cloud.status,
+        cloudUpdatedAt: cloud.updatedAt,
+        issue: 'cloud_only'
+      });
+    } else if (localIsRated && cloudIsRated) {
+      if (local.status !== cloud.status) {
+        statusMismatchCount++;
+        discrepancies.push({
+          wordId,
+          localStatus: local.status,
+          localUpdatedAt: local.updatedAt,
+          cloudStatus: cloud.status,
+          cloudUpdatedAt: cloud.updatedAt,
+          issue: 'status_mismatch'
+        });
+      } else if (local.updatedAt && cloud.updatedAt && local.updatedAt !== cloud.updatedAt) {
+        timestampMismatchCount++;
+        discrepancies.push({
+          wordId,
+          localStatus: local.status,
+          localUpdatedAt: local.updatedAt,
+          cloudStatus: cloud.status,
+          cloudUpdatedAt: cloud.updatedAt,
+          issue: 'timestamp_mismatch'
+        });
+      }
+    }
+  }
+
+  const hasDiscrepancy = discrepancies.length > 0 || queuedSyncCount > 0;
+
+  let summaryMessage = '';
+  if (!hasDiscrepancy) {
+    summaryMessage = `Sync Verification Passed: Local (${localRatedCount} rated) and Cloud (${cloudRatedCount} rated) are 100% in sync.`;
+  } else {
+    const parts = [];
+    if (localOnlyCount > 0) parts.push(`${localOnlyCount} local-only item(s)`);
+    if (cloudOnlyCount > 0) parts.push(`${cloudOnlyCount} cloud-only item(s)`);
+    if (statusMismatchCount > 0) parts.push(`${statusMismatchCount} status mismatch(es)`);
+    if (timestampMismatchCount > 0) parts.push(`${timestampMismatchCount} timestamp diff(s)`);
+    if (queuedSyncCount > 0) parts.push(`${queuedSyncCount} pending queued offline update(s)`);
+    summaryMessage = `Sync Diagnostic Notice: ${parts.join(', ')}. Local Know: ${localKnowCount}, Cloud Know: ${cloudKnowCount}.`;
+  }
+
+  return {
+    hasDiscrepancy,
+    localTotalWords: localKeys.length,
+    cloudTotalWords: cloudKeys.length,
+    localRatedCount,
+    cloudRatedCount,
+    localKnowCount,
+    cloudKnowCount,
+    localOnlyCount,
+    cloudOnlyCount,
+    statusMismatchCount,
+    timestampMismatchCount,
+    queuedSyncCount,
+    discrepancies,
+    summaryMessage
+  };
+}
+
+
