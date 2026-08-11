@@ -95,6 +95,12 @@ interface FirestoreUserDoc {
     history?: Record<string, any>;
   };
   synonymProgress?: Record<string, { correct: boolean; updatedAt: string }>;
+  blankProgress?: Record<string, any>;
+  oooProgress?: Record<string, any>;
+  analogyProgress?: Record<string, any>;
+  enrolledCourseIds?: string[];
+  walletBalance?: number;
+  balance?: number;
   settings?: any;
 }
 
@@ -1017,20 +1023,92 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       const querySnapshot = await getDocs(collection(db, path));
       const fetchedUsersMap = new Map<string, FirestoreUserDoc>();
 
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
         const userEmail = (data.email || '').trim().toLowerCase();
-        if (data.email || doc.id) {
-          fetchedUsersMap.set(userEmail || doc.id, {
-            id: doc.id,
-            email: data.email || 'unknown@user.com',
-            createdAt: data.createdAt,
-            updatedAt: data.updatedAt,
-            progress: data.progress || {},
-            goal: data.goal || {},
-            synonymProgress: data.synonymProgress || {},
-            settings: data.settings || {}
-          });
+        const key = userEmail || docSnap.id;
+
+        if (key) {
+          const docProg = data.progress && typeof data.progress === 'object' ? data.progress : {};
+          const docGoal = data.goal && typeof data.goal === 'object' ? data.goal : {};
+          const docSyn = data.synonymProgress && typeof data.synonymProgress === 'object' ? data.synonymProgress : {};
+          const docBlank = data.blankProgress && typeof data.blankProgress === 'object' ? data.blankProgress : {};
+          const docOoo = data.oooProgress && typeof data.oooProgress === 'object' ? data.oooProgress : {};
+          const docAnalogy = data.analogyProgress && typeof data.analogyProgress === 'object' ? data.analogyProgress : {};
+          const docSettings = data.settings && typeof data.settings === 'object' ? data.settings : {};
+          const docEnrolled = Array.isArray(data.enrolledCourseIds) ? data.enrolledCourseIds : [];
+
+          if (fetchedUsersMap.has(key)) {
+            const existing = fetchedUsersMap.get(key)!;
+            
+            // Merge progress: combine both, for overlapping keys pick the one with rating or latest updatedAt
+            const mergedProg = { ...existing.progress };
+            Object.keys(docProg).forEach((wId) => {
+              if (!mergedProg[wId]) {
+                mergedProg[wId] = docProg[wId];
+              } else {
+                const exTime = new Date(mergedProg[wId]?.updatedAt || 0).getTime();
+                const newTime = new Date(docProg[wId]?.updatedAt || 0).getTime();
+                const exIsRated = mergedProg[wId]?.status && mergedProg[wId]?.status !== 'unrated';
+                const newIsRated = docProg[wId]?.status && docProg[wId]?.status !== 'unrated';
+
+                if ((newIsRated && !exIsRated) || (newTime > exTime)) {
+                  mergedProg[wId] = docProg[wId];
+                }
+              }
+            });
+
+            // Merge goal
+            const mergedGoal = {
+              dailyTarget: docGoal.dailyTarget || existing.goal?.dailyTarget || 15,
+              streak: Math.max(existing.goal?.streak || 0, docGoal.streak || 0),
+              lastStudyDate: (docGoal.lastStudyDate || '') > (existing.goal?.lastStudyDate || '') ? docGoal.lastStudyDate : (existing.goal?.lastStudyDate || ''),
+              history: { ...(existing.goal?.history || {}), ...(docGoal.history || {}) }
+            };
+
+            // Merge enrolled courses
+            const mergedEnrolled = Array.from(new Set([...(existing.enrolledCourseIds || []), ...docEnrolled]));
+
+            // Prefer real UID for id (not containing @ or req-)
+            const isRealUid = !docSnap.id.includes('@') && !docSnap.id.includes('req-');
+            const finalId = isRealUid ? docSnap.id : existing.id;
+
+            const finalUpdatedAt = (data.updatedAt || '') > (existing.updatedAt || '') ? data.updatedAt : existing.updatedAt;
+
+            fetchedUsersMap.set(key, {
+              id: finalId,
+              email: data.email || existing.email || 'unknown@user.com',
+              createdAt: existing.createdAt || data.createdAt || new Date().toISOString(),
+              updatedAt: finalUpdatedAt || new Date().toISOString(),
+              progress: mergedProg,
+              goal: mergedGoal,
+              synonymProgress: { ...existing.synonymProgress, ...docSyn },
+              blankProgress: { ...(existing.blankProgress || {}), ...docBlank },
+              oooProgress: { ...(existing.oooProgress || {}), ...docOoo },
+              analogyProgress: { ...(existing.analogyProgress || {}), ...docAnalogy },
+              settings: { ...existing.settings, ...docSettings },
+              enrolledCourseIds: mergedEnrolled,
+              walletBalance: typeof data.walletBalance === 'number' ? data.walletBalance : (existing.walletBalance || 0),
+              balance: typeof data.balance === 'number' ? data.balance : (existing.balance || 0)
+            });
+          } else {
+            fetchedUsersMap.set(key, {
+              id: docSnap.id,
+              email: data.email || 'unknown@user.com',
+              createdAt: data.createdAt || new Date().toISOString(),
+              updatedAt: data.updatedAt || new Date().toISOString(),
+              progress: docProg,
+              goal: docGoal,
+              synonymProgress: docSyn,
+              blankProgress: docBlank,
+              oooProgress: docOoo,
+              analogyProgress: docAnalogy,
+              settings: docSettings,
+              enrolledCourseIds: docEnrolled,
+              walletBalance: data.walletBalance || 0,
+              balance: data.balance || 0
+            });
+          }
         }
       });
 
@@ -2350,7 +2428,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       const knowCount = progValues.filter(p => p.status === 'know').length;
                       const confusionCount = progValues.filter(p => p.status === 'confusion').length;
                       const dontKnowCount = progValues.filter(p => p.status === 'dont_know').length;
-                      const percentKnow = Math.round((knowCount / 1110) * 100) || 0;
+                      const totalWordsCount = words && words.length > 0 ? words.length : 1108;
+                      const percentKnow = Math.round((knowCount / totalWordsCount) * 100) || 0;
+                      const percentConfusion = Math.round((confusionCount / totalWordsCount) * 100) || 0;
+                      const percentDontKnow = Math.round((dontKnowCount / totalWordsCount) * 100) || 0;
 
                       return (
                         <tr key={u.id} className="hover:bg-slate-50/50 transition">
@@ -2385,8 +2466,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                               </div>
                               <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden flex">
                                 <div className="bg-emerald-500 h-full" style={{ width: `${percentKnow}%` }} />
-                                <div className="bg-amber-400 h-full" style={{ width: `${Math.round((confusionCount / 1110) * 100)}%` }} />
-                                <div className="bg-rose-400 h-full" style={{ width: `${Math.round((dontKnowCount / 1110) * 100)}%` }} />
+                                <div className="bg-amber-400 h-full" style={{ width: `${percentConfusion}%` }} />
+                                <div className="bg-rose-400 h-full" style={{ width: `${percentDontKnow}%` }} />
                               </div>
                             </div>
                           </td>

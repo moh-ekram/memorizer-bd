@@ -892,6 +892,76 @@ export default function App() {
         data = docSnap.data();
       }
 
+      // Consolidate any document matched by email (e.g. users/{email}) into user cloud snapshot
+      const cleanUserEmail = (currentUser.email || '').trim().toLowerCase();
+      if (cleanUserEmail) {
+        try {
+          const emailQuery = query(collection(db, 'users'), where('email', '==', cleanUserEmail));
+          const emailSnap = await getDocs(emailQuery);
+
+          let mergedCloudProg = { ...(data?.progress || {}) };
+          let mergedEnrolled = Array.isArray(data?.enrolledCourseIds) ? [...data.enrolledCourseIds] : [];
+          let mergedGoal = { ...(data?.goal || {}) };
+          let mergedSyn = { ...(data?.synonymProgress || {}) };
+          let mergedBlank = { ...(data?.blankProgress || {}) };
+          let mergedOoo = { ...(data?.oooProgress || {}) };
+          let mergedAnalogy = { ...(data?.analogyProgress || {}) };
+
+          emailSnap.docs.forEach(eDoc => {
+            if (eDoc.id !== currentUser.uid) {
+              const eData = eDoc.data();
+              if (eData.progress && typeof eData.progress === 'object') {
+                Object.keys(eData.progress).forEach(wId => {
+                  if (!mergedCloudProg[wId]) {
+                    mergedCloudProg[wId] = eData.progress[wId];
+                  } else {
+                    const exTime = new Date(mergedCloudProg[wId]?.updatedAt || 0).getTime();
+                    const newTime = new Date(eData.progress[wId]?.updatedAt || 0).getTime();
+                    const exIsRated = mergedCloudProg[wId]?.status && mergedCloudProg[wId]?.status !== 'unrated';
+                    const newIsRated = eData.progress[wId]?.status && eData.progress[wId]?.status !== 'unrated';
+                    if ((newIsRated && !exIsRated) || (newTime > exTime)) {
+                      mergedCloudProg[wId] = eData.progress[wId];
+                    }
+                  }
+                });
+              }
+              if (Array.isArray(eData.enrolledCourseIds)) {
+                eData.enrolledCourseIds.forEach((cid: string) => {
+                  if (cid && !mergedEnrolled.includes(cid)) mergedEnrolled.push(cid);
+                });
+              }
+              if (eData.goal && typeof eData.goal === 'object') {
+                mergedGoal = {
+                  ...mergedGoal,
+                  ...eData.goal,
+                  streak: Math.max(mergedGoal.streak || 0, eData.goal.streak || 0),
+                  history: { ...(mergedGoal.history || {}), ...(eData.goal.history || {}) }
+                };
+              }
+            }
+          });
+
+          if (!data && (Object.keys(mergedCloudProg).length > 0 || mergedEnrolled.length > 0)) {
+            data = {
+              progress: mergedCloudProg,
+              enrolledCourseIds: mergedEnrolled,
+              goal: mergedGoal,
+              synonymProgress: mergedSyn,
+              blankProgress: mergedBlank,
+              oooProgress: mergedOoo,
+              analogyProgress: mergedAnalogy,
+              email: currentUser.email
+            };
+          } else if (data) {
+            data.progress = mergedCloudProg;
+            data.enrolledCourseIds = mergedEnrolled;
+            data.goal = mergedGoal;
+          }
+        } catch (eErr) {
+          console.warn("Notice during email cloud data consolidation:", eErr);
+        }
+      }
+
       if (data) {
         // Merge state from cloud data with existing local progress to prevent overwriting locally rated words
         setProgress(prev => {
