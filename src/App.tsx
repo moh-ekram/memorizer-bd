@@ -2288,7 +2288,7 @@ const getActiveCourse = (
             />
           )}
 
-          {['study_tools', 'dictionary', 'lists', 'planner', 'story'].includes(activeTab) && (
+          {['study_tools', 'dictionary', 'lists', 'planner', 'story', 'article'].includes(activeTab) && (
             <StudyToolsCenter
               words={activeWords}
               progress={progress}

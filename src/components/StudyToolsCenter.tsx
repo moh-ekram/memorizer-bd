@@ -9,12 +9,14 @@ import {
   ChevronDown,
   ChevronUp,
   BookText,
-  Wrench
+  Wrench,
+  Newspaper
 } from 'lucide-react';
 import CustomLists from './CustomLists';
 import SearchDictionary from './SearchDictionary';
 import DailyPlanner from './DailyPlanner';
 import ReadStoryView from './ReadStoryView';
+import ReadArticleView from './ReadArticleView';
 import { VocabularyWord, WordStatus, CustomFolder, UserProgress, StudyGoal, AppSettings, Course, StoryItem } from '../types';
 
 interface StudyToolsCenterProps {
@@ -36,7 +38,7 @@ interface StudyToolsCenterProps {
   setGoal: (goal: StudyGoal) => void;
   onLaunchPractice: () => void;
   onOpenSettings?: () => void;
-  initialSubTab?: 'hub' | 'lists' | 'dictionary' | 'planner' | 'story';
+  initialSubTab?: 'hub' | 'lists' | 'dictionary' | 'planner' | 'story' | 'article';
 }
 
 export default function StudyToolsCenter({
@@ -60,7 +62,7 @@ export default function StudyToolsCenter({
   onOpenSettings,
   initialSubTab = 'hub'
 }: StudyToolsCenterProps) {
-  const [subTab, setSubTab] = useState<'hub' | 'lists' | 'dictionary' | 'planner' | 'story'>(initialSubTab);
+  const [subTab, setSubTab] = useState<'hub' | 'lists' | 'dictionary' | 'planner' | 'story' | 'article'>(initialSubTab);
 
   const activeStories = (stories && stories.length > 0) ? stories : (course?.stories || []);
   const isStoryEnabled = enableStoryMode && course?.enabledGames?.story !== false;
@@ -125,13 +127,27 @@ export default function StudyToolsCenter({
       enabled: isStoryEnabled,
       icon: <BookText className="w-6 h-6" />,
       action: () => setSubTab('story')
+    },
+    {
+      key: 'article',
+      title: 'Read Article',
+      banglaTitle: 'Read Articles & Blogs',
+      desc: 'Explore curated articles and blog posts written to enrich your vocabulary in real-world contexts.',
+      tag: 'Articles & Blogs',
+      btnText: 'Read Articles',
+      iconBg: 'bg-teal-50 text-teal-600 border-teal-100',
+      borderHover: 'hover:border-teal-200',
+      tagColor: 'text-teal-600',
+      enabled: true,
+      icon: <Newspaper className="w-6 h-6" />,
+      action: () => setSubTab('article')
     }
   ];
 
   // Sort tools according to settings.studyToolsItemsOrder
   const studyOrder = Array.isArray(settings?.studyToolsItemsOrder) && settings.studyToolsItemsOrder.length > 0
     ? settings.studyToolsItemsOrder
-    : ['lists', 'dictionary', 'planner', 'story'];
+    : ['lists', 'dictionary', 'planner', 'story', 'article'];
 
   const orderedStudyTools = [...studyToolsConfig].sort((a, b) => {
     const idxA = studyOrder.indexOf(a.key);
@@ -217,6 +233,19 @@ export default function StudyToolsCenter({
                 <span>Read story</span>
               </button>
             )}
+
+            <button
+              onClick={() => setSubTab('article')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex-shrink-0 ${
+                subTab === 'article'
+                  ? 'bg-teal-50 text-teal-700 border border-teal-150'
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 border border-transparent'
+              }`}
+              style={{ fontFamily: "'Poppins', sans-serif" }}
+            >
+              <Newspaper className="w-3.5 h-3.5" />
+              <span>Read Article</span>
+            </button>
           </div>
         </div>
       )}
@@ -384,6 +413,16 @@ export default function StudyToolsCenter({
           onRateWord={onRateWord}
           onToggleBookmark={onToggleBookmark}
           onOpenSettings={onOpenSettings}
+        />
+      )}
+
+      {subTab === 'article' && (
+        <ReadArticleView
+          stories={activeStories}
+          words={words}
+          progress={progress}
+          onRateWord={onRateWord}
+          onToggleBookmark={onToggleBookmark}
         />
       )}
     </div>
