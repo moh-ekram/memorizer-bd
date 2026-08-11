@@ -1391,7 +1391,7 @@ export default function App() {
     return () => unsubscribe();
   }, [user?.uid]);
 
-  // Sync to Cloud whenever state changes and user is logged in (debounced)
+  // Sync to Cloud whenever state changes and user is logged in (debounced & visibility-aware)
   useEffect(() => {
     if (!user || !hasLoadedFromCloud) {
       setSyncStatus('idle');
@@ -1433,11 +1433,23 @@ export default function App() {
       }
     };
 
+    // Immediate sync if document is hidden or on visibility change / pageunload
+    const handleVisibilityOrUnload = () => {
+      if (document.hidden) {
+        performSync();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityOrUnload);
+
     const timer = setTimeout(() => {
       performSync();
     }, 1000);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', handleVisibilityOrUnload);
+    };
   }, [progress, folders, goal, synonymProgress, blankProgress, oooProgress, analogyProgress, settings, enrolledCourseIds, activeCourseId, quizScore, quizTaken, user, hasLoadedFromCloud]);
 
   const forceSyncToCloud = async () => {

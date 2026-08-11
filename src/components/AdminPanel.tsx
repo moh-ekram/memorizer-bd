@@ -25,7 +25,6 @@ import TransactionHistoryView from './TransactionHistoryView';
 import { logAdminActivity } from '../lib/activityLogger';
 import { BulkCsvStudentModal } from './BulkCsvStudentModal';
 import { ActivityLogsView } from './ActivityLogsView';
-import { SupabaseRlsModal } from './SupabaseRlsModal';
 import { TransactionDebugger, TransactionLogItem } from './TransactionDebugger';
 import { Code, Bug, TerminalSquare, AlertCircle } from 'lucide-react';
 import { 
@@ -165,7 +164,6 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const [requestsSubTab, setRequestsSubTab] = useState<'pending' | 'autoverify' | 'history' | 'debugger'>('pending');
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [bulkCsvCourse, setBulkCsvCourse] = useState<Course | null>(null);
-  const [showSupabaseRlsModal, setShowSupabaseRlsModal] = useState(false);
 
   // Transaction Debugger Logs state
   const [transactionLogs, setTransactionLogs] = useState<TransactionLogItem[]>(() => {
@@ -970,7 +968,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       setHasFetchedCourses(true);
     } catch (err) {
       console.error('Error fetching custom courses:', err);
-      setCoursesError('Failed to load courses list from Supabase.');
+      setCoursesError('Failed to load courses list from Cloud DB.');
     } finally {
       setCoursesLoading(false);
     }
@@ -2127,7 +2125,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   };
 
   const handlePurgeAllGameData = async () => {
-    if (!window.confirm("WARNING: Are you sure you want to delete ALL game questions (Blank Filling, Odd One Out, Word Analogy, MCQ) across ALL courses? This will wipe all game data in local storage, server file cache, and Supabase.")) {
+    if (!window.confirm("WARNING: Are you sure you want to delete ALL game questions (Blank Filling, Odd One Out, Word Analogy, MCQ) across ALL courses? This will wipe all game data in local storage, server file cache, and Cloud DB.")) {
       return;
     }
     try {
@@ -2232,14 +2230,6 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <button
-              type="button"
-              onClick={() => setShowSupabaseRlsModal(true)}
-              className="p-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer"
-              title="Copy RLS Script"
-            >
-              <Code className="w-3.5 h-3.5" />
-            </button>
             <button
               type="button"
               onClick={handlePurgeAllGameData}
@@ -2391,7 +2381,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             {loading ? (
               <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
                 <RefreshCw className="w-8 h-8 animate-spin text-indigo-500" />
-                <p className="text-xs font-bold">Fetching real-time data from Supabase Cloud DB...</p>
+                <p className="text-xs font-bold">Fetching real-time data from Cloud DB...</p>
               </div>
             ) : error ? (
               <div className="p-8 text-center text-rose-500 flex flex-col items-center justify-center gap-3">
@@ -4448,7 +4438,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         excelSaveStatus === 'saving' ? 'bg-slate-400' : 'bg-emerald-600 hover:bg-emerald-500'
                       }`}
                     >
-                      {excelSaveStatus === 'saving' ? 'Saving...' : 'Save to Supabase'}
+                      {excelSaveStatus === 'saving' ? 'Saving...' : 'Save to Cloud DB'}
                     </button>
                   </div>
 
@@ -4473,7 +4463,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               {excelSaveStatus === 'saved' && (
                 <div className="p-3.5 bg-emerald-50 text-emerald-700 rounded-xl flex items-center gap-2 border border-emerald-100 text-xs font-semibold">
                   <CheckCircle className="w-4 h-4" />
-                  <span>Questions successfully saved to Supabase!</span>
+                  <span>Questions successfully saved to Cloud DB!</span>
                 </div>
               )}
             </div>
@@ -5279,12 +5269,6 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             showToast('Failed to update student access list.', 'error');
           }
         }}
-      />
-
-      {/* Supabase RLS Policy Script Modal */}
-      <SupabaseRlsModal
-        isOpen={showSupabaseRlsModal}
-        onClose={() => setShowSupabaseRlsModal(false)}
       />
     </div>
   );
