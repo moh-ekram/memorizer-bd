@@ -257,11 +257,17 @@ export default function App() {
       const next = typeof value === 'function' ? value(prev) : value;
       if (next && next.trim() !== '') {
         safeSetLocalStorage(LOCAL_STORAGE_ACTIVE_COURSE_KEY, next);
-        if (auth.currentUser) {
-          setDoc(doc(db, 'users', auth.currentUser.uid), {
+        const now = new Date().toISOString();
+        safeSetLocalStorage('vocab_memorizer_active_course_timestamp', now);
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          setDoc(doc(db, 'users', currentUser.uid), {
             activeCourseId: next,
-            updatedAt: new Date().toISOString()
-          }, { merge: true }).catch(() => {});
+            activeCourseUpdatedAt: now,
+            updatedAt: now
+          }, { merge: true }).catch((err) => {
+            console.warn('Error saving activeCourseId to cloud:', err);
+          });
         }
       }
       return next;
@@ -1084,15 +1090,41 @@ export default function App() {
           return mergedEnrolled;
         });
 
-        // Sync active course from cloud: restore cloud activeCourseId if saved, else retain local active selection
-        if (data.activeCourseId && typeof data.activeCourseId === 'string' && data.activeCourseId.trim() !== '') {
-          setActiveCourseId(data.activeCourseId);
-          safeSetLocalStorage(LOCAL_STORAGE_ACTIVE_COURSE_KEY, data.activeCourseId);
+        // Sync active course from cloud: prefer local selection if valid/newer, else restore cloud activeCourseId
+        const localActiveId = localStorage.getItem(LOCAL_STORAGE_ACTIVE_COURSE_KEY);
+        const localActiveTime = localStorage.getItem('vocab_memorizer_active_course_timestamp') || '';
+        const cloudActiveId = (typeof data.activeCourseId === 'string' && data.activeCourseId.trim() !== '') ? data.activeCourseId : null;
+        const cloudActiveTime = data.activeCourseUpdatedAt || data.updatedAt || '';
+
+        if (localActiveId && localActiveId.trim() !== '') {
+          const isLocalNewerOrEqual = !cloudActiveTime || (localActiveTime && localActiveTime >= cloudActiveTime);
+          const preferLocal = !cloudActiveId || (cloudActiveId === 'gre' && localActiveId !== 'gre') || isLocalNewerOrEqual;
+
+          if (preferLocal) {
+            setActiveCourseId(localActiveId);
+            safeSetLocalStorage(LOCAL_STORAGE_ACTIVE_COURSE_KEY, localActiveId);
+            if (data.activeCourseId !== localActiveId) {
+              try {
+                await setDoc(userDocRef, {
+                  activeCourseId: localActiveId,
+                  activeCourseUpdatedAt: localActiveTime || new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+                }, { merge: true });
+              } catch (e) {
+                console.warn("Failed to update user activeCourseId in cloud:", e);
+              }
+            }
+          } else if (cloudActiveId) {
+            setActiveCourseId(cloudActiveId);
+            safeSetLocalStorage(LOCAL_STORAGE_ACTIVE_COURSE_KEY, cloudActiveId);
+          }
+        } else if (cloudActiveId) {
+          setActiveCourseId(cloudActiveId);
+          safeSetLocalStorage(LOCAL_STORAGE_ACTIVE_COURSE_KEY, cloudActiveId);
         } else {
-          setActiveCourseId(prev => {
-            if (prev && prev.trim() !== '') return prev;
-            return autoSyncedPurchased[0] || userEnrolled[0] || 'gre';
-          });
+          const fallback = autoSyncedPurchased[0] || userEnrolled[0] || 'gre';
+          setActiveCourseId(fallback);
+          safeSetLocalStorage(LOCAL_STORAGE_ACTIVE_COURSE_KEY, fallback);
         }
         setQuizScore(typeof data.quizScore === 'number' ? data.quizScore : 0);
         setQuizTaken(typeof data.quizTaken === 'number' ? data.quizTaken : 0);
