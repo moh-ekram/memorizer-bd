@@ -246,10 +246,26 @@ export default function App() {
     return saved ? JSON.parse(saved) : ['gre'];
   });
 
-  const [activeCourseId, setActiveCourseId] = useState<string>(() => {
+  const [activeCourseId, setActiveCourseIdState] = useState<string>(() => {
     const saved = localStorage.getItem(LOCAL_STORAGE_ACTIVE_COURSE_KEY);
     return saved ? saved : 'gre';
   });
+
+  const setActiveCourseId = React.useCallback((value: string | ((prev: string) => string)) => {
+    setActiveCourseIdState(prev => {
+      const next = typeof value === 'function' ? value(prev) : value;
+      if (next && next.trim() !== '') {
+        safeSetLocalStorage(LOCAL_STORAGE_ACTIVE_COURSE_KEY, next);
+        if (auth.currentUser) {
+          setDoc(doc(db, 'users', auth.currentUser.uid), {
+            activeCourseId: next,
+            updatedAt: new Date().toISOString()
+          }, { merge: true }).catch(() => {});
+        }
+      }
+      return next;
+    });
+  }, []);
 
   const [customCourses, setCustomCourses] = useState<Course[]>(() => {
     const saved = localStorage.getItem('vocab_memorizer_cached_custom_courses');
@@ -894,23 +910,48 @@ export default function App() {
           });
           return merged;
         });
-        setFolders(Array.isArray(data.folders) && data.folders.length > 0 ? data.folders : [
-          { id: '1', name: 'Important Words (High Priority)', color: '#ef4444' },
-          { id: '2', name: 'Hard Synonyms', color: '#f59e0b' }
-        ]);
 
-        const rawGoal = data.goal && typeof data.goal === 'object' ? data.goal : {};
-        setGoal({
-          dailyTarget: typeof rawGoal.dailyTarget === 'number' ? rawGoal.dailyTarget : 15,
-          streak: typeof rawGoal.streak === 'number' ? rawGoal.streak : 1,
-          lastStudyDate: typeof rawGoal.lastStudyDate === 'string' ? rawGoal.lastStudyDate : new Date().toISOString().split('T')[0],
-          history: rawGoal.history && typeof rawGoal.history === 'object' ? rawGoal.history : {}
+        // Merge folders
+        setFolders(prev => {
+          const cloudFolders = Array.isArray(data.folders) && data.folders.length > 0 ? data.folders : [];
+          if (cloudFolders.length === 0) return prev;
+          const folderMap = new Map();
+          cloudFolders.forEach(f => folderMap.set(f.id, f));
+          prev.forEach(f => {
+            if (!folderMap.has(f.id)) folderMap.set(f.id, f);
+          });
+          return Array.from(folderMap.values());
         });
 
-        setSynonymProgress(data.synonymProgress && typeof data.synonymProgress === 'object' ? data.synonymProgress : {});
-        setBlankProgress(data.blankProgress && typeof data.blankProgress === 'object' ? data.blankProgress : {});
-        setOooProgress(data.oooProgress && typeof data.oooProgress === 'object' ? data.oooProgress : {});
-        setAnalogyProgress(data.analogyProgress && typeof data.analogyProgress === 'object' ? data.analogyProgress : {});
+        // Merge goal & study history
+        setGoal(prev => {
+          const rawGoal = data.goal && typeof data.goal === 'object' ? data.goal : {};
+          return {
+            dailyTarget: typeof rawGoal.dailyTarget === 'number' ? rawGoal.dailyTarget : (prev.dailyTarget || 15),
+            streak: Math.max(prev.streak || 1, typeof rawGoal.streak === 'number' ? rawGoal.streak : 1),
+            lastStudyDate: rawGoal.lastStudyDate || prev.lastStudyDate || new Date().toISOString().split('T')[0],
+            history: { ...(rawGoal.history || {}), ...(prev.history || {}) }
+          };
+        });
+
+        // Merge practice games progress
+        setSynonymProgress(prev => {
+          const cloud = (data.synonymProgress && typeof data.synonymProgress === 'object') ? data.synonymProgress : {};
+          return { ...cloud, ...prev };
+        });
+        setBlankProgress(prev => {
+          const cloud = (data.blankProgress && typeof data.blankProgress === 'object') ? data.blankProgress : {};
+          return { ...cloud, ...prev };
+        });
+        setOooProgress(prev => {
+          const cloud = (data.oooProgress && typeof data.oooProgress === 'object') ? data.oooProgress : {};
+          return { ...cloud, ...prev };
+        });
+        setAnalogyProgress(prev => {
+          const cloud = (data.analogyProgress && typeof data.analogyProgress === 'object') ? data.analogyProgress : {};
+          return { ...cloud, ...prev };
+        });
+
         if (data.settings && typeof data.settings === 'object') {
           setSettings(prev => ({
             ...prev,
@@ -966,14 +1007,22 @@ export default function App() {
           console.warn("Auto-sync course purchases error:", syncErr);
         }
 
-        const mergedEnrolled = Array.from(new Set([...userEnrolled, ...autoSyncedPurchased]));
-        setEnrolledCourseIds(mergedEnrolled);
-        // Sync active course from cloud: prefer local selection if already set, else cloud activeCourseId
-        setActiveCourseId(prev => {
-          if (prev && prev.trim() !== '') return prev;
-          if (data.activeCourseId) return data.activeCourseId;
-          return mergedEnrolled[0] || 'gre';
+        let mergedEnrolled: string[] = [];
+        setEnrolledCourseIds(prev => {
+          mergedEnrolled = Array.from(new Set([...prev, ...userEnrolled, ...autoSyncedPurchased]));
+          return mergedEnrolled;
         });
+
+        // Sync active course from cloud: restore cloud activeCourseId if saved, else retain local active selection
+        if (data.activeCourseId && typeof data.activeCourseId === 'string' && data.activeCourseId.trim() !== '') {
+          setActiveCourseId(data.activeCourseId);
+          safeSetLocalStorage(LOCAL_STORAGE_ACTIVE_COURSE_KEY, data.activeCourseId);
+        } else {
+          setActiveCourseId(prev => {
+            if (prev && prev.trim() !== '') return prev;
+            return autoSyncedPurchased[0] || userEnrolled[0] || 'gre';
+          });
+        }
         setQuizScore(typeof data.quizScore === 'number' ? data.quizScore : 0);
         setQuizTaken(typeof data.quizTaken === 'number' ? data.quizTaken : 0);
         
