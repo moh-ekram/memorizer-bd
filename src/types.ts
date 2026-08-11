@@ -137,6 +137,20 @@ export interface StoryItem {
   createdAt?: string;
 }
 
+export interface ArticleItem {
+  id: string;
+  title: string;
+  excerpt: string;
+  content: string;
+  author: string;
+  category: string;
+  readTime: string;
+  publishedAt: string;
+  coverGradient: string;
+  tags: string[];
+  createdAt?: string;
+}
+
 export interface Course {
   id: string;
   title: string;
@@ -144,6 +158,7 @@ export interface Course {
   totalGroups: number;
   words: VocabularyWord[];
   stories?: StoryItem[];
+  articles?: ArticleItem[];
   isDefault?: boolean;
   isRestricted?: boolean;
   allowedUsers?: string[];

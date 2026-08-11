@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Course, VocabularyWord, BlankQuestion, OddOneOutQuestion, WordAnalogyQuestion, CustomMcqQuestion, StoryItem } from '../types';
+import { Course, VocabularyWord, BlankQuestion, OddOneOutQuestion, WordAnalogyQuestion, CustomMcqQuestion, StoryItem, ArticleItem } from '../types';
 import { extractTextFromWordFile, parseStoriesFromRawText } from '../utils/storyParser';
 import { 
   X, 
@@ -17,6 +17,7 @@ import {
   Copy, 
   Check, 
   BookOpen, 
+  Newspaper,
   Search, 
   UploadCloud, 
   FileSpreadsheet, 
@@ -53,7 +54,7 @@ interface CourseSettingsProps {
   course: Course;
   onClose: () => void;
   onSaveSuccess: (updatedCourse?: Course) => void;
-  initialTab?: 'general' | 'variables' | 'access' | 'students' | 'wordlist' | 'addwords' | 'verification' | 'blank-questions' | 'ooo-questions' | 'analogy-questions' | 'mcq-questions' | 'practice-games' | 'story-management';
+  initialTab?: 'general' | 'variables' | 'access' | 'students' | 'wordlist' | 'addwords' | 'verification' | 'blank-questions' | 'ooo-questions' | 'analogy-questions' | 'mcq-questions' | 'practice-games' | 'story-management' | 'article-management';
   initialEditWordName?: string;
 }
 
@@ -982,6 +983,17 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
       setLocalStories(course.stories);
     }
   }, [course?.stories]);
+
+  // --- ARTICLE MANAGEMENT STATES ---
+  const [localArticles, setLocalArticles] = useState<ArticleItem[]>(course.articles || []);
+  const [articleUploadLoading, setArticleUploadLoading] = useState<boolean>(false);
+  const [articleUploadError, setArticleUploadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (course?.articles) {
+      setLocalArticles(course.articles);
+    }
+  }, [course?.articles]);
 
   // --- WORDS LIST STATES ---
   const sanitizeWordsList = (wordsList: VocabularyWord[]) => {
@@ -2142,6 +2154,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
         accessDurationDays: Number(accessDurationDays) || 365,
         words: localWords,
         stories: localStories,
+        articles: localArticles,
         variableToggles: finalToggles,
         enabledGames: enabledGames, // Save practice and games toggles!
         totalGroups: uniqueGroupsSize || 1,
@@ -2180,6 +2193,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     { id: 'analogy-questions' as const, label: 'Word Analogy', icon: Shuffle, badge: courseAnalogyQuestions.length },
     { id: 'mcq-questions' as const, label: 'MCQ Quiz Qs', icon: GraduationCap, badge: courseMcqQuestions.length },
     { id: 'story-management' as const, label: 'Read Story Management', icon: BookOpen, badge: localStories.length },
+    { id: 'article-management' as const, label: 'Read Article Management', icon: Newspaper, badge: localArticles.length },
   ];
 
   return (
@@ -5010,6 +5024,237 @@ First paragraph of story 2...`}
                   ) : (
                     <div className="p-8 text-center text-xs text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 font-medium">
                       No stories uploaded yet. Use the document uploader above to add stories.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* --- READ ARTICLE MANAGEMENT TAB --- */}
+            {activeTab === 'article-management' && (
+              <div className="space-y-6 animate-fade-in">
+                <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 text-white p-6 rounded-3xl space-y-2 shadow-lg border border-indigo-700/50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Newspaper className="w-5 h-5 text-indigo-300" />
+                      <h4 className="font-extrabold text-sm sm:text-base">Course Article Management</h4>
+                    </div>
+                    <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-extrabold rounded-full flex items-center gap-1.5">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      <span>Cloud Auto-Sync Ready</span>
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 font-medium leading-relaxed max-w-3xl">
+                    Add custom reading articles to this course. Added articles will be synchronized with the cloud database and available to all enrolled students in the Article Reading View.
+                  </p>
+                </div>
+
+                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h5 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                      <span>Course Articles ({localArticles.length})</span>
+                    </h5>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLocalArticles(prev => [
+                            ...prev,
+                            {
+                              id: `art-${course.id}-${Date.now()}-${prev.length + 1}`,
+                              title: `New Article Title ${prev.length + 1}`,
+                              excerpt: 'Brief overview or summary of this article...',
+                              content: 'Enter full article content here. Vocabulary words matching course list will be automatically highlighted during reading.',
+                              author: 'Course Educator',
+                              category: 'Vocabulary Reading',
+                              readTime: '4 min read',
+                              publishedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+                              coverGradient: 'from-indigo-600 via-purple-600 to-pink-600',
+                              tags: ['Vocabulary', 'Article'],
+                              createdAt: new Date().toISOString()
+                            }
+                          ]);
+                        }}
+                        className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Add New Article</span>
+                      </button>
+                      {localArticles.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm('Are you sure you want to remove all custom articles from this course?')) {
+                              setLocalArticles([]);
+                            }
+                          }}
+                          className="px-3 py-2 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition cursor-pointer"
+                        >
+                          Remove All Articles
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {localArticles.length > 0 ? (
+                    <div className="space-y-5">
+                      {localArticles.map((art, aIdx) => (
+                        <div key={art.id || aIdx} className="bg-white p-5 rounded-2xl border border-slate-200 space-y-4 shadow-2xs">
+                          <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                            <div className="flex items-center gap-2 flex-1">
+                              <span className="text-xs font-mono font-black px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg border border-indigo-150 shrink-0">
+                                Article #{aIdx + 1}
+                              </span>
+                              <input
+                                type="text"
+                                value={art.title}
+                                onChange={(e) => {
+                                  const updated = [...localArticles];
+                                  updated[aIdx].title = e.target.value;
+                                  setLocalArticles(updated);
+                                }}
+                                placeholder="Article Title..."
+                                className="text-xs font-extrabold text-slate-900 border border-slate-200 rounded-xl px-3 py-1.5 w-full focus:border-indigo-500 outline-none"
+                              />
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setLocalArticles(prev => prev.filter((_, i) => i !== aIdx));
+                              }}
+                              className="p-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition cursor-pointer shrink-0"
+                              title="Delete Article"
+                            >
+                              <Trash2 className="w-4.5 h-4.5" />
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">
+                                Category
+                              </label>
+                              <input
+                                type="text"
+                                value={art.category || 'Vocabulary Reading'}
+                                onChange={(e) => {
+                                  const updated = [...localArticles];
+                                  updated[aIdx].category = e.target.value;
+                                  setLocalArticles(updated);
+                                }}
+                                className="w-full text-xs text-slate-800 font-semibold border border-slate-200 rounded-xl p-2.5 focus:border-indigo-500 outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">
+                                Author
+                              </label>
+                              <input
+                                type="text"
+                                value={art.author || 'Course Educator'}
+                                onChange={(e) => {
+                                  const updated = [...localArticles];
+                                  updated[aIdx].author = e.target.value;
+                                  setLocalArticles(updated);
+                                }}
+                                className="w-full text-xs text-slate-800 font-semibold border border-slate-200 rounded-xl p-2.5 focus:border-indigo-500 outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">
+                                Read Time
+                              </label>
+                              <input
+                                type="text"
+                                value={art.readTime || '4 min read'}
+                                onChange={(e) => {
+                                  const updated = [...localArticles];
+                                  updated[aIdx].readTime = e.target.value;
+                                  setLocalArticles(updated);
+                                }}
+                                className="w-full text-xs text-slate-800 font-semibold border border-slate-200 rounded-xl p-2.5 focus:border-indigo-500 outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">
+                              Article Excerpt / Summary
+                            </label>
+                            <input
+                              type="text"
+                              value={art.excerpt || ''}
+                              onChange={(e) => {
+                                const updated = [...localArticles];
+                                updated[aIdx].excerpt = e.target.value;
+                                setLocalArticles(updated);
+                              }}
+                              className="w-full text-xs text-slate-700 font-medium border border-slate-200 rounded-xl p-2.5 focus:border-indigo-500 outline-none"
+                              placeholder="Brief summary displayed on article card..."
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">
+                              Full Article Content
+                            </label>
+                            <textarea
+                              rows={6}
+                              value={art.content}
+                              onChange={(e) => {
+                                const updated = [...localArticles];
+                                updated[aIdx].content = e.target.value;
+                                setLocalArticles(updated);
+                              }}
+                              className="w-full text-xs text-slate-700 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none resize-y font-normal leading-relaxed"
+                              placeholder="Enter full article text..."
+                            />
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Save to Cloud Button at bottom of article list */}
+                      <div className="pt-2 flex justify-end">
+                        <button
+                          type="button"
+                          disabled={isSaving}
+                          onClick={handleSave}
+                          className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 transition shadow-md cursor-pointer disabled:opacity-50"
+                        >
+                          {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                          <span>Save Articles to Cloud</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center text-xs text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200 space-y-3">
+                      <Newspaper className="w-8 h-8 text-slate-300 mx-auto" />
+                      <p className="font-medium text-slate-600">No custom articles added to this course yet.</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLocalArticles([
+                            {
+                              id: `art-${course.id}-${Date.now()}-1`,
+                              title: 'Sample Course Article',
+                              excerpt: 'An engaging vocabulary article for students.',
+                              content: 'This is a sample article for this course. Add relevant vocabulary words here to help students learn in context.',
+                              author: 'Course Instructor',
+                              category: 'Reading Practice',
+                              readTime: '3 min read',
+                              publishedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+                              coverGradient: 'from-indigo-600 via-purple-600 to-pink-600',
+                              tags: ['Reading', 'Vocabulary']
+                            }
+                          ]);
+                        }}
+                        className="px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl text-xs font-bold border border-indigo-200 transition cursor-pointer"
+                      >
+                        Create First Course Article
+                      </button>
                     </div>
                   )}
                 </div>

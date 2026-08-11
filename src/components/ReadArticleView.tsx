@@ -632,17 +632,24 @@ export default function ReadArticleView({
             <div className="flex items-center gap-2 flex-wrap">
               
               {/* Font Size Selector */}
-              <div className="flex items-center bg-slate-100 rounded-xl p-1 text-xs font-bold text-slate-600 border border-slate-200">
+              <div className="flex items-center bg-slate-100 rounded-xl p-1 text-xs font-bold text-slate-600 border border-slate-200" style={{ fontFamily: "'Poppins', sans-serif" }}>
                 <Type className="w-3.5 h-3.5 ml-2 mr-1 text-slate-400" />
-                {(['sm', 'base', 'lg', 'xl'] as const).map(sz => (
+                <span className="text-[10px] uppercase text-slate-400 font-extrabold mr-1 hidden sm:inline">Font Size:</span>
+                {([
+                  { id: 'sm', label: 'Small' },
+                  { id: 'base', label: 'Medium' },
+                  { id: 'lg', label: 'Large' },
+                  { id: 'xl', label: 'XL' }
+                ] as const).map(option => (
                   <button
-                    key={sz}
-                    onClick={() => setFontSize(sz)}
-                    className={`px-2 py-1 rounded-lg uppercase transition ${
-                      fontSize === sz ? 'bg-white text-indigo-600 shadow-2xs font-extrabold' : 'hover:text-slate-900'
+                    key={option.id}
+                    onClick={() => setFontSize(option.id)}
+                    className={`px-2.5 py-1 rounded-lg text-xs transition cursor-pointer ${
+                      fontSize === option.id ? 'bg-white text-indigo-600 shadow-2xs font-extrabold border border-slate-200/60' : 'hover:text-slate-900 font-semibold text-slate-600'
                     }`}
+                    style={{ fontFamily: "'Poppins', sans-serif" }}
                   >
-                    {sz}
+                    {option.label}
                   </button>
                 ))}
               </div>

@@ -65,6 +65,7 @@ export default function StudyToolsCenter({
   const [subTab, setSubTab] = useState<'hub' | 'lists' | 'dictionary' | 'planner' | 'story' | 'article'>(initialSubTab);
 
   const activeStories = (stories && stories.length > 0) ? stories : (course?.stories || []);
+  const activeArticles = course?.articles || [];
   const isStoryEnabled = enableStoryMode && course?.enabledGames?.story !== false;
 
   const [mobileCollapsedState, setMobileCollapsedState] = useState<Record<string, boolean>>({});
@@ -418,6 +419,7 @@ export default function StudyToolsCenter({
 
       {subTab === 'article' && (
         <ReadArticleView
+          articles={activeArticles}
           stories={activeStories}
           words={words}
           progress={progress}
