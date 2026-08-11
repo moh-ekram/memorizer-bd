@@ -188,8 +188,6 @@ export default function FlashcardViewer({
         setSelectedGroups(sortedGrps);
         setIsSessionActive(Boolean(initialGroup));
       }
-      setSelectedStatuses(['know', 'confusion', 'dont_know', 'unrated']);
-      setSelectedFolder('all');
       setUserHasManuallyChangedStatuses(false);
       setCurrentIndex(0);
       setIsFlipped(false);

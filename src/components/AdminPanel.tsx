@@ -25,6 +25,7 @@ import TransactionHistoryView from './TransactionHistoryView';
 import { logAdminActivity } from '../lib/activityLogger';
 import { BulkCsvStudentModal } from './BulkCsvStudentModal';
 import { ActivityLogsView } from './ActivityLogsView';
+import { SupabaseRlsModal } from './SupabaseRlsModal';
 import { TransactionDebugger, TransactionLogItem } from './TransactionDebugger';
 import { Code, Bug, TerminalSquare, AlertCircle } from 'lucide-react';
 import { 
@@ -94,12 +95,6 @@ interface FirestoreUserDoc {
     history?: Record<string, any>;
   };
   synonymProgress?: Record<string, { correct: boolean; updatedAt: string }>;
-  blankProgress?: Record<string, any>;
-  oooProgress?: Record<string, any>;
-  analogyProgress?: Record<string, any>;
-  enrolledCourseIds?: string[];
-  walletBalance?: number;
-  balance?: number;
   settings?: any;
 }
 
@@ -164,6 +159,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const [requestsSubTab, setRequestsSubTab] = useState<'pending' | 'autoverify' | 'history' | 'debugger'>('pending');
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [bulkCsvCourse, setBulkCsvCourse] = useState<Course | null>(null);
+  const [showSupabaseRlsModal, setShowSupabaseRlsModal] = useState(false);
 
   // Transaction Debugger Logs state
   const [transactionLogs, setTransactionLogs] = useState<TransactionLogItem[]>(() => {
@@ -964,20 +960,11 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       qSnap.forEach(docSnap => {
         list.push({ ...docSnap.data(), id: docSnap.id } as Course);
       });
-      setCustomCourses(prev => {
-        if (prev.length === 0) return list;
-        return list.map(fetched => {
-          const local = prev.find(p => p.id === fetched.id);
-          if (local && local.stories && local.stories.length > 0 && (!fetched.stories || fetched.stories.length === 0)) {
-            return { ...fetched, stories: local.stories };
-          }
-          return fetched;
-        });
-      });
+      setCustomCourses(list);
       setHasFetchedCourses(true);
     } catch (err) {
       console.error('Error fetching custom courses:', err);
-      setCoursesError('Failed to load courses list from Cloud DB.');
+      setCoursesError('Failed to load courses list from Supabase.');
     } finally {
       setCoursesLoading(false);
     }
@@ -1030,92 +1017,20 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       const querySnapshot = await getDocs(collection(db, path));
       const fetchedUsersMap = new Map<string, FirestoreUserDoc>();
 
-      querySnapshot.forEach((docSnap) => {
-        const data = docSnap.data();
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
         const userEmail = (data.email || '').trim().toLowerCase();
-        const key = userEmail || docSnap.id;
-
-        if (key) {
-          const docProg = data.progress && typeof data.progress === 'object' ? data.progress : {};
-          const docGoal = data.goal && typeof data.goal === 'object' ? data.goal : {};
-          const docSyn = data.synonymProgress && typeof data.synonymProgress === 'object' ? data.synonymProgress : {};
-          const docBlank = data.blankProgress && typeof data.blankProgress === 'object' ? data.blankProgress : {};
-          const docOoo = data.oooProgress && typeof data.oooProgress === 'object' ? data.oooProgress : {};
-          const docAnalogy = data.analogyProgress && typeof data.analogyProgress === 'object' ? data.analogyProgress : {};
-          const docSettings = data.settings && typeof data.settings === 'object' ? data.settings : {};
-          const docEnrolled = Array.isArray(data.enrolledCourseIds) ? data.enrolledCourseIds : [];
-
-          if (fetchedUsersMap.has(key)) {
-            const existing = fetchedUsersMap.get(key)!;
-            
-            // Merge progress: combine both, for overlapping keys pick the one with rating or latest updatedAt
-            const mergedProg = { ...existing.progress };
-            Object.keys(docProg).forEach((wId) => {
-              if (!mergedProg[wId]) {
-                mergedProg[wId] = docProg[wId];
-              } else {
-                const exTime = new Date(mergedProg[wId]?.updatedAt || 0).getTime();
-                const newTime = new Date(docProg[wId]?.updatedAt || 0).getTime();
-                const exIsRated = mergedProg[wId]?.status && mergedProg[wId]?.status !== 'unrated';
-                const newIsRated = docProg[wId]?.status && docProg[wId]?.status !== 'unrated';
-
-                if ((newIsRated && !exIsRated) || (newTime > exTime)) {
-                  mergedProg[wId] = docProg[wId];
-                }
-              }
-            });
-
-            // Merge goal
-            const mergedGoal = {
-              dailyTarget: docGoal.dailyTarget || existing.goal?.dailyTarget || 15,
-              streak: Math.max(existing.goal?.streak || 0, docGoal.streak || 0),
-              lastStudyDate: (docGoal.lastStudyDate || '') > (existing.goal?.lastStudyDate || '') ? docGoal.lastStudyDate : (existing.goal?.lastStudyDate || ''),
-              history: { ...(existing.goal?.history || {}), ...(docGoal.history || {}) }
-            };
-
-            // Merge enrolled courses
-            const mergedEnrolled = Array.from(new Set([...(existing.enrolledCourseIds || []), ...docEnrolled]));
-
-            // Prefer real UID for id (not containing @ or req-)
-            const isRealUid = !docSnap.id.includes('@') && !docSnap.id.includes('req-');
-            const finalId = isRealUid ? docSnap.id : existing.id;
-
-            const finalUpdatedAt = (data.updatedAt || '') > (existing.updatedAt || '') ? data.updatedAt : existing.updatedAt;
-
-            fetchedUsersMap.set(key, {
-              id: finalId,
-              email: data.email || existing.email || 'unknown@user.com',
-              createdAt: existing.createdAt || data.createdAt || new Date().toISOString(),
-              updatedAt: finalUpdatedAt || new Date().toISOString(),
-              progress: mergedProg,
-              goal: mergedGoal,
-              synonymProgress: { ...existing.synonymProgress, ...docSyn },
-              blankProgress: { ...(existing.blankProgress || {}), ...docBlank },
-              oooProgress: { ...(existing.oooProgress || {}), ...docOoo },
-              analogyProgress: { ...(existing.analogyProgress || {}), ...docAnalogy },
-              settings: { ...existing.settings, ...docSettings },
-              enrolledCourseIds: mergedEnrolled,
-              walletBalance: typeof data.walletBalance === 'number' ? data.walletBalance : (existing.walletBalance || 0),
-              balance: typeof data.balance === 'number' ? data.balance : (existing.balance || 0)
-            });
-          } else {
-            fetchedUsersMap.set(key, {
-              id: docSnap.id,
-              email: data.email || 'unknown@user.com',
-              createdAt: data.createdAt || new Date().toISOString(),
-              updatedAt: data.updatedAt || new Date().toISOString(),
-              progress: docProg,
-              goal: docGoal,
-              synonymProgress: docSyn,
-              blankProgress: docBlank,
-              oooProgress: docOoo,
-              analogyProgress: docAnalogy,
-              settings: docSettings,
-              enrolledCourseIds: docEnrolled,
-              walletBalance: data.walletBalance || 0,
-              balance: data.balance || 0
-            });
-          }
+        if (data.email || doc.id) {
+          fetchedUsersMap.set(userEmail || doc.id, {
+            id: doc.id,
+            email: data.email || 'unknown@user.com',
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+            progress: data.progress || {},
+            goal: data.goal || {},
+            synonymProgress: data.synonymProgress || {},
+            settings: data.settings || {}
+          });
         }
       });
 
@@ -2134,7 +2049,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   };
 
   const handlePurgeAllGameData = async () => {
-    if (!window.confirm("WARNING: Are you sure you want to delete ALL game questions (Blank Filling, Odd One Out, Word Analogy, MCQ) across ALL courses? This will wipe all game data in local storage, server file cache, and Cloud DB.")) {
+    if (!window.confirm("WARNING: Are you sure you want to delete ALL game questions (Blank Filling, Odd One Out, Word Analogy, MCQ) across ALL courses? This will wipe all game data in local storage, server file cache, and Supabase.")) {
       return;
     }
     try {
@@ -2239,6 +2154,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowSupabaseRlsModal(true)}
+              className="p-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer"
+              title="Copy RLS Script"
+            >
+              <Code className="w-3.5 h-3.5" />
+            </button>
             <button
               type="button"
               onClick={handlePurgeAllGameData}
@@ -2390,7 +2313,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             {loading ? (
               <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
                 <RefreshCw className="w-8 h-8 animate-spin text-indigo-500" />
-                <p className="text-xs font-bold">Fetching real-time data from Cloud DB...</p>
+                <p className="text-xs font-bold">Fetching real-time data from Supabase Cloud DB...</p>
               </div>
             ) : error ? (
               <div className="p-8 text-center text-rose-500 flex flex-col items-center justify-center gap-3">
@@ -2427,10 +2350,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       const knowCount = progValues.filter(p => p.status === 'know').length;
                       const confusionCount = progValues.filter(p => p.status === 'confusion').length;
                       const dontKnowCount = progValues.filter(p => p.status === 'dont_know').length;
-                      const totalWordsCount = words && words.length > 0 ? words.length : 1108;
-                      const percentKnow = Math.round((knowCount / totalWordsCount) * 100) || 0;
-                      const percentConfusion = Math.round((confusionCount / totalWordsCount) * 100) || 0;
-                      const percentDontKnow = Math.round((dontKnowCount / totalWordsCount) * 100) || 0;
+                      const percentKnow = Math.round((knowCount / 1110) * 100) || 0;
 
                       return (
                         <tr key={u.id} className="hover:bg-slate-50/50 transition">
@@ -2465,8 +2385,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                               </div>
                               <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden flex">
                                 <div className="bg-emerald-500 h-full" style={{ width: `${percentKnow}%` }} />
-                                <div className="bg-amber-400 h-full" style={{ width: `${percentConfusion}%` }} />
-                                <div className="bg-rose-400 h-full" style={{ width: `${percentDontKnow}%` }} />
+                                <div className="bg-amber-400 h-full" style={{ width: `${Math.round((confusionCount / 1110) * 100)}%` }} />
+                                <div className="bg-rose-400 h-full" style={{ width: `${Math.round((dontKnowCount / 1110) * 100)}%` }} />
                               </div>
                             </div>
                           </td>
@@ -4447,7 +4367,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         excelSaveStatus === 'saving' ? 'bg-slate-400' : 'bg-emerald-600 hover:bg-emerald-500'
                       }`}
                     >
-                      {excelSaveStatus === 'saving' ? 'Saving...' : 'Save to Cloud DB'}
+                      {excelSaveStatus === 'saving' ? 'Saving...' : 'Save to Supabase'}
                     </button>
                   </div>
 
@@ -4472,7 +4392,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               {excelSaveStatus === 'saved' && (
                 <div className="p-3.5 bg-emerald-50 text-emerald-700 rounded-xl flex items-center gap-2 border border-emerald-100 text-xs font-semibold">
                   <CheckCircle className="w-4 h-4" />
-                  <span>Questions successfully saved to Cloud DB!</span>
+                  <span>Questions successfully saved to Supabase!</span>
                 </div>
               )}
             </div>
@@ -4997,6 +4917,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 return [...prev, updatedCourse];
               });
             }
+            fetchCustomCourses();
           }} 
           initialTab={courseSettingsInitialTab}
           initialEditWordName={courseSettingsInitialEditWordName}
@@ -5277,6 +5198,12 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             showToast('Failed to update student access list.', 'error');
           }
         }}
+      />
+
+      {/* Supabase RLS Policy Script Modal */}
+      <SupabaseRlsModal
+        isOpen={showSupabaseRlsModal}
+        onClose={() => setShowSupabaseRlsModal(false)}
       />
     </div>
   );

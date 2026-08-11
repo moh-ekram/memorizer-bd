@@ -68,8 +68,6 @@ interface AppSettingsViewProps {
   userEmail?: string | null;
   syncStatus: string;
   onForceSync?: () => void;
-  onReloadFromCloud?: () => void;
-  onRunDiagnostic?: () => void;
   syncLogs?: SyncLogEntry[];
   allCourses?: Course[];
 }
@@ -81,8 +79,6 @@ export default function AppSettingsView({
   userEmail,
   syncStatus,
   onForceSync,
-  onReloadFromCloud,
-  onRunDiagnostic,
   syncLogs = [],
   allCourses = []
 }: AppSettingsViewProps) {
@@ -846,39 +842,14 @@ export default function AppSettingsView({
                     <span>{syncStatus === 'synced' ? 'Synced with Cloud' : syncStatus === 'syncing' ? 'Syncing Changes...' : 'Local Storage'}</span>
                   </span>
 
-                  {userEmail && (
-                    <div className="flex items-center gap-2">
-                      {onForceSync && (
-                        <button
-                          onClick={onForceSync}
-                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
-                          title="Backup device data to Cloud"
-                        >
-                          <UploadCloud className="w-3.5 h-3.5" />
-                          <span>Backup Now</span>
-                        </button>
-                      )}
-                      {onReloadFromCloud && (
-                        <button
-                          onClick={onReloadFromCloud}
-                          className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer border border-slate-600"
-                          title="Restore latest data from Cloud"
-                        >
-                          <DownloadCloud className="w-3.5 h-3.5 text-sky-400" />
-                          <span>Restore Cloud Data</span>
-                        </button>
-                      )}
-                      {onRunDiagnostic && (
-                        <button
-                          onClick={onRunDiagnostic}
-                          className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
-                          title="Run deeper synchronization verification check"
-                        >
-                          <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                          <span>Run Diagnostic</span>
-                        </button>
-                      )}
-                    </div>
+                  {userEmail && onForceSync && (
+                    <button
+                      onClick={onForceSync}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    >
+                      <UploadCloud className="w-3.5 h-3.5" />
+                      <span>Backup Now</span>
+                    </button>
                   )}
                 </div>
               </div>
