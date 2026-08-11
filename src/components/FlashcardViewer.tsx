@@ -199,6 +199,39 @@ export default function FlashcardViewer({
   const [isFilterExpanded, setIsFilterExpanded] = useState(false);
   const [userHasManuallyChangedStatuses, setUserHasManuallyChangedStatuses] = useState(false);
 
+  // Smart Default Tag Selection Logic:
+  // 1. As long as unrated (not studied) data exists in selected pool, default to ONLY 'unrated'
+  // 2. Once all words in pool are studied/rated, default to 'dont_know' & 'confusion' (Red & Yellow)
+  // 3. Once all words are green (learned), default to ALL tags
+  useEffect(() => {
+    if (userHasManuallyChangedStatuses) return;
+
+    const currentPool = activeWordsList.filter(w =>
+      selectedGroups.length === 0 || selectedGroups.some(g => String(g) === String(w.group))
+    );
+
+    if (currentPool.length === 0) return;
+
+    let unratedCount = 0;
+    let redCount = 0;
+    let yellowCount = 0;
+
+    currentPool.forEach(w => {
+      const st = progress[w.id]?.status || 'unrated';
+      if (st === 'unrated') unratedCount++;
+      else if (st === 'dont_know') redCount++;
+      else if (st === 'confusion') yellowCount++;
+    });
+
+    if (unratedCount > 0) {
+      setSelectedStatuses(['unrated']);
+    } else if (redCount > 0 || yellowCount > 0) {
+      setSelectedStatuses(['dont_know', 'confusion']);
+    } else {
+      setSelectedStatuses(['know', 'confusion', 'dont_know', 'unrated']);
+    }
+  }, [activeWordsList, selectedGroups, progress, userHasManuallyChangedStatuses]);
+
   // Swipe gesture refs for mobile navigation
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
@@ -743,7 +776,7 @@ export default function FlashcardViewer({
   // =========================================================================
   if (!isSessionActive) {
     return (
-      <div className="space-y-4 max-w-2xl mx-auto" id="flashcard-setup-view">
+      <div className="space-y-4 w-full max-w-4xl lg:max-w-5xl mx-auto px-2 sm:px-4" id="flashcard-setup-view">
         {/* Restricted Course Free Trial Notice Banner */}
         {isRestrictedLocked && (
           <div className="p-4 bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-indigo-500/10 border border-amber-400/40 rounded-2xl shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 font-sans">
@@ -780,7 +813,7 @@ export default function FlashcardViewer({
         )}
 
         {/* 1. Course Name Pill Banner */}
-        <div className="w-full max-w-lg mx-auto bg-[#342e6f] text-white py-3 px-6 rounded-full text-center shadow-md my-2 border border-indigo-900/30">
+        <div className="w-full max-w-3xl lg:max-w-4xl mx-auto bg-[#342e6f] text-white py-3 px-6 rounded-full text-center shadow-md my-2 border border-indigo-900/30">
           <span className="text-[11px] font-semibold text-indigo-200/90 block leading-tight">
             You are on now @
           </span>
@@ -796,7 +829,7 @@ export default function FlashcardViewer({
               setIsSessionActive(true);
             }
           }}
-          className={`w-full max-w-lg mx-auto bg-[#773357] hover:bg-[#6c2d4f] text-white rounded-2xl p-4 shadow-lg border border-pink-900/20 flex items-center justify-between transition-all active:scale-[0.99] my-3 select-none ${
+          className={`w-full max-w-3xl lg:max-w-4xl mx-auto bg-[#773357] hover:bg-[#6c2d4f] text-white rounded-2xl p-3.5 sm:p-4 shadow-lg border border-pink-900/20 flex items-center justify-between transition-all active:scale-[0.99] my-3 select-none ${
             filteredWords.length > 0 ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'
           }`}
         >
@@ -813,9 +846,9 @@ export default function FlashcardViewer({
                 repeat: Infinity,
                 ease: "easeInOut"
               }}
-              className="p-2.5 bg-pink-500/25 rounded-2xl text-white shrink-0 border border-pink-300/40 shadow-inner flex items-center justify-center relative"
+              className="p-2 sm:p-2.5 bg-pink-500/25 rounded-2xl text-white shrink-0 border border-pink-300/40 shadow-inner flex items-center justify-center relative"
             >
-              <svg className="w-7 h-7 text-white drop-shadow-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <svg className="w-6 h-6 sm:w-7 sm:h-7 text-white drop-shadow-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
                 <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v6" />
                 <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
@@ -828,14 +861,14 @@ export default function FlashcardViewer({
               <span className="text-[11px] font-semibold text-pink-200/90 block leading-none mb-1">
                 Click here to:
               </span>
-              <h2 className="text-lg sm:text-xl font-black text-white leading-tight tracking-tight">
+              <h2 className="text-base sm:text-xl font-black text-white leading-tight tracking-tight">
                 Start Flashcard
               </h2>
             </div>
           </div>
 
           {/* Vertical Divider Line */}
-          <div className="h-9 w-[1px] bg-pink-300/30 shrink-0 mx-2" />
+          <div className="h-8 sm:h-9 w-[1px] bg-pink-300/30 shrink-0 mx-2" />
 
           {/* Right Side: Filter & Customization Toggle */}
           <button
@@ -844,62 +877,70 @@ export default function FlashcardViewer({
               e.stopPropagation();
               setIsFilterExpanded(prev => !prev);
             }}
-            className="text-left text-xs font-extrabold text-pink-100 hover:text-white transition leading-snug cursor-pointer max-w-[110px]"
+            className="text-left text-xs font-extrabold text-pink-100 hover:text-white transition leading-snug cursor-pointer flex items-center gap-1.5 bg-pink-900/40 hover:bg-pink-900/60 px-3 py-1.5 rounded-xl border border-pink-400/20"
           >
-            Filter & Customization {isFilterExpanded ? '▲' : '▼'}
+            <SlidersHorizontal className="w-3.5 h-3.5 text-pink-300" />
+            <span>Filter</span>
+            <span className="text-[10px]">{isFilterExpanded ? '▲' : '▼'}</span>
           </button>
         </div>
 
-        {/* Filter Configuration Controls (Expanding right under the CTA card) */}
+        {/* Minimal Filter Configuration Controls */}
         {isFilterExpanded && (
-          <div className="w-full max-w-lg mx-auto bg-white rounded-3xl border border-pink-200/80 shadow-xl overflow-hidden transition-all duration-200 my-3 animate-in fade-in slide-in-from-top-2">
-            <div className="p-4 sm:p-5 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <h3 className="flex items-center gap-1.5 font-black text-slate-900 text-sm">
+          <div className="w-full max-w-3xl lg:max-w-4xl mx-auto bg-white rounded-2xl border border-pink-200/80 shadow-lg overflow-hidden transition-all duration-200 my-2 animate-in fade-in slide-in-from-top-2">
+            <div className="p-3.5 sm:p-4 space-y-3 text-xs">
+              {/* Header bar */}
+              <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+                <h3 className="flex items-center gap-1.5 font-black text-slate-900 text-xs sm:text-sm">
                   <SlidersHorizontal className="w-4 h-4 text-pink-600" />
-                  <span>Filter & Customization</span>
+                  <span>Filter & Deck Customization</span>
                 </h3>
                 <button
                   type="button"
                   onClick={() => {
                     setSelectedGroups(uniqueGroups);
-                    setSelectedStatuses(['know', 'dont_know', 'confusion', 'unrated']);
                     setSelectedFolder('all');
                     setStudyOrder('random');
+                    setUserHasManuallyChangedStatuses(false);
                   }}
-                  className="text-[11px] font-bold text-pink-600 hover:text-pink-700 cursor-pointer hover:underline"
+                  className="text-[11px] font-bold text-pink-600 hover:text-pink-700 cursor-pointer hover:underline flex items-center gap-1"
                 >
-                  Reset All Filters
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Reset Filters</span>
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {/* Group Selection */}
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
                       Vocabulary Groups ({selectedGroups.length}/{uniqueGroups.length})
                     </label>
-                    <div className="flex gap-1.5 text-[10px]">
+                    <div className="flex items-center gap-2 text-[10px]">
                       <button
                         type="button"
                         onClick={() => setSelectedGroups(uniqueGroups)}
-                        className="text-indigo-600 font-bold hover:underline cursor-pointer"
+                        className="text-indigo-600 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                        title="Select All Groups"
                       >
-                        Select All
+                        <Check className="w-3 h-3" />
+                        <span>All</span>
                       </button>
                       <span className="text-slate-300">|</span>
                       <button
                         type="button"
                         onClick={() => setSelectedGroups([])}
-                        className="text-rose-600 font-bold hover:underline cursor-pointer"
+                        className="text-rose-600 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                        title="Clear All Groups"
                       >
-                        Clear All
+                        <X className="w-3 h-3" />
+                        <span>Clear</span>
                       </button>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-5 sm:grid-cols-6 gap-1 max-h-36 overflow-y-auto p-1.5 bg-slate-50 border border-slate-200/60 rounded-xl scrollbar-thin">
+                  <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-1 max-h-32 overflow-y-auto p-1.5 bg-slate-50 border border-slate-200/60 rounded-xl scrollbar-thin">
                     {uniqueGroups.map((gVal) => {
                       const isSelected = selectedGroups.some(x => String(x) === String(gVal));
                       return (
@@ -916,10 +957,10 @@ export default function FlashcardViewer({
                               }
                             });
                           }}
-                          className={`py-1 text-[11px] font-semibold rounded-lg transition cursor-pointer ${
+                          className={`py-1 text-[11px] font-bold rounded-lg transition cursor-pointer text-center ${
                             isSelected
                               ? 'bg-indigo-600 text-white shadow-2xs'
-                              : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/60'
+                              : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200/60'
                           }`}
                         >
                           {gVal}
@@ -929,39 +970,44 @@ export default function FlashcardViewer({
                   </div>
                 </div>
 
-                {/* Status Tags Selection */}
-                <div className="space-y-2">
+                {/* Status Tags Selection with Icons */}
+                <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      Tag Status Filter
-                    </label>
-                    <div className="flex gap-1.5 text-[10px]">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedStatuses(['know', 'dont_know', 'confusion', 'unrated']);
-                          setUserHasManuallyChangedStatuses(true);
-                        }}
-                        className="text-indigo-600 font-bold hover:underline cursor-pointer"
-                      >
-                        All Tags
-                      </button>
+                    <div className="flex items-center gap-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                        Tag Status Filter
+                      </label>
+                      {!userHasManuallyChangedStatuses && (
+                        <span className="px-1.5 py-0.2 bg-indigo-100 text-indigo-700 text-[9px] font-bold rounded-md">
+                          Auto-Select
+                        </span>
+                      )}
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedStatuses(['know', 'dont_know', 'confusion', 'unrated']);
+                        setUserHasManuallyChangedStatuses(true);
+                      }}
+                      className="text-[10px] text-indigo-600 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      <Filter className="w-3 h-3" />
+                      <span>Select All Tags</span>
+                    </button>
                   </div>
 
                   <div className="grid grid-cols-2 gap-1.5">
                     {[
-                      { key: 'unrated', label: 'Unrated (Gray)', color: 'bg-slate-400' },
-                      { key: 'dont_know', label: 'Not Learned (Red)', color: 'bg-rose-500' },
-                      { key: 'confusion', label: 'Confused (Yellow)', color: 'bg-amber-500' },
-                      { key: 'know', label: 'Learned (Green)', color: 'bg-emerald-500' }
+                      { key: 'unrated', label: 'Unrated', icon: <span className="w-2.5 h-2.5 rounded-full bg-slate-400 shrink-0" /> },
+                      { key: 'dont_know', label: 'Not Learned', icon: <XCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" /> },
+                      { key: 'confusion', label: 'Confused', icon: <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" /> },
+                      { key: 'know', label: 'Learned', icon: <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> }
                     ].map(st => {
                       const isSelected = selectedStatuses.includes(st.key);
                       return (
                         <button
                           key={st.key}
                           type="button"
-                          style={{ touchAction: 'manipulation' }}
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedStatuses(prev => 
@@ -971,15 +1017,15 @@ export default function FlashcardViewer({
                             );
                             setUserHasManuallyChangedStatuses(true);
                           }}
-                          className={`p-2 rounded-xl text-[11px] font-semibold flex items-center justify-between transition cursor-pointer select-none border active:scale-95 ${
-                            isSelected ? 'bg-indigo-50 border-indigo-200 text-indigo-900' : 'bg-slate-50 border-slate-200/60 text-slate-600 hover:bg-slate-100'
+                          className={`p-1.5 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-between transition cursor-pointer select-none border active:scale-95 ${
+                            isSelected ? 'bg-indigo-50 border-indigo-300 text-indigo-900 shadow-2xs' : 'bg-slate-50 border-slate-200/60 text-slate-500 hover:bg-slate-100'
                           }`}
                         >
                           <div className="flex items-center gap-1.5">
-                            <span className={`w-2.5 h-2.5 rounded-full ${st.color}`} />
+                            {st.icon}
                             <span>{st.label}</span>
                           </div>
-                          {isSelected && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+                          {isSelected && <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0" />}
                         </button>
                       );
                     })}
@@ -987,18 +1033,20 @@ export default function FlashcardViewer({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+              {/* Row 2: Bookmark Folder & Sequence & Flip Animation */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-100">
                 {/* Bookmark Folder */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                    Bookmark Collection
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                    <Bookmark className="w-3 h-3 text-indigo-500" />
+                    <span>Bookmark Folder</span>
                   </label>
                   <select
                     value={selectedFolder}
                     onChange={(e) => setSelectedFolder(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200/80 rounded-xl p-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                    className="w-full bg-slate-50 border border-slate-200/80 rounded-xl p-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
                   >
-                    <option value="all">All Words (No Folder Limit)</option>
+                    <option value="all">All Words (No Limit)</option>
                     {folders.map(f => (
                       <option key={f.id} value={f.id}>{f.name}</option>
                     ))}
@@ -1006,15 +1054,17 @@ export default function FlashcardViewer({
                 </div>
 
                 {/* Study Order */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                    Sequence / Order
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                    <ArrowUpDown className="w-3 h-3 text-indigo-500" />
+                    <span>Study Sequence</span>
                   </label>
-                  <div className="grid grid-cols-3 gap-1.5">
+                  <div className="grid grid-cols-3 gap-1">
                     <button
                       type="button"
                       onClick={() => setStudyOrder('serial')}
-                      className={`py-2 text-[11px] font-semibold rounded-xl border transition cursor-pointer flex items-center justify-center gap-1 ${
+                      title="Serial Order"
+                      className={`py-1.5 text-[11px] font-bold rounded-xl border transition cursor-pointer flex items-center justify-center gap-1 ${
                         studyOrder === 'serial' ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                       }`}
                     >
@@ -1024,17 +1074,18 @@ export default function FlashcardViewer({
                     <button
                       type="button"
                       onClick={() => setStudyOrder('alphabetical')}
-                      className={`py-2 text-[11px] font-semibold rounded-xl border transition cursor-pointer flex items-center justify-center gap-1 ${
+                      title="Alphabetical Order"
+                      className={`py-1.5 text-[11px] font-bold rounded-xl border transition cursor-pointer flex items-center justify-center gap-1 ${
                         studyOrder === 'alphabetical' ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                       }`}
                     >
-                      <span className="font-mono text-[9px] font-black">A-Z</span>
-                      <span>Alphabetical</span>
+                      <span>A-Z</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setStudyOrder('random')}
-                      className={`py-2 text-[11px] font-semibold rounded-xl border transition cursor-pointer flex items-center justify-center gap-1 ${
+                      title="Shuffle Order"
+                      className={`py-1.5 text-[11px] font-bold rounded-xl border transition cursor-pointer flex items-center justify-center gap-1 ${
                         studyOrder === 'random' ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                       }`}
                     >
@@ -1045,28 +1096,29 @@ export default function FlashcardViewer({
                 </div>
 
                 {/* Flip Animation Style Selector */}
-                <div className="space-y-1.5 col-span-1 sm:col-span-2 pt-2 border-t border-slate-100">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Card Flip Animation
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-indigo-500" />
+                    <span>Flip Animation</span>
                   </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  <div className="grid grid-cols-4 gap-1">
                     {[
-                      { id: 'shuffle', label: 'Shuffle', icon: '🔀' },
-                      { id: 'flip-h', label: 'Horizontal (H)', icon: '🔄' },
-                      { id: 'flip-v', label: 'Vertical (V)', icon: '↕️' },
-                      { id: 'diagonal', label: 'Diagonal 3D', icon: '✨' },
+                      { id: 'shuffle', label: 'Rand', icon: '🔀' },
+                      { id: 'flip-h', label: 'Horiz', icon: '🔄' },
+                      { id: 'flip-v', label: 'Vert', icon: '↕️' },
+                      { id: 'diagonal', label: '3D', icon: '✨' },
                     ].map((anim) => (
                       <button
                         key={anim.id}
                         type="button"
                         onClick={() => handleSelectAnimation(anim.id as FlipAnimationKey)}
-                        className={`py-2 px-1 text-[10px] sm:text-[11px] font-semibold rounded-xl border transition cursor-pointer flex items-center justify-center gap-1 ${
+                        className={`py-1.5 text-[10px] font-bold rounded-xl border transition cursor-pointer flex items-center justify-center gap-0.5 ${
                           effectiveAnimSetting === anim.id
                             ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
                             : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                         }`}
                       >
-                        <span className="text-xs">{anim.icon}</span>
+                        <span className="text-[10px]">{anim.icon}</span>
                         <span>{anim.label}</span>
                       </button>
                     ))}
@@ -1075,24 +1127,24 @@ export default function FlashcardViewer({
               </div>
 
               {/* Action Footer */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-500">
-                  Matching Words: <span className="text-indigo-600 font-extrabold">{filteredWords.length}</span>
+              <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-600">
+                  Matching Words: <span className="text-indigo-600 font-black text-sm">{filteredWords.length}</span>
                 </span>
 
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setIsFilterExpanded(false)}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
                   >
-                    Done
+                    Close
                   </button>
                   <button
                     type="button"
                     onClick={() => setIsSessionActive(true)}
                     disabled={filteredWords.length === 0}
-                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-extrabold rounded-xl transition cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                    className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-black rounded-xl transition cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
                   >
                     <Play className="w-3.5 h-3.5 fill-current" />
                     <span>Start Deck ({filteredWords.length})</span>
@@ -1104,7 +1156,7 @@ export default function FlashcardViewer({
         )}
 
         {/* 3. Statistics Donut Chart Card */}
-        <div className="w-full max-w-lg mx-auto bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs text-center space-y-4 my-3">
+        <div className="w-full max-w-3xl lg:max-w-4xl mx-auto bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-5 shadow-xs text-center space-y-4 my-3">
           {/* Top Row: Total Words & Not Studied */}
           <div className="flex items-center justify-center gap-2 text-center">
             <div className="inline-flex flex-col items-center">
