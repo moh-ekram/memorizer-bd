@@ -978,10 +978,8 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   const [pastedStoryText, setPastedStoryText] = useState<string>('');
 
   useEffect(() => {
-    if (course?.stories) {
-      setLocalStories(course.stories);
-    }
-  }, [course?.stories]);
+    setLocalStories(course.stories || []);
+  }, [course?.id]);
 
   // --- WORDS LIST STATES ---
   const sanitizeWordsList = (wordsList: VocabularyWord[]) => {

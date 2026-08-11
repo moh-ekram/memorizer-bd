@@ -93,7 +93,7 @@ export default function SynonymCheck({
   const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false);
   
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() => {
-    return settings?.defaultSynonymTags || ['know', 'dont_know', 'unrated'];
+    return settings?.defaultSynonymTags || ['know', 'confusion', 'dont_know', 'unrated'];
   });
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
@@ -163,7 +163,7 @@ export default function SynonymCheck({
     }
 
     // Filter by synonym progress status
-    if (selectedStatuses.length < 3) {
+    if (selectedStatuses.length < 4) {
       result = result.filter(w => {
         const hasProg = synonymProgress[w.id];
         const status = hasProg ? (hasProg.correct ? 'know' : 'dont_know') : 'unrated';
@@ -619,12 +619,13 @@ export default function SynonymCheck({
               className="bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans text-slate-700 flex items-center justify-between gap-2 min-w-[180px] cursor-pointer text-left"
             >
               <span className="truncate max-w-[160px]">
-                {selectedStatuses.length === 3 
+                {selectedStatuses.length === 4 
                   ? 'All Tags' 
                   : selectedStatuses.length === 0 
                   ? 'No Tags' 
                   : selectedStatuses.map(s => {
                       if (s === 'know') return 'Correct';
+                      if (s === 'confusion') return 'Confused';
                       if (s === 'dont_know') return 'Incorrect';
                       return 'Not Started';
                     }).join(', ')}
@@ -641,7 +642,7 @@ export default function SynonymCheck({
                     <div className="flex gap-2 text-[10px]">
                       <button
                         type="button"
-                        onClick={() => setSelectedStatuses(['know', 'dont_know', 'unrated'])}
+                        onClick={() => setSelectedStatuses(['know', 'confusion', 'dont_know', 'unrated'])}
                         className="text-indigo-600 hover:text-indigo-700 font-extrabold cursor-pointer hover:underline"
                       >
                         Select All
@@ -660,6 +661,7 @@ export default function SynonymCheck({
                   <div className="space-y-1.5">
                     {[
                       { key: 'know', label: 'Correct (Green)', color: 'bg-emerald-500' },
+                      { key: 'confusion', label: 'Confused (Yellow)', color: 'bg-amber-500' },
                       { key: 'dont_know', label: 'Incorrect (Red)', color: 'bg-rose-500' },
                       { key: 'unrated', label: 'Not Started (Gray)', color: 'bg-slate-400' }
                     ].map(st => {

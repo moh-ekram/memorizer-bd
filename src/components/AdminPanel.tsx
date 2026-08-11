@@ -964,7 +964,16 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       qSnap.forEach(docSnap => {
         list.push({ ...docSnap.data(), id: docSnap.id } as Course);
       });
-      setCustomCourses(list);
+      setCustomCourses(prev => {
+        if (prev.length === 0) return list;
+        return list.map(fetched => {
+          const local = prev.find(p => p.id === fetched.id);
+          if (local && local.stories && local.stories.length > 0 && (!fetched.stories || fetched.stories.length === 0)) {
+            return { ...fetched, stories: local.stories };
+          }
+          return fetched;
+        });
+      });
       setHasFetchedCourses(true);
     } catch (err) {
       console.error('Error fetching custom courses:', err);
@@ -4988,7 +4997,6 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 return [...prev, updatedCourse];
               });
             }
-            fetchCustomCourses();
           }} 
           initialTab={courseSettingsInitialTab}
           initialEditWordName={courseSettingsInitialEditWordName}
