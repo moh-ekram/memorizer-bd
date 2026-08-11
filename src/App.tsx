@@ -1094,7 +1094,7 @@ export default function App() {
         const localActiveId = localStorage.getItem(LOCAL_STORAGE_ACTIVE_COURSE_KEY);
         const localActiveTime = localStorage.getItem('vocab_memorizer_active_course_timestamp') || '';
         const cloudActiveId = (typeof data.activeCourseId === 'string' && data.activeCourseId.trim() !== '') ? data.activeCourseId : null;
-        const cloudActiveTime = data.activeCourseUpdatedAt || data.updatedAt || '';
+        const cloudActiveTime = data.activeCourseUpdatedAt || '';
 
         if (localActiveId && localActiveId.trim() !== '') {
           const isLocalNewerOrEqual = !cloudActiveTime || (localActiveTime && localActiveTime >= cloudActiveTime);
@@ -1117,10 +1117,16 @@ export default function App() {
           } else if (cloudActiveId) {
             setActiveCourseId(cloudActiveId);
             safeSetLocalStorage(LOCAL_STORAGE_ACTIVE_COURSE_KEY, cloudActiveId);
+            if (cloudActiveTime) {
+              safeSetLocalStorage('vocab_memorizer_active_course_timestamp', cloudActiveTime);
+            }
           }
         } else if (cloudActiveId) {
           setActiveCourseId(cloudActiveId);
           safeSetLocalStorage(LOCAL_STORAGE_ACTIVE_COURSE_KEY, cloudActiveId);
+          if (cloudActiveTime) {
+            safeSetLocalStorage('vocab_memorizer_active_course_timestamp', cloudActiveTime);
+          }
         } else {
           const fallback = autoSyncedPurchased[0] || userEnrolled[0] || 'gre';
           setActiveCourseId(fallback);
@@ -1307,6 +1313,84 @@ export default function App() {
     };
   }, []);
 
+  // Real-time user document synchronization across devices
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const userDocRef = doc(db, 'users', user.uid);
+    const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+      if (!docSnap.exists()) return;
+      const data = docSnap.data();
+
+      // Temporarily set cloud sync flag so local debounced performSync doesn't loop
+      isSyncingFromCloud.current = true;
+
+      // Merge real-time progress from cloud
+      if (data.progress && typeof data.progress === 'object') {
+        setProgress(prev => {
+          const cloudProg = data.progress;
+          const merged = { ...prev, ...cloudProg };
+          Object.keys(prev).forEach(wordId => {
+            if (cloudProg[wordId]) {
+              const localTime = new Date(prev[wordId].updatedAt || 0).getTime();
+              const cloudTime = new Date(cloudProg[wordId].updatedAt || 0).getTime();
+              const localStatus = prev[wordId].status || 'unrated';
+              const cloudStatus = cloudProg[wordId].status || 'unrated';
+
+              if (cloudStatus !== 'unrated' && localStatus === 'unrated') {
+                merged[wordId] = cloudProg[wordId];
+              } else if (localTime > cloudTime) {
+                merged[wordId] = prev[wordId];
+              } else {
+                merged[wordId] = cloudProg[wordId];
+              }
+            }
+          });
+          return merged;
+        });
+      }
+
+      // Sync active course from cloud if newer
+      if (data.activeCourseId && typeof data.activeCourseId === 'string' && data.activeCourseId.trim() !== '') {
+        const cloudActiveId = data.activeCourseId.trim();
+        const cloudActiveTime = data.activeCourseUpdatedAt || '';
+        const localActiveId = localStorage.getItem(LOCAL_STORAGE_ACTIVE_COURSE_KEY);
+        const localActiveTime = localStorage.getItem('vocab_memorizer_active_course_timestamp') || '';
+
+        if (!localActiveId || !localActiveTime || (cloudActiveTime && cloudActiveTime > localActiveTime)) {
+          setActiveCourseId(cloudActiveId);
+          safeSetLocalStorage(LOCAL_STORAGE_ACTIVE_COURSE_KEY, cloudActiveId);
+          if (cloudActiveTime) {
+            safeSetLocalStorage('vocab_memorizer_active_course_timestamp', cloudActiveTime);
+          }
+        }
+      }
+
+      // Merge enrolled course IDs
+      if (Array.isArray(data.enrolledCourseIds) && data.enrolledCourseIds.length > 0) {
+        setEnrolledCourseIds(prev => Array.from(new Set([...prev, ...data.enrolledCourseIds])));
+      }
+
+      // Merge goal & streak
+      if (data.goal && typeof data.goal === 'object') {
+        setGoal(prev => ({
+          dailyTarget: typeof data.goal.dailyTarget === 'number' ? data.goal.dailyTarget : (prev.dailyTarget || 15),
+          streak: Math.max(prev.streak || 1, typeof data.goal.streak === 'number' ? data.goal.streak : 1),
+          lastStudyDate: data.goal.lastStudyDate || prev.lastStudyDate || new Date().toISOString().split('T')[0],
+          history: { ...(data.goal.history || {}), ...(prev.history || {}) }
+        }));
+      }
+
+      setTimeout(() => {
+        isSyncingFromCloud.current = false;
+      }, 500);
+    }, (error) => {
+      console.warn("Real-time user snapshot listener notice:", error);
+    });
+
+    return () => unsubscribe();
+  }, [user?.uid]);
+
   // Sync to Cloud whenever state changes and user is logged in (debounced)
   useEffect(() => {
     if (!user || !hasLoadedFromCloud) {
@@ -1321,6 +1405,7 @@ export default function App() {
     const performSync = async () => {
       setSyncStatus('syncing');
       try {
+        const activeCourseTimestamp = localStorage.getItem('vocab_memorizer_active_course_timestamp') || new Date().toISOString();
         await setDoc(doc(db, 'users', user.uid), {
           progress,
           folders,
@@ -1332,6 +1417,7 @@ export default function App() {
           settings,
           enrolledCourseIds,
           activeCourseId,
+          activeCourseUpdatedAt: activeCourseTimestamp,
           quizScore,
           quizTaken,
           email: user.email,
@@ -1656,6 +1742,23 @@ const getActiveCourse = (
       (c && c.title && (c.title.trim().toLowerCase().includes(norm) || norm.includes(c.title.trim().toLowerCase())))
     );
     if (match) return match;
+  }
+
+  // If targetId is non-gre and non-empty, preserve provisional course object while courses load
+  if (targetId && targetId.trim() !== '' && targetId.trim().toLowerCase() !== 'gre') {
+    return {
+      id: targetId,
+      title: targetId,
+      description: 'Loading course content...',
+      totalGroups: 1,
+      words: [],
+      stories: [],
+      isDefault: false,
+      isRestricted: false,
+      createdAt: new Date().toISOString(),
+      createdBy: 'system',
+      price: 0
+    };
   }
 
   // Fallback to explicitly default course or first available course
