@@ -567,9 +567,10 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
       setExcelQuestionsPreview([]);
       fetchBlankQuestions();
       setTimeout(() => setExcelSaveStatus('idle'), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving blank questions:', err);
       setExcelSaveStatus('error');
+      setExcelUploadError(`Failed to save to cloud: ${err?.message || 'Database connection error'}`);
     }
   };
 
@@ -672,9 +673,10 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
       setExcelOooPreview([]);
       fetchOooQuestions();
       setTimeout(() => setExcelOooSaveStatus('idle'), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving OOO questions:', err);
       setExcelOooSaveStatus('error');
+      setExcelOooUploadError(`Failed to save to cloud: ${err?.message || 'Database connection error'}`);
     }
   };
 
@@ -774,9 +776,10 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
       setExcelAnalogyPreview([]);
       fetchAnalogyQuestions();
       setTimeout(() => setExcelAnalogySaveStatus('idle'), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving analogy questions:', err);
       setExcelAnalogySaveStatus('error');
+      setExcelAnalogyUploadError(`Failed to save to cloud: ${err?.message || 'Database connection error'}`);
     }
   };
 
@@ -882,9 +885,10 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
       setExcelMcqPreview([]);
       fetchMcqQuestions();
       setTimeout(() => setExcelMcqSaveStatus('idle'), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving MCQ questions:', err);
       setExcelMcqSaveStatus('error');
+      setExcelMcqUploadError(`Failed to save to cloud: ${err?.message || 'Database connection error'}`);
     }
   };
 
@@ -2015,23 +2019,96 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   };
 
   // --- DELETION ACTIONS ---
-  const handleDeleteWord = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this word from the course?')) {
-      setLocalWords(prev => prev.filter(w => w.id !== id));
-      setSelectedWordIds(prev => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
+  const handleDeleteWord = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this word from the course?')) return;
+    const updatedWords = localWords.filter(w => w.id !== id);
+    setLocalWords(updatedWords);
+    setSelectedWordIds(prev => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+
+    try {
+      const uniqueGroupsSize = new Set(updatedWords.map(w => w.group)).size;
+      const courseRef = doc(db, 'courses', course.id);
+      await updateDoc(courseRef, {
+        words: updatedWords,
+        totalGroups: uniqueGroupsSize || 1
       });
+      if (onSaveSuccess) {
+        onSaveSuccess({
+          ...course,
+          words: updatedWords,
+          totalGroups: uniqueGroupsSize || 1
+        });
+      }
+    } catch (err) {
+      console.error('Failed to sync word deletion to Firestore:', err);
+      alert('Failed to sync word deletion to cloud database.');
     }
   };
 
-  const handleDeleteSelectedWords = () => {
+  const handleDeleteSelectedWords = async () => {
     if (selectedWordIds.size === 0) return;
-    if (window.confirm(`Are you sure you want to delete the selected ${selectedWordIds.size} words from the course?`)) {
-      setLocalWords(prev => prev.filter(w => !selectedWordIds.has(w.id)));
-      setSelectedWordIds(new Set());
-      setCurrentWordPage(1);
+    const count = selectedWordIds.size;
+    if (!window.confirm(`Are you sure you want to delete the selected ${count} words from the course?`)) return;
+
+    const updatedWords = localWords.filter(w => !selectedWordIds.has(w.id));
+    setLocalWords(updatedWords);
+    setSelectedWordIds(new Set());
+    setCurrentWordPage(1);
+
+    try {
+      const uniqueGroupsSize = new Set(updatedWords.map(w => w.group)).size;
+      const courseRef = doc(db, 'courses', course.id);
+      await updateDoc(courseRef, {
+        words: updatedWords,
+        totalGroups: uniqueGroupsSize || 1
+      });
+      if (onSaveSuccess) {
+        onSaveSuccess({
+          ...course,
+          words: updatedWords,
+          totalGroups: uniqueGroupsSize || 1
+        });
+      }
+      alert(`Successfully deleted ${count} selected words from cloud!`);
+    } catch (err) {
+      console.error('Failed to sync bulk word deletion to Firestore:', err);
+      alert('Failed to sync bulk deletion to cloud database.');
+    }
+  };
+
+  const handleBulkDeleteAllWords = async () => {
+    if (localWords.length === 0) {
+      alert('No words in list to delete.');
+      return;
+    }
+    const count = localWords.length;
+    if (!window.confirm(`Are you sure you want to delete ALL ${count} words from this course? This action cannot be undone.`)) return;
+
+    setLocalWords([]);
+    setSelectedWordIds(new Set());
+    setCurrentWordPage(1);
+
+    try {
+      const courseRef = doc(db, 'courses', course.id);
+      await updateDoc(courseRef, {
+        words: [],
+        totalGroups: 1
+      });
+      if (onSaveSuccess) {
+        onSaveSuccess({
+          ...course,
+          words: [],
+          totalGroups: 1
+        });
+      }
+      alert(`Successfully deleted all ${count} words from course!`);
+    } catch (err) {
+      console.error('Failed to clear all words in Firestore:', err);
+      alert('Failed to clear words in cloud database.');
     }
   };
 
@@ -3397,6 +3474,18 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         <span>Delete Selected ({selectedWordIds.size})</span>
+                      </button>
+                    )}
+
+                    {localWords.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleBulkDeleteAllWords}
+                        className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-extrabold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                        title="Delete all words in this course from cloud"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete All Words ({localWords.length})</span>
                       </button>
                     )}
                   </div>

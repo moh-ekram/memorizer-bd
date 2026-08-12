@@ -88,12 +88,22 @@ export async function getDocs(queryOrCollectionRef: any) {
   }
 }
 
+function cleanFirestoreData(data: any): any {
+  if (data === undefined || data === null) return null;
+  try {
+    return JSON.parse(JSON.stringify(data));
+  } catch (e) {
+    return data;
+  }
+}
+
 export async function setDoc(docRef: any, data: any, options?: { merge?: boolean }) {
   try {
+    const cleanData = cleanFirestoreData(data);
     if (options) {
-      await fsSetDoc(docRef, data, options);
+      await fsSetDoc(docRef, cleanData, options);
     } else {
-      await fsSetDoc(docRef, data);
+      await fsSetDoc(docRef, cleanData);
     }
   } catch (err) {
     console.warn('Firebase setDoc error:', err);
@@ -103,10 +113,12 @@ export async function setDoc(docRef: any, data: any, options?: { merge?: boolean
 
 export async function updateDoc(docRef: any, data: any) {
   try {
-    await fsUpdateDoc(docRef, data);
+    const cleanData = cleanFirestoreData(data);
+    await fsUpdateDoc(docRef, cleanData);
   } catch (err) {
     console.warn('Firebase updateDoc error, falling back to merge setDoc:', err);
-    await fsSetDoc(docRef, data, { merge: true });
+    const cleanData = cleanFirestoreData(data);
+    await fsSetDoc(docRef, cleanData, { merge: true });
   }
 }
 
@@ -154,10 +166,10 @@ export async function saveBulkDocs(collectionName: string, items: any[]) {
   try {
     const processedItems = items.map((item, index) => {
       const docId = item.id || `${collectionName}_${Date.now()}_${index}_${Math.random().toString(36).substring(2, 8)}`;
-      return {
+      return cleanFirestoreData({
         ...item,
         id: docId
-      };
+      });
     });
 
     // Firestore Write Batch
