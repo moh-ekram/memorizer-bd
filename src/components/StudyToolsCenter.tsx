@@ -166,75 +166,69 @@ export default function StudyToolsCenter({
     <div className="space-y-6 max-w-5xl mx-auto" id="study-tools-center-wrapper">
       {/* Top Bar navigation when inside a specific study tool */}
       {subTab !== 'hub' && (
-        <div className="bg-white p-4 rounded-2xl border border-slate-250/60 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
+        <div className="bg-white p-3 sm:px-4 rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-3 animate-fade-in">
           <button
             onClick={() => setSubTab('hub')}
-            className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition cursor-pointer self-start"
+            className="p-1.5 text-slate-400 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition cursor-pointer flex items-center justify-center shrink-0"
+            title="Back to Hub"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Back to Hub</span>
           </button>
 
-          {/* Sub Navigation Capsules */}
-          <div className="flex items-center gap-1.5 overflow-x-auto p-0.5 scrollbar-none">
+          {/* Sub Navigation Pills */}
+          <div className="flex items-center gap-1 overflow-x-auto p-0.5 scrollbar-none">
             <button
               onClick={() => setSubTab('lists')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex-shrink-0 ${
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer shrink-0 ${
                 subTab === 'lists'
-                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-150'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 border border-transparent'
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              <BookMarked className="w-3.5 h-3.5" />
               <span>Bookmark</span>
             </button>
             <button
               onClick={() => setSubTab('dictionary')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex-shrink-0 ${
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer shrink-0 ${
                 subTab === 'dictionary'
-                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-150'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 border border-transparent'
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              <BookOpen className="w-3.5 h-3.5" />
               <span>Dictionary</span>
             </button>
             <button
               onClick={() => setSubTab('planner')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex-shrink-0 ${
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer shrink-0 ${
                 subTab === 'planner'
-                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-150'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 border border-transparent'
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              <CalendarCheck2 className="w-3.5 h-3.5" />
               <span>Planner</span>
             </button>
 
             {isStoryEnabled && (
               <button
                 onClick={() => setSubTab('story')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex-shrink-0 ${
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer shrink-0 ${
                   subTab === 'story'
-                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-150'
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 border border-transparent'
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                <BookText className="w-3.5 h-3.5" />
-                <span>Read story</span>
+                <span>Read Story</span>
               </button>
             )}
 
             <button
               onClick={() => setSubTab('article')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex-shrink-0 ${
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer shrink-0 ${
                 subTab === 'article'
-                  ? 'bg-teal-50 text-teal-700 border border-teal-150'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 border border-transparent'
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
               }`}
-              style={{ fontFamily: "'Poppins', sans-serif" }}
             >
-              <Newspaper className="w-3.5 h-3.5" />
               <span>Read Article</span>
             </button>
           </div>

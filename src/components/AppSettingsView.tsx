@@ -314,16 +314,13 @@ export default function AppSettingsView({
   return (
     <div className="flex-1 p-3 sm:p-5 space-y-4 max-w-3xl mx-auto font-sans text-slate-800" id="app-settings-page">
       {/* Top title and resetting button */}
-      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">Settings</h1>
-          <p className="text-[11px] text-slate-400 mt-0.5 font-medium">Manage preferences, default behaviors, and account sync.</p>
-        </div>
+      <div className="flex items-center justify-between border-b border-slate-100/80 pb-3">
+        <h1 className="text-xl font-bold tracking-tight text-slate-900">Settings</h1>
         <button
           onClick={triggerResetSettings}
-          className="px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:text-white hover:bg-slate-800 hover:border-slate-800 border border-slate-200 rounded-lg transition-all duration-150 cursor-pointer flex items-center gap-1.5 bg-white shadow-2xs"
+          className="px-2.5 py-1 text-xs font-medium text-slate-500 hover:text-slate-900 transition flex items-center gap-1.5 cursor-pointer"
         >
-          <RotateCcw className="w-3 h-3" />
+          <RotateCcw className="w-3.5 h-3.5" />
           <span>Reset Defaults</span>
         </button>
       </div>
@@ -491,38 +488,43 @@ export default function AppSettingsView({
           <div className="space-y-4 font-['Poppins',sans-serif]">
             
             {/* Cloud Sync Status Header */}
-            <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 p-4 sm:p-5 rounded-2xl text-white shadow-sm border border-slate-700/60 relative overflow-hidden space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-700/60 pb-3.5">
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-4 shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center shrink-0">
-                    <Database className="w-5 h-5 text-indigo-300" />
+                  <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
+                    <Database className="w-4 h-4 text-indigo-600" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-white tracking-wide">Cloud Synchronization Center</h3>
-                    <p className="text-[11px] text-slate-300 font-medium truncate max-w-xs sm:max-w-md">
-                      {userEmail ? userEmail : 'Not logged in (Local memory mode active)'}
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-slate-900">Cloud Sync</h3>
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        {displayActivityLogs[0]?.timestamp ? formatLogTime(displayActivityLogs[0].timestamp) : 'Just now'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 font-normal truncate max-w-xs sm:max-w-md">
+                      {userEmail ? userEmail : 'Offline Mode'}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 self-start sm:self-auto">
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border shadow-2xs ${
-                    syncStatus === 'synced' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' :
-                    syncStatus === 'syncing' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' :
-                    'bg-slate-700/60 text-slate-300 border-slate-600'
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                    syncStatus === 'synced' ? 'bg-emerald-50 text-emerald-700' :
+                    syncStatus === 'syncing' ? 'bg-indigo-50 text-indigo-700' :
+                    'bg-slate-100 text-slate-600'
                   }`}>
-                    <span className={`w-2 h-2 rounded-full ${
-                      syncStatus === 'synced' ? 'bg-emerald-400 animate-pulse' :
-                      syncStatus === 'syncing' ? 'bg-indigo-400 animate-ping' :
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      syncStatus === 'synced' ? 'bg-emerald-500' :
+                      syncStatus === 'syncing' ? 'bg-indigo-500 animate-ping' :
                       'bg-slate-400'
                     }`} />
-                    <span>{syncStatus === 'synced' ? 'Synced with Cloud' : syncStatus === 'syncing' ? 'Syncing Changes...' : 'Local Storage'}</span>
+                    <span>{syncStatus === 'synced' ? 'Synced' : syncStatus === 'syncing' ? 'Syncing...' : 'Local'}</span>
                   </span>
 
                   {userEmail && onForceSync && (
                     <button
                       onClick={onForceSync}
-                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
                     >
                       <UploadCloud className="w-3.5 h-3.5" />
                       <span>Backup Now</span>
@@ -531,29 +533,19 @@ export default function AppSettingsView({
                 </div>
               </div>
 
-              {/* Sync Metrics Bar */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
-                <div className="bg-slate-800/60 border border-slate-700/50 p-2.5 rounded-xl">
-                  <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Sync Engine</span>
-                  <span className="block text-xs font-bold text-indigo-200 mt-0.5 flex items-center gap-1">
-                    <Zap className="w-3 h-3 text-amber-400" />
-                    <span>Auto & Manual Sync</span>
+              {/* Simple 2-column key-value metrics grid */}
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div className="bg-slate-50/80 border border-slate-100 p-3 rounded-xl">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">Sync Engine</span>
+                  <span className="block text-xs font-bold text-slate-800 mt-0.5">
+                    Automatic
                   </span>
                 </div>
 
-                <div className="bg-slate-800/60 border border-slate-700/50 p-2.5 rounded-xl">
-                  <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Latest Sync Volume</span>
-                  <span className="block text-xs font-bold text-emerald-300 mt-0.5 flex items-center gap-1">
-                    <Package className="w-3 h-3 text-emerald-400" />
-                    <span>{displayActivityLogs[0]?.itemCount !== undefined ? `${displayActivityLogs[0].itemCount} Items` : 'Active'}</span>
-                  </span>
-                </div>
-
-                <div className="bg-slate-800/60 border border-slate-700/50 p-2.5 rounded-xl col-span-2 sm:col-span-1">
-                  <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Data Protection</span>
-                  <span className="block text-xs font-bold text-sky-200 mt-0.5 flex items-center gap-1">
-                    <ShieldCheck className="w-3 h-3 text-sky-400" />
-                    <span>100% Encrypted & Safe</span>
+                <div className="bg-slate-50/80 border border-slate-100 p-3 rounded-xl">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">Sync Volume</span>
+                  <span className="block text-xs font-bold text-slate-800 mt-0.5">
+                    {displayActivityLogs[0]?.itemCount !== undefined ? `${displayActivityLogs[0].itemCount} Items` : 'Synced'}
                   </span>
                 </div>
               </div>

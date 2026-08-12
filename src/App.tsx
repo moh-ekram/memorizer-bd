@@ -1928,63 +1928,85 @@ const getActiveCourse = (
       {/* Unified Horizontal Menu Bar (Sits directly under the main banner) */}
       <div 
         ref={navContainerRef}
-        className="bg-white border-b border-slate-200/60 overflow-x-auto flex items-center justify-center gap-2 sm:gap-3.5 p-2.5 md:px-8 md:py-3 scrollbar-none flex-shrink-0 relative w-full" 
+        className="bg-white border-b border-slate-200/60 overflow-x-auto flex items-center justify-center gap-1.5 sm:gap-2.5 p-2 md:px-8 md:py-2.5 scrollbar-none flex-shrink-0 relative w-full" 
         id="horizontal-menu-navigation"
       >
         <button
-          onClick={() => {
-            setActiveTab('profile');
-          }}
+          onClick={() => setActiveTab('profile')}
           data-active={['profile', 'dashboard', 'my_courses', 'flashcard'].includes(activeTab)}
           title="My Profile"
-          className="p-2.5 rounded-2xl transition cursor-pointer flex-shrink-0 flex items-center justify-center bg-[#5241f3] text-white shadow-md shadow-indigo-500/20 active:scale-95"
+          className={`p-2 rounded-xl transition cursor-pointer flex-shrink-0 flex items-center justify-center active:scale-95 ${
+            ['profile', 'dashboard', 'my_courses', 'flashcard'].includes(activeTab)
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100/80'
+          }`}
         >
-          <User className="w-5 h-5 text-white" />
+          <User className="w-5 h-5" />
         </button>
 
         <button
           onClick={() => handleNavigateTab('revision')}
           data-active={activeTab === 'revision'}
           title="Revision"
-          className="p-2.5 rounded-2xl transition cursor-pointer flex-shrink-0 flex items-center justify-center hover:bg-slate-50 text-emerald-500 active:scale-95"
+          className={`p-2 rounded-xl transition cursor-pointer flex-shrink-0 flex items-center justify-center active:scale-95 ${
+            activeTab === 'revision'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100/80'
+          }`}
         >
-          <RotateCcw className="w-5 h-5 text-emerald-500" />
+          <RotateCcw className="w-5 h-5" />
         </button>
 
         <button
           onClick={() => handleNavigateTab('leaderboard')}
           data-active={activeTab === 'leaderboard'}
           title="Leaderboard"
-          className="p-2.5 rounded-2xl transition cursor-pointer flex-shrink-0 flex items-center justify-center hover:bg-slate-50 text-amber-500 active:scale-95"
+          className={`p-2 rounded-xl transition cursor-pointer flex-shrink-0 flex items-center justify-center active:scale-95 ${
+            activeTab === 'leaderboard'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100/80'
+          }`}
         >
-          <Trophy className="w-5 h-5 text-amber-500" />
+          <Trophy className="w-5 h-5" />
         </button>
 
         <button
           onClick={() => handleNavigateTab('practice')}
           data-active={['practice', 'synonym', 'quiz', 'match'].includes(activeTab)}
           title="Games"
-          className="p-2.5 rounded-2xl transition cursor-pointer flex-shrink-0 flex items-center justify-center hover:bg-slate-50 text-slate-400 active:scale-95"
+          className={`p-2 rounded-xl transition cursor-pointer flex-shrink-0 flex items-center justify-center active:scale-95 ${
+            ['practice', 'synonym', 'quiz', 'match'].includes(activeTab)
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100/80'
+          }`}
         >
-          <Gamepad2 className="w-5 h-5 text-slate-400" />
+          <Gamepad2 className="w-5 h-5" />
         </button>
 
         <button
           onClick={() => handleNavigateTab('study_tools')}
           data-active={['study_tools', 'dictionary', 'lists', 'planner', 'story'].includes(activeTab)}
           title="Study Tools"
-          className="p-2.5 rounded-2xl transition cursor-pointer flex-shrink-0 flex items-center justify-center hover:bg-slate-50 text-slate-400 active:scale-95"
+          className={`p-2 rounded-xl transition cursor-pointer flex-shrink-0 flex items-center justify-center active:scale-95 ${
+            ['study_tools', 'dictionary', 'lists', 'planner', 'story'].includes(activeTab)
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100/80'
+          }`}
         >
-          <BookOpen className="w-5 h-5 text-slate-400" />
+          <BookOpen className="w-5 h-5" />
         </button>
 
         <button
           onClick={() => setActiveTab('settings')}
           data-active={activeTab === 'settings'}
           title="Settings"
-          className="p-2.5 rounded-2xl transition cursor-pointer flex-shrink-0 flex items-center justify-center hover:bg-slate-50 text-slate-400 active:scale-95"
+          className={`p-2 rounded-xl transition cursor-pointer flex-shrink-0 flex items-center justify-center active:scale-95 ${
+            activeTab === 'settings'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100/80'
+          }`}
         >
-          <Settings className="w-5 h-5 text-slate-400" />
+          <Settings className="w-5 h-5" />
         </button>
 
         <button
@@ -1995,10 +2017,15 @@ const getActiveCourse = (
               setActiveTab('settings');
             }
           }}
+          data-active={activeTab === 'admin'}
           title="Custom Courses / Admin"
-          className="p-2.5 rounded-2xl transition cursor-pointer flex-shrink-0 flex items-center justify-center bg-rose-50 text-rose-500 border border-rose-100 hover:bg-rose-100 active:scale-95"
+          className={`p-2 rounded-xl transition cursor-pointer flex-shrink-0 flex items-center justify-center active:scale-95 ${
+            activeTab === 'admin'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100/80'
+          }`}
         >
-          <FolderPlus className="w-5 h-5 text-rose-500" />
+          <FolderPlus className="w-5 h-5" />
         </button>
 
         {/* App Meta Info */}

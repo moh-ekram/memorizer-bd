@@ -289,51 +289,39 @@ export default function ReadStoryView({
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-indigo-900 text-white p-6 sm:p-8 rounded-3xl relative overflow-hidden shadow-md flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div className="space-y-1 max-w-xl">
-          <span className="inline-flex items-center gap-1.5 px-3 py-0.5 bg-indigo-500/20 text-indigo-200 text-[10px] font-black rounded-full uppercase tracking-wider border border-indigo-500/30">
-            <BookOpen className="w-3 h-3 text-amber-300" /> Read Story Mode
-          </span>
-          <h2 className="text-2xl sm:text-3xl font-black tracking-tight">গল্প পড়ুন ও শব্দ শিখুন</h2>
-          <p className="text-xs sm:text-sm text-indigo-200 leading-relaxed font-medium">
-            গল্পের ভেতরে ভোকাবুলারি শব্দ ও বাংলা অর্থ হাইলাইট করা থাকে। গল্পটি ওপেন করে পড়তে যেকোনো গল্পে ক্লিক করুন।
-          </p>
-        </div>
-
-        {/* Stats Pill */}
-        <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/15 text-xs font-bold shrink-0">
-          <div>
-            <span className="text-[10px] text-indigo-200 uppercase tracking-wider block font-medium">মোট গল্প</span>
-            <span className="text-lg font-black font-mono text-white">{stories.length}</span>
-          </div>
-          <div className="w-px h-8 bg-white/20" />
-          <div>
-            <span className="text-[10px] text-indigo-200 uppercase tracking-wider block font-medium">কোর্স শব্দ</span>
-            <span className="text-lg font-black font-mono text-amber-300">{words.length}</span>
-          </div>
-        </div>
+      <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-2xs space-y-1.5">
+        <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">গল্প পড়ুন ও শব্দ শিখুন</h2>
+        <p className="text-xs sm:text-sm text-slate-500 font-normal">
+          গল্পের ভেতর হাইলাইটেড শব্দ ক্লিক করে অর্থ ও স্ট্যাটাস শিখুন।
+        </p>
       </div>
 
-      {/* Search Bar */}
+      {/* Search & Stats Bar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="গল্পের টাইটেল বা শব্দ খুঁজুন..."
-            className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:border-indigo-500 outline-none transition text-slate-800 shadow-2xs"
+            placeholder="Search stories..."
+            className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-medium focus:border-indigo-500 outline-none transition text-slate-800"
           />
         </div>
 
-        <span className="text-xs text-slate-500 font-bold self-end sm:self-center">
-          {filteredStories.length} of {stories.length} stories
-        </span>
+        {/* Minimalist Stats Chips */}
+        <div className="flex items-center gap-2 text-xs font-medium text-slate-600 self-end sm:self-center">
+          <span className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg">
+            {stories.length} Stories
+          </span>
+          <span className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg">
+            {words.length} Words
+          </span>
+        </div>
       </div>
 
       {/* Stories Catalog Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredStories.map((story) => {
           const originalIndex = stories.findIndex(s => s.id === story.id);
           const vocabCount = getVocabForStory(story.content).length;
@@ -342,35 +330,34 @@ export default function ReadStoryView({
             <div
               key={story.id}
               onClick={() => handleOpenStoryModal(originalIndex)}
-              className="bg-white hover:bg-slate-50/80 rounded-2xl p-5 border border-slate-200 shadow-2xs hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between space-y-4 group relative overflow-hidden"
+              className="bg-white hover:bg-slate-50/60 rounded-2xl p-5 border border-slate-200/80 shadow-2xs hover:shadow-xs transition duration-150 cursor-pointer flex flex-col justify-between space-y-3 group"
             >
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-mono font-extrabold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-150">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span className="font-semibold text-slate-500">
                     Story #{originalIndex + 1}
                   </span>
-                  <span className="text-[10px] font-bold text-slate-400">
+                  <span>
                     {story.content.split(/\s+/).length} Words
                   </span>
                 </div>
 
-                <h3 className="text-base font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1">
+                <h3 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1">
                   {story.title}
                 </h3>
 
-                <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed font-normal">
+                <p className="text-xs text-slate-500 line-clamp-3 leading-relaxed font-normal">
                   {story.content}
                 </p>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+              <div className="pt-3 border-t border-slate-100/80 flex items-center justify-between text-xs text-slate-500">
                 {vocabCount > 0 ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">
-                    <Sparkles className="w-3 h-3 text-indigo-500" />
-                    <span>{vocabCount}টি শব্দ চিহ্নিত</span>
+                  <span className="text-[11px] font-medium text-indigo-600">
+                    {vocabCount}টি শব্দ চিহ্নিত
                   </span>
                 ) : (
-                  <span className="text-[10px] text-slate-400 font-medium">সাধারণ গল্প</span>
+                  <span className="text-[11px] text-slate-400 font-normal">সাধারণ গল্প</span>
                 )}
 
                 <button
