@@ -241,35 +241,23 @@ export default function ReadArticleView({
     return results;
   };
 
-  // Build lookup map for vocabulary matching inside article text
+  // Build lookup map for vocabulary matching inside article text (place1 target words only)
   const { wordLookupMap, allSearchTerms } = useMemo(() => {
     const map = new Map<string, VocabularyWord>();
     const termsSet = new Set<string>();
 
     words.forEach(w => {
+      // 1. Base Word (place1)
       if (w.word && w.word.trim()) {
         const cleanWord = w.word.trim().toLowerCase();
         map.set(cleanWord, w);
         termsSet.add(cleanWord);
       }
+      // 2. Extra Word if present (place1)
       if (w.extraWord && w.extraWord.trim()) {
         const cleanExtra = w.extraWord.trim().toLowerCase();
         if (!map.has(cleanExtra)) map.set(cleanExtra, w);
         termsSet.add(cleanExtra);
-      }
-      if (w.meaning) {
-        extractCleanTerms(w.meaning).forEach(m => {
-          const cleanM = m.toLowerCase();
-          if (!map.has(cleanM)) map.set(cleanM, w);
-          termsSet.add(cleanM);
-        });
-      }
-      if (w.synonyms) {
-        extractCleanTerms(w.synonyms).forEach(s => {
-          const cleanS = s.toLowerCase();
-          if (!map.has(cleanS)) map.set(cleanS, w);
-          termsSet.add(cleanS);
-        });
       }
     });
 
@@ -343,11 +331,11 @@ export default function ReadArticleView({
         const wordProg = progress[matchedWord.id];
         const status = wordProg?.status || 'unrated';
 
-        let badgeBg = 'bg-indigo-100 text-indigo-900 border-indigo-300 hover:bg-indigo-200';
-        if (highlightColor === 'emerald') badgeBg = 'bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200';
-        if (highlightColor === 'amber') badgeBg = 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200';
-        if (highlightColor === 'rose') badgeBg = 'bg-rose-100 text-rose-900 border-rose-300 hover:bg-rose-200';
-        if (highlightColor === 'slate') badgeBg = 'bg-slate-200 text-slate-900 border-slate-300 hover:bg-slate-300';
+        let textColor = 'text-indigo-600 hover:text-indigo-800 decoration-indigo-400';
+        if (highlightColor === 'emerald') textColor = 'text-emerald-600 hover:text-emerald-800 decoration-emerald-500';
+        if (highlightColor === 'amber') textColor = 'text-amber-600 hover:text-amber-800 decoration-amber-500';
+        if (highlightColor === 'rose') textColor = 'text-rose-600 hover:text-rose-800 decoration-rose-500';
+        if (highlightColor === 'slate') textColor = 'text-slate-900 hover:text-black decoration-slate-700';
 
         let statusDot = 'bg-slate-400';
         if (status === 'know') statusDot = 'bg-emerald-500';
@@ -361,12 +349,12 @@ export default function ReadArticleView({
               e.stopPropagation();
               setActiveWordPopup(matchedWord);
             }}
-            className={`inline-flex items-center gap-1 px-1.5 py-0.5 my-0.5 mx-0.5 rounded-md text-xs font-semibold border cursor-pointer transition shadow-2xs ${badgeBg}`}
+            className={`inline-flex items-center gap-1 mx-0.5 cursor-pointer font-extrabold hover:underline underline-offset-3 transition-colors ${textColor}`}
             title={`Click to view definition for "${matchedWord.word}"`}
             style={{ fontFamily: "'Poppins', sans-serif" }}
           >
             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot}`} />
-            <span className="font-bold underline decoration-dotted decoration-indigo-400/60 underline-offset-2">
+            <span className="underline decoration-dotted">
               {part}
             </span>
           </span>

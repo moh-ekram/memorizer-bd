@@ -60,60 +60,24 @@ export default function ReadStoryView({
     return results;
   };
 
-  // Build a lookup map of course words, meanings & synonyms for fast matching
+  // Build a lookup map of course words for fast matching (place1 target words only)
   const { wordLookupMap, allSearchTerms } = useMemo(() => {
     const map = new Map<string, VocabularyWord>();
     const termsSet = new Set<string>();
 
     words.forEach(w => {
-      // 1. Base Word
+      // 1. Base Word (place1)
       if (w.word && w.word.trim()) {
         const cleanWord = w.word.trim().toLowerCase();
         map.set(cleanWord, w);
         termsSet.add(cleanWord);
       }
 
-      // 2. Extra Word if present
+      // 2. Extra Word if present (place1)
       if (w.extraWord && w.extraWord.trim()) {
         const cleanExtra = w.extraWord.trim().toLowerCase();
         if (!map.has(cleanExtra)) map.set(cleanExtra, w);
         termsSet.add(cleanExtra);
-      }
-
-      // 3. Meaning terms (e.g., Bengali meanings like "দয়ালু", "হ্রাস করা")
-      if (w.meaning) {
-        const meanings = extractCleanTerms(w.meaning);
-        meanings.forEach(m => {
-          const cleanM = m.toLowerCase();
-          if (!map.has(cleanM)) {
-            map.set(cleanM, w);
-          }
-          termsSet.add(cleanM);
-        });
-      }
-
-      // 4. Extra Meaning if present
-      if (w.extraMeaning) {
-        const extraMeanings = extractCleanTerms(w.extraMeaning);
-        extraMeanings.forEach(m => {
-          const cleanEM = m.toLowerCase();
-          if (!map.has(cleanEM)) {
-            map.set(cleanEM, w);
-          }
-          termsSet.add(cleanEM);
-        });
-      }
-
-      // 5. Synonyms terms
-      if (w.synonyms) {
-        const syns = extractCleanTerms(w.synonyms);
-        syns.forEach(s => {
-          const cleanS = s.toLowerCase();
-          if (!map.has(cleanS)) {
-            map.set(cleanS, w);
-          }
-          termsSet.add(cleanS);
-        });
       }
     });
 
@@ -234,10 +198,10 @@ export default function ReadStoryView({
     if (!wordRegex) return text;
 
     const colorClasses = {
-      red: 'text-red-600 hover:text-red-700 decoration-red-500 bg-red-50/60 hover:bg-red-100/80',
-      green: 'text-emerald-700 hover:text-emerald-800 decoration-emerald-500 bg-emerald-50/60 hover:bg-emerald-100/80',
-      blue: 'text-blue-700 hover:text-blue-800 decoration-blue-500 bg-blue-50/60 hover:bg-blue-100/80',
-      black: 'text-slate-950 hover:text-black decoration-slate-900 bg-slate-100/80 hover:bg-slate-200'
+      red: 'text-red-600 hover:text-red-700 decoration-red-500',
+      green: 'text-emerald-700 hover:text-emerald-800 decoration-emerald-500',
+      blue: 'text-indigo-600 hover:text-indigo-800 decoration-indigo-500',
+      black: 'text-slate-900 hover:text-black decoration-slate-700'
     };
 
     const parts: React.ReactNode[] = [];
@@ -265,7 +229,7 @@ export default function ReadStoryView({
               e.stopPropagation();
               setActiveWordPopup(matchedWordObj);
             }}
-            className={`inline font-extrabold underline underline-offset-4 cursor-pointer transition-all px-1 py-0.5 rounded-md ${colorClasses[highlightColor]}`}
+            className={`inline font-extrabold underline underline-offset-3 cursor-pointer transition-colors ${colorClasses[highlightColor]}`}
             title={`Click to view flashcard for "${matchedWordObj.word}" (${matchedWordObj.meaning || ''})`}
           >
             {matchedText}
