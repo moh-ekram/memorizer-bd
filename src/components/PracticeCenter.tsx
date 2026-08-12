@@ -474,9 +474,9 @@ export default function PracticeCenter({
 
       {subTab === 'hub' && (
         <div className="space-y-4">
-          {/* Header area - only says 'গেমস' with no stats or extra text */}
+          {/* Header area */}
           <div className="px-1 py-0.5">
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">গেমস</h2>
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Practice & Games</h2>
           </div>
 
           <motion.div 
