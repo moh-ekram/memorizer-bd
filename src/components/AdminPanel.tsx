@@ -3207,81 +3207,21 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           </div>
         ) : requestsSubTab === 'autoverify' ? (
         <div className="space-y-6 font-sans" style={{ fontFamily: "'Poppins', sans-serif" }}>
-          {/* Header Banner */}
-          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 rounded-2xl border border-indigo-800/60 shadow-md">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-400/20 text-amber-300 rounded-full text-xs font-extrabold border border-amber-400/30 mb-2">
-                  <Zap className="w-3.5 h-3.5 fill-amber-300" />
-                  <span>Central bKash Gateway</span>
-                </div>
-                <h2 className="text-xl font-black tracking-tight text-white">Payment Auto-Verification Center</h2>
-                <p className="text-xs text-indigo-200 mt-1 max-w-3xl leading-relaxed">
-                  Add verified payment records to automatically approve course access and credit user wallet balances.
-                </p>
+          {/* Execution Result Feedback */}
+          {autoVerifyResultMessage && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200/80 rounded-xl text-emerald-800 text-xs font-semibold flex items-center justify-between gap-3 animate-fadeIn">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{autoVerifyResultMessage}</span>
               </div>
-              <div className="flex items-center gap-2.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => handleRunCentralAutoVerification()}
-                  disabled={isAutoVerifyingAll}
-                  className="px-5 py-3 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-xl text-xs transition shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  <Zap className={`w-4 h-4 fill-slate-950 ${isAutoVerifyingAll ? 'animate-spin' : ''}`} />
-                  <span>{isAutoVerifyingAll ? 'Verifying...' : '⚡ Run Verification'}</span>
-                </button>
-              </div>
+              <button 
+                onClick={() => setAutoVerifyResultMessage(null)}
+                className="text-emerald-700 hover:text-slate-900 p-1 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
-
-            {/* Execution Result Feedback */}
-            {autoVerifyResultMessage && (
-              <div className="mt-4 p-3.5 bg-emerald-500/20 border border-emerald-400/40 rounded-xl text-emerald-200 text-xs font-semibold flex items-center justify-between gap-3 animate-fadeIn">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>{autoVerifyResultMessage}</span>
-                </div>
-                <button 
-                  onClick={() => setAutoVerifyResultMessage(null)}
-                  className="text-emerald-300 hover:text-white p-1"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Top Quick Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-white p-4 rounded-2xl border border-slate-200/70 shadow-2xs flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center font-black text-lg shrink-0">
-                ৳
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block">Total Verified Records</span>
-                <span className="text-xl font-black text-slate-800 font-mono">{globalVerifiedPayments.length} Recs</span>
-              </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border border-slate-200/70 shadow-2xs flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                <Layers className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block">Multi-Course Cart</span>
-                <span className="text-xl font-black text-indigo-600 font-mono">100% Active</span>
-              </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border border-slate-200/70 shadow-2xs flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                <Wallet className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block">Auto Wallet Credit</span>
-                <span className="text-xl font-black text-emerald-600 font-mono">Enabled</span>
-              </div>
-            </div>
-          </div>
+          )}
 
           {/* Grid: Add Single Payment vs Bulk Import */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
