@@ -2336,14 +2336,20 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     });
   };
 
-  // --- SAVE OPERATION (MUTATE FIRESTORE) ---
-  const handleSave = async () => {
+  // --- ASYNCHRONOUS, DEBOUNCED SAVE OPERATION (MUTATE FIRESTORE) ---
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleSave = () => {
     if (!title.trim()) {
       setError('Course title is required!');
-      return;
-    }
-
-    if (!window.confirm('Are you sure you want to save all changes for this course to the cloud database?')) {
       return;
     }
 
@@ -2351,67 +2357,75 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     setError(null);
     setSuccess(false);
 
-    try {
-      let finalAllowedUsers = [...allowedUsers];
-      if (isBulkMode) {
-        finalAllowedUsers = Array.from(new Set(
-          bulkInput
-              .split('\n')
-              .map(line => line.trim())
-              .filter(line => line.length > 0)
-        ));
-      }
-
-      // Compute total groups dynamically
-      const uniqueGroupsSize = new Set(localWords.map(w => w.group)).size;
-
-      // Force toggles off for variables which have no data
-      const finalToggles = { ...toggles };
-      Object.keys(variableAvailability).forEach(key => {
-        if (!variableAvailability[key as keyof typeof variableAvailability]) {
-          finalToggles[key] = false;
-        }
-      });
-
-      const updatedCourse: Course = {
-        ...course,
-        title: title.trim(),
-        description: description.trim(),
-        isDefault: isDefault,
-        isRestricted: isRestricted,
-        hidden: hidden,
-        allowedUsers: finalAllowedUsers, // Always preserve the allowed users list
-        allowedUsersExpiry: allowedUsersExpiry, // Save student access expiry dates map
-        accessDurationDays: Number(accessDurationDays) || 365,
-        words: localWords,
-        stories: localStories,
-        articles: localArticles,
-        variableToggles: finalToggles,
-        enabledGames: enabledGames, // Save practice and games toggles!
-        totalGroups: uniqueGroupsSize || 1,
-        price: Number(price) || 0,
-        order: Number(courseOrder) || 0,
-        bkashNumber: bkashNumber.trim(),
-        googleSearchQuery: googleSearchQuery.trim(),
-        verifiedPayments: verifiedPayments,
-        placeLabels: localPlaceLabels,
-      };
-
-      // Strip out undefined fields before setDoc
-      const cleanData = JSON.parse(JSON.stringify(updatedCourse));
-      await setDoc(doc(db, 'courses', course.id), cleanData, { merge: true });
-      
-      setSuccess(true);
-      onSaveSuccess(updatedCourse);
-      setTimeout(() => {
-        onClose();
-      }, 500);
-    } catch (err) {
-      console.error('Error updating course in Firestore:', err);
-      setError('Failed to save data to the cloud. Please try again.');
-    } finally {
-      setIsSaving(false);
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
     }
+
+    // Yield execution to the browser main thread so the loading state and spinner render instantly
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        let finalAllowedUsers = [...allowedUsers];
+        if (isBulkMode) {
+          finalAllowedUsers = Array.from(new Set(
+            bulkInput
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0)
+          ));
+        }
+
+        // Compute total groups dynamically
+        const uniqueGroupsSize = new Set(localWords.map(w => w.group)).size;
+
+        // Force toggles off for variables which have no data
+        const finalToggles = { ...toggles };
+        Object.keys(variableAvailability).forEach(key => {
+          if (!variableAvailability[key as keyof typeof variableAvailability]) {
+            finalToggles[key] = false;
+          }
+        });
+
+        const updatedCourse: Course = {
+          ...course,
+          title: title.trim(),
+          description: description.trim(),
+          isDefault: isDefault,
+          isRestricted: isRestricted,
+          hidden: hidden,
+          allowedUsers: finalAllowedUsers, // Always preserve the allowed users list
+          allowedUsersExpiry: allowedUsersExpiry, // Save student access expiry dates map
+          accessDurationDays: Number(accessDurationDays) || 365,
+          words: localWords,
+          stories: localStories,
+          articles: localArticles,
+          variableToggles: finalToggles,
+          enabledGames: enabledGames, // Save practice and games toggles!
+          totalGroups: uniqueGroupsSize || 1,
+          price: Number(price) || 0,
+          order: Number(courseOrder) || 0,
+          bkashNumber: bkashNumber.trim(),
+          googleSearchQuery: googleSearchQuery.trim(),
+          verifiedPayments: verifiedPayments,
+          placeLabels: localPlaceLabels,
+        };
+
+        // Strip out undefined fields safely before setDoc
+        const cleanData = JSON.parse(JSON.stringify(updatedCourse));
+        await setDoc(doc(db, 'courses', course.id), cleanData, { merge: true });
+        
+        setSuccess(true);
+        setIsSaving(false);
+
+        setTimeout(() => {
+          onSaveSuccess(updatedCourse);
+          onClose();
+        }, 400);
+      } catch (err) {
+        console.error('Error updating course in Firestore:', err);
+        setError('Failed to save data to the cloud. Please try again.');
+        setIsSaving(false);
+      }
+    }, 30);
   };
 
   // Navigation Items with Icons and Count Badges
@@ -2642,6 +2656,43 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                       }`}
                     />
                   </button>
+                </div>
+
+                {/* Custom Segment Display Labels */}
+                <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-3">
+                  <div>
+                    <span className="font-extrabold text-xs text-slate-900 block">Custom Segment Display Labels (স্থানভিত্তিক কাস্টম লেবেল)</span>
+                    <span className="text-[11px] text-slate-500 font-medium block mt-0.5">
+                      Customize display names for card positions (place1 through place6) across flashcards, word lists, and games.
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {[
+                      { key: 'place1', label: 'place1 (Front Main)', defaultVal: 'Front Main Display' },
+                      { key: 'place2', label: 'place2 (Back Main)', defaultVal: 'Back Main Display' },
+                      { key: 'place3', label: 'place3 (Example Sentences)', defaultVal: 'Example Sentences' },
+                      { key: 'place4', label: 'place4 (Front Sub-Header)', defaultVal: 'Derivative Word' },
+                      { key: 'place5', label: 'place5 (Back Extra Sec 1)', defaultVal: 'Synonyms' },
+                      { key: 'place6', label: 'place6 (Back Extra Sec 2)', defaultVal: 'Memory Trick / Notes' },
+                    ].map(item => (
+                      <div key={item.key} className="space-y-1">
+                        <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">{item.label}</label>
+                        <input
+                          type="text"
+                          value={localPlaceLabels[item.key] || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setLocalPlaceLabels(prev => ({
+                              ...prev,
+                              [item.key]: val
+                            }));
+                          }}
+                          placeholder={item.defaultVal}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:border-indigo-500 focus:ring-1 focus:ring-indigo-100 outline-none text-slate-800 transition"
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="p-5 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex items-start gap-3.5">
