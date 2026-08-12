@@ -30,6 +30,7 @@ import {
   downloadOooExcelTemplate,
   downloadAnalogyExcelTemplate,
   downloadMcqExcelTemplate,
+  downloadExamExcelTemplate,
   downloadAllGamesMultiSheetTemplate 
 } from '../lib/gameExcelUtils';
 import { CourseSettings } from './CourseSettings';
@@ -442,6 +443,12 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const [creationMethod, setCreationMethod] = useState<'excel' | 'paste'>('excel');
   const [pasteInputText, setPasteInputText] = useState('');
 
+  // Multi-sheet and game excel upload state with visual loading & buffering fix
+  const [isUploadingMultiSheet, setIsUploadingMultiSheet] = useState(false);
+  const [multiSheetUploadProgress, setMultiSheetUploadProgress] = useState<number>(0);
+  const [multiSheetStatusMessage, setMultiSheetStatusMessage] = useState<string>('');
+  const [multiSheetSuccessMessage, setMultiSheetSuccessMessage] = useState<string | null>(null);
+
   // Course access and default settings states
   const [newCourseIsDefault, setNewCourseIsDefault] = useState(false);
   const [newCourseIsRestricted, setNewCourseIsRestricted] = useState(false);
@@ -579,9 +586,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     if (excelQuestionsPreview.length === 0) return;
     setExcelSaveStatus('saving');
     try {
-      for (const q of excelQuestionsPreview) {
-        await setDoc(doc(db, 'blank_questions', q.id), q);
-      }
+      await saveBulkDocs('blank_questions', excelQuestionsPreview);
       setExcelSaveStatus('saved');
       setExcelQuestionsPreview([]);
       fetchBlankQuestions();
@@ -4063,68 +4068,143 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 </p>
               </div>
 
-              {/* Upload Drop Zone */}
-              <div className="border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-xl p-6 text-center transition cursor-pointer relative bg-slate-50/50">
-                <input 
-                  type="file" 
-                  accept=".xlsx, .xls, .csv" 
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    setExcelUploadError(null);
-                    try {
-                      const res = await parseMultiSheetGamesExcel(file, 'all');
-                      let total = 0;
-                      if (res.blankQs.length > 0) {
-                        for (const q of res.blankQs) await setDoc(doc(db, 'blank_questions', q.id), q, { merge: true });
-                        total += res.blankQs.length;
-                      }
-                      if (res.oooQs.length > 0) {
-                        for (const q of res.oooQs) await setDoc(doc(db, 'odd_one_out_questions', q.id), q, { merge: true });
-                        total += res.oooQs.length;
-                      }
-                      if (res.analogyQs.length > 0) {
-                        for (const q of res.analogyQs) await setDoc(doc(db, 'word_analogy_questions', q.id), q, { merge: true });
-                        total += res.analogyQs.length;
-                      }
-                      if (res.mcqQs.length > 0) {
-                        for (const q of res.mcqQs) await setDoc(doc(db, 'mcq_questions', q.id), q, { merge: true });
-                        total += res.mcqQs.length;
-                      }
-                      if (res.examQs.length > 0) {
-                        const newExam: Exam = {
-                          id: `exam_${Date.now()}`,
-                          title: file.name.replace(/\.[^/.]+$/, "") || 'নতুন অনলাইন এক্সাম',
-                          durationMinutes: 15,
-                          marksPerQuestion: 1,
-                          negativeMarking: 0.25,
-                          totalMarks: res.examQs.length,
-                          questions: res.examQs,
-                          createdAt: new Date().toISOString()
-                        };
-                        await setDoc(doc(db, 'exams', newExam.id), newExam, { merge: true });
-                        total += res.examQs.length;
-                      }
+              {/* Upload Drop Zone & Visual Processing State */}
+              <div className="space-y-3">
+                <div className={`border-2 border-dashed rounded-2xl p-6 text-center transition relative ${
+                  isUploadingMultiSheet
+                    ? 'border-indigo-400 bg-indigo-50/40'
+                    : 'border-slate-200 hover:border-indigo-400 bg-slate-50/50 cursor-pointer'
+                }`}>
+                  <input 
+                    type="file" 
+                    accept=".xlsx, .xls, .csv" 
+                    disabled={isUploadingMultiSheet}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setExcelUploadError(null);
+                      setMultiSheetSuccessMessage(null);
+                      setIsUploadingMultiSheet(true);
+                      setMultiSheetUploadProgress(15);
+                      setMultiSheetStatusMessage('এক্সেল ফাইল প্রসেস করা হচ্ছে এবং প্রশ্নাবলী এক্সট্র্যাক্ট করা হচ্ছে...');
+                      try {
+                        const res = await parseMultiSheetGamesExcel(file, 'all');
+                        let total = 0;
 
-                      showToast(`সফলভাবে মোট ${total} টি প্রশ্ন ও ডাটা ডাটাবেজে সংরক্ষিত হয়েছে!`, 'success');
-                      fetchBlankQuestions();
-                    } catch (err: any) {
-                      setExcelUploadError(`আপলোড ত্রুটি: ${err?.message || 'ফাইলের ফরম্যাট সঠিক নয়'}`);
-                    }
-                  }}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                />
-                <UploadCloud className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                <p className="text-xs font-bold text-slate-700">মাল্টি-শীট বা সিঙ্গেল এক্সেল ফাইলটি এখানে ড্রপ করুন</p>
-                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">সহায়ক ফাইলের ধরন: .xlsx, .xls</p>
-              </div>
+                        if (res.blankQs.length > 0) {
+                          setMultiSheetStatusMessage(`Blank filling প্রশ্নাবলী (${res.blankQs.length} টি) ক্লাউডে সেভ করা হচ্ছে...`);
+                          setMultiSheetUploadProgress(35);
+                          await saveBulkDocs('blank_questions', res.blankQs);
+                          total += res.blankQs.length;
+                        }
 
-              {excelUploadError && (
-                <div className="p-3.5 bg-rose-50 text-rose-700 rounded-xl flex items-start gap-2 border border-rose-100 text-xs font-semibold">
-                  <XCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <span>{excelUploadError}</span>
+                        if (res.oooQs.length > 0) {
+                          setMultiSheetStatusMessage(`Odd One Out প্রশ্নাবলী (${res.oooQs.length} টি) ক্লাউডে সেভ করা হচ্ছে...`);
+                          setMultiSheetUploadProgress(55);
+                          await saveBulkDocs('odd_one_out_questions', res.oooQs);
+                          total += res.oooQs.length;
+                        }
+
+                        if (res.analogyQs.length > 0) {
+                          setMultiSheetStatusMessage(`Word Analogy প্রশ্নাবলী (${res.analogyQs.length} টি) ক্লাউডে সেভ করা হচ্ছে...`);
+                          setMultiSheetUploadProgress(75);
+                          await saveBulkDocs('word_analogy_questions', res.analogyQs);
+                          total += res.analogyQs.length;
+                        }
+
+                        if (res.mcqQs.length > 0) {
+                          setMultiSheetStatusMessage(`MCQ Quiz প্রশ্নাবলী (${res.mcqQs.length} টি) ক্লাউডে সেভ করা হচ্ছে...`);
+                          setMultiSheetUploadProgress(88);
+                          await saveBulkDocs('mcq_questions', res.mcqQs);
+                          total += res.mcqQs.length;
+                        }
+
+                        if (res.examQs.length > 0) {
+                          setMultiSheetStatusMessage(`অনলাইন এক্সাম সিরিজ ক্লাউডে তৈরি করা হচ্ছে...`);
+                          setMultiSheetUploadProgress(95);
+                          const newExam: Exam = {
+                            id: `exam_${Date.now()}`,
+                            title: file.name.replace(/\.[^/.]+$/, "") || 'নতুন অনলাইন এক্সাম',
+                            durationMinutes: 15,
+                            marksPerQuestion: 1,
+                            negativeMarking: 0.25,
+                            totalMarks: res.examQs.length,
+                            questions: res.examQs,
+                            createdAt: new Date().toISOString()
+                          };
+                          await setDoc(doc(db, 'exams', newExam.id), newExam, { merge: true });
+                          total += res.examQs.length;
+                        }
+
+                        setMultiSheetUploadProgress(100);
+                        const msg = `সফলভাবে মোট ${total} টি প্রশ্ন ও ডাটাবেজ কন্টেন্ট সংরক্ষিত হয়েছে!`;
+                        setMultiSheetSuccessMessage(msg);
+                        fetchBlankQuestions();
+                      } catch (err: any) {
+                        console.error('Multi-sheet upload error:', err);
+                        setExcelUploadError(`আপলোড ত্রুটি: ${err?.message || 'ফাইলের ফরম্যাট বা কলাম গঠন সঠিক নয়'}`);
+                      } finally {
+                        setIsUploadingMultiSheet(false);
+                      }
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                  />
+
+                  {isUploadingMultiSheet ? (
+                    <div className="py-2 space-y-3">
+                      <div className="flex items-center justify-center gap-2 text-indigo-600 font-bold text-xs">
+                        <RefreshCw className="w-5 h-5 animate-spin text-indigo-600" />
+                        <span>{multiSheetStatusMessage}</span>
+                      </div>
+                      <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden max-w-md mx-auto">
+                        <div 
+                          className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"
+                          style={{ width: `${multiSheetUploadProgress}%` }}
+                        />
+                      </div>
+                      <span className="text-[11px] font-extrabold text-indigo-700 bg-indigo-100/70 px-2.5 py-0.5 rounded-full inline-block">
+                        {multiSheetUploadProgress}% প্রসেসিং সম্পন্ন
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <UploadCloud className="w-8 h-8 text-indigo-500 mx-auto mb-2" />
+                      <p className="text-xs font-bold text-slate-700">মাল্টি-শীট বা সিঙ্গেল এক্সেল ফাইলটি এখানে ক্লিক করে বা ড্রপ করে আপলোড করুন</p>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-0.5">সহায়ক ফাইলের ধরন: .xlsx, .xls</p>
+                    </>
+                  )}
                 </div>
-              )}
+
+                {multiSheetSuccessMessage && (
+                  <div className="p-3.5 bg-emerald-50 text-emerald-800 rounded-xl flex items-center justify-between border border-emerald-200 text-xs font-semibold shadow-xs">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      <span>{multiSheetSuccessMessage}</span>
+                    </div>
+                    <button 
+                      onClick={() => setMultiSheetSuccessMessage(null)}
+                      className="text-emerald-600 hover:text-emerald-900 font-bold text-xs cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+
+                {excelUploadError && (
+                  <div className="p-3.5 bg-rose-50 text-rose-700 rounded-xl flex items-start justify-between gap-2 border border-rose-100 text-xs font-semibold">
+                    <div className="flex items-start gap-2">
+                      <XCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-rose-600" />
+                      <span>{excelUploadError}</span>
+                    </div>
+                    <button 
+                      onClick={() => setExcelUploadError(null)}
+                      className="text-rose-500 hover:text-rose-800 font-bold text-xs cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+              </div>
 
               {excelQuestionsPreview.length > 0 && (
                 <div className="space-y-3.5">

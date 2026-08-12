@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Course, VocabularyWord, BlankQuestion, OddOneOutQuestion, WordAnalogyQuestion, CustomMcqQuestion, StoryItem, ArticleItem } from '../types';
+import { Course, VocabularyWord, BlankQuestion, OddOneOutQuestion, WordAnalogyQuestion, CustomMcqQuestion, StoryItem, ArticleItem, Exam, ExamQuestion } from '../types';
 import { extractTextFromWordFile, parseStoriesFromRawText } from '../utils/storyParser';
 import { 
   X, 
@@ -174,6 +174,52 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   const [bulkExpiryDate, setBulkExpiryDate] = useState('');
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [courseOrder, setCourseOrder] = useState<number>(course.order !== undefined ? course.order : 0);
+
+  // Sync state whenever the course prop changes
+  useEffect(() => {
+    if (course) {
+      setTitle(course.title || '');
+      setDescription(course.description || '');
+      setLocalPlaceLabels(course.placeLabels || {});
+      setIsDefault(!!course.isDefault);
+      setIsRestricted(!!course.isRestricted);
+      setHidden(!!course.hidden);
+      setPrice((course.price && course.price > 0) ? course.price : 30);
+      setBkashNumber((course.bkashNumber && course.bkashNumber !== '01700000000' && course.bkashNumber.trim() !== '') ? course.bkashNumber : '01581624202');
+      setGoogleSearchQuery(course.googleSearchQuery || '');
+      setAllowedUsers(course.allowedUsers || []);
+      setAllowedUsersExpiry(course.allowedUsersExpiry || {});
+      setAccessDurationDays(course.accessDurationDays || 365);
+      setCourseOrder(course.order !== undefined ? course.order : 0);
+      setVerifiedPayments(course.verifiedPayments || []);
+      setLocalWords(course.words || []);
+      setLocalStories(course.stories || []);
+      setLocalArticles(course.articles || []);
+      setEnabledGames({
+        quiz: true,
+        match: true,
+        synonym: true,
+        blank: true,
+        odd_one_out: true,
+        analogy: true,
+        story: true,
+        article: true,
+        exam: true,
+        flashcards: true,
+        spelling: true,
+        ...(course.enabledGames || {})
+      });
+      setToggles({
+        meaning: true,
+        synonyms: true,
+        extraWord: true,
+        extraMeaning: true,
+        example: true,
+        audio: true,
+        ...(course.variableToggles || {})
+      });
+    }
+  }, [course]);
 
   // --- AUTO-VERIFICATION PAYMENT STATES ---
   const [verifiedPayments, setVerifiedPayments] = useState<{ bkashNumber: string; trxId: string; amount?: number }[]>(course.verifiedPayments || []);
@@ -1074,7 +1120,13 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     match: true,
     synonym: true,
     blank: true,
+    odd_one_out: true,
+    analogy: true,
     story: true,
+    article: true,
+    exam: true,
+    flashcards: true,
+    spelling: true,
     ...(course.enabledGames || {})
   });
 
@@ -2345,13 +2397,15 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
         placeLabels: localPlaceLabels,
       };
 
-      await setDoc(doc(db, 'courses', course.id), updatedCourse);
+      // Strip out undefined fields before setDoc
+      const cleanData = JSON.parse(JSON.stringify(updatedCourse));
+      await setDoc(doc(db, 'courses', course.id), cleanData, { merge: true });
       
       setSuccess(true);
+      onSaveSuccess(updatedCourse);
       setTimeout(() => {
-        onSaveSuccess(updatedCourse);
         onClose();
-      }, 1000);
+      }, 500);
     } catch (err) {
       console.error('Error updating course in Firestore:', err);
       setError('Failed to save data to the cloud. Please try again.');
@@ -2703,13 +2757,17 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
 
                 <div className="border border-slate-100 rounded-3xl overflow-hidden bg-white divide-y divide-slate-100">
                   {[
-                    { key: 'quiz', label: 'MCQ Quiz', desc: 'Multiple choice questions and spelling practice games.', icon: GraduationCap },
-                    { key: 'match', label: 'Word Match Game', desc: 'Card matching memory training game.', icon: Gamepad2 },
-                    { key: 'synonym', label: 'Synonym Check', desc: 'Synonym matching and verification game.', icon: Sparkles },
-                    { key: 'blank', label: 'Blank Filling Practice', desc: 'Sentence fill-in-the-blanks practice.', icon: BookOpen },
-                    { key: 'odd_one_out', label: 'Odd One Out', desc: 'Synonyms word selection challenge.', icon: HelpCircle },
-                    { key: 'analogy', label: 'Word Analogy', desc: 'Word pairs analogy logic challenge.', icon: Shuffle },
-                    { key: 'story', label: 'Read Story Mode', desc: 'Enable or disable story-based learning module.', icon: BookOpen }
+                    { key: 'quiz', label: 'MCQ Quiz (এমসিকিউ কুইজ)', desc: 'Multiple choice questions and spelling practice games.', icon: GraduationCap },
+                    { key: 'match', label: 'Word Match Game (শব্দ মেলানো গেম)', desc: 'Card matching memory training game.', icon: Gamepad2 },
+                    { key: 'synonym', label: 'Synonym Check (সমার্থক শব্দ টেস্ট)', desc: 'Synonym matching and verification game.', icon: Sparkles },
+                    { key: 'blank', label: 'Blank Filling Practice (শূন্যস্থান পূরণ)', desc: 'Sentence fill-in-the-blanks practice.', icon: BookOpen },
+                    { key: 'odd_one_out', label: 'Odd One Out (ব্যতিক্রমী শব্দ নির্বাচন)', desc: 'Synonyms word selection challenge.', icon: HelpCircle },
+                    { key: 'analogy', label: 'Word Analogy (শব্দ এনালজি ও লজিক)', desc: 'Word pairs analogy logic challenge.', icon: Shuffle },
+                    { key: 'story', label: 'Read Story Mode (গল্পের মাধ্যমে পড়া)', desc: 'Enable or disable story-based learning module.', icon: BookOpen },
+                    { key: 'article', label: 'Read Article Mode (আর্টিকেল রিডিং সেকশন)', desc: 'Reading comprehension and English articles section.', icon: Newspaper },
+                    { key: 'exam', label: 'Online Exam Series (অনলাইন মক এক্সাম)', desc: 'Timed mock exam test series with merit leaderboard.', icon: Award },
+                    { key: 'flashcards', label: 'Word Flashcards (ফ্ল্যাশকার্ড স্টাডি)', desc: 'Card swipe vocabulary flashcard training.', icon: Eye },
+                    { key: 'spelling', label: 'Spelling Bee Challenge (বানান চর্চা)', desc: 'Audio pronunciation and spelling test game.', icon: Volume2 }
                   ].map(item => {
                     const isEnabled = enabledGames[item.key] !== false;
                     

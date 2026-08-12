@@ -2396,6 +2396,9 @@ const getActiveCourse = (
               enabledGames={activeCourse?.enabledGames}
               placeLabels={activeCourse?.placeLabels}
               googleSearchQuery={activeCourse?.googleSearchQuery}
+              userEmail={user?.email || undefined}
+              userDisplayName={user?.displayName || (user?.email ? user.email.split('@')[0] : undefined)}
+              userId={user?.uid || undefined}
             />
           )}
 

@@ -122,6 +122,9 @@ interface PracticeCenterProps {
     place6?: string;
   };
   googleSearchQuery?: string;
+  userEmail?: string;
+  userDisplayName?: string;
+  userId?: string;
 }
 
 export default function PracticeCenter({
@@ -148,7 +151,10 @@ export default function PracticeCenter({
   allCourses,
   enabledGames,
   placeLabels,
-  googleSearchQuery
+  googleSearchQuery,
+  userEmail,
+  userDisplayName,
+  userId
 }: PracticeCenterProps) {
   const [subTab, setSubTab] = useState<'hub' | 'quiz' | 'match' | 'exam' | 'blank' | 'odd_one_out' | 'analogy' | 'analytics'>('hub');
   const [isQuickShuffleOpen, setIsQuickShuffleOpen] = useState<boolean>(false);
@@ -592,6 +598,9 @@ export default function PracticeCenter({
         <ExamView
           courses={allCourses || []}
           activeCourseId={activeCourseId}
+          userEmail={userEmail}
+          userDisplayName={userDisplayName}
+          userId={userId}
         />
       )}
 

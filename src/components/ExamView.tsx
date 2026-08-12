@@ -489,24 +489,40 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
             </div>
 
             {/* Action Buttons */}
-            <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-slate-100">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-6 border-b border-slate-100">
               <button
                 onClick={() => {
                   setActiveExam(null);
                   setIsExamCompleted(false);
                 }}
-                className="px-5 py-2.5 rounded-2xl border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 cursor-pointer"
+                className="px-4 py-2.5 rounded-2xl border border-slate-200 text-slate-700 font-semibold text-xs hover:bg-slate-50 cursor-pointer"
               >
                 ← পরীক্ষার তালিকায় ফিরুন
               </button>
 
-              <button
-                onClick={() => handleViewMeritList(activeExam)}
-                className="px-6 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm shadow-md flex items-center gap-2 cursor-pointer"
-              >
-                <Award className="w-4 h-4" />
-                <span>মেরিট লিস্ট দেখুন</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const targetExam = activeExam;
+                    if (targetExam) {
+                      setIsExamCompleted(false);
+                      handleStartExam(targetExam);
+                    }
+                  }}
+                  className="px-5 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-md flex items-center gap-1.5 cursor-pointer transition active:scale-95"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Retake Exam (পুনরায় পরীক্ষা দিন)</span>
+                </button>
+
+                <button
+                  onClick={() => handleViewMeritList(activeExam)}
+                  className="px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md flex items-center gap-1.5 cursor-pointer transition"
+                >
+                  <Award className="w-4 h-4" />
+                  <span>মেরিট লিস্ট দেখুন</span>
+                </button>
+              </div>
             </div>
 
             {/* Detailed Question by Question Review */}
@@ -605,12 +621,28 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
               <h2 className="text-2xl font-extrabold text-slate-900">{meritListExam.title}</h2>
             </div>
 
-            <button
-              onClick={() => setMeritListExam(null)}
-              className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 cursor-pointer"
-            >
-              ← পরীক্ষার তালিকায় ফিরুন
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const targetExam = meritListExam;
+                  setMeritListExam(null);
+                  if (targetExam) {
+                    handleStartExam(targetExam);
+                  }
+                }}
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md flex items-center gap-1.5 cursor-pointer transition active:scale-95"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Retake Exam (পুনরায় পরীক্ষা দিন)</span>
+              </button>
+
+              <button
+                onClick={() => setMeritListExam(null)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 cursor-pointer"
+              >
+                ← পরীক্ষার তালিকায় ফিরুন
+              </button>
+            </div>
           </div>
 
           {loadingMerit ? (
