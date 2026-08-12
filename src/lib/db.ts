@@ -51,179 +51,72 @@ export {
   clearQuestionsCache
 };
 
-function withTimeout<T>(promise: Promise<T>, ms = 3500): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Firebase operation timed out after ${ms}ms`)), ms))
-  ]);
-}
-
 export async function getDoc(docRef: any) {
   try {
-    const snap = await withTimeout(fsGetDoc(docRef), 3000);
-    if (snap.exists()) {
-      return snap;
-    }
+    const snap = await fsGetDoc(docRef);
+    return {
+      ...snap,
+      id: snap.id,
+      exists: () => snap.exists(),
+      data: () => (snap.exists() ? (snap.data() as any) : null)
+    };
   } catch (err) {
-    console.warn('Firebase getDoc warning, falling back:', err);
+    console.warn('Firebase getDoc error:', err);
+    throw err;
   }
-
-  // Fallback to server file API or localStorage
-  try {
-    const colName = docRef.parent?.id || docRef.path?.split('/')[0];
-    const docId = docRef.id;
-    if (colName && docId) {
-      const res = await fetch(`/api/db/${encodeURIComponent(colName)}/doc/${encodeURIComponent(docId)}`);
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.exists && json.data) {
-          return {
-            exists: () => true,
-            data: () => json.data,
-            id: docId
-          };
-        }
-      }
-
-      const cached = localStorage.getItem(`local_store_${colName}_${docId}`);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        return {
-          exists: () => true,
-          data: () => ({ ...parsed, id: docId }),
-          id: docId
-        };
-      }
-    }
-  } catch (_) {}
-
-  return { exists: () => false, data: () => null, id: docRef?.id || '' };
 }
 
 export async function getDocs(queryOrCollectionRef: any) {
-  const docsMap = new Map<string, any>();
-  const colName = queryOrCollectionRef.id || queryOrCollectionRef.path?.split('/')[0] || queryOrCollectionRef.collectionName;
-
-  // 1. Fetch from Firebase Firestore
   try {
-    const snap = await withTimeout(fsGetDocs(queryOrCollectionRef), 6000);
-    if (snap && snap.docs) {
-      snap.docs.forEach((docSnap: any) => {
-        docsMap.set(docSnap.id, docSnap.data());
-      });
-    }
+    const snap = await fsGetDocs(queryOrCollectionRef);
+    const docs = snap.docs.map(d => ({
+      ...d,
+      id: d.id,
+      exists: () => d.exists(),
+      data: () => d.data() as any
+    }));
+    return {
+      ...snap,
+      docs,
+      empty: snap.empty,
+      size: snap.size,
+      forEach: (callback: (doc: any) => void) => docs.forEach(callback)
+    };
   } catch (err) {
-    console.warn('Firebase getDocs warning, falling back:', err);
+    console.warn('Firebase getDocs error:', err);
+    throw err;
   }
-
-  // 2. Fetch from server DB API backup & localStorage ONLY for missing documents
-  if (colName) {
-    try {
-      const res = await fetch(`/api/db/${encodeURIComponent(colName)}`);
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && Array.isArray(json.docs)) {
-          json.docs.forEach((docData: any) => {
-            if (docData && docData.id) {
-              const existing = docsMap.get(String(docData.id));
-              if (!existing) {
-                docsMap.set(String(docData.id), docData);
-              }
-            }
-          });
-        }
-      }
-    } catch (_) {}
-
-    // Local storage check
-    try {
-      const prefix = `local_store_${colName}_`;
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith(prefix)) {
-          const docId = key.replace(prefix, '');
-          const rawVal = localStorage.getItem(key);
-          if (rawVal) {
-            try {
-              const parsed = JSON.parse(rawVal);
-              if (!docsMap.has(docId)) {
-                docsMap.set(docId, { id: docId, ...parsed });
-              }
-            } catch (_) {}
-          }
-        }
-      }
-    } catch (_) {}
-  }
-
-  const docs = Array.from(docsMap.entries()).map(([id, docData]) => ({
-    id,
-    data: () => docData,
-    exists: () => true
-  }));
-
-  return {
-    docs,
-    empty: docs.length === 0,
-    size: docs.length,
-    forEach: (callback: (doc: any) => void) => docs.forEach(callback),
-    exists: () => docs.length > 0
-  };
 }
 
 export async function setDoc(docRef: any, data: any, options?: { merge?: boolean }) {
-  // Sync to Firebase
   try {
     if (options) {
-      await withTimeout(fsSetDoc(docRef, data, options), 12000);
+      await fsSetDoc(docRef, data, options);
     } else {
-      await withTimeout(fsSetDoc(docRef, data), 12000);
+      await fsSetDoc(docRef, data);
     }
   } catch (err) {
-    console.warn('Firebase setDoc error or timeout:', err);
+    console.warn('Firebase setDoc error:', err);
+    throw err;
   }
-
-  // Local & Server File Backup
-  try {
-    const colName = docRef.parent?.id || docRef.path?.split('/')[0];
-    const docId = docRef.id;
-    if (colName && docId) {
-      safeSetLocalStorage(`local_store_${colName}_${docId}`, JSON.stringify(data));
-      fetch(`/api/db/${encodeURIComponent(colName)}/doc`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: docId, data, merge: options?.merge })
-      }).catch(() => {});
-    }
-  } catch (_) {}
 }
 
 export async function updateDoc(docRef: any, data: any) {
   try {
-    await withTimeout(fsUpdateDoc(docRef, data), 12000);
+    await fsUpdateDoc(docRef, data);
   } catch (err) {
-    console.warn('Firebase updateDoc error or timeout, attempting merge setDoc:', err);
-    await setDoc(docRef, data, { merge: true });
+    console.warn('Firebase updateDoc error, falling back to merge setDoc:', err);
+    await fsSetDoc(docRef, data, { merge: true });
   }
 }
 
 export async function deleteDoc(docRef: any) {
   try {
-    await withTimeout(fsDeleteDoc(docRef), 3500);
+    await fsDeleteDoc(docRef);
   } catch (err) {
-    console.warn('Firebase deleteDoc error or timeout:', err);
+    console.warn('Firebase deleteDoc error:', err);
+    throw err;
   }
-
-  try {
-    const colName = docRef.parent?.id || docRef.path?.split('/')[0];
-    const docId = docRef.id;
-    if (colName && docId) {
-      localStorage.removeItem(`local_store_${colName}_${docId}`);
-      fetch(`/api/db/${encodeURIComponent(colName)}/doc/${encodeURIComponent(docId)}`, {
-        method: 'DELETE'
-      }).catch(() => {});
-    }
-  } catch (_) {}
 }
 
 export function onSnapshot(refOrQuery: any, callback: (snap: any) => void, onError?: (error: any) => void) {
@@ -235,12 +128,6 @@ export function onSnapshot(refOrQuery: any, callback: (snap: any) => void, onErr
     (err) => {
       console.warn('onSnapshot Firebase error:', err);
       if (onError) onError(err);
-      // Fallback one-shot
-      if (refOrQuery.id || refOrQuery.path?.includes('/')) {
-        getDoc(refOrQuery).then(callback).catch(() => {});
-      } else {
-        getDocs(refOrQuery).then(callback).catch(() => {});
-      }
     }
   );
 }
@@ -251,7 +138,7 @@ export async function incrementCourseClickCount(courseId: string) {
     const docRef = doc(db, 'courses', courseId);
     const snap = await getDoc(docRef);
     if (snap.exists()) {
-      const data = snap.data();
+      const data = snap.data() as any;
       const currentClicks = typeof data?.clickCount === 'number' ? data.clickCount : 0;
       await updateDoc(docRef, { clickCount: currentClicks + 1 });
     } else {
@@ -282,23 +169,11 @@ export async function saveBulkDocs(collectionName: string, items: any[]) {
         const docRef = doc(db, collectionName, item.id);
         batch.set(docRef, item, { merge: true });
       });
-      await withTimeout(batch.commit(), 3500).catch(err => console.warn('Batch commit warning:', err));
+      await batch.commit();
     }
-
-    // Local & Server API backup
-    for (const item of processedItems) {
-      try {
-        safeSetLocalStorage(`local_store_${collectionName}_${item.id}`, JSON.stringify(item));
-      } catch (_) {}
-    }
-
-    fetch(`/api/db/${encodeURIComponent(collectionName)}/bulk`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: processedItems })
-    }).catch(() => {});
   } catch (err) {
     console.error(`saveBulkDocs exception for ${collectionName}:`, err);
+    throw err;
   }
 }
 
@@ -313,22 +188,11 @@ export async function deleteBulkDocs(collectionName: string, docIds: string[]) {
         const docRef = doc(db, collectionName, id);
         batch.delete(docRef);
       });
-      await batch.commit().catch(err => console.warn('Batch delete warning:', err));
+      await batch.commit();
     }
-
-    for (const id of docIds) {
-      try {
-        localStorage.removeItem(`local_store_${collectionName}_${id}`);
-      } catch (_) {}
-    }
-
-    fetch(`/api/db/${encodeURIComponent(collectionName)}/delete-bulk`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ docIds })
-    }).catch(() => {});
   } catch (err) {
     console.error(`deleteBulkDocs exception for ${collectionName}:`, err);
+    throw err;
   }
 }
 
@@ -342,24 +206,8 @@ export async function clearCollectionDocs(collectionName: string, courseId?: str
       const docIds = snap.docs.map(d => d.id);
       await deleteBulkDocs(collectionName, docIds);
     }
-
-    // Clear local storage prefix
-    const prefix = `local_store_${collectionName}_`;
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (key.startsWith(prefix) || key.includes(collectionName))) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach(k => localStorage.removeItem(k));
-
-    fetch(`/api/db/${encodeURIComponent(collectionName)}/clear`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ courseId })
-    }).catch(() => {});
   } catch (err) {
     console.error(`clearCollectionDocs error for ${collectionName}:`, err);
+    throw err;
   }
 }

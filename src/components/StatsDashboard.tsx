@@ -159,7 +159,7 @@ export default function StatsDashboard({
       try {
         const usedTxSnap = await getDoc(doc(db, 'used_transactions', matchTrx));
         if (usedTxSnap.exists()) {
-          const usedData = usedTxSnap.data();
+          const usedData = usedTxSnap.data() as any;
           if (usedData.spent === true || usedData.status === 'spent') {
             setIsSubmittingRequest(false);
             setCheckoutMessage({
@@ -177,7 +177,7 @@ export default function StatsDashboard({
       try {
         const requestsSnap = await getDocs(query(collection(db, 'access_requests')));
         const existingWithTrx = requestsSnap.docs.find(d => {
-          const reqData = d.data();
+          const reqData = d.data() as any;
           const reqTrx = reqData.trxId ? String(reqData.trxId).toLowerCase().trim() : '';
           if (reqTrx === matchTrx) {
             return reqData.spent === true || reqData.status === 'approved' || reqData.status === 'pending' || reqData.verificationMethod === 'auto';
@@ -205,7 +205,7 @@ export default function StatsDashboard({
       try {
         const globalVpSnap = await getDoc(doc(db, 'system_settings', 'global_verified_payments'));
         if (globalVpSnap.exists()) {
-          globalVps = globalVpSnap.data().verifiedPayments || [];
+          globalVps = (globalVpSnap.data() as any)?.verifiedPayments || [];
           if (Array.isArray(globalVps)) {
             matchedVpIndex = globalVps.findIndex((vp: any) => {
               if (vp.spent || vp.claimed) return false;
@@ -375,24 +375,7 @@ export default function StatsDashboard({
   const [dbLeaderboard, setDbLeaderboard] = useState<any[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
 
-  const fetchLeaderboard = async (forceRefetch = false) => {
-    if (!forceRefetch) {
-      const cached = localStorage.getItem('vocab_memorizer_cached_dashboard_leaderboard');
-      const cachedTime = localStorage.getItem('vocab_memorizer_cached_dashboard_leaderboard_timestamp');
-      if (cached && cachedTime) {
-        const ageInMs = Date.now() - Number(cachedTime);
-        const fifteenMinutesInMs = 15 * 60 * 1000;
-        if (ageInMs < fifteenMinutesInMs) {
-          try {
-            setDbLeaderboard(JSON.parse(cached));
-            return;
-          } catch (e) {
-            console.error("Failed to parse cached dashboard leaderboard:", e);
-          }
-        }
-      }
-    }
-
+  const fetchLeaderboard = async (_forceRefetch?: boolean) => {
     setLoadingLeaderboard(true);
     try {
       const usersRef = collection(db, 'users');
@@ -400,7 +383,7 @@ export default function StatsDashboard({
       const snapshot = await getDocs(q);
       const fetchedList: any[] = [];
       snapshot.forEach((doc) => {
-        const data = doc.data();
+        const data = doc.data() as any;
         const progressObj = data.progress || {};
         let knowWordCount = 0;
         Object.values(progressObj).forEach((p: any) => {
@@ -416,8 +399,6 @@ export default function StatsDashboard({
         });
       });
       setDbLeaderboard(fetchedList);
-      safeSetLocalStorage('vocab_memorizer_cached_dashboard_leaderboard', JSON.stringify(fetchedList));
-      safeSetLocalStorage('vocab_memorizer_cached_dashboard_leaderboard_timestamp', String(Date.now()));
     } catch (err) {
       console.error("Error fetching leaderboard from Firestore:", err);
     } finally {

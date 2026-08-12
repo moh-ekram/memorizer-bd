@@ -211,25 +211,11 @@ export default function MyCoursesView({
 
   useEffect(() => {
     const cleanEmail = (user?.email || accessEmail || '').trim().toLowerCase();
-    const storageKey = `vocab_used_free_samples_${cleanEmail || 'guest'}`;
-    try {
-      const localData = localStorage.getItem(storageKey);
-      if (localData) {
-        setUsedFreeSamples(JSON.parse(localData));
-      }
-    } catch (e) {
-      console.warn("Error reading local free samples:", e);
-    }
-
     if (cleanEmail) {
       getDoc(doc(db, 'user_used_samples', cleanEmail)).then((snap) => {
         if (snap.exists()) {
-          const remoteData = snap.data().samples || {};
-          setUsedFreeSamples(prev => {
-            const merged = { ...prev, ...remoteData };
-            safeSetLocalStorage(storageKey, JSON.stringify(merged));
-            return merged;
-          });
+          const remoteData = (snap.data() as any)?.samples || {};
+          setUsedFreeSamples(remoteData);
         }
       }).catch(err => console.warn("Error fetching remote free samples:", err));
     }

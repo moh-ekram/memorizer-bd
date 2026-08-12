@@ -13,7 +13,7 @@ import AnnouncementBanner from './components/AnnouncementBanner';
 import LandingHomePage from './components/LandingHomePage';
 import RevisionCenter from './components/RevisionCenter';
 import { SyncConflictModal, SyncConflictData } from './components/SyncConflictModal';
-import { safeSetLocalStorage } from './lib/storage';
+import { safeSetLocalStorage, clearNonEssentialLocalStorageCache } from './lib/storage';
 
 import {
   LayoutDashboard,
@@ -456,35 +456,9 @@ export default function App() {
     });
   };
 
-  // Load from IndexedDB on initial mount as a secure backup
+  // Clear local cache remnants on initial mount
   useEffect(() => {
-    const loadIndexedDBCache = async () => {
-      try {
-        const cachedProgress = await getProgressFromIndexedDB();
-        if (cachedProgress && Object.keys(cachedProgress).length > 0) {
-          setProgress(prev => {
-            const merged = { ...prev };
-            Object.keys(cachedProgress).forEach(key => {
-              const prevItem = prev[key];
-              const cachedItem = cachedProgress[key];
-              if (!prevItem) {
-                merged[key] = cachedItem;
-              } else {
-                const prevTime = new Date(prevItem.updatedAt || 0).getTime();
-                const cachedTime = new Date(cachedItem.updatedAt || 0).getTime();
-                if (cachedTime > prevTime) {
-                  merged[key] = cachedItem;
-                }
-              }
-            });
-            return merged;
-          });
-        }
-      } catch (err) {
-        console.warn('Could not read IndexedDB progress cache:', err);
-      }
-    };
-    loadIndexedDBCache();
+    clearNonEssentialLocalStorageCache();
   }, []);
 
   // Service Worker Registration and Background Sync Listener

@@ -26,35 +26,7 @@ export default function GlobalLeaderboard() {
   const [currentUserRank, setCurrentUserRank] = useState<number | null>(null);
   const [currentUserData, setCurrentUserData] = useState<LeaderboardEntry | null>(null);
 
-  const fetchLeaderboardData = async (forceRefetch = false) => {
-    // Check cache first if not forced
-    if (!forceRefetch) {
-      const cached = localStorage.getItem('vocab_memorizer_cached_leaderboard');
-      const cachedTime = localStorage.getItem('vocab_memorizer_cached_leaderboard_timestamp');
-      if (cached && cachedTime) {
-        const ageInMs = Date.now() - Number(cachedTime);
-        const fifteenMinutesInMs = 15 * 60 * 1000;
-        if (ageInMs < fifteenMinutesInMs) {
-          try {
-            const sorted = JSON.parse(cached);
-            setLeaderboard(sorted);
-            const currentUserId = auth.currentUser?.uid;
-            if (currentUserId) {
-              const rankIndex = sorted.findIndex((item: any) => item.id === currentUserId);
-              if (rankIndex !== -1) {
-                setCurrentUserRank(rankIndex + 1);
-                setCurrentUserData(sorted[rankIndex]);
-              }
-            }
-            setLoading(false);
-            return;
-          } catch (e) {
-            console.error("Failed to parse cached leaderboard:", e);
-          }
-        }
-      }
-    }
-
+  const fetchLeaderboardData = async (_forceRefetch?: boolean) => {
     setLoading(true);
     try {
       const usersRef = collection(db, 'users');
@@ -63,7 +35,7 @@ export default function GlobalLeaderboard() {
       const currentUserId = auth.currentUser?.uid;
 
       snapshot.forEach((doc) => {
-        const data = doc.data();
+        const data = doc.data() as any;
         const progressObj = data.progress || {};
         
         // Count words marked as 'know'

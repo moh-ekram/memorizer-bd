@@ -633,21 +633,6 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         reqMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as AccessRequest);
       });
 
-      // Also check server API backup to catch any requests saved via server fallback
-      try {
-        const res = await fetch('/api/db/access_requests');
-        if (res.ok) {
-          const json = await res.json();
-          if (json.success && Array.isArray(json.docs)) {
-            json.docs.forEach((d: any) => {
-              if (d && d.id && !reqMap.has(d.id)) {
-                reqMap.set(d.id, { id: d.id, ...d } as AccessRequest);
-              }
-            });
-          }
-        }
-      } catch (_) {}
-
       const list = Array.from(reqMap.values());
       list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       setAccessRequests(list);
