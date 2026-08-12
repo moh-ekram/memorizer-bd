@@ -905,6 +905,19 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             enrolledCourseIds: updatedEnrolled,
             updatedAt: nowISO
           }, { merge: true });
+
+          try {
+            const uq = query(collection(db, 'users'), where('email', '==', userEmail));
+            const uSnap = await getDocs(uq);
+            uSnap.docs.forEach(async d => {
+              if (d.id !== userEmail) {
+                await setDoc(doc(db, 'users', d.id), {
+                  enrolledCourseIds: updatedEnrolled,
+                  updatedAt: nowISO
+                }, { merge: true });
+              }
+            });
+          } catch (_) {}
         }
 
         await setDoc(reqRef, {

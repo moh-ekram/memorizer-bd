@@ -842,12 +842,86 @@ export default function App() {
     setHasLoadedFromCloud(false);
     isSyncingFromCloud.current = true;
     try {
+      const cleanUserEmail = (currentUser.email || '').trim().toLowerCase();
+      const docsToMerge: any[] = [];
       const userDocRef = doc(db, 'users', currentUser.uid);
-      
+
+      // 1. Fetch by UID
+      try {
+        const uidSnap = await getDoc(userDocRef);
+        if (uidSnap.exists()) docsToMerge.push(uidSnap.data());
+      } catch (err) {
+        console.warn("Fetch UID doc error:", err);
+      }
+
+      // 2. Fetch by email doc ID if different
+      if (cleanUserEmail && cleanUserEmail !== currentUser.uid.toLowerCase()) {
+        try {
+          const emailSnap = await getDoc(doc(db, 'users', cleanUserEmail));
+          if (emailSnap.exists()) docsToMerge.push(emailSnap.data());
+        } catch (err) {
+          console.warn("Fetch Email doc error:", err);
+        }
+      }
+
+      // 3. Query users collection by email
+      if (cleanUserEmail) {
+        try {
+          const uQuery = query(collection(db, 'users'), where('email', '==', cleanUserEmail));
+          const uSnap = await getDocs(uQuery);
+          uSnap.docs.forEach(d => {
+            if (d.id !== currentUser.uid && d.id !== cleanUserEmail) {
+              docsToMerge.push(d.data());
+            }
+          });
+        } catch (err) {
+          console.warn("Query users by email error:", err);
+        }
+      }
+
       let data: any = null;
-      const docSnap = await getDoc(userDocRef);
-      if (docSnap.exists()) {
-        data = docSnap.data();
+      if (docsToMerge.length > 0) {
+        data = {};
+        docsToMerge.forEach(docData => {
+          if (docData.progress && typeof docData.progress === 'object') {
+            data.progress = { ...(data.progress || {}), ...docData.progress };
+          }
+          if (docData.synonymProgress && typeof docData.synonymProgress === 'object') {
+            data.synonymProgress = { ...(data.synonymProgress || {}), ...docData.synonymProgress };
+          }
+          if (docData.blankProgress && typeof docData.blankProgress === 'object') {
+            data.blankProgress = { ...(data.blankProgress || {}), ...docData.blankProgress };
+          }
+          if (docData.oooProgress && typeof docData.oooProgress === 'object') {
+            data.oooProgress = { ...(data.oooProgress || {}), ...docData.oooProgress };
+          }
+          if (docData.analogyProgress && typeof docData.analogyProgress === 'object') {
+            data.analogyProgress = { ...(data.analogyProgress || {}), ...docData.analogyProgress };
+          }
+          const enrolledList = Array.isArray(docData.enrolledCourseIds) 
+            ? docData.enrolledCourseIds 
+            : (Array.isArray(docData.enrolledCourses) ? docData.enrolledCourses : []);
+          if (enrolledList.length > 0) {
+            data.enrolledCourseIds = Array.from(new Set([
+              ...(Array.isArray(data.enrolledCourseIds) ? data.enrolledCourseIds : []),
+              ...enrolledList.map((id: any) => (typeof id === 'string' ? id.trim().toLowerCase() : ''))
+            ])).filter(Boolean);
+          }
+          if (docData.activeCourseId && docData.activeCourseId !== 'gre') {
+            data.activeCourseId = docData.activeCourseId;
+          }
+          if (Array.isArray(docData.folders) && docData.folders.length > 0) {
+            data.folders = docData.folders;
+          }
+          if (docData.goal && typeof docData.goal === 'object') {
+            data.goal = { ...(data.goal || {}), ...docData.goal };
+          }
+          if (docData.settings && typeof docData.settings === 'object') {
+            data.settings = { ...(data.settings || {}), ...docData.settings };
+          }
+          if (typeof docData.quizScore === 'number') data.quizScore = Math.max(data.quizScore || 0, docData.quizScore);
+          if (typeof docData.quizTaken === 'number') data.quizTaken = Math.max(data.quizTaken || 0, docData.quizTaken);
+        });
       }
 
       if (data) {
@@ -899,7 +973,6 @@ export default function App() {
         // Auto-sync any course access requests or allowedUsers entries matching currentUser.email
         let autoSyncedPurchased: string[] = [];
         try {
-          const cleanUserEmail = (currentUser.email || '').trim().toLowerCase();
           if (cleanUserEmail) {
             const foundIds = new Set<string>();
             const reqsQuery = query(
@@ -975,12 +1048,19 @@ export default function App() {
         setQuizScore(typeof data.quizScore === 'number' ? data.quizScore : 0);
         setQuizTaken(typeof data.quizTaken === 'number' ? data.quizTaken : 0);
         
-        if (mergedEnrolled.length > userEnrolled.length) {
-          try {
-            await setDoc(userDocRef, { enrolledCourseIds: mergedEnrolled }, { merge: true });
-          } catch (setErr) {
-            console.warn("Failed to update user enrolledCourseIds in cloud:", setErr);
+        // Write unified state back to cloud for both UID and Email docs
+        try {
+          const syncPayload = {
+            enrolledCourseIds: mergedEnrolled,
+            email: currentUser.email,
+            updatedAt: new Date().toISOString()
+          };
+          await setDoc(userDocRef, syncPayload, { merge: true });
+          if (cleanUserEmail && cleanUserEmail !== currentUser.uid.toLowerCase()) {
+            await setDoc(doc(db, 'users', cleanUserEmail), syncPayload, { merge: true });
           }
+        } catch (setErr) {
+          console.warn("Failed to sync unified user enrolledCourseIds in cloud:", setErr);
         }
 
         setSyncStatus('synced');
@@ -1158,7 +1238,7 @@ export default function App() {
     const performSync = async () => {
       setSyncStatus('syncing');
       try {
-        await setDoc(doc(db, 'users', user.uid), {
+        const payload = {
           progress,
           folders,
           goal,
@@ -1173,7 +1253,18 @@ export default function App() {
           quizTaken,
           email: user.email,
           updatedAt: new Date().toISOString()
-        }, { merge: true });
+        };
+        await setDoc(doc(db, 'users', user.uid), payload, { merge: true });
+        if (user.email) {
+          const cleanEmail = user.email.trim().toLowerCase();
+          if (cleanEmail && cleanEmail !== user.uid.toLowerCase()) {
+            try {
+              await setDoc(doc(db, 'users', cleanEmail), payload, { merge: true });
+            } catch (e2) {
+              console.warn("Secondary email doc sync warning:", e2);
+            }
+          }
+        }
         setSyncStatus('synced');
         const itemCount = Object.keys(progress || {}).length;
         addSyncLog('auto', `Saved ${itemCount} study item${itemCount === 1 ? '' : 's'} & preferences to Cloud`, 'success', itemCount);
@@ -1195,7 +1286,7 @@ export default function App() {
     if (!user) return;
     setSyncStatus('syncing');
     try {
-      await setDoc(doc(db, 'users', user.uid), {
+      const payload = {
         progress,
         folders,
         goal,
@@ -1210,7 +1301,18 @@ export default function App() {
         quizTaken,
         email: user.email,
         updatedAt: new Date().toISOString()
-      }, { merge: true });
+      };
+      await setDoc(doc(db, 'users', user.uid), payload, { merge: true });
+      if (user.email) {
+        const cleanEmail = user.email.trim().toLowerCase();
+        if (cleanEmail && cleanEmail !== user.uid.toLowerCase()) {
+          try {
+            await setDoc(doc(db, 'users', cleanEmail), payload, { merge: true });
+          } catch (e2) {
+            console.warn("Secondary email doc manual sync warning:", e2);
+          }
+        }
+      }
 
       setSyncStatus('synced');
       setHasLoadedFromCloud(true);
