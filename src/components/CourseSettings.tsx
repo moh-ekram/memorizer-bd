@@ -34,6 +34,7 @@ import {
   GraduationCap,
   Sparkles,
   Shuffle,
+  Award,
   Save
 } from 'lucide-react';
 import { db, doc, setDoc, getDoc, collection, getDocs, updateDoc, deleteDoc, saveBulkDocs, deleteBulkDocs, matchesCourseId, clearCollectionDocs, query, where } from '../lib/db';
@@ -46,7 +47,9 @@ import {
   downloadAnalogyExcelTemplate,
   parseAnalogyExcel,
   downloadMcqExcelTemplate,
-  parseMcqExcel
+  parseMcqExcel,
+  downloadExamExcelTemplate,
+  parseExamExcel
 } from '../lib/gameExcelUtils';
 import { ExcelImportStatsReport, ImportStatsReport } from './ExcelImportStatsReport';
 
@@ -139,6 +142,18 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   const [excelMcqUploadError, setExcelMcqUploadError] = useState<string | null>(null);
   const [excelMcqNotice, setExcelMcqNotice] = useState<string[] | null>(null);
   const [excelMcqSaveStatus, setExcelMcqSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  // --- ONLINE EXAMS STATES ---
+  const [courseExams, setCourseExams] = useState<Exam[]>([]);
+  const [examsLoading, setExamsLoading] = useState(false);
+  const [examTitleInput, setExamTitleInput] = useState('');
+  const [examDurationInput, setExamDurationInput] = useState<number>(15);
+  const [examMarksPerQInput, setExamMarksPerQInput] = useState<number>(1);
+  const [examNegativeMarkInput, setExamNegativeMarkInput] = useState<number>(0.25);
+  const [excelExamPreview, setExcelExamPreview] = useState<ExamQuestion[]>([]);
+  const [excelExamUploadError, setExcelExamUploadError] = useState<string | null>(null);
+  const [excelExamNotice, setExcelExamNotice] = useState<string[] | null>(null);
+  const [excelExamSaveStatus, setExcelExamSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   // --- GENERAL COURSE STATES ---
   const [title, setTitle] = useState(course.title);
@@ -515,11 +530,31 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     }
   };
 
+  const fetchCourseExams = async () => {
+    setExamsLoading(true);
+    try {
+      const qSnap = await getDocs(collection(db, 'exams'));
+      const list: Exam[] = [];
+      qSnap.forEach(docSnap => {
+        const data = docSnap.data();
+        if (matchesCourseId(data.courseId, course.id) || data.courseId === course.id) {
+          list.push({ id: docSnap.id, ...data } as Exam);
+        }
+      });
+      setCourseExams(list);
+    } catch (err) {
+      console.error('Error fetching course exams:', err);
+    } finally {
+      setExamsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchBlankQuestions();
     fetchOooQuestions();
     fetchAnalogyQuestions();
     fetchMcqQuestions();
+    fetchCourseExams();
   }, [course.id]);
 
   useEffect(() => {
@@ -531,6 +566,8 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
       fetchAnalogyQuestions();
     } else if (activeTab === 'mcq-questions') {
       fetchMcqQuestions();
+    } else if (activeTab === 'exam-questions') {
+      fetchCourseExams();
     }
   }, [activeTab]);
 
@@ -953,6 +990,71 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     } finally {
       setMcqQuestionsLoading(false);
       fetchMcqQuestions();
+    }
+  };
+
+  const handleUploadExamExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setExcelExamUploadError(null);
+    setExcelExamNotice(null);
+    setExcelExamPreview([]);
+
+    try {
+      const { questions, notices } = await parseExamExcel(file, course.id);
+      if (questions.length === 0) {
+        setExcelExamUploadError(notices[0] || 'No valid exam questions found in file.');
+      } else {
+        setExcelExamPreview(questions);
+        if (notices.length > 0) setExcelExamNotice(notices);
+      }
+    } catch (err: any) {
+      console.error('Error parsing exam excel:', err);
+      setExcelExamUploadError('Failed to parse Excel file.');
+    }
+  };
+
+  const handleSaveExamExcel = async () => {
+    if (excelExamPreview.length === 0) return;
+    setExcelExamSaveStatus('saving');
+    try {
+      const title = examTitleInput.trim() || `${course.title} - Online Exam`;
+      const newExam: Exam = {
+        id: `exam_${Date.now()}`,
+        title,
+        courseId: course.id,
+        courseTitle: course.title,
+        durationMinutes: examDurationInput || 15,
+        marksPerQuestion: examMarksPerQInput || 1,
+        negativeMarking: examNegativeMarkInput || 0.25,
+        totalMarks: excelExamPreview.length * (examMarksPerQInput || 1),
+        questions: excelExamPreview,
+        createdAt: new Date().toISOString()
+      };
+
+      await setDoc(doc(db, 'exams', newExam.id), newExam, { merge: true });
+      setExcelExamSaveStatus('saved');
+      setExcelExamPreview([]);
+      setExamTitleInput('');
+      fetchCourseExams();
+      setTimeout(() => setExcelExamSaveStatus('idle'), 3000);
+      alert('Online Exam successfully created and published!');
+    } catch (err: any) {
+      console.error('Error saving exam:', err);
+      setExcelExamSaveStatus('error');
+      setExcelExamUploadError(`Failed to save to cloud: ${err?.message || 'Database connection error'}`);
+    }
+  };
+
+  const handleDeleteCourseExam = async (examId: string) => {
+    if (!window.confirm('Are you sure you want to delete this exam?')) return;
+    try {
+      await deleteDoc(doc(db, 'exams', examId));
+      fetchCourseExams();
+    } catch (err) {
+      console.error('Error deleting exam:', err);
+      alert('Failed to delete exam from cloud.');
     }
   };
 
@@ -2269,6 +2371,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     { id: 'ooo-questions' as const, label: 'Odd One Out', icon: HelpCircle, badge: courseOooQuestions.length },
     { id: 'analogy-questions' as const, label: 'Word Analogy', icon: Shuffle, badge: courseAnalogyQuestions.length },
     { id: 'mcq-questions' as const, label: 'MCQ Quiz Qs', icon: GraduationCap, badge: courseMcqQuestions.length },
+    { id: 'exam-questions' as const, label: 'Online Exams (অনলাইন এক্সাম)', icon: Award, badge: courseExams.length },
     { id: 'story-management' as const, label: 'Read Story Management', icon: BookOpen, badge: localStories.length },
     { id: 'article-management' as const, label: 'Read Article Management', icon: Newspaper, badge: localArticles.length },
   ];
@@ -4883,6 +4986,188 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* --- SECTION: ONLINE EXAMS MANAGEMENT --- */}
+            {activeTab === 'exam-questions' && (
+              <div className="space-y-6 overflow-y-auto max-h-[60vh] pr-2 animate-fadeIn">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                  <div>
+                    <h4 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                      <Award className="w-5 h-5 text-indigo-600" />
+                      <span>Online Exams Management (অনলাইন এক্সাম ম্যানেজমেন্ট)</span>
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Upload exam questions via Excel, configure time limits, pass marks, and negative marking for <span className="font-bold text-indigo-600">{course.title}</span>.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => downloadExamExcelTemplate()}
+                    className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-xs rounded-xl border border-indigo-200 transition cursor-pointer flex items-center gap-1.5 shrink-0"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-indigo-600" />
+                    <span>Download Exam Excel Template</span>
+                  </button>
+                </div>
+
+                {/* Create Exam Card */}
+                <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200/80 space-y-4">
+                  <h5 className="text-xs font-black text-slate-800 uppercase tracking-wider">Create New Exam via Excel Upload</h5>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">Exam Title (শিরোনাম)</label>
+                      <input
+                        type="text"
+                        value={examTitleInput}
+                        onChange={(e) => setExamTitleInput(e.target.value)}
+                        placeholder={`${course.title} Final Test`}
+                        className="w-full text-xs font-bold text-slate-800 border border-slate-200 rounded-xl px-3 py-2 bg-white focus:border-indigo-500 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">Time Limit (Minutes)</label>
+                      <input
+                        type="number"
+                        value={examDurationInput}
+                        onChange={(e) => setExamDurationInput(Number(e.target.value) || 15)}
+                        className="w-full text-xs font-bold text-slate-800 border border-slate-200 rounded-xl px-3 py-2 bg-white focus:border-indigo-500 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">Marks per Question</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={examMarksPerQInput}
+                        onChange={(e) => setExamMarksPerQInput(Number(e.target.value) || 1)}
+                        className="w-full text-xs font-bold text-slate-800 border border-slate-200 rounded-xl px-3 py-2 bg-white focus:border-indigo-500 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">Negative Mark per Wrong Answer</label>
+                      <input
+                        type="number"
+                        step="0.05"
+                        value={examNegativeMarkInput}
+                        onChange={(e) => setExamNegativeMarkInput(Number(e.target.value) || 0.25)}
+                        className="w-full text-xs font-bold text-slate-800 border border-slate-200 rounded-xl px-3 py-2 bg-white focus:border-indigo-500 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Upload Input */}
+                  <div className="pt-2">
+                    <label className="cursor-pointer bg-white border-2 border-dashed border-indigo-200 hover:border-indigo-400 p-4 rounded-xl text-center transition flex flex-col items-center justify-center">
+                      <input
+                        type="file"
+                        accept=".xlsx, .xls"
+                        className="hidden"
+                        onChange={handleUploadExamExcel}
+                      />
+                      <UploadCloud className="w-6 h-6 text-indigo-500 mb-1" />
+                      <span className="text-xs font-bold text-slate-700">Click or Drag & Drop Exam Excel File</span>
+                      <span className="text-[10px] text-slate-400 mt-0.5">Columns: Question, Option A, Option B, Option C, Option D, Correct Answer, Explanation</span>
+                    </label>
+                  </div>
+
+                  {excelExamUploadError && (
+                    <p className="text-xs font-bold text-rose-600 bg-rose-50 p-3 rounded-xl border border-rose-200">
+                      {excelExamUploadError}
+                    </p>
+                  )}
+
+                  {/* Excel Preview */}
+                  {excelExamPreview.length > 0 && (
+                    <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-extrabold text-emerald-900">
+                            Exam File Loaded Successfully: {excelExamPreview.length} Questions Ready
+                          </p>
+                          <p className="text-[11px] font-semibold text-emerald-700">
+                            Total Exam Marks: {excelExamPreview.length * (examMarksPerQInput || 1)}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={excelExamSaveStatus === 'saving'}
+                          onClick={handleSaveExamExcel}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          {excelExamSaveStatus === 'saving' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                          <span>Save & Publish Exam</span>
+                        </button>
+                      </div>
+
+                      <div className="max-h-40 overflow-y-auto space-y-1.5 text-xs text-emerald-950 font-medium border-t border-emerald-200/60 pt-2">
+                        {excelExamPreview.map((q, idx) => (
+                          <div key={idx} className="bg-white/80 p-2 rounded-lg border border-emerald-100 flex items-center justify-between gap-2">
+                            <span className="truncate font-semibold">{idx + 1}. {q.question}</span>
+                            <span className="shrink-0 bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-md">Ans: {q.answer}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Published Exams List */}
+                <div className="space-y-3">
+                  <h5 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center justify-between">
+                    <span>Published Exams for {course.title} ({courseExams.length})</span>
+                    <button
+                      type="button"
+                      onClick={fetchCourseExams}
+                      className="text-indigo-600 hover:text-indigo-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${examsLoading ? 'animate-spin' : ''}`} />
+                      <span>Refresh</span>
+                    </button>
+                  </h5>
+
+                  {courseExams.length === 0 ? (
+                    <div className="text-center py-8 bg-slate-50 rounded-2xl border border-slate-100 text-slate-400 text-xs font-medium">
+                      No online exams published for this course yet. Upload an Excel file above to create one.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {courseExams.map(ex => (
+                        <div key={ex.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col justify-between space-y-3">
+                          <div>
+                            <div className="flex items-center justify-between gap-2">
+                              <h6 className="font-extrabold text-slate-900 text-xs">{ex.title}</h6>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCourseExam(ex.id)}
+                                className="text-rose-500 hover:text-rose-700 p-1 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                title="Delete Exam"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 mt-2 text-[11px] text-slate-500 font-bold">
+                              <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md">{ex.questions?.length || 0} Questions</span>
+                              <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">{ex.durationMinutes} Mins</span>
+                              <span className="bg-amber-50 text-amber-800 px-2 py-0.5 rounded-md">Pass: {ex.totalMarks || (ex.questions?.length || 0)} Marks</span>
+                              {ex.negativeMarking ? (
+                                <span className="bg-rose-50 text-rose-700 px-2 py-0.5 rounded-md">Negative: -{ex.negativeMarking}</span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>

@@ -431,6 +431,90 @@ export async function parseAnalogyExcel(file: File, courseId: string): Promise<{
   });
 }
 
+export function downloadExamExcelTemplate() {
+  const sampleData = [
+    [
+      'Unique ID',
+      'Question Text (প্রশ্ন)',
+      'Option 1 (অপশন ১)',
+      'Option 2 (অপশন ২)',
+      'Option 3 (অপশন ৩)',
+      'Option 4 (অপশন ৪)',
+      'Answer (উত্তর - ঐচ্ছিক যদি # থাকে)',
+      'Explanation (ব্যাখ্যা - ঐচ্ছিক)'
+    ],
+    [
+      'exam_001',
+      'An explicit order was given to the team.',
+      'Clear#',
+      'Vague',
+      'Hidden',
+      'Implicit',
+      '',
+      'Explicit means clearly stated and easy to understand.'
+    ],
+    [
+      'exam_002',
+      'What is the antonym of "Artificial"?',
+      'Natural',
+      'Fake',
+      'Synthetic',
+      'Man-made',
+      'Natural',
+      'Natural is the direct antonym of artificial.'
+    ]
+  ];
+
+  const ws = utils.aoa_to_sheet(sampleData);
+  const wb = utils.book_new();
+  utils.book_append_sheet(wb, ws, 'Exam_Questions');
+  writeFile(wb, 'Online_Exam_Template.xlsx');
+}
+
+export async function parseExamExcel(file: File, courseId?: string): Promise<{ questions: ExamQuestion[]; notices: string[] }> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+        const wb = read(data, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rawRows = utils.sheet_to_json(ws, { header: 1 }) as any[][];
+
+        if (!rawRows || rawRows.length === 0) {
+          return resolve({ questions: [], notices: ['Selected Excel sheet is completely empty.'] });
+        }
+
+        const questions: ExamQuestion[] = [];
+        const notices: string[] = [];
+
+        const row0 = rawRows[0] || [];
+        const r0Str = row0.map(c => cleanText(c).toLowerCase()).join(' ');
+        const hasHeader = r0Str.includes('question') || r0Str.includes('option') || r0Str.includes('id') || r0Str.includes('প্রশ্ন');
+        const startIdx = hasHeader ? 1 : 0;
+
+        for (let i = startIdx; i < rawRows.length; i++) {
+          const parsed = parseGenericQuestionRow(rawRows[i], i, hasHeader, 'exam');
+          if (!parsed) continue;
+
+          questions.push({
+            id: parsed.id,
+            question: parsed.question,
+            options: parsed.options,
+            answer: parsed.answer,
+            explanation: parsed.explanation
+          });
+        }
+
+        resolve({ questions, notices });
+      } catch (err: any) {
+        resolve({ questions: [], notices: [`Excel parsing error: ${err?.message || 'Invalid file format'}`] });
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
 // ==========================================
 // 4. MCQ QUIZ EXCEL UTILS
 // ==========================================

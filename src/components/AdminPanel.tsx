@@ -2358,7 +2358,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       </div>
 
       {/* Admin Tab Navigation - Responsive Wrapping Pill Grid */}
-      <div className="bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-1.5">
+      <div className="bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5">
         <button
           onClick={() => setActiveAdminTab('courses')}
           className={`px-3 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center ${
@@ -2369,6 +2369,18 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         >
           <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
           <span className="truncate">Courses ({customCourses.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveAdminTab('blank-questions')}
+          className={`px-3 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center ${
+            activeAdminTab === 'blank-questions'
+              ? 'bg-emerald-600 text-white shadow-xs font-black border border-emerald-700'
+              : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/80'
+          }`}
+        >
+          <Award className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+          <span className="truncate">Exam & Game Upload</span>
         </button>
 
         <button
@@ -3990,6 +4002,15 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition cursor-pointer"
               >
                 MCQ Quiz
+              </button>
+
+              <button
+                type="button"
+                onClick={() => downloadExamExcelTemplate()}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Award className="w-4 h-4" />
+                <span>অনলাইন এক্সাম টেমপ্লেট (Online Exam)</span>
               </button>
             </div>
           </div>
