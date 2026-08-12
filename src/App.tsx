@@ -136,7 +136,7 @@ export default function App() {
   const getPrimaryTab = (tab: string): string => {
     if (['profile', 'dashboard', 'my_courses', 'flashcard'].includes(tab)) return 'profile';
     if (tab === 'revision') return 'revision';
-    if (['practice', 'synonym', 'quiz', 'match'].includes(tab)) return 'practice';
+    if (['practice', 'quiz', 'match', 'exam'].includes(tab)) return 'practice';
     if (['study_tools', 'dictionary', 'lists', 'planner', 'story'].includes(tab)) return 'study_tools';
     return tab;
   };
@@ -955,10 +955,18 @@ export default function App() {
           history: rawGoal.history && typeof rawGoal.history === 'object' ? rawGoal.history : {}
         });
 
-        setSynonymProgress(data.synonymProgress && typeof data.synonymProgress === 'object' ? data.synonymProgress : {});
-        setBlankProgress(data.blankProgress && typeof data.blankProgress === 'object' ? data.blankProgress : {});
-        setOooProgress(data.oooProgress && typeof data.oooProgress === 'object' ? data.oooProgress : {});
-        setAnalogyProgress(data.analogyProgress && typeof data.analogyProgress === 'object' ? data.analogyProgress : {});
+        setBlankProgress(prev => {
+          const cloudBlank = (data.blankProgress && typeof data.blankProgress === 'object') ? data.blankProgress : {};
+          return { ...prev, ...cloudBlank };
+        });
+        setOooProgress(prev => {
+          const cloudOoo = (data.oooProgress && typeof data.oooProgress === 'object') ? data.oooProgress : {};
+          return { ...prev, ...cloudOoo };
+        });
+        setAnalogyProgress(prev => {
+          const cloudAnalogy = (data.analogyProgress && typeof data.analogyProgress === 'object') ? data.analogyProgress : {};
+          return { ...prev, ...cloudAnalogy };
+        });
         if (data.settings && typeof data.settings === 'object') {
           setSettings(prev => ({
             ...prev,
@@ -2048,10 +2056,10 @@ const getActiveCourse = (
 
         <button
           onClick={() => handleNavigateTab('practice')}
-          data-active={['practice', 'synonym', 'quiz', 'match'].includes(activeTab)}
+          data-active={['practice', 'quiz', 'match', 'exam'].includes(activeTab)}
           title="Games"
           className={`p-2 rounded-xl transition cursor-pointer flex-shrink-0 flex items-center justify-center active:scale-95 ${
-            ['practice', 'synonym', 'quiz', 'match'].includes(activeTab)
+            ['practice', 'quiz', 'match', 'exam'].includes(activeTab)
               ? 'bg-indigo-600 text-white shadow-xs'
               : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100/80'
           }`}
@@ -2361,7 +2369,7 @@ const getActiveCourse = (
             <GlobalLeaderboard />
           )}
 
-          {['practice', 'synonym', 'quiz', 'match'].includes(activeTab) && (
+          {['practice', 'quiz', 'match', 'exam'].includes(activeTab) && (
             <PracticeCenter
               words={activeWords}
               progress={progress}

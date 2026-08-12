@@ -18,8 +18,20 @@ import {
   runTransaction,
   writeBatch
 } from '../lib/db';
-import { VocabularyWord, UserProgress, Course, AccessRequest, BlankQuestion, AppSettings, VerifiedPayment } from '../types';
+import { VocabularyWord, UserProgress, Course, AccessRequest, BlankQuestion, AppSettings, VerifiedPayment, ExamQuestion, Exam } from '../types';
 import { read, utils } from 'xlsx';
+import { 
+  parseBlankExcel, 
+  parseOooExcel, 
+  parseAnalogyExcel, 
+  parseMcqExcel, 
+  parseMultiSheetGamesExcel,
+  downloadBlankExcelTemplate,
+  downloadOooExcelTemplate,
+  downloadAnalogyExcelTemplate,
+  downloadMcqExcelTemplate,
+  downloadAllGamesMultiSheetTemplate 
+} from '../lib/gameExcelUtils';
 import { CourseSettings } from './CourseSettings';
 import TransactionHistoryView from './TransactionHistoryView';
 import { logAdminActivity } from '../lib/activityLogger';
@@ -3930,22 +3942,103 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         <div className="space-y-8 animate-fade-in">
           {/* Header */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs">
-            <h3 className="font-extrabold text-slate-800 text-lg">Blank Filling Practice Management</h3>
+            <h3 className="font-extrabold text-slate-800 text-lg">গেম ও এক্সাম ডাটা আপলোড অ্যান্ড এক্সেল ম্যানেজমেন্ট</h3>
             <p className="text-xs text-slate-500 font-medium mt-1">
-              Manage blank filling questions from the Admin Panel. You can upload an Excel file or add questions manually.
+              একই সাথে সকল গেম ও এক্সামের ডেটা এক্সেল ফাইলের একাধিক শীট (Multi-Sheet) অথবা নির্দিষ্ট গেমের শীট থেকে সহজেই আপলোড করুন।
             </p>
+
+            {/* Template Download Buttons */}
+            <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-slate-700 mr-1">টেমপ্লেট ডাউনলোড করুন:</span>
+
+              <button
+                type="button"
+                onClick={() => downloadAllGamesMultiSheetTemplate()}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>মাল্টি-শীট গেম ও এক্সাম টেমপ্লেট (All-in-One)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => downloadBlankExcelTemplate()}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                Blank Filling
+              </button>
+
+              <button
+                type="button"
+                onClick={() => downloadOooExcelTemplate()}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                Odd One Out
+              </button>
+
+              <button
+                type="button"
+                onClick={() => downloadAnalogyExcelTemplate()}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                Word Analogy
+              </button>
+
+              <button
+                type="button"
+                onClick={() => downloadMcqExcelTemplate()}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                MCQ Quiz
+              </button>
+            </div>
+          </div>
+
+          {/* Column Names Logic Table Explanation */}
+          <div className="bg-amber-50/70 border border-amber-200 p-5 rounded-2xl text-xs space-y-3">
+            <h4 className="font-extrabold text-amber-900 text-sm flex items-center gap-2">
+              <Info className="w-4 h-4 text-amber-600" />
+              <span>এক্সেল কলামের নাম ও লজিকের নিয়মাবলী (Excel Column Logic Rules)</span>
+            </h4>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse bg-white rounded-xl border border-amber-200/80">
+                <thead>
+                  <tr className="bg-amber-100/50 text-amber-900 font-bold text-[11px] border-b border-amber-200">
+                    <th className="p-2.5">কলাম ১: প্রশ্ন (Question)</th>
+                    <th className="p-2.5">কলাম ২-৫: অপশনসমূহ (Options)</th>
+                    <th className="p-2.5">কলাম ৬: উত্তর (Answer - ঐচ্ছিক)</th>
+                    <th className="p-2.5">কলাম ৭: ব্যাখ্যা (Explanation - ঐচ্ছিক)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-amber-100 text-[11px] text-slate-700">
+                  <tr>
+                    <td className="p-2.5 font-bold">কলামের নাম: <span className="font-mono text-indigo-700">Question / Sentence / Stem / প্রশ্ন</span></td>
+                    <td className="p-2.5 font-bold">কলামের নাম: <span className="font-mono text-indigo-700">Option 1, Option 2, Option 3, Option 4 / অপশন ১-৪</span></td>
+                    <td className="p-2.5">কলামের নাম: <span className="font-mono text-indigo-700">Answer / Correct Option / উত্তর</span></td>
+                    <td className="p-2.5">কলামের নাম: <span className="font-mono text-indigo-700">Explanation / Reason / ব্যাখ্যা</span></td>
+                  </tr>
+                  <tr>
+                    <td className="p-2.5 text-slate-600" colSpan={4}>
+                      💡 <strong>লজিক নিয়ম ১ (উত্তরের কলাম না থাকলে):</strong> অপশনের যেকোনো চার কলামের একটি উত্তরের শেষে বা শুরুতে <strong>#</strong> চিহ্ন থাকলে (যেমন: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-rose-600">ঢাকা#</code>) সেটিকে স্বয়ংক্রিয়ভাবে সঠিক উত্তর হিসেবে নির্বাচন করা হবে।<br/>
+                      💡 <strong>লজিক নিয়ম ২ (ব্যাখ্যার কলাম না থাকলে):</strong> ব্যাখ্যার জায়গায় স্বয়ংক্রিয়ভাবে ডিফল্ট লেখা বসবে (যেমন: <em>"সঠিক উত্তরের ব্যাখ্যা শীঘ্রই সংযুক্ত করা হবে।"</em>)।
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Excel Upload Section */}
+            {/* Multi-Sheet & Single Game Excel Upload Section */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-6">
               <div>
                 <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                   <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
-                  <span>Excel Upload</span>
+                  <span>মাল্টি-শীট বা সিঙ্গেল এক্সেল আপলোড (Multi-Sheet Excel Uploader)</span>
                 </h4>
                 <p className="text-[11px] text-slate-400 mt-1 font-medium">
-                  File format: First column has Sentence with blank (e.g., "He is a ___ boy."), next 4 columns are options. The correct option must have '#' appended (e.g., "good#").
+                  একই ফাইলে 'Blank Filling', 'Odd One Out', 'Word Analogy', 'MCQ Quiz', 'Exam' নামের শীট থাকলে সবকটি গেম একসাথে আপডেট হবে।
                 </p>
               </div>
 
@@ -3954,12 +4047,55 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 <input 
                   type="file" 
                   accept=".xlsx, .xls, .csv" 
-                  onChange={handleUploadBlankExcel}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setExcelUploadError(null);
+                    try {
+                      const res = await parseMultiSheetGamesExcel(file, 'all');
+                      let total = 0;
+                      if (res.blankQs.length > 0) {
+                        for (const q of res.blankQs) await setDoc(doc(db, 'blank_questions', q.id), q, { merge: true });
+                        total += res.blankQs.length;
+                      }
+                      if (res.oooQs.length > 0) {
+                        for (const q of res.oooQs) await setDoc(doc(db, 'odd_one_out_questions', q.id), q, { merge: true });
+                        total += res.oooQs.length;
+                      }
+                      if (res.analogyQs.length > 0) {
+                        for (const q of res.analogyQs) await setDoc(doc(db, 'word_analogy_questions', q.id), q, { merge: true });
+                        total += res.analogyQs.length;
+                      }
+                      if (res.mcqQs.length > 0) {
+                        for (const q of res.mcqQs) await setDoc(doc(db, 'mcq_questions', q.id), q, { merge: true });
+                        total += res.mcqQs.length;
+                      }
+                      if (res.examQs.length > 0) {
+                        const newExam: Exam = {
+                          id: `exam_${Date.now()}`,
+                          title: file.name.replace(/\.[^/.]+$/, "") || 'নতুন অনলাইন এক্সাম',
+                          durationMinutes: 15,
+                          marksPerQuestion: 1,
+                          negativeMarking: 0.25,
+                          totalMarks: res.examQs.length,
+                          questions: res.examQs,
+                          createdAt: new Date().toISOString()
+                        };
+                        await setDoc(doc(db, 'exams', newExam.id), newExam, { merge: true });
+                        total += res.examQs.length;
+                      }
+
+                      showToast(`সফলভাবে মোট ${total} টি প্রশ্ন ও ডাটা ডাটাবেজে সংরক্ষিত হয়েছে!`, 'success');
+                      fetchBlankQuestions();
+                    } catch (err: any) {
+                      setExcelUploadError(`আপলোড ত্রুটি: ${err?.message || 'ফাইলের ফরম্যাট সঠিক নয়'}`);
+                    }
+                  }}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />
                 <UploadCloud className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                <p className="text-xs font-bold text-slate-700">Click or drag file to select</p>
-                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Supports .xlsx, .xls, .csv</p>
+                <p className="text-xs font-bold text-slate-700">মাল্টি-শীট বা সিঙ্গেল এক্সেল ফাইলটি এখানে ড্রপ করুন</p>
+                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">সহায়ক ফাইলের ধরন: .xlsx, .xls</p>
               </div>
 
               {excelUploadError && (

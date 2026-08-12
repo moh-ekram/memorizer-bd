@@ -268,4 +268,47 @@ export interface CustomMcqQuestion {
   createdAt?: string;
 }
 
+export interface ExamQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  answer: string;
+  explanation?: string;
+}
+
+export interface Exam {
+  id: string;
+  title: string;
+  description?: string;
+  courseId?: string;
+  courseTitle?: string;
+  durationMinutes: number; // e.g. 15, 30, 60
+  marksPerQuestion: number; // e.g. 1
+  negativeMarking: number; // e.g. 0.25, 0.50
+  passMarks?: number;
+  totalMarks: number;
+  questions: ExamQuestion[];
+  createdAt?: string;
+  createdBy?: string;
+}
+
+export interface ExamResult {
+  id: string;
+  examId: string;
+  examTitle: string;
+  userId: string;
+  userEmail: string;
+  userDisplayName?: string;
+  score: number;
+  totalMarks: number;
+  correctCount: number;
+  wrongCount: number;
+  unansweredCount: number;
+  negativeDeduction: number;
+  timeTakenSeconds: number;
+  submittedAt: string;
+  userAnswers?: Record<string, string>;
+}
+
+
 

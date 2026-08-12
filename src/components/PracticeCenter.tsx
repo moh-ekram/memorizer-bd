@@ -18,7 +18,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import { db, collection, getDocs } from '../lib/db';
-import SynonymCheck from './SynonymCheck';
+import { ExamView } from './ExamView';
 import PracticeQuiz from './PracticeQuiz';
 import WordMatchGame from './WordMatchGame';
 import BlankFillingPractice from './BlankFillingPractice';
@@ -150,7 +150,7 @@ export default function PracticeCenter({
   placeLabels,
   googleSearchQuery
 }: PracticeCenterProps) {
-  const [subTab, setSubTab] = useState<'hub' | 'quiz' | 'match' | 'synonym' | 'blank' | 'odd_one_out' | 'analogy' | 'analytics'>('hub');
+  const [subTab, setSubTab] = useState<'hub' | 'quiz' | 'match' | 'exam' | 'blank' | 'odd_one_out' | 'analogy' | 'analytics'>('hub');
   const [isQuickShuffleOpen, setIsQuickShuffleOpen] = useState<boolean>(false);
 
   const [mobileCollapsedState, setMobileCollapsedState] = useState<Record<string, boolean>>({});
@@ -335,19 +335,19 @@ export default function PracticeCenter({
       action: () => setSubTab('match')
     },
     {
-      key: 'synonym',
-      title: 'Synonym Check',
-      tag: 'AI Verification',
-      btnText: 'Verify Now',
+      key: 'exam',
+      title: 'Exam Section (পরীক্ষা সেকশন)',
+      tag: 'Model Test',
+      btnText: 'Start Exam',
       iconBg: 'bg-amber-50 text-amber-600 border-amber-100',
       ringColorClass: 'text-amber-500',
       barColorClass: 'bg-amber-500',
       borderHover: 'hover:border-amber-200',
       tagColor: 'text-amber-600',
       hoverText: 'hover:text-amber-600',
-      enabled: isSynonymEnabled,
-      icon: <Sparkle className="w-6 h-6 text-amber-500" />,
-      action: () => setSubTab('synonym')
+      enabled: true,
+      icon: <GraduationCap className="w-6 h-6 text-amber-500" />,
+      action: () => setSubTab('exam')
     },
     {
       key: 'blank',
@@ -436,6 +436,16 @@ export default function PracticeCenter({
         >
           <Gamepad2 className="w-4 h-4 text-indigo-600" />
           <span>Games Hub</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setSubTab('exam')}
+          className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-2 cursor-pointer ${
+            subTab === 'exam' ? 'bg-white text-indigo-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <GraduationCap className="w-4 h-4 text-amber-500" />
+          <span>Exam Hall (অনলাইন এক্সাম)</span>
         </button>
         <button
           type="button"
@@ -578,20 +588,10 @@ export default function PracticeCenter({
         />
       )}
 
-      {subTab === 'synonym' && (
-        <SynonymCheck
-          words={words}
-          synonymProgress={synonymProgress}
-          onUpdateSynonymProgress={onUpdateSynonymProgress}
-          activeGroup={activeGroup}
-          progress={progress}
-          folders={folders}
-          onRateWord={onRateWord}
-          onUpdateNotes={onUpdateNotes}
-          onToggleBookmark={onToggleBookmark}
-          settings={settings}
-          onBack={() => setSubTab('hub')}
-          googleSearchQuery={googleSearchQuery}
+      {subTab === 'exam' && (
+        <ExamView
+          courses={allCourses || []}
+          activeCourseId={activeCourseId}
         />
       )}
 
