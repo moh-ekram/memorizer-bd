@@ -11,17 +11,10 @@ import {
 
 const metaEnv = (import.meta as any).env || {};
 
-// Dynamically use current origin for authDomain if running on a custom domain / webview
-// so that /__/auth proxy routes handle OAuth on the same origin without sessionStorage partitioning errors.
+// Get Firebase Auth Domain - use environment variable or fallback to official firebaseapp.com domain
 const getDynamicAuthDomain = () => {
   if (metaEnv.VITE_FIREBASE_AUTH_DOMAIN) {
     return metaEnv.VITE_FIREBASE_AUTH_DOMAIN;
-  }
-  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
-    const host = window.location.hostname;
-    if (host !== 'localhost' && host !== '127.0.0.1') {
-      return window.location.host;
-    }
   }
   return "memorizerbd-75fc8.firebaseapp.com";
 };
