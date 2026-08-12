@@ -37,6 +37,7 @@ import {
   Flame, 
   TrendingUp, 
   Award, 
+  Trophy,
   Info, 
   RefreshCw, 
   Database, 
@@ -96,6 +97,175 @@ interface FirestoreUserDoc {
   };
   synonymProgress?: Record<string, { correct: boolean; updatedAt: string }>;
   settings?: any;
+  enrolledCourseIds?: string[];
+  walletBalance?: number;
+}
+
+// Helper to calculate enrolled courses for a given user doc
+function getUserEnrolledCoursesList(
+  u: FirestoreUserDoc,
+  allCourses: Course[],
+  accessRequestsList: AccessRequest[]
+): Course[] {
+  const cleanEmail = (u.email || '').trim().toLowerCase();
+  const enrolledMap = new Map<string, Course>();
+
+  // 1. Default or free courses
+  allCourses.forEach(c => {
+    if (c.isDefault || c.price === 0) {
+      enrolledMap.set(c.id.trim().toLowerCase(), c);
+    }
+  });
+
+  // 2. User's enrolledCourseIds from Firestore doc
+  if (Array.isArray(u.enrolledCourseIds)) {
+    u.enrolledCourseIds.forEach(id => {
+      const match = allCourses.find(c => c.id.trim().toLowerCase() === id.trim().toLowerCase());
+      if (match) {
+        enrolledMap.set(match.id.trim().toLowerCase(), match);
+      }
+    });
+  }
+
+  // 3. Course allowedUsers includes email
+  allCourses.forEach(c => {
+    if (Array.isArray(c.allowedUsers) && c.allowedUsers.some(au => typeof au === 'string' && au.trim().toLowerCase() === cleanEmail)) {
+      enrolledMap.set(c.id.trim().toLowerCase(), c);
+    }
+  });
+
+  // 4. Approved access_requests
+  if (cleanEmail) {
+    accessRequestsList.forEach(req => {
+      const reqEmail = (req.email || req.userEmail || '').trim().toLowerCase();
+      if (reqEmail === cleanEmail && req.status === 'approved') {
+        if (req.courseId && req.courseId !== 'wallet_recharge' && req.courseId !== 'multi_cart') {
+          const match = allCourses.find(c => c.id.trim().toLowerCase() === req.courseId.trim().toLowerCase());
+          if (match) enrolledMap.set(match.id.trim().toLowerCase(), match);
+        }
+        if (Array.isArray(req.courseIds)) {
+          req.courseIds.forEach(cid => {
+            if (cid && cid !== 'wallet_recharge' && cid !== 'multi_cart') {
+              const match = allCourses.find(c => c.id.trim().toLowerCase() === cid.trim().toLowerCase());
+              if (match) enrolledMap.set(match.id.trim().toLowerCase(), match);
+            }
+          });
+        }
+      }
+    });
+  }
+
+  const result = Array.from(enrolledMap.values());
+  if (result.length === 0) {
+    const defaultCourse = allCourses.find(c => c.isDefault || c.id === 'gre');
+    if (defaultCourse) result.push(defaultCourse);
+  }
+  return result;
+}
+
+// Helper to calculate course specific progress stats for a user
+function getUserCourseProgressStats(
+  u: FirestoreUserDoc,
+  course: Course,
+  allWords: VocabularyWord[]
+) {
+  const courseWords = (course.words && course.words.length > 0)
+    ? course.words
+    : (course.id.trim().toLowerCase() === 'gre' || course.isDefault ? allWords : []);
+
+  const totalWords = courseWords.length > 0
+    ? courseWords.length
+    : ((course.totalGroups || 37) * 30);
+
+  let knowCount = 0;
+  let confusionCount = 0;
+  let dontKnowCount = 0;
+
+  if (courseWords.length > 0) {
+    courseWords.forEach(w => {
+      const status = u.progress?.[w.id]?.status;
+      if (status === 'know') knowCount++;
+      else if (status === 'confusion') confusionCount++;
+      else if (status === 'dont_know') dontKnowCount++;
+    });
+  } else {
+    const progEntries = Object.values(u.progress || {});
+    knowCount = progEntries.filter(p => p.status === 'know').length;
+    confusionCount = progEntries.filter(p => p.status === 'confusion').length;
+    dontKnowCount = progEntries.filter(p => p.status === 'dont_know').length;
+  }
+
+  const unstudiedCount = Math.max(0, totalWords - (knowCount + confusionCount + dontKnowCount));
+  const progressPercent = totalWords > 0 ? Math.round((knowCount / totalWords) * 100) : 0;
+
+  return {
+    totalWords,
+    knowCount,
+    confusionCount,
+    dontKnowCount,
+    unstudiedCount,
+    progressPercent
+  };
+}
+
+// Helper to calculate overall user stats and rank across all users
+function getUserOverallStatsAndRank(
+  u: FirestoreUserDoc,
+  allUsersList: FirestoreUserDoc[],
+  allCourses: Course[],
+  accessRequestsList: AccessRequest[],
+  allWords: VocabularyWord[]
+) {
+  const getRankScore = (userDoc: FirestoreUserDoc) => {
+    const progValues = Object.values(userDoc.progress || {});
+    const know = progValues.filter(p => p.status === 'know').length;
+    const streak = userDoc.goal?.streak || 0;
+    const evaluated = progValues.length;
+    return { know, streak, evaluated };
+  };
+
+  const sortedUsers = [...allUsersList].sort((a, b) => {
+    const scoreA = getRankScore(a);
+    const scoreB = getRankScore(b);
+    if (scoreB.know !== scoreA.know) return scoreB.know - scoreA.know;
+    if (scoreB.streak !== scoreA.streak) return scoreB.streak - scoreA.streak;
+    return scoreB.evaluated - scoreA.evaluated;
+  });
+
+  const rankIndex = sortedUsers.findIndex(usr => (usr.id === u.id) || (usr.email && usr.email.toLowerCase() === u.email.toLowerCase()));
+  const rank = rankIndex >= 0 ? rankIndex + 1 : sortedUsers.length || 1;
+
+  const enrolledCourses = getUserEnrolledCoursesList(u, allCourses, accessRequestsList);
+
+  let totalTargetWords = 0;
+  let totalKnow = 0;
+  let totalConfusion = 0;
+  let totalDontKnow = 0;
+
+  enrolledCourses.forEach(c => {
+    const cStats = getUserCourseProgressStats(u, c, allWords);
+    totalTargetWords += cStats.totalWords;
+    totalKnow += cStats.knowCount;
+    totalConfusion += cStats.confusionCount;
+    totalDontKnow += cStats.dontKnowCount;
+  });
+
+  if (totalTargetWords === 0) {
+    totalTargetWords = allWords.length || 1110;
+  }
+
+  const overallPercent = Math.round((totalKnow / totalTargetWords) * 100) || 0;
+
+  return {
+    rank,
+    totalUsers: allUsersList.length || 1,
+    enrolledCourses,
+    totalTargetWords,
+    totalKnow,
+    totalConfusion,
+    totalDontKnow,
+    overallPercent
+  };
 }
 
 interface AdminPanelProps {
@@ -151,7 +321,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'email' | 'streak' | 'progress' | 'lastActive'>('lastActive');
   const [selectedUser, setSelectedUser] = useState<FirestoreUserDoc | null>(null);
-  const [activeUserTab, setActiveUserTab] = useState<'progress' | 'analytics' | 'settings'>('progress');
+  const [activeUserTab, setActiveUserTab] = useState<'enrolled' | 'progress' | 'analytics' | 'settings'>('enrolled');
   const [activeWordFilter, setActiveWordFilter] = useState<'all' | 'know' | 'confusion' | 'dont_know'>('all');
 
   // Course management and upload states
@@ -1029,7 +1199,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             progress: data.progress || {},
             goal: data.goal || {},
             synonymProgress: data.synonymProgress || {},
-            settings: data.settings || {}
+            settings: data.settings || {},
+            enrolledCourseIds: data.enrolledCourseIds || [],
+            walletBalance: data.walletBalance ?? data.balance ?? 0
           });
         }
       });
@@ -2345,12 +2517,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs font-sans">
                     {filteredUsers.map(u => {
-                      const progValues = getProgressValues(u.progress);
-                      const totalRated = progValues.length;
-                      const knowCount = progValues.filter(p => p.status === 'know').length;
-                      const confusionCount = progValues.filter(p => p.status === 'confusion').length;
-                      const dontKnowCount = progValues.filter(p => p.status === 'dont_know').length;
-                      const percentKnow = Math.round((knowCount / 1110) * 100) || 0;
+                      const stats = getUserOverallStatsAndRank(u, users, allAdminCoursesList, accessRequests, words);
+                      const enrolledCourses = stats.enrolledCourses;
 
                       return (
                         <tr key={u.id} className="hover:bg-slate-50/50 transition">
@@ -2376,17 +2544,39 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                             </div>
                           </td>
                           <td className="py-4 px-4">
-                            <div className="space-y-1">
-                              <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
-                                <span>Know: {knowCount} ({percentKnow}%)</span>
+                            <div className="space-y-1.5 min-w-[210px]">
+                              {/* Top row stats + Rank */}
+                              <div className="flex items-center justify-between text-[10px] font-bold text-slate-700">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded font-black text-[9px] border border-indigo-100">
+                                    🏆 Rank #{stats.rank}
+                                  </span>
+                                  <span>{stats.totalKnow}/{stats.totalTargetWords} ({stats.overallPercent}%)</span>
+                                </div>
                                 <span className="text-[9px] font-semibold text-slate-400">
-                                  {confusionCount}❓ • {dontKnowCount}❌
+                                  {stats.totalConfusion}❓ • {stats.totalDontKnow}❌
                                 </span>
                               </div>
-                              <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden flex">
-                                <div className="bg-emerald-500 h-full" style={{ width: `${percentKnow}%` }} />
-                                <div className="bg-amber-400 h-full" style={{ width: `${Math.round((confusionCount / 1110) * 100)}%` }} />
-                                <div className="bg-rose-400 h-full" style={{ width: `${Math.round((dontKnowCount / 1110) * 100)}%` }} />
+
+                              {/* Progress bar */}
+                              <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex">
+                                <div className="bg-emerald-500 h-full transition-all" style={{ width: `${stats.overallPercent}%` }} />
+                                <div className="bg-amber-400 h-full transition-all" style={{ width: `${Math.round((stats.totalConfusion / stats.totalTargetWords) * 100)}%` }} />
+                                <div className="bg-rose-400 h-full transition-all" style={{ width: `${Math.round((stats.totalDontKnow / stats.totalTargetWords) * 100)}%` }} />
+                              </div>
+
+                              {/* Enrolled course badges */}
+                              <div className="flex flex-wrap gap-1 pt-0.5">
+                                {enrolledCourses.slice(0, 2).map(c => (
+                                  <span key={c.id} className="text-[9px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded border border-slate-200 truncate max-w-[110px]" title={c.title}>
+                                    {c.title}
+                                  </span>
+                                ))}
+                                {enrolledCourses.length > 2 && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
+                                    +{enrolledCourses.length - 2} more
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </td>
@@ -2399,9 +2589,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                             <button
                               type="button"
                               onClick={() => setSelectedUser(u)}
-                              className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-[10px] font-black transition cursor-pointer"
+                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[11px] font-black transition cursor-pointer shadow-xs flex items-center justify-center gap-1 mx-auto"
                             >
-                              Details
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Details</span>
                             </button>
                           </td>
                         </tr>
@@ -3475,460 +3666,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs">
             <h3 className="font-extrabold text-slate-800 text-lg flex items-center gap-2">
               <Sliders className="w-5 h-5 text-indigo-600" />
-              <span>System Settings & Banner Control</span>
+              <span>System Settings</span>
             </h3>
             <p className="text-xs text-slate-500 font-medium mt-1">
-              Configure global app announcements, ads, notice banners, and system defaults across the platform.
+              Configure item ordering, support contact info, and platform defaults across the platform.
             </p>
           </div>
 
-          {/* User Announcement / Notice / Ad Banner Control */}
-          <div className="bg-white p-6 rounded-2xl border border-indigo-200/80 shadow-xs space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4 flex-wrap gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Megaphone className="w-5 h-5 text-indigo-600" />
-                  <h4 className="font-extrabold text-slate-900 text-base">
-                    User Announcement & Notification Banner System
-                  </h4>
-                </div>
-                <p className="mt-0.5" style={{ fontFamily: 'Poppins, Inter, ui-sans-serif, system-ui, sans-serif', fontSize: '10px', color: 'oklch(0.704 0.04 256.788)', fontWeight: 500, lineHeight: '10px', letterSpacing: '-0.25px' }}>
-                  Control for displaying special notices, announcements, or banner alerts at the top of the application.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-bold text-slate-700">Banner Status:</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (settings && onUpdateSettings) {
-                      onUpdateSettings({
-                        ...settings,
-                        announcementEnabled: !settings.announcementEnabled
-                      });
-                    }
-                  }}
-                  className={`px-4 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
-                    settings?.announcementEnabled 
-                      ? 'bg-emerald-600 text-white shadow-xs' 
-                      : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
-                  }`}
-                >
-                  <Bell className="w-3.5 h-3.5" />
-                  <span>{settings?.announcementEnabled ? 'Active (Published)' : 'Disabled'}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Config Fields */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Announcement Message */}
-              <div className="md:col-span-2 space-y-1.5">
-                <label className="text-xs font-extrabold text-slate-700 block">
-                  Announcement / Notice Text:
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="e.g. 🎉 New course updates and features added! Check them out now."
-                  value={settings?.announcementText || ''}
-                  onChange={(e) => {
-                    if (settings && onUpdateSettings) {
-                      onUpdateSettings({
-                        ...settings,
-                        announcementText: e.target.value
-                      });
-                    }
-                  }}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-500 transition"
-                />
-              </div>
-
-              {/* Banner Type / Theme Selector */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-extrabold text-slate-700 block">
-                  Banner Color Theme / Type:
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { key: 'info', label: 'Info (Blue)', bg: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-                    { key: 'warning', label: 'Notice (Amber)', bg: 'bg-amber-50 text-amber-800 border-amber-200' },
-                    { key: 'success', label: 'Offer (Emerald)', bg: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-                    { key: 'promo', label: 'Promo (Purple)', bg: 'bg-purple-50 text-purple-800 border-purple-200' },
-                  ].map(t => (
-                    <button
-                      key={t.key}
-                      type="button"
-                      onClick={() => {
-                        if (settings && onUpdateSettings) {
-                          onUpdateSettings({
-                            ...settings,
-                            announcementType: t.key as any
-                          });
-                        }
-                      }}
-                      className={`p-2 rounded-xl text-xs font-bold border transition text-center ${
-                        (settings?.announcementType || 'info') === t.key 
-                          ? 'ring-2 ring-indigo-600 font-extrabold ' + t.bg
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Closable Toggle */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-extrabold text-slate-700 block">
-                  Dismissable / Closable by User?
-                </label>
-                <div className="flex items-center gap-3 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (settings && onUpdateSettings) {
-                        onUpdateSettings({
-                          ...settings,
-                          announcementClosable: settings.announcementClosable !== false ? false : true
-                        });
-                      }
-                    }}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
-                      settings?.announcementClosable !== false
-                        ? 'bg-indigo-50 text-indigo-700 border-indigo-200 font-extrabold'
-                        : 'bg-slate-100 text-slate-600 border-slate-200'
-                    }`}
-                  >
-                    {settings?.announcementClosable !== false ? 'Yes (User can dismiss)' : 'No (Persistent banner)'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Action Link & Text */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-extrabold text-slate-700 block">
-                  Optional Button Link URL:
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. https://facebook.com or /#courses"
-                  value={settings?.announcementLink || ''}
-                  onChange={(e) => {
-                    if (settings && onUpdateSettings) {
-                      onUpdateSettings({
-                        ...settings,
-                        announcementLink: e.target.value
-                      });
-                    }
-                  }}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-500 transition"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-extrabold text-slate-700 block">
-                  Optional Button Label:
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. View Details"
-                  value={settings?.announcementLinkText || ''}
-                  onChange={(e) => {
-                    if (settings && onUpdateSettings) {
-                      onUpdateSettings({
-                        ...settings,
-                        announcementLinkText: e.target.value
-                      });
-                    }
-                  }}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-500 transition"
-                />
-              </div>
-            </div>
-
-            {/* Live Banner Preview */}
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
-              <span className="block" style={{ fontFamily: 'Poppins, Inter, ui-sans-serif, system-ui, sans-serif', fontSize: '10px', color: 'oklch(0.704 0.04 256.788)', fontWeight: 500, lineHeight: '10px', letterSpacing: '-0.25px' }}>Live Banner Preview:</span>
-              {settings?.announcementEnabled ? (
-                <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 flex-wrap ${
-                  settings.announcementType === 'warning' ? 'bg-amber-50 text-amber-900 border-amber-200' :
-                  settings.announcementType === 'success' ? 'bg-emerald-50 text-emerald-900 border-emerald-200' :
-                  settings.announcementType === 'promo' ? 'bg-purple-50 text-purple-900 border-purple-200' :
-                  'bg-indigo-50 text-indigo-900 border-indigo-200'
-                }`}>
-                  <div className="flex items-center gap-2.5 text-xs font-bold">
-                    <Megaphone className="w-4 h-4 shrink-0" />
-                    <span>{settings.announcementText || 'Your announcement text will appear here.'}</span>
-                  </div>
-                  {settings.announcementLink && (
-                    <a
-                      href={settings.announcementLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3 py-1 bg-white shadow-2xs rounded-lg text-xs font-extrabold border border-black/10 hover:bg-slate-50 transition"
-                    >
-                      {settings.announcementLinkText || 'View Details'}
-                    </a>
-                  )}
-                </div>
-              ) : (
-                <div className="p-3 bg-white rounded-lg border border-slate-200 text-slate-400 text-xs font-semibold text-center italic" style={{ fontFamily: 'Poppins, Inter, ui-sans-serif, system-ui, sans-serif', fontSize: '10px', color: 'oklch(0.704 0.04 256.788)', fontWeight: 500, lineHeight: '10px', letterSpacing: '-0.25px' }}>
-                  Announcement banner is currently disabled.
-                </div>
-              )}
-            </div>
-          </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Daily Dashboard Banner Flashcard Overlay Setting */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div>
-                  <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-indigo-600" />
-                    <span>Daily Banner Flashcard Overlay</span>
-                  </h4>
-                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                    Controls automated flashcard banner overlay popups on the dashboard
-                  </p>
-                </div>
-                <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 font-extrabold text-[10px] rounded-lg uppercase">
-                  Banner Control
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                {/* Input Box: Times Per Day */}
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 space-y-2">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Frequency (Times Per Day):
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="0"
-                      max="50"
-                      value={settings?.flashcardBannerCountPerDay !== undefined ? settings.flashcardBannerCountPerDay : (settings?.flashcardBannerAnim === 'once_daily' ? 1 : settings?.flashcardBannerAnim === 'disabled' ? 0 : 2)}
-                      onChange={(e) => {
-                        const count = parseInt(e.target.value, 10) || 0;
-                        if (settings && onUpdateSettings) {
-                          onUpdateSettings({
-                            ...settings,
-                            flashcardBannerCountPerDay: Math.max(0, count),
-                            flashcardBannerAnim: count === 0 ? 'disabled' : count === 1 ? 'once_daily' : 'twice_daily'
-                          });
-                        }
-                      }}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-extrabold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                    />
-                    <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">
-                      times/day
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5 pt-1">
-                    {[0, 1, 2, 3, 5].map((num) => (
-                      <button
-                        key={num}
-                        type="button"
-                        onClick={() => {
-                          if (settings && onUpdateSettings) {
-                            onUpdateSettings({
-                              ...settings,
-                              flashcardBannerCountPerDay: num,
-                              flashcardBannerAnim: num === 0 ? 'disabled' : num === 1 ? 'once_daily' : 'twice_daily'
-                            });
-                          }
-                        }}
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition ${
-                          (settings?.flashcardBannerCountPerDay ?? (settings?.flashcardBannerAnim === 'once_daily' ? 1 : settings?.flashcardBannerAnim === 'disabled' ? 0 : 2)) === num
-                            ? 'bg-slate-800 text-white border-slate-800'
-                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        {num === 0 ? 'Off' : `${num}x`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Input Box: Duration in Seconds */}
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 space-y-2">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Overlay Duration (Seconds):
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="0.5"
-                      max="60"
-                      step="0.5"
-                      value={settings?.flashcardBannerDurationSec ?? 3.0}
-                      onChange={(e) => {
-                        const dur = parseFloat(e.target.value) || 3.0;
-                        if (settings && onUpdateSettings) {
-                          onUpdateSettings({
-                            ...settings,
-                            flashcardBannerDurationSec: Math.max(0.5, dur)
-                          });
-                        }
-                      }}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-extrabold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                    />
-                    <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">
-                      seconds
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5 pt-1">
-                    {[1, 2, 3, 5, 10].map((dur) => (
-                      <button
-                        key={dur}
-                        type="button"
-                        onClick={() => {
-                          if (settings && onUpdateSettings) {
-                            onUpdateSettings({
-                              ...settings,
-                              flashcardBannerDurationSec: dur
-                            });
-                          }
-                        }}
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition ${
-                          (settings?.flashcardBannerDurationSec ?? 3.0) === dur
-                            ? 'bg-indigo-600 text-white border-indigo-600'
-                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        {dur}s
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Default Flashcard Configurations */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
-                  <Sliders className="w-4 h-4 text-emerald-600" />
-                  <span>Default Flashcard Order & Audio</span>
-                </h4>
-                <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 font-extrabold text-[10px] rounded-lg uppercase">
-                  Defaults
-                </span>
-              </div>
-
-              <div className="space-y-4 pt-1">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    Default Flashcard Card Order
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { key: 'random', label: 'Random' },
-                      { key: 'serial', label: 'Serial' },
-                      { key: 'alphabetical', label: 'Alphabetical' }
-                    ].map(ord => {
-                      const isSel = (settings?.defaultFlashcardOrder || 'random') === ord.key;
-                      return (
-                        <button
-                          key={ord.key}
-                          type="button"
-                          onClick={() => {
-                            if (settings && onUpdateSettings) {
-                              onUpdateSettings({
-                                ...settings,
-                                defaultFlashcardOrder: ord.key as any
-                              });
-                            }
-                          }}
-                          className={`py-2 px-3 rounded-xl border text-xs font-bold transition cursor-pointer text-center ${
-                            isSel ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          {ord.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                  <span className="text-xs font-bold text-slate-700">Auto-play Audio Pronunciation</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (settings && onUpdateSettings) {
-                        onUpdateSettings({
-                          ...settings,
-                          autoPlayAudio: !settings.autoPlayAudio
-                        });
-                      }
-                    }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${
-                      settings?.autoPlayAudio ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
-                    }`}
-                  >
-                    {settings?.autoPlayAudio ? 'Enabled' : 'Disabled'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Start Page & Course Displayer Settings */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-4 col-span-1 md:col-span-2">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div>
-                  <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
-                    <Globe className="w-4 h-4 text-indigo-600" />
-                    <span>Start Page & 2-Second Course Rotator Settings (স্টার্ট পেইজ সেটিং)</span>
-                  </h4>
-                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                    Select which courses from Buy New Courses or custom courses cycle every 2 seconds on the Start Page hero headline
-                  </p>
-                </div>
-                <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 font-extrabold text-[10px] rounded-lg uppercase">
-                  Start Page Rotator
-                </span>
-              </div>
-
-              {/* Course Toggles */}
-              <div className="space-y-3 pt-1">
-                <label className="block text-xs font-bold text-slate-700">
-                  Select Courses to Display in 2-Second Rotation on Start Page Hero Section:
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {Array.from(new Set([
-                    ...customCourses.map(c => (c.title || c.id).trim()).filter(Boolean),
-                    'BCS', 'GRE', 'IELTS', 'Bank Job', 'Primary Teacher', 'Basic Vocab', 'Spoken English', 'Duolingo DET', 'TOEFL'
-                  ])).map(cName => {
-                    const currentList = settings?.landingDisplayCourses || ['BCS', 'GRE', 'IELTS', 'Bank Job'];
-                    const isSel = currentList.includes(cName);
-                    return (
-                      <button
-                        key={cName}
-                        type="button"
-                        onClick={() => {
-                          const updatedList = isSel
-                            ? currentList.filter(x => x !== cName)
-                            : [...currentList, cName];
-                          const updated = { ...settings, landingDisplayCourses: updatedList };
-                          if (onUpdateSettings) onUpdateSettings(updated);
-                          try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (e) {}
-                        }}
-                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer ${
-                          isSel ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        {isSel ? `✓ ${cName}` : `+ ${cName}`}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
             {/* Practice & Games Item Positioning Setting */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-4 col-span-1 md:col-span-2">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -4507,69 +4252,217 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       )}
 
       {/* User Details Slideover / Modal */}
-      {selectedUser && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-end z-50 animate-fade-in" id="user-details-modal">
-          <div className="bg-white w-full max-w-2xl h-full flex flex-col shadow-2xl relative animate-slide-left font-sans">
-            
-            {/* Modal Header */}
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-indigo-500 text-white flex items-center justify-center font-black text-sm">
-                  {selectedUser.email[0].toUpperCase()}
+      {selectedUser && (() => {
+        const selectedUserStats = getUserOverallStatsAndRank(selectedUser, users, allAdminCoursesList, accessRequests, words);
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-end z-50 animate-fade-in" id="user-details-modal">
+            <div className="bg-white w-full max-w-2xl h-full flex flex-col shadow-2xl relative animate-slide-left font-sans">
+              
+              {/* Modal Header */}
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-xs">
+                    {selectedUser.email[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-slate-800 text-base flex items-center gap-2">
+                      <span>{selectedUser.email.split('@')[0]}</span>
+                      <button 
+                        onClick={() => copyToClipboard(selectedUser.email)}
+                        className="p-1 hover:bg-slate-200 rounded text-slate-400 hover:text-slate-600 transition cursor-pointer" 
+                        title="Copy email address"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-[10px] font-black flex items-center gap-1 border border-amber-200">
+                        <Trophy className="w-3 h-3 text-amber-600 fill-amber-500" />
+                        <span>Rank #{selectedUserStats.rank}</span>
+                      </span>
+                    </h3>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-[10px] text-slate-400 font-bold font-mono uppercase tracking-wide">ID: {selectedUser.id}</p>
+                      <span className="text-slate-300">•</span>
+                      <span className="text-[10px] text-indigo-600 font-extrabold">{selectedUserStats.enrolledCourses.length} Enrolled Courses</span>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-800 text-base flex items-center gap-1.5">
-                    <span>{selectedUser.email.split('@')[0]}</span>
-                    <button 
-                      onClick={() => copyToClipboard(selectedUser.email)}
-                      className="p-1 hover:bg-slate-200 rounded text-slate-400 hover:text-slate-600 transition cursor-pointer" 
-                      title="Copy email address"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                    </button>
-                  </h3>
-                  <p className="text-[11px] text-slate-400 font-bold font-mono uppercase tracking-wide">ID: {selectedUser.id}</p>
-                </div>
+
+                <button 
+                  onClick={() => setSelectedUser(null)}
+                  className="p-2 hover:bg-slate-200 rounded-full text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              <button 
-                onClick={() => setSelectedUser(null)}
-                className="p-2 hover:bg-slate-200 rounded-full text-slate-400 hover:text-slate-600 transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+              {/* Modal Tabs */}
+              <div className="flex border-b border-slate-100 px-6 bg-slate-50 text-xs font-bold text-slate-500 gap-6 overflow-x-auto">
+                <button 
+                  onClick={() => setActiveUserTab('enrolled')}
+                  className={`py-3.5 border-b-2 transition outline-none cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                    activeUserTab === 'enrolled' ? 'border-indigo-600 text-indigo-600' : 'border-transparent hover:text-slate-800'
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Enrolled Courses & Rank</span>
+                </button>
+                <button 
+                  onClick={() => setActiveUserTab('progress')}
+                  className={`py-3.5 border-b-2 transition outline-none cursor-pointer shrink-0 ${
+                    activeUserTab === 'progress' ? 'border-indigo-600 text-indigo-600' : 'border-transparent hover:text-slate-800'
+                  }`}
+                >
+                  Vocabulary Progress
+                </button>
+                <button 
+                  onClick={() => setActiveUserTab('analytics')}
+                  className={`py-3.5 border-b-2 transition outline-none cursor-pointer shrink-0 ${
+                    activeUserTab === 'analytics' ? 'border-indigo-600 text-indigo-600' : 'border-transparent hover:text-slate-800'
+                  }`}
+                >
+                  Targets & Goals
+                </button>
+                <button 
+                  onClick={() => setActiveUserTab('settings')}
+                  className={`py-3.5 border-b-2 transition outline-none cursor-pointer shrink-0 ${
+                    activeUserTab === 'settings' ? 'border-indigo-600 text-indigo-600' : 'border-transparent hover:text-slate-800'
+                  }`}
+                >
+                  User Settings
+                </button>
+              </div>
 
-            {/* Modal Tabs */}
-            <div className="flex border-b border-slate-100 px-6 bg-slate-50 text-xs font-bold text-slate-500 gap-6">
-              <button 
-                onClick={() => setActiveUserTab('progress')}
-                className={`py-3.5 border-b-2 transition outline-none cursor-pointer ${
-                  activeUserTab === 'progress' ? 'border-indigo-600 text-indigo-600' : 'border-transparent hover:text-slate-800'
-                }`}
-              >
-                Vocabulary Progress
-              </button>
-              <button 
-                onClick={() => setActiveUserTab('analytics')}
-                className={`py-3.5 border-b-2 transition outline-none cursor-pointer ${
-                  activeUserTab === 'analytics' ? 'border-indigo-600 text-indigo-600' : 'border-transparent hover:text-slate-800'
-                }`}
-              >
-                Targets & Goals
-              </button>
-              <button 
-                onClick={() => setActiveUserTab('settings')}
-                className={`py-3.5 border-b-2 transition outline-none cursor-pointer ${
-                  activeUserTab === 'settings' ? 'border-indigo-600 text-indigo-600' : 'border-transparent hover:text-slate-800'
-                }`}
-              >
-                User Settings
-              </button>
-            </div>
+              {/* Modal Content - Scrollable */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {activeUserTab === 'enrolled' && (
+                  <div className="space-y-6 font-sans">
+                    {/* Top Gradient Rank & Performance Summary Banner */}
+                    <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 rounded-2xl shadow-md border border-indigo-800/60">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center divide-x divide-indigo-800/50">
+                        
+                        <div className="px-2">
+                          <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider block">Global Rank</span>
+                          <div className="mt-1 flex items-center justify-center gap-1">
+                            <Trophy className="w-4 h-4 text-amber-400 fill-amber-400" />
+                            <span className="text-xl font-black text-amber-300 font-mono">#{selectedUserStats.rank}</span>
+                            <span className="text-[10px] text-indigo-200">/ {selectedUserStats.totalUsers}</span>
+                          </div>
+                        </div>
 
-            {/* Modal Content - Scrollable */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                        <div className="px-2">
+                          <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider block">Overall Progress</span>
+                          <div className="mt-1 flex items-center justify-center gap-1">
+                            <span className="text-xl font-black text-emerald-400 font-mono">{selectedUserStats.overallPercent}%</span>
+                          </div>
+                        </div>
+
+                        <div className="px-2">
+                          <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider block">Words Mastered</span>
+                          <div className="mt-1 flex items-center justify-center gap-1">
+                            <span className="text-xl font-black text-white font-mono">{selectedUserStats.totalKnow}</span>
+                            <span className="text-[10px] text-indigo-300">/ {selectedUserStats.totalTargetWords}</span>
+                          </div>
+                        </div>
+
+                        <div className="px-2">
+                          <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider block">Enrolled Courses</span>
+                          <div className="mt-1 flex items-center justify-center gap-1">
+                            <BookOpen className="w-4 h-4 text-indigo-400" />
+                            <span className="text-xl font-black text-white font-mono">{selectedUserStats.enrolledCourses.length}</span>
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+
+                    {/* Enrolled Courses Breakdown List */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                          <BookOpen className="w-4 h-4 text-indigo-600" />
+                          <span>Enrolled Courses Statistics ({selectedUserStats.enrolledCourses.length})</span>
+                        </h4>
+                      </div>
+
+                      <div className="space-y-3">
+                        {selectedUserStats.enrolledCourses.map(course => {
+                          const cStats = getUserCourseProgressStats(selectedUser, course, words);
+                          const isCompleted = cStats.progressPercent >= 100;
+
+                          return (
+                            <div key={course.id} className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs hover:border-indigo-300 transition space-y-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h5 className="font-extrabold text-slate-900 text-sm">{course.title}</h5>
+                                    {course.isDefault && (
+                                      <span className="text-[9px] font-extrabold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">
+                                        Default Free
+                                      </span>
+                                    )}
+                                    {!course.isDefault && (
+                                      <span className="text-[9px] font-extrabold px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full">
+                                        ৳{course.price || 0} BDT
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-[11px] text-slate-500 font-medium line-clamp-1 mt-0.5">
+                                    {course.description || 'Interactive vocabulary course'}
+                                  </p>
+                                </div>
+
+                                <span className={`text-[10px] font-black px-2.5 py-1 rounded-xl flex items-center gap-1 shrink-0 ${
+                                  isCompleted ? 'bg-emerald-100 text-emerald-800' : 'bg-indigo-50 text-indigo-700'
+                                }`}>
+                                  {isCompleted ? '🎉 100% Completed' : `${cStats.progressPercent}% Progress`}
+                                </span>
+                              </div>
+
+                              {/* Course Progress Bar */}
+                              <div className="space-y-1.5">
+                                <div className="flex items-center justify-between text-[10px] font-bold text-slate-600">
+                                  <span>
+                                    {cStats.knowCount} / {cStats.totalWords} words mastered ({cStats.progressPercent}%)
+                                  </span>
+                                  <span className="text-slate-400">
+                                    {cStats.confusionCount} Confused • {cStats.dontKnowCount} Needs Work • {cStats.unstudiedCount} Unstudied
+                                  </span>
+                                </div>
+
+                                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden flex">
+                                  <div className="bg-emerald-500 h-full transition-all" style={{ width: `${cStats.progressPercent}%` }} />
+                                  <div className="bg-amber-400 h-full transition-all" style={{ width: `${Math.round((cStats.confusionCount / cStats.totalWords) * 100)}%` }} />
+                                  <div className="bg-rose-400 h-full transition-all" style={{ width: `${Math.round((cStats.dontKnowCount / cStats.totalWords) * 100)}%` }} />
+                                </div>
+                              </div>
+
+                              {/* Sub-metrics breakdown pills */}
+                              <div className="grid grid-cols-4 gap-2 pt-1 text-center">
+                                <div className="bg-slate-50 rounded-xl p-2 border border-slate-100">
+                                  <span className="text-[9px] text-slate-400 font-bold block">Target</span>
+                                  <span className="text-xs font-black text-slate-800 font-mono">{cStats.totalWords}</span>
+                                </div>
+                                <div className="bg-emerald-50/70 rounded-xl p-2 border border-emerald-100">
+                                  <span className="text-[9px] text-emerald-700 font-bold block">Known</span>
+                                  <span className="text-xs font-black text-emerald-800 font-mono">{cStats.knowCount}</span>
+                                </div>
+                                <div className="bg-amber-50/70 rounded-xl p-2 border border-amber-100">
+                                  <span className="text-[9px] text-amber-700 font-bold block">Confusion</span>
+                                  <span className="text-xs font-black text-amber-800 font-mono">{cStats.confusionCount}</span>
+                                </div>
+                                <div className="bg-rose-50/70 rounded-xl p-2 border border-rose-100">
+                                  <span className="text-[9px] text-rose-700 font-bold block">Needs Work</span>
+                                  <span className="text-xs font-black text-rose-800 font-mono">{cStats.dontKnowCount}</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
               {activeUserTab === 'progress' && (
                 <div className="space-y-6">
                   {/* Progress Summary Mini-Grid */}
@@ -4834,7 +4727,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Edit Course Settings Modal */}
       {editingCourse && (
