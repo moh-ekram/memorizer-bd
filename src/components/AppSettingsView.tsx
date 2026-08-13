@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { AppSettings, WordStatus, SyncLogEntry, Course } from '../types';
+import { AppSettings, WordStatus, SyncLogEntry, Course, DEFAULT_KEYBOARD_SHORTCUTS } from '../types';
 import { 
   Settings, 
   Layers, 
@@ -296,14 +296,7 @@ export default function AppSettingsView({
         defaultSynonymTags: ['know', 'dont_know', 'unrated'],
         defaultQuizType: 'mcq_en_bn',
         defaultMatchSize: 8,
-        shortcuts: {
-          'Space': 'flip',
-          'ArrowRight': 'know',
-          'ArrowLeft': 'dont_know',
-          'ArrowUp': 'confusion',
-          'ArrowDown': 'skip',
-          'Enter': 'audio'
-        },
+        shortcuts: DEFAULT_KEYBOARD_SHORTCUTS,
         flashcardAnimation: 'flip-h',
         colorizeMainWord: true,
         flashcardBannerAnim: 'twice_daily'
@@ -371,14 +364,7 @@ export default function AppSettingsView({
                   onClick={() => {
                     onUpdateSettings({
                       ...settings,
-                      shortcuts: {
-                        'Space': 'flip',
-                        'ArrowRight': 'know',
-                        'ArrowLeft': 'dont_know',
-                        'ArrowUp': 'confusion',
-                        'ArrowDown': 'skip',
-                        'Enter': 'audio'
-                      }
+                      shortcuts: DEFAULT_KEYBOARD_SHORTCUTS
                     });
                   }}
                   className="text-[10px] text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md font-semibold transition-all duration-150 cursor-pointer"
@@ -407,14 +393,7 @@ export default function AppSettingsView({
                   { id: 'KeyF', label: 'Letter F', icon: Type },
                   { id: 'KeyG', label: 'Letter G', icon: Type },
                 ].map(keyObj => {
-                  const currentShortcuts = settings.shortcuts || {
-                    'Space': 'flip',
-                    'ArrowRight': 'know',
-                    'ArrowLeft': 'dont_know',
-                    'ArrowUp': 'confusion',
-                    'ArrowDown': 'skip',
-                    'Enter': 'audio'
-                  };
+                  const currentShortcuts = settings.shortcuts || DEFAULT_KEYBOARD_SHORTCUTS;
                   const assignedAction = currentShortcuts[keyObj.id] || 'none';
    
                   const actionIconsMap: Record<string, { icon: any; color: string; bg: string; label: string }> = {

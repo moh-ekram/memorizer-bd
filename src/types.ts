@@ -107,6 +107,17 @@ export interface AppSettings {
   contactEmail?: string;
 }
 
+// Default keyboard shortcuts matching the requested UI specification
+export const DEFAULT_KEYBOARD_SHORTCUTS: Record<string, string> = {
+  'Space': 'flip',       // Spacebar -> Flip Card
+  'Enter': 'google',     // Enter Key -> Google Search
+  'ArrowRight': 'know',  // Right Arrow -> Learned
+  'ArrowLeft': 'dont_know', // Left Arrow -> Unlearned
+  'ArrowUp': 'confusion',// Up Arrow -> Confused
+  'ArrowDown': 'flip',   // Down Arrow -> Flip Card
+  'Digit1': 'skip',      // Number 1 -> Next Card
+};
+
 export interface SyncLogEntry {
   id: string;
   timestamp: string;

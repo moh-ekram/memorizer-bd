@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { vocabulary } from './data/vocabulary';
-import { UserProgress, WordStatus, CustomFolder, StudyGoal, ActiveTab, AppSettings, SyncLogEntry } from './types';
+import { UserProgress, WordStatus, CustomFolder, StudyGoal, ActiveTab, AppSettings, SyncLogEntry, DEFAULT_KEYBOARD_SHORTCUTS } from './types';
 import StatsDashboard from './components/StatsDashboard';
 import FlashcardViewer from './components/FlashcardViewer';
 import PracticeCenter from './components/PracticeCenter';
@@ -338,14 +338,9 @@ export default function App() {
       defaultMatchSize: parsed.defaultMatchSize || 8,
 
       // Default keyboard shortcuts mapping
-      shortcuts: parsed.shortcuts || {
-        'Space': 'flip',
-        'ArrowRight': 'know',
-        'ArrowLeft': 'dont_know',
-        'ArrowUp': 'confusion',
-        'ArrowDown': 'skip',
-        'Enter': 'audio'
-      },
+      shortcuts: (!parsed.shortcuts || parsed.shortcuts.Enter === 'audio' || parsed.shortcuts.ArrowDown === 'skip')
+        ? { ...DEFAULT_KEYBOARD_SHORTCUTS, ...(parsed.shortcuts || {}) }
+        : parsed.shortcuts,
 
       // Default flashcard rotation animation
       flashcardAnimation: ['flip-h', 'flip-v', 'diagonal', 'shuffle'].includes(parsed.flashcardAnimation) ? parsed.flashcardAnimation : 'shuffle',

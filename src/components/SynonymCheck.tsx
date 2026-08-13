@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { VocabularyWord, WordStatus, UserProgress, CustomFolder, AppSettings } from '../types';
+import { VocabularyWord, WordStatus, UserProgress, CustomFolder, AppSettings, DEFAULT_KEYBOARD_SHORTCUTS } from '../types';
 import { getGoogleSearchUrl } from '../lib/searchUtils';
 import { 
   CheckCircle2, 
@@ -337,16 +337,23 @@ export default function SynonymCheck({
         return;
       }
 
-      const userShortcuts = settings?.shortcuts || {
-        'Space': 'flip',
-        'ArrowRight': 'know',
-        'ArrowLeft': 'dont_know',
-        'ArrowUp': 'confusion',
-        'ArrowDown': 'skip',
-        'Enter': 'audio'
-      };
+      const userShortcuts = settings?.shortcuts || DEFAULT_KEYBOARD_SHORTCUTS;
 
-      const keyIdentifier = e.code === 'Space' ? 'Space' : e.code;
+      let keyIdentifier = e.code;
+      if (e.key === ' ' || e.code === 'Space') keyIdentifier = 'Space';
+      else if (e.key === 'Enter' || e.code === 'Enter') keyIdentifier = 'Enter';
+      else if (e.key === '1' || e.code === 'Digit1' || e.code === 'Numpad1') keyIdentifier = 'Digit1';
+      else if (e.key === '2' || e.code === 'Digit2' || e.code === 'Numpad2') keyIdentifier = 'Digit2';
+      else if (e.key === '3' || e.code === 'Digit3' || e.code === 'Numpad3') keyIdentifier = 'Digit3';
+      else if (e.key === '4' || e.code === 'Digit4' || e.code === 'Numpad4') keyIdentifier = 'Digit4';
+      else if (e.key === '5' || e.code === 'Digit5' || e.code === 'Numpad5') keyIdentifier = 'Digit5';
+      else if (e.key === '6' || e.code === 'Digit6' || e.code === 'Numpad6') keyIdentifier = 'Digit6';
+      else if (e.key?.toLowerCase() === 'a' || e.code === 'KeyA') keyIdentifier = 'KeyA';
+      else if (e.key?.toLowerCase() === 's' || e.code === 'KeyS') keyIdentifier = 'KeyS';
+      else if (e.key?.toLowerCase() === 'd' || e.code === 'KeyD') keyIdentifier = 'KeyD';
+      else if (e.key?.toLowerCase() === 'f' || e.code === 'KeyF') keyIdentifier = 'KeyF';
+      else if (e.key?.toLowerCase() === 'g' || e.code === 'KeyG') keyIdentifier = 'KeyG';
+
       const action = userShortcuts[keyIdentifier];
 
       if (action && action !== 'none') {

@@ -21,7 +21,10 @@ import {
   ArrowUpRight,
   Flame,
   Calendar,
-  BarChart2
+  BarChart2,
+  Clock,
+  Table as TableIcon,
+  LayoutGrid
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { 
@@ -213,6 +216,7 @@ export default function GameAnalyticsDashboard({
 }: GameAnalyticsDashboardProps) {
   const [filterGrade, setFilterGrade] = useState<'all' | 'mastery' | 'proficient' | 'developing' | 'unplayed'>('all');
   const [chartViewMode, setChartViewMode] = useState<'area' | 'bar' | 'heatmap'>('area');
+  const [displayLayout, setDisplayLayout] = useState<'table' | 'cards'>('table');
 
   // Compute 30-Day Daily Study Consistency Trend
   const dailyConsistencyData = useMemo(() => {
@@ -794,212 +798,413 @@ export default function GameAnalyticsDashboard({
         )}
       </div>
 
-      {/* Filter Tabs Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 pb-1 border-b border-slate-200/80">
+      {/* Filter & Layout Control Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-3 pb-2 border-b border-slate-200/80">
         <div className="flex items-center gap-2">
           <Layers className="w-5 h-5 text-indigo-600" />
-          <h3 className="text-base font-extrabold text-slate-900">গেম ভিত্তিক পারফরম্যান্স বিস্তারিত</h3>
+          <h3 className="text-base font-black text-slate-900">গেম ভিত্তিক পারফরম্যান্স টেবিল</h3>
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-          <button
-            onClick={() => setFilterGrade('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
-              filterGrade === 'all'
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
-            }`}
-          >
-            সকল গেম ({gameMetrics.length})
-          </button>
-          <button
-            onClick={() => setFilterGrade('mastery')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
-              filterGrade === 'mastery'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800'
-            }`}
-          >
-            Mastery (≥85%)
-          </button>
-          <button
-            onClick={() => setFilterGrade('proficient')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
-              filterGrade === 'proficient'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'bg-amber-50 hover:bg-amber-100 text-amber-800'
-            }`}
-          >
-            Proficient (70-84%)
-          </button>
-          <button
-            onClick={() => setFilterGrade('developing')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
-              filterGrade === 'developing'
-                ? 'bg-rose-600 text-white shadow-xs'
-                : 'bg-rose-50 hover:bg-rose-100 text-rose-800'
-            }`}
-          >
-            Needs Practice (&lt;70%)
-          </button>
-          <button
-            onClick={() => setFilterGrade('unplayed')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
-              filterGrade === 'unplayed'
-                ? 'bg-slate-800 text-white shadow-xs'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
-            }`}
-          >
-            Unplayed
-          </button>
-        </div>
-      </div>
-
-      {/* 6 Games Grid with Percentage Circles & Detailed Breakdown */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filteredMetrics.map((game) => {
-          const isUnplayed = game.attempted === 0;
-
-          return (
-            <motion.div
-              key={game.key}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25 }}
-              className="bg-white rounded-3xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-slate-300 transition-all p-5 space-y-4 flex flex-col justify-between"
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Layout Toggle (Table vs Cards) */}
+          <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200/80 shrink-0">
+            <button
+              type="button"
+              onClick={() => setDisplayLayout('table')}
+              className={`px-2.5 py-1 text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                displayLayout === 'table' ? 'bg-white text-indigo-700 shadow-2xs font-extrabold' : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Table View"
             >
-              {/* Card Header */}
-              <div className="space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-3 rounded-2xl border ${game.iconBg}`}>
-                      {game.icon}
-                    </div>
-                    <div>
-                      <h4 className="font-extrabold text-slate-900 text-base leading-tight">{game.title}</h4>
-                      <p className="text-[11px] text-slate-400 font-medium mt-0.5">{game.subtitle}</p>
-                    </div>
-                  </div>
+              <TableIcon className="w-3.5 h-3.5" />
+              <span>Table</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDisplayLayout('cards')}
+              className={`px-2.5 py-1 text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                displayLayout === 'cards' ? 'bg-white text-indigo-700 shadow-2xs font-extrabold' : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Grid Cards View"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Cards</span>
+            </button>
+          </div>
 
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${game.badgeBg}`}>
-                    {game.badgeText}
-                  </span>
-                </div>
-
-                {/* Status Grade Tag */}
-                <div className="flex items-center gap-2">
-                  {game.statusGrade === 'mastery' && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-200">
-                      <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Mastery Achieved</span>
-                    </span>
-                  )}
-                  {game.statusGrade === 'proficient' && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-amber-50 text-amber-700 text-[11px] font-bold border border-amber-200">
-                      <Zap className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Proficient</span>
-                    </span>
-                  )}
-                  {game.statusGrade === 'developing' && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-rose-50 text-rose-700 text-[11px] font-bold border border-rose-200">
-                      <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
-                      <span>Needs Practice</span>
-                    </span>
-                  )}
-                  {game.statusGrade === 'unplayed' && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold border border-slate-200">
-                      <Target className="w-3.5 h-3.5 text-slate-500" />
-                      <span>Not Played Yet</span>
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Main Visual Section: Percentage Circle Ring & Metric Legend */}
-              <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100 flex items-center justify-between gap-3">
-                {/* SVG Donut Circle Ring */}
-                <CorrectWrongRing
-                  correct={game.correct}
-                  wrong={game.wrong}
-                  total={game.total}
-                  size={84}
-                  strokeWidth={8}
-                />
-
-                {/* Legend List */}
-                <div className="space-y-1.5 text-xs flex-1">
-                  {/* Corrected */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-slate-700 font-medium">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shrink-0" />
-                      <span>সঠিক (Correct):</span>
-                    </div>
-                    <span className="font-extrabold font-mono text-emerald-600">
-                      {game.correct} <span className="text-[10px] text-slate-400 font-normal">({game.correctPctOfTotal}%)</span>
-                    </span>
-                  </div>
-
-                  {/* Wronged */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-slate-700 font-medium">
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block shrink-0" />
-                      <span>ভুল (Wrong):</span>
-                    </div>
-                    <span className="font-extrabold font-mono text-rose-600">
-                      {game.wrong} <span className="text-[10px] text-slate-400 font-normal">({game.wrongPctOfTotal}%)</span>
-                    </span>
-                  </div>
-
-                  {/* Remaining */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-slate-700 font-medium">
-                      <span className="w-2.5 h-2.5 rounded-full bg-slate-300 inline-block shrink-0" />
-                      <span>অবশিষ্ট:</span>
-                    </div>
-                    <span className="font-extrabold font-mono text-slate-500">
-                      {game.remaining}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Stacked Percentage Progress Bar */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-[11px] text-slate-500 font-bold">
-                  <span>Accuracy Rate</span>
-                  <span className="font-mono text-slate-900 font-extrabold">{isUnplayed ? '0%' : `${game.accuracyPct}%`}</span>
-                </div>
-                <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden flex">
-                  {game.correct > 0 && (
-                    <div
-                      style={{ width: `${(game.correct / game.total) * 100}%` }}
-                      className="bg-emerald-500 h-full transition-all duration-500"
-                      title={`Correct: ${game.correct}`}
-                    />
-                  )}
-                  {game.wrong > 0 && (
-                    <div
-                      style={{ width: `${(game.wrong / game.total) * 100}%` }}
-                      className="bg-rose-500 h-full transition-all duration-500"
-                      title={`Wrong: ${game.wrong}`}
-                    />
-                  )}
-                </div>
-              </div>
-
-              {/* Action Button */}
-              <button
-                onClick={() => onPlayGame(game.key)}
-                className="w-full py-2.5 px-4 bg-slate-900 hover:bg-indigo-600 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer group"
-              >
-                <Play className="w-3.5 h-3.5 fill-white group-hover:scale-110 transition-transform" />
-                <span>{isUnplayed ? 'গেম খেলুন' : 'পুনরায় প্র্যাকটিস করুন'}</span>
-                <ArrowUpRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition-colors" />
-              </button>
-            </motion.div>
-          );
-        })}
+          {/* Minimal Pill Filter Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+            <button
+              onClick={() => setFilterGrade('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                filterGrade === 'all'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>All ({gameMetrics.length})</span>
+            </button>
+            <button
+              onClick={() => setFilterGrade('mastery')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                filterGrade === 'mastery'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-emerald-50/80 hover:bg-emerald-100/80 text-emerald-800 border border-emerald-200/60 font-bold'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Mastery</span>
+            </button>
+            <button
+              onClick={() => setFilterGrade('proficient')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                filterGrade === 'proficient'
+                  ? 'bg-amber-500 text-white shadow-xs'
+                  : 'bg-amber-50/80 hover:bg-amber-100/80 text-amber-800 border border-amber-200/60 font-bold'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>Proficient</span>
+            </button>
+            <button
+              onClick={() => setFilterGrade('developing')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                filterGrade === 'developing'
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'bg-rose-50/80 hover:bg-rose-100/80 text-rose-800 border border-rose-200/60 font-bold'
+              }`}
+            >
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>Needs Practice</span>
+            </button>
+            <button
+              onClick={() => setFilterGrade('unplayed')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                filterGrade === 'unplayed'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold'
+              }`}
+            >
+              <Target className="w-3.5 h-3.5" />
+              <span>Unplayed</span>
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* Main Content Area: Modern Table vs Cards */}
+      {displayLayout === 'table' ? (
+        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[840px]">
+              <thead>
+                <tr className="bg-slate-50/90 border-b border-slate-200/80 text-[11px] font-black uppercase text-slate-500 tracking-wider">
+                  <th className="px-5 py-4">Game & Category</th>
+                  <th className="px-5 py-4 text-center">Accuracy & Donut</th>
+                  <th className="px-5 py-4 text-center">Correct (সঠিক)</th>
+                  <th className="px-5 py-4 text-center">Wrong (ভুল)</th>
+                  <th className="px-5 py-4 text-center">Remaining</th>
+                  <th className="px-5 py-4 text-center">Status</th>
+                  <th className="px-5 py-4 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs font-medium">
+                {filteredMetrics.map((game) => {
+                  const isUnplayed = game.attempted === 0;
+
+                  return (
+                    <motion.tr
+                      key={game.key}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.15 }}
+                      className="hover:bg-indigo-50/40 transition-colors group"
+                    >
+                      {/* Cell 1: Game Icon, Title, Subtitle & Badge */}
+                      <td className="px-5 py-4 align-middle">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 rounded-2xl bg-indigo-50/90 border border-indigo-100 text-indigo-600 shadow-2xs group-hover:scale-105 transition-transform shrink-0">
+                            {game.icon}
+                          </div>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-extrabold text-slate-900 text-sm group-hover:text-indigo-600 transition-colors">
+                                {game.title}
+                              </h4>
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-100 text-slate-600 border border-slate-200/70">
+                                {game.badgeText}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 font-medium">{game.subtitle}</p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Cell 2: Accuracy & Donut Ring */}
+                      <td className="px-5 py-4 align-middle">
+                        <div className="flex items-center justify-center gap-3">
+                          <CorrectWrongRing
+                            correct={game.correct}
+                            wrong={game.wrong}
+                            total={game.total}
+                            size={48}
+                            strokeWidth={5}
+                          />
+                          <div className="space-y-1 w-24">
+                            <div className="flex items-center justify-between text-[11px] font-black font-mono text-indigo-700">
+                              <span>{isUnplayed ? '0%' : `${game.accuracyPct}%`}</span>
+                              <span className="text-[9px] text-slate-400 uppercase font-semibold">Acc</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-slate-150 rounded-full overflow-hidden flex">
+                              {game.correct > 0 && (
+                                <div
+                                  style={{ width: `${(game.correct / game.total) * 100}%` }}
+                                  className="bg-emerald-500 h-full"
+                                  title={`Correct: ${game.correct}`}
+                                />
+                              )}
+                              {game.wrong > 0 && (
+                                <div
+                                  style={{ width: `${(game.wrong / game.total) * 100}%` }}
+                                  className="bg-rose-500 h-full"
+                                  title={`Wrong: ${game.wrong}`}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Cell 3: Correct */}
+                      <td className="px-5 py-4 align-middle text-center">
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200/70 font-mono">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span className="font-black text-xs">{game.correct}</span>
+                          <span className="text-[10px] text-emerald-700 font-extrabold bg-emerald-100/90 px-1 py-0.2 rounded">
+                            {game.correctPctOfTotal}%
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Cell 4: Wrong */}
+                      <td className="px-5 py-4 align-middle text-center">
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 text-rose-800 border border-rose-200/70 font-mono">
+                          <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                          <span className="font-black text-xs">{game.wrong}</span>
+                          <span className="text-[10px] text-rose-700 font-extrabold bg-rose-100/90 px-1 py-0.2 rounded">
+                            {game.wrongPctOfTotal}%
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Cell 5: Remaining */}
+                      <td className="px-5 py-4 align-middle text-center">
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 border border-slate-200/70 font-mono">
+                          <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
+                          <span className="font-black text-xs">{game.remaining}</span>
+                        </div>
+                      </td>
+
+                      {/* Cell 6: Status */}
+                      <td className="px-5 py-4 align-middle text-center">
+                        {game.statusGrade === 'mastery' && (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-black border border-emerald-200">
+                            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Mastery</span>
+                          </span>
+                        )}
+                        {game.statusGrade === 'proficient' && (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-50 text-amber-700 text-xs font-black border border-amber-200">
+                            <Zap className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Proficient</span>
+                          </span>
+                        )}
+                        {game.statusGrade === 'developing' && (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-rose-50 text-rose-700 text-xs font-black border border-rose-200">
+                            <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                            <span>Needs Practice</span>
+                          </span>
+                        )}
+                        {game.statusGrade === 'unplayed' && (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 text-slate-600 text-xs font-black border border-slate-200">
+                            <Clock className="w-3.5 h-3.5 text-slate-500" />
+                            <span>Not Played</span>
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Cell 7: Action */}
+                      <td className="px-5 py-4 align-middle text-right">
+                        <button
+                          onClick={() => onPlayGame(game.key)}
+                          className="px-3.5 py-2 bg-slate-900 hover:bg-indigo-600 text-white font-black text-xs rounded-xl shadow-2xs hover:shadow-md transition-all inline-flex items-center gap-1.5 cursor-pointer group/btn"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-cyan-400 text-cyan-400 group-hover/btn:fill-white group-hover/btn:text-white transition-colors" />
+                          <span>{isUnplayed ? 'Start' : 'Practice'}</span>
+                          <ArrowUpRight className="w-3.5 h-3.5 text-slate-400 group-hover/btn:text-white transition-transform group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5" />
+                        </button>
+                      </td>
+                    </motion.tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        /* 6 Games Grid - Cards View */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredMetrics.map((game) => {
+            const isUnplayed = game.attempted === 0;
+
+            return (
+              <motion.div
+                key={game.key}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+                className="group bg-gradient-to-b from-white to-slate-50/70 rounded-3xl border border-slate-200/90 hover:border-indigo-300/90 shadow-2xs hover:shadow-lg hover:shadow-indigo-500/5 transition-all p-5 space-y-4 flex flex-col justify-between"
+              >
+                {/* Card Top Row */}
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-2xl bg-indigo-50/90 border border-indigo-100 text-indigo-600 shadow-2xs group-hover:scale-105 transition-transform shrink-0">
+                        {game.icon}
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-slate-900 text-base leading-tight group-hover:text-indigo-600 transition-colors">
+                          {game.title}
+                        </h4>
+                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">{game.subtitle}</p>
+                      </div>
+                    </div>
+
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-600 border border-slate-200/80 shrink-0">
+                      {game.badgeText}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {game.statusGrade === 'mastery' && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 text-[11px] font-black border border-emerald-200/80">
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Mastery</span>
+                      </span>
+                    )}
+                    {game.statusGrade === 'proficient' && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-amber-50 text-amber-700 text-[11px] font-black border border-amber-200/80">
+                        <Zap className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Proficient</span>
+                      </span>
+                    )}
+                    {game.statusGrade === 'developing' && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-rose-50 text-rose-700 text-[11px] font-black border border-rose-200/80">
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                        <span>Needs Practice</span>
+                      </span>
+                    )}
+                    {game.statusGrade === 'unplayed' && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-black border border-slate-200/80">
+                        <Clock className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Not Played</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-slate-100/70 p-3.5 rounded-2xl border border-slate-200/60 flex items-center justify-between gap-4">
+                  <div className="shrink-0">
+                    <CorrectWrongRing
+                      correct={game.correct}
+                      wrong={game.wrong}
+                      total={game.total}
+                      size={76}
+                      strokeWidth={7}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5 flex-1 text-xs">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-slate-700 font-bold">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                        <span>Correct</span>
+                      </div>
+                      <div className="flex items-center gap-1 font-mono">
+                        <span className="font-extrabold text-emerald-600">{game.correct}</span>
+                        <span className="text-[10px] text-emerald-700 bg-emerald-100/80 px-1 py-0.2 rounded font-black">
+                          {game.correctPctOfTotal}%
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-slate-700 font-bold">
+                        <XCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                        <span>Wrong</span>
+                      </div>
+                      <div className="flex items-center gap-1 font-mono">
+                        <span className="font-extrabold text-rose-600">{game.wrong}</span>
+                        <span className="text-[10px] text-rose-700 bg-rose-100/80 px-1 py-0.2 rounded font-black">
+                          {game.wrongPctOfTotal}%
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-slate-500 font-bold">
+                        <HelpCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>Remaining</span>
+                      </div>
+                      <span className="font-extrabold font-mono text-slate-600">
+                        {game.remaining}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 font-bold">
+                    <span className="flex items-center gap-1 text-slate-600">
+                      <Target className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Accuracy Rate</span>
+                    </span>
+                    <span className="font-mono text-indigo-700 font-black">{isUnplayed ? '0%' : `${game.accuracyPct}%`}</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-150 rounded-full overflow-hidden flex">
+                    {game.correct > 0 && (
+                      <div
+                        style={{ width: `${(game.correct / game.total) * 100}%` }}
+                        className="bg-emerald-500 h-full transition-all duration-500"
+                        title={`Correct: ${game.correct}`}
+                      />
+                    )}
+                    {game.wrong > 0 && (
+                      <div
+                        style={{ width: `${(game.wrong / game.total) * 100}%` }}
+                        className="bg-rose-500 h-full transition-all duration-500"
+                        title={`Wrong: ${game.wrong}`}
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => onPlayGame(game.key)}
+                  className="w-full py-2.5 px-4 bg-slate-900 hover:bg-indigo-600 text-white font-extrabold text-xs rounded-xl shadow-xs hover:shadow-md hover:shadow-indigo-500/20 transition-all flex items-center justify-between cursor-pointer group/btn"
+                >
+                  <div className="flex items-center gap-2">
+                    <Play className="w-3.5 h-3.5 fill-cyan-400 text-cyan-400 group-hover/btn:fill-white group-hover/btn:text-white transition-colors" />
+                    <span>{isUnplayed ? 'Start Game' : 'Practice Game'}</span>
+                  </div>
+                  <ArrowUpRight className="w-3.5 h-3.5 text-slate-400 group-hover/btn:text-white group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-all" />
+                </button>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
