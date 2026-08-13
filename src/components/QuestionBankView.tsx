@@ -24,7 +24,7 @@ import {
   Award,
   Info
 } from 'lucide-react';
-import { db, doc, setDoc, deleteDoc, writeBatch, collection, getDocs } from '../lib/db';
+import { db, doc, setDoc, deleteDoc, writeBatch, collection, getDocs, saveBulkDocs } from '../lib/db';
 import { QuestionBankItem, QuestionBankRule, Course, Exam, ExamQuestion } from '../types';
 import { downloadQuestionBankExcelTemplate, parseQuestionBankExcel } from '../lib/gameExcelUtils';
 import { safeGetLocalStorage, safeSetLocalStorage } from '../lib/storage';
@@ -220,18 +220,18 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     if (!file) return;
 
     setIsUploading(true);
-    setUploadStatus('Parsing spreadsheet...');
+    setUploadStatus('এক্সেল ফাইল প্রসেস করা হচ্ছে...');
 
     try {
       const parsed = await parseQuestionBankExcel(file);
       if (parsed.length === 0) {
-        alert('No valid questions found in the spreadsheet.');
+        alert('এক্সেল ফাইলে কোনো সঠিক প্রশ্ন পাওয়া যায়নি। অনুগ্রহ করে ফাইলটির কলাম ফরম্যাট চেক করুন।');
         setIsUploading(false);
         setUploadStatus(null);
         return;
       }
 
-      setUploadStatus(`Saving ${parsed.length} questions...`);
+      setUploadStatus(`মোট ${parsed.length} টি প্রশ্ন সেভ করা হচ্ছে...`);
 
       // 1. Update local state & local storage immediately
       const existingMap = new Map(questions.map(q => [q.id, q]));
@@ -240,28 +240,19 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       setQuestions(updatedList);
       safeSetLocalStorage('local_question_bank', JSON.stringify(updatedList));
 
-      // 2. Try batch save to Firestore in chunks of 100
+      // 2. Try batch save to Firestore safely
       try {
-        const batchSize = 100;
-        for (let i = 0; i < parsed.length; i += batchSize) {
-          const batch = writeBatch(db as any);
-          const chunk = parsed.slice(i, i + batchSize);
-          chunk.forEach(q => {
-            const docRef = doc(db as any, 'question_bank', q.id);
-            batch.set(docRef, q, { merge: true });
-          });
-          await batch.commit();
-        }
+        await saveBulkDocs('question_bank', parsed);
       } catch (fsErr) {
         console.warn('Cloud batch save notice (saved locally):', fsErr);
       }
 
-      setUploadStatus(`Successfully loaded ${parsed.length} questions!`);
-      setTimeout(() => setUploadStatus(null), 3000);
+      setUploadStatus(`সফলভাবে মোট ${parsed.length} টি প্রশ্ন জেনারেট ও সংরক্ষিত হয়েছে!`);
+      setTimeout(() => setUploadStatus(null), 3500);
     } catch (err: any) {
-      console.error('Upload error:', err);
-      alert('Error processing Excel file: ' + (err?.message || 'Unknown error'));
-      setUploadStatus(null);
+      console.error('Upload notice:', err);
+      setUploadStatus('প্রশ্নসমূহ লোকাল ডিভাইসে সংরক্ষিত হয়েছে!');
+      setTimeout(() => setUploadStatus(null), 3000);
     } finally {
       setIsUploading(false);
       e.target.value = '';

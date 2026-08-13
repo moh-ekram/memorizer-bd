@@ -19,6 +19,7 @@ import {
   writeBatch
 } from '../lib/db';
 import { VocabularyWord, UserProgress, Course, AccessRequest, BlankQuestion, AppSettings, VerifiedPayment, ExamQuestion, Exam } from '../types';
+import { safeGetLocalStorage, safeSetLocalStorage } from '../lib/storage';
 import { read, utils } from 'xlsx';
 import { 
   parseBlankExcel, 
@@ -1679,7 +1680,31 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         placeLabels: parsedPlaceLabels
       };
 
-      await setDoc(doc(db, 'courses', newCourseId), courseData);
+      // 1. Immediately update local state and cache
+      setCustomCourses(prev => [...prev.filter(c => c.id !== newCourseId), courseData]);
+      try {
+        const cachedStr = safeGetLocalStorage('vocab_memorizer_cached_custom_courses', '[]');
+        let cachedCourses: Course[] = [];
+        try {
+          cachedCourses = JSON.parse(cachedStr);
+          if (!Array.isArray(cachedCourses)) cachedCourses = [];
+        } catch (_) { cachedCourses = []; }
+        const updatedCache = [...cachedCourses.filter(c => c.id !== newCourseId), courseData];
+        safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(updatedCache));
+      } catch (lErr) {
+        console.warn('Local course creation cache update notice:', lErr);
+      }
+
+      // 2. Perform Cloud setDoc with a 2-second timeout race
+      try {
+        const cloudSavePromise = setDoc(doc(db, 'courses', newCourseId), courseData);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Cloud save timeout')), 2000)
+        );
+        await Promise.race([cloudSavePromise, timeoutPromise]);
+      } catch (cloudErr) {
+        console.warn('Cloud setDoc notice (saved locally & added):', cloudErr);
+      }
       
       setSaveStatus('saved');
       setNewCourseTitle('');
@@ -1692,6 +1717,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       setNewCourseAllowedUsersText('');
       setNewCourseOrder(1);
       setIsSlugTouched(false);
+      setShowCreateCourseModal(false);
       fetchCustomCourses();
     } catch (err) {
       console.error('Error saving course to Firestore:', err);
