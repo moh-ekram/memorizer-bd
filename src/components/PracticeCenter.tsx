@@ -491,17 +491,85 @@ export default function PracticeCenter({
       {subTab === 'hub' && (
         <div className="space-y-4">
           {/* Header area */}
-          <div className="px-1 py-0.5">
+          <div className="px-1 py-0.5 flex items-center justify-between">
             <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Practice & Games</h2>
           </div>
 
+          {/* 1. PINNED EXAM SECTION (SPECIAL FEATURED HEADER CARD) */}
+          <div className="max-w-2xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              whileHover={{ scale: 1.01 }}
+              onClick={() => setSubTab('exam')}
+              className="relative overflow-hidden rounded-2xl sm:rounded-3xl p-5 sm:p-6 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border-2 border-amber-400/80 shadow-xl shadow-indigo-950/20 cursor-pointer group transition-all duration-300"
+            >
+              {/* Background ambient light effects */}
+              <div className="absolute -top-12 -right-12 w-44 h-44 bg-amber-400/15 rounded-full blur-2xl pointer-events-none" />
+              <div className="absolute -bottom-12 -left-12 w-44 h-44 bg-indigo-500/25 rounded-full blur-2xl pointer-events-none" />
+
+              {/* Top Bar: Pinned Badge & Tag */}
+              <div className="flex items-center justify-between gap-2 mb-4 relative z-10">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400/20 text-amber-300 border border-amber-400/40 rounded-full text-[11px] font-black uppercase tracking-wider shadow-2xs backdrop-blur-md">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                  <span>📌 পিন করা বিশেষ সেকশন</span>
+                </div>
+                <span className="text-[10px] font-extrabold px-2.5 py-0.5 bg-indigo-500/30 text-indigo-200 rounded-md border border-indigo-400/30 font-mono uppercase">
+                  Model Test & Exam
+                </span>
+              </div>
+
+              {/* Main Content */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/30 group-hover:scale-105 transition-transform duration-300">
+                    <GraduationCap className="w-7 h-7 sm:w-8 sm:h-8" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg sm:text-xl font-extrabold text-white group-hover:text-amber-300 transition-colors flex items-center gap-2">
+                      <span>অনলাইন মডেল টেস্ট ও লাইভ এক্সাম</span>
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-300 font-medium mt-1 leading-relaxed">
+                      কোর্স ভিত্তিক টাইমার এক্সাম, নেগেটিভ মার্কিং, ফলাফল ও সার্বজনীন মেরিট লিস্ট।
+                    </p>
+                  </div>
+                </div>
+
+                <div className="shrink-0 pt-2 sm:pt-0">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSubTab('exam');
+                    }}
+                    className="w-full sm:w-auto px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs sm:text-sm shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 transition cursor-pointer border border-amber-300"
+                  >
+                    <span>পরীক্ষা হলে প্রবেশ করুন</span>
+                    <ChevronRight className="w-4 h-4 text-slate-950" />
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* 2. SECTION DIVIDER FOR REGULAR INTERACTIVE GAMES */}
+          <div className="max-w-2xl mx-auto flex items-center gap-3 pt-3 pb-1">
+            <div className="h-px bg-slate-200 flex-1" />
+            <span className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Gamepad2 className="w-3.5 h-3.5 text-indigo-500" />
+              <span>ইন্টারঅ্যাক্টিভ গেমস & অনুশীলন</span>
+            </span>
+            <div className="h-px bg-slate-200 flex-1" />
+          </div>
+
+          {/* 3. STANDARD GAMES LIST (EXCLUDING PINNED EXAM) */}
           <motion.div 
             variants={containerVariants}
             initial="hidden"
             animate="show"
             className="space-y-2.5 max-w-2xl mx-auto"
           >
-            {orderedItems.filter(item => item.enabled).map((item) => {
+            {orderedItems.filter(item => item.key !== 'exam' && item.enabled).map((item) => {
               const stats = gameStats[item.key as keyof typeof gameStats] || { completed: 0, total: 0, percent: 0 };
 
               return (
@@ -555,10 +623,10 @@ export default function PracticeCenter({
             })}
 
             {/* Empty State when no games are enabled */}
-            {orderedItems.filter(item => item.enabled).length === 0 && (
+            {orderedItems.filter(item => item.key !== 'exam' && item.enabled).length === 0 && (
               <div className="col-span-full py-12 text-center bg-white border border-slate-150 rounded-3xl p-8 space-y-3">
                 <Gamepad2 className="w-12 h-12 text-slate-350 mx-auto" />
-                <h3 className="font-extrabold text-slate-700 text-base">No practices or games available</h3>
+                <h3 className="font-extrabold text-slate-700 text-base">No practice games available</h3>
                 <p className="text-xs text-slate-400 font-semibold max-w-sm mx-auto leading-relaxed">
                   The admin has not enabled any practice or game options for this course.
                 </p>

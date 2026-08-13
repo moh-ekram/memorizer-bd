@@ -35,7 +35,7 @@ interface QuestionBankViewProps {
 }
 
 export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewProps) {
-  const [activeTab, setActiveTab] = useState<'repository' | 'scheduler'>('repository');
+  const [activeTab, setActiveTab] = useState<'repository' | 'scheduler' | 'scheduled_exams'>('repository');
 
   // Question Bank State
   const [questions, setQuestions] = useState<QuestionBankItem[]>([]);
@@ -45,6 +45,10 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
   const [filterGroup2, setFilterGroup2] = useState<string>('all');
   const [filterGroup3, setFilterGroup3] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Scheduled Exams State
+  const [allExams, setAllExams] = useState<Exam[]>([]);
+  const [loadingExams, setLoadingExams] = useState<boolean>(false);
 
   // Upload & Upload Status
   const [isUploading, setIsUploading] = useState(false);
@@ -167,8 +171,54 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     setLoading(false);
   };
 
+  // Fetch Scheduled Exams
+  const fetchScheduledExams = async () => {
+    setLoadingExams(true);
+    const examMap = new Map<string, Exam>();
+
+    // 1. Local Cache
+    try {
+      const localData = safeGetLocalStorage('local_exams', '[]');
+      const parsed = JSON.parse(localData);
+      if (Array.isArray(parsed)) {
+        parsed.forEach((e: Exam) => { if (e && e.id) examMap.set(e.id, e); });
+      }
+    } catch (_) {}
+
+    // 2. Firestore
+    try {
+      const snap = await getDocs(collection(db, 'exams'));
+      snap.forEach(docSnap => {
+        const d = docSnap.data();
+        if (docSnap.id) examMap.set(docSnap.id, { id: docSnap.id, ...d } as Exam);
+      });
+    } catch (err) {
+      console.warn('Notice loading cloud exams in QuestionBankView:', err);
+    }
+
+    const combined = Array.from(examMap.values());
+    setAllExams(combined);
+    setLoadingExams(false);
+  };
+
+  // Delete Exam handler
+  const handleDeleteExam = async (examId: string) => {
+    if (!window.confirm('আপনি কি নিশ্চিত যে এই শিডিউলড এক্সামটি মুছে ফেলতে চান?')) return;
+
+    const updatedExams = allExams.filter(e => e.id !== examId);
+    setAllExams(updatedExams);
+    safeSetLocalStorage('local_exams', JSON.stringify(updatedExams));
+
+    try {
+      await deleteDoc(doc(db, 'exams', examId));
+    } catch (err) {
+      console.warn('Cloud exam delete notice (deleted locally):', err);
+    }
+  };
+
   useEffect(() => {
     fetchQuestions();
+    fetchScheduledExams();
   }, []);
 
   // Compute unique groups for filter dropdowns
@@ -573,6 +623,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
       setPublishSuccess(true);
       setSelectedIds(new Set());
+      fetchScheduledExams();
       if (onExamPublished) onExamPublished();
       setTimeout(() => setPublishSuccess(false), 4000);
     } catch (err) {
@@ -603,10 +654,10 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex bg-slate-800/80 p-1.5 rounded-2xl border border-slate-700/60 z-10 shrink-0">
+        <div className="flex flex-wrap bg-slate-800/80 p-1.5 rounded-2xl border border-slate-700/60 z-10 shrink-0 gap-1">
           <button
             onClick={() => setActiveTab('repository')}
-            className={`px-5 py-2.5 rounded-xl text-xs font-black transition flex items-center gap-2 ${
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition flex items-center gap-2 ${
               activeTab === 'repository'
                 ? 'bg-indigo-600 text-white shadow-lg'
                 : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
@@ -617,7 +668,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
           </button>
           <button
             onClick={() => setActiveTab('scheduler')}
-            className={`px-5 py-2.5 rounded-xl text-xs font-black transition flex items-center gap-2 ${
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition flex items-center gap-2 ${
               activeTab === 'scheduler'
                 ? 'bg-indigo-600 text-white shadow-lg'
                 : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
@@ -625,6 +676,17 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
           >
             <Shuffle className="w-4 h-4" />
             <span>গ্রুপ কন্ডিশন এক্সাম শিডিউলার</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('scheduled_exams')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition flex items-center gap-2 ${
+              activeTab === 'scheduled_exams'
+                ? 'bg-indigo-600 text-white shadow-lg'
+                : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+            }`}
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+            <span>শিডিউলড এক্সাম তালিকা ({allExams.length})</span>
           </button>
         </div>
       </div>
@@ -1223,7 +1285,217 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
         </div>
       )}
 
-      {/* Manual Add / Edit Modal */}
+      {/* TAB 3: SCHEDULED EXAMS BY COURSE */}
+      {activeTab === 'scheduled_exams' && (
+        <div className="space-y-6 animate-fadeIn">
+          {/* Summary Statistics Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+                <BookOpen className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-xs text-slate-500 font-semibold block">মোট কোর্স</span>
+                <strong className="text-xl font-extrabold text-slate-900">{courses.length} টি</strong>
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                <FileSpreadsheet className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-xs text-slate-500 font-semibold block">মোট শিডিউলড এক্সাম</span>
+                <strong className="text-xl font-extrabold text-slate-900">{allExams.length} টি</strong>
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+              <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+                <HelpCircle className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-xs text-slate-500 font-semibold block">এক্সামে মোট প্রশ্ন সংখ্যা</span>
+                <strong className="text-xl font-extrabold text-slate-900">
+                  {allExams.reduce((acc, e) => acc + (e.questions?.length || 0), 0)} টি
+                </strong>
+              </div>
+            </div>
+          </div>
+
+          {/* Course-wise Exam List Breakdown */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Layers className="w-5 h-5 text-indigo-600" />
+                <span>কোর্স ভিত্তিক এক্সাম শিডিউল বিবরণ</span>
+              </h3>
+              <button
+                onClick={fetchScheduledExams}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingExams ? 'animate-spin' : ''}`} />
+                <span>রিফ্রেশ</span>
+              </button>
+            </div>
+
+            {loadingExams ? (
+              <div className="bg-white rounded-2xl p-8 text-center text-slate-400 text-sm">
+                শিডিউলড এক্সামের তথ্য লোড হচ্ছে...
+              </div>
+            ) : allExams.length === 0 ? (
+              <div className="bg-white rounded-2xl p-10 border border-slate-200 text-center text-slate-500">
+                <FileSpreadsheet className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="font-bold text-slate-800">কোন এক্সাম শিডিউল করা নেই</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  "গ্রুপ কন্ডিশন এক্সাম শিডিউলার" ট্যাব থেকে নতুন পরীক্ষা তৈরি ও শিডিউল করুন।
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Loop over courses */}
+                {courses.map(course => {
+                  const courseExams = allExams.filter(e => e.courseId === course.id);
+                  const totalQ = courseExams.reduce((acc, e) => acc + (e.questions?.length || 0), 0);
+
+                  return (
+                    <div key={course.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+                      {/* Course Header */}
+                      <div className="p-4 sm:p-5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white font-bold flex items-center justify-center text-sm shrink-0 shadow-xs">
+                            {course.code ? course.code.substring(0, 3).toUpperCase() : 'CRS'}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-extrabold text-slate-900 text-base">{course.title}</h4>
+                              {course.code && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-200 text-slate-700 rounded-md uppercase">
+                                  {course.code}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              মোট প্রশ্ন: <span className="font-bold text-slate-700">{totalQ} টি</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className={`px-3 py-1 rounded-full text-xs font-black ${
+                            courseExams.length > 0 
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
+                              : 'bg-slate-100 text-slate-500 border border-slate-200'
+                          }`}>
+                            {courseExams.length} টি এক্সাম শিডিউলড
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Exam Cards inside Course */}
+                      {courseExams.length === 0 ? (
+                        <div className="p-4 text-center text-xs text-slate-400 italic">
+                          এই কোর্সে এখনও কোনো এক্সাম শিডিউল করা হয়নি।
+                        </div>
+                      ) : (
+                        <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3.5 bg-white">
+                          {courseExams.map(exam => (
+                            <div key={exam.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition flex flex-col justify-between gap-3">
+                              <div>
+                                <div className="flex items-center justify-between gap-2 mb-1.5">
+                                  <h5 className="font-bold text-slate-900 text-sm">{exam.title}</h5>
+                                  <span className="text-[11px] font-mono text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 shrink-0">
+                                    {exam.durationMinutes} মি.
+                                  </span>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-2">
+                                  <span>প্রশ্ন: <strong className="text-slate-800 font-bold">{exam.questions?.length || 0} টি</strong></span>
+                                  <span>নম্বর: <strong className="text-slate-800 font-bold">{exam.totalMarks || ((exam.questions?.length || 0) * (exam.marksPerQuestion || 1))}</strong></span>
+                                  <span>নেগেটিভ: <strong className="text-rose-600 font-bold">-{exam.negativeMarking || 0}</strong></span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 text-xs">
+                                <span className="text-[11px] text-slate-400">
+                                  {exam.createdAt ? new Date(exam.createdAt).toLocaleDateString() : 'শিডিউলড'}
+                                </span>
+
+                                <button
+                                  onClick={() => handleDeleteExam(exam.id)}
+                                  className="px-2.5 py-1 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg font-bold text-xs flex items-center gap-1 transition cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>মুছুন</span>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Unassigned / General Exams Section */}
+                {(() => {
+                  const generalExams = allExams.filter(e => !e.courseId || !courses.some(c => c.id === e.courseId));
+                  if (generalExams.length === 0) return null;
+
+                  return (
+                    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs mt-6">
+                      <div className="p-4 sm:p-5 bg-amber-50/60 border-b border-amber-200/80 flex items-center justify-between">
+                        <div>
+                          <h4 className="font-extrabold text-amber-900 text-base">সাধারণ / অল-কোর্স পরীক্ষা</h4>
+                          <p className="text-xs text-amber-700">কোন সুনির্দিষ্ট কোর্সে যুক্ত নয় এমন এক্সামসমূহ</p>
+                        </div>
+                        <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-800 border border-amber-200">
+                          {generalExams.length} টি এক্সাম
+                        </span>
+                      </div>
+
+                      <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3.5 bg-white">
+                        {generalExams.map(exam => (
+                          <div key={exam.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition flex flex-col justify-between gap-3">
+                            <div>
+                              <div className="flex items-center justify-between gap-2 mb-1.5">
+                                <h5 className="font-bold text-slate-900 text-sm">{exam.title}</h5>
+                                <span className="text-[11px] font-mono text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 shrink-0">
+                                  {exam.durationMinutes} মি.
+                                </span>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-2">
+                                <span>প্রশ্ন: <strong className="text-slate-800 font-bold">{exam.questions?.length || 0} টি</strong></span>
+                                <span>নম্বর: <strong className="text-slate-800 font-bold">{exam.totalMarks || ((exam.questions?.length || 0) * (exam.marksPerQuestion || 1))}</strong></span>
+                                <span>নেগেটিভ: <strong className="text-rose-600 font-bold">-{exam.negativeMarking || 0}</strong></span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 text-xs">
+                              <span className="text-[11px] text-slate-400">
+                                {exam.createdAt ? new Date(exam.createdAt).toLocaleDateString() : 'শিডিউলড'}
+                              </span>
+
+                              <button
+                                onClick={() => handleDeleteExam(exam.id)}
+                                className="px-2.5 py-1 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg font-bold text-xs flex items-center gap-1 transition cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>মুছুন</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 space-y-6 shadow-2xl relative animate-scaleUp">

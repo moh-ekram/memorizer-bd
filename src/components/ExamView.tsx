@@ -38,6 +38,9 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedCourseFilter, setSelectedCourseFilter] = useState<string>(activeCourseId || 'all');
 
+  // Track user results map (key: examId -> ExamResult)
+  const [userResultsMap, setUserResultsMap] = useState<Record<string, ExamResult>>({});
+
   // Exam taking state
   const [activeExam, setActiveExam] = useState<Exam | null>(null);
   const [currentQIndex, setCurrentQIndex] = useState<number>(0);
@@ -52,6 +55,56 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
   const [meritListExam, setMeritListExam] = useState<Exam | null>(null);
   const [meritResults, setMeritResults] = useState<ExamResult[]>([]);
   const [loadingMerit, setLoadingMerit] = useState<boolean>(false);
+
+  // Fetch User Previous Exam Results
+  useEffect(() => {
+    let isMounted = true;
+    const fetchUserResults = async () => {
+      const map: Record<string, ExamResult> = {};
+
+      // 1. Local Storage cache
+      try {
+        const localData = safeGetLocalStorage('local_exam_results', '[]');
+        const parsed = JSON.parse(localData);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((r: ExamResult) => {
+            if (r && r.examId) {
+              if (!map[r.examId] || r.score > map[r.examId].score) {
+                map[r.examId] = r;
+              }
+            }
+          });
+        }
+      } catch (_) {}
+
+      // 2. Cloud Firestore results
+      try {
+        const snap = await getDocs(collection(db, 'exam_results'));
+        snap.forEach(docSnap => {
+          const data = docSnap.data() as ExamResult;
+          const matchEmail = userEmail && data.userEmail && data.userEmail.toLowerCase() === userEmail.toLowerCase();
+          const matchUserId = userId && data.userId && data.userId === userId;
+
+          if (matchEmail || matchUserId || (!userEmail && !userId)) {
+            if (data && data.examId) {
+              if (!map[data.examId] || data.score > map[data.examId].score) {
+                map[data.examId] = { id: docSnap.id, ...data };
+              }
+            }
+          }
+        });
+      } catch (err) {
+        console.warn('Notice loading user exam results:', err);
+      }
+
+      if (isMounted) {
+        setUserResultsMap(map);
+      }
+    };
+
+    fetchUserResults();
+    return () => { isMounted = false; };
+  }, [userEmail, userId]);
 
   // Fetch Exams from Firestore & Local Cache
   useEffect(() => {
@@ -171,6 +224,27 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
     setExamResult(resultObj);
     setIsExamCompleted(true);
 
+    // Save result to local storage cache
+    try {
+      const existingResStr = safeGetLocalStorage('local_exam_results', '[]');
+      let localRes: ExamResult[] = [];
+      try {
+        localRes = JSON.parse(existingResStr);
+        if (!Array.isArray(localRes)) localRes = [];
+      } catch (_) { localRes = []; }
+
+      const updatedLocalRes = [resultObj, ...localRes.filter(r => r.id !== resultObj.id)];
+      safeSetLocalStorage('local_exam_results', JSON.stringify(updatedLocalRes));
+    } catch (lErr) {
+      console.warn('Notice saving local exam result:', lErr);
+    }
+
+    // Update state userResultsMap
+    setUserResultsMap(prev => ({
+      ...prev,
+      [activeExam.id]: resultObj
+    }));
+
     // Upload Result to Firestore for Merit List
     try {
       await setDoc(doc(db, 'exam_results', resultObj.id), resultObj, { merge: true });
@@ -183,29 +257,45 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
   const handleViewMeritList = async (exam: Exam) => {
     setMeritListExam(exam);
     setLoadingMerit(true);
+    const resultMap = new Map<string, ExamResult>();
+
+    // 1. Load from local storage
+    try {
+      const localData = safeGetLocalStorage('local_exam_results', '[]');
+      const parsed = JSON.parse(localData);
+      if (Array.isArray(parsed)) {
+        parsed.forEach((r: ExamResult) => {
+          if (r && r.examId === exam.id && r.id) {
+            resultMap.set(r.id, r);
+          }
+        });
+      }
+    } catch (_) {}
+
+    // 2. Load from Firestore
     try {
       const snap = await getDocs(collection(db, 'exam_results'));
-      const results: ExamResult[] = [];
       snap.forEach(d => {
         const data = d.data() as ExamResult;
-        if (data.examId === exam.id) {
-          results.push({ id: d.id, ...data });
+        if (data.examId === exam.id && d.id) {
+          resultMap.set(d.id, { id: d.id, ...data });
         }
       });
-
-      // Sort by highest score, then fewest wrong answers, then fastest time
-      results.sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        if (a.wrongCount !== b.wrongCount) return a.wrongCount - b.wrongCount;
-        return a.timeTakenSeconds - b.timeTakenSeconds;
-      });
-
-      setMeritResults(results);
     } catch (e) {
-      console.error('Failed to load merit list:', e);
-    } finally {
-      setLoadingMerit(false);
+      console.warn('Notice loading merit list from cloud:', e);
     }
+
+    const results = Array.from(resultMap.values());
+
+    // Sort by highest score, then fewest wrong answers, then fastest time
+    results.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      if (a.wrongCount !== b.wrongCount) return a.wrongCount - b.wrongCount;
+      return a.timeTakenSeconds - b.timeTakenSeconds;
+    });
+
+    setMeritResults(results);
+    setLoadingMerit(false);
   };
 
   const filteredExams = exams.filter(e => {
@@ -791,6 +881,8 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
             const qCount = exam.questions?.length || 0;
             const marksPerQ = exam.marksPerQuestion || 1;
             const totalMarks = qCount * marksPerQ;
+            const userResult = userResultsMap[exam.id];
+            const isParticipated = !!userResult;
 
             return (
               <div
@@ -798,7 +890,8 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                 className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition flex flex-col justify-between relative overflow-hidden group"
               >
                 <div>
-                  <div className="flex items-center justify-between mb-4">
+                  {/* Top Badges */}
+                  <div className="flex items-center justify-between mb-3">
                     <span className="text-[11px] font-bold px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-100">
                       {courses.find(c => c.id === exam.courseId)?.title || 'সাধারণ পরীক্ষা'}
                     </span>
@@ -808,6 +901,14 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                       <span>{exam.durationMinutes} মিনিট</span>
                     </span>
                   </div>
+
+                  {/* Participation Tag Badge */}
+                  {isParticipated && (
+                    <div className="mb-3 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-full text-[11px] font-extrabold shadow-2xs">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>অংশগ্রহণ করা হয়েছে (প্রাপ্ত নম্বর: {userResult.score}/{userResult.totalMarks})</span>
+                    </div>
+                  )}
 
                   <h3 className="text-xl font-bold text-slate-900 mb-2 group-hover:text-indigo-600 transition">
                     {exam.title}
@@ -838,19 +939,34 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-center gap-2">
                   <button
                     onClick={() => handleStartExam(exam)}
-                    className="flex-1 py-3 px-4 rounded-2xl font-bold text-xs text-white bg-indigo-600 hover:bg-indigo-500 shadow-md flex items-center justify-center gap-2 transition cursor-pointer"
+                    className="flex-1 w-full py-3 px-4 rounded-2xl font-bold text-xs text-white bg-indigo-600 hover:bg-indigo-500 shadow-md flex items-center justify-center gap-2 transition cursor-pointer"
                   >
-                    <span>পরীক্ষা শুরু করুন</span>
+                    <span>{isParticipated ? 'পুনরায় পরীক্ষা দিন' : 'পরীক্ষা শুরু করুন'}</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
 
+                  {isParticipated && (
+                    <button
+                      onClick={() => {
+                        setActiveExam(exam);
+                        setExamResult(userResult);
+                        setIsExamCompleted(true);
+                      }}
+                      title="পূর্ববর্তী মার্কশীট দেখুন"
+                      className="w-full sm:w-auto px-3.5 py-3 rounded-2xl border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shrink-0"
+                    >
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                      <span>মার্কশীট</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={() => handleViewMeritList(exam)}
-                    title="মেরিট লিস্ট দেখুন"
-                    className="p-3 rounded-2xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                    title="মেরিট লিস্ট / লিডারবোর্ড দেখুন"
+                    className="w-full sm:w-auto p-3 rounded-2xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition cursor-pointer flex items-center justify-center gap-1 shrink-0"
                   >
                     <Trophy className="w-4 h-4 text-amber-500" />
                   </button>
