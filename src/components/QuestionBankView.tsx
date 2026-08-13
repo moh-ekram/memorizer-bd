@@ -20,11 +20,13 @@ import {
   Edit2,
   RefreshCw,
   Sliders,
-  Check
+  Check,
+  Info
 } from 'lucide-react';
 import { db, doc, setDoc, deleteDoc, writeBatch, collection, getDocs } from '../lib/db';
 import { QuestionBankItem, QuestionBankRule, Course, Exam, ExamQuestion } from '../types';
 import { downloadQuestionBankExcelTemplate, parseQuestionBankExcel } from '../lib/gameExcelUtils';
+import { safeGetLocalStorage, safeSetLocalStorage } from '../lib/storage';
 
 interface QuestionBankViewProps {
   courses: Course[];
@@ -78,19 +80,35 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishSuccess, setPublishSuccess] = useState(false);
+  const [permissionNotice, setPermissionNotice] = useState<string | null>(null);
 
-  // Fetch Question Bank from Firestore
+  // Fetch Question Bank from Firestore with LocalStorage Fallback
   const fetchQuestions = async () => {
     setLoading(true);
+    setPermissionNotice(null);
     try {
       const snap = await getDocs(collection(db, 'question_bank'));
       const list: QuestionBankItem[] = [];
-      snap.forEach(doc => {
-        list.push({ id: doc.id, ...doc.data() } as QuestionBankItem);
+      snap.forEach(docSnap => {
+        list.push({ id: docSnap.id, ...docSnap.data() } as QuestionBankItem);
       });
       setQuestions(list);
-    } catch (err) {
-      console.error('Failed to fetch question bank:', err);
+      safeSetLocalStorage('local_question_bank', JSON.stringify(list));
+    } catch (err: any) {
+      console.warn('Question bank Firestore fetch notice:', err);
+      // Fallback to local storage cache
+      const cached = safeGetLocalStorage('local_question_bank', null);
+      if (cached) {
+        try {
+          const list = JSON.parse(cached);
+          if (Array.isArray(list) && list.length > 0) {
+            setQuestions(list);
+            setPermissionNotice('ক্লাউড কানেকশন বা পারমিশন সীমিত থাকায় লোকাল ডিভাইস ক্যাশ থেকে প্রশ্নাবলী লোড করা হয়েছে।');
+          }
+        } catch (_) {}
+      } else {
+        setPermissionNotice('ক্লাউড ডাটাবেজ থেকে প্রশ্ন লোড করা যায়নি (পারমিশন সীমাবদ্ধতা)। এক্সেল দিয়ে নতুন প্রশ্ন আপলোড করলে তা লোকাল ডিভাইসেও অটোমেটিক সেভ থাকবে।');
+      }
     } finally {
       setLoading(false);
     }
@@ -160,23 +178,32 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
         return;
       }
 
-      setUploadStatus(`Saving ${parsed.length} questions to cloud database...`);
+      setUploadStatus(`Saving ${parsed.length} questions...`);
 
-      // Batch save to Firestore in chunks of 100
-      const batchSize = 100;
-      for (let i = 0; i < parsed.length; i += batchSize) {
-        const batch = writeBatch(db as any);
-        const chunk = parsed.slice(i, i + batchSize);
-        chunk.forEach(q => {
-          const docRef = doc(db as any, 'question_bank', q.id);
-          batch.set(docRef, q, { merge: true });
-        });
-        await batch.commit();
-        setUploadStatus(`Saved ${Math.min(i + batchSize, parsed.length)} / ${parsed.length} questions...`);
+      // 1. Update local state & local storage immediately
+      const existingMap = new Map(questions.map(q => [q.id, q]));
+      parsed.forEach(q => existingMap.set(q.id, q));
+      const updatedList = Array.from(existingMap.values());
+      setQuestions(updatedList);
+      safeSetLocalStorage('local_question_bank', JSON.stringify(updatedList));
+
+      // 2. Try batch save to Firestore in chunks of 100
+      try {
+        const batchSize = 100;
+        for (let i = 0; i < parsed.length; i += batchSize) {
+          const batch = writeBatch(db as any);
+          const chunk = parsed.slice(i, i + batchSize);
+          chunk.forEach(q => {
+            const docRef = doc(db as any, 'question_bank', q.id);
+            batch.set(docRef, q, { merge: true });
+          });
+          await batch.commit();
+        }
+      } catch (fsErr) {
+        console.warn('Cloud batch save notice (saved locally):', fsErr);
       }
 
-      await fetchQuestions();
-      setUploadStatus(`Successfully uploaded ${parsed.length} questions!`);
+      setUploadStatus(`Successfully loaded ${parsed.length} questions!`);
       setTimeout(() => setUploadStatus(null), 3000);
     } catch (err: any) {
       console.error('Upload error:', err);
@@ -219,18 +246,24 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       createdAt: editingQuestion?.createdAt || new Date().toISOString()
     };
 
+    // Update local state and local storage immediately
+    const updatedList = questions.some(q => q.id === qId)
+      ? questions.map(q => q.id === qId ? item : q)
+      : [item, ...questions];
+    setQuestions(updatedList);
+    safeSetLocalStorage('local_question_bank', JSON.stringify(updatedList));
+
+    setShowAddModal(false);
+    setEditingQuestion(null);
+    setFormData({
+      question: '', optionA: '', optionB: '', optionC: '', optionD: '',
+      correctAnswer: 'A', explanation: '', group1: 'General', group2: 'General', group3: 'General'
+    });
+
     try {
       await setDoc(doc(db, 'question_bank', qId), item, { merge: true });
-      await fetchQuestions();
-      setShowAddModal(false);
-      setEditingQuestion(null);
-      setFormData({
-        question: '', optionA: '', optionB: '', optionC: '', optionD: '',
-        correctAnswer: 'A', explanation: '', group1: 'General', group2: 'General', group3: 'General'
-      });
     } catch (err) {
-      console.error('Save error:', err);
-      alert('Failed to save question to Firestore.');
+      console.warn('Cloud setDoc notice (saved locally):', err);
     }
   };
 
@@ -260,17 +293,19 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
   const handleDeleteSingle = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this question?')) return;
+    const updatedList = questions.filter(q => q.id !== id);
+    setQuestions(updatedList);
+    safeSetLocalStorage('local_question_bank', JSON.stringify(updatedList));
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+
     try {
       await deleteDoc(doc(db, 'question_bank', id));
-      setQuestions(prev => prev.filter(q => q.id !== id));
-      setSelectedIds(prev => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
     } catch (err) {
-      console.error('Delete error:', err);
-      alert('Failed to delete question.');
+      console.warn('Cloud deleteDoc notice:', err);
     }
   };
 
@@ -278,8 +313,13 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     if (selectedIds.size === 0) return;
     if (!window.confirm(`Are you sure you want to delete ${selectedIds.size} selected questions?`)) return;
 
+    const updatedList = questions.filter(q => !selectedIds.has(q.id));
+    setQuestions(updatedList);
+    safeSetLocalStorage('local_question_bank', JSON.stringify(updatedList));
+
     try {
       const idsArr = Array.from(selectedIds);
+      setSelectedIds(new Set());
       for (let i = 0; i < idsArr.length; i += 100) {
         const batch = writeBatch(db as any);
         idsArr.slice(i, i + 100).forEach((id: string) => {
@@ -287,11 +327,8 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
         });
         await batch.commit();
       }
-      setQuestions(prev => prev.filter(q => !selectedIds.has(q.id)));
-      setSelectedIds(new Set());
     } catch (err) {
-      console.error('Bulk delete error:', err);
-      alert('Failed to bulk delete questions.');
+      console.warn('Cloud bulk delete notice:', err);
     }
   };
 
@@ -459,6 +496,14 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
           </button>
         </div>
       </div>
+
+      {/* Permission / Offline Notice Banner */}
+      {permissionNotice && (
+        <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl text-xs font-semibold flex items-center gap-2">
+          <Info className="w-4 h-4 text-amber-600 shrink-0" />
+          <span>{permissionNotice}</span>
+        </div>
+      )}
 
       {/* Upload Status Alert */}
       {uploadStatus && (
