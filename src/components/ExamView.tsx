@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { db, collection, getDocs, doc, setDoc } from '../lib/db';
 import { Exam, ExamQuestion, ExamResult, Course } from '../types';
+import { safeGetLocalStorage, safeSetLocalStorage } from '../lib/storage';
 
 interface ExamViewProps {
   courses: Course[];
@@ -52,23 +53,36 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
   const [meritResults, setMeritResults] = useState<ExamResult[]>([]);
   const [loadingMerit, setLoadingMerit] = useState<boolean>(false);
 
-  // Fetch Exams from Firestore
+  // Fetch Exams from Firestore & Local Cache
   useEffect(() => {
     let isMounted = true;
     const fetchExams = async () => {
       setLoading(true);
+      const examMap = new Map<string, Exam>();
+
+      // Load from local storage first
+      try {
+        const localData = safeGetLocalStorage('local_exams', '[]');
+        const parsed = JSON.parse(localData);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((e: Exam) => { if (e && e.id) examMap.set(e.id, e); });
+        }
+      } catch (_) {}
+
       try {
         const snap = await getDocs(collection(db, 'exams'));
-        const loaded: Exam[] = [];
         snap.forEach(docSnap => {
           const d = docSnap.data();
-          loaded.push({ id: docSnap.id, ...d } as Exam);
+          if (docSnap.id) examMap.set(docSnap.id, { id: docSnap.id, ...d } as Exam);
         });
-        if (isMounted) setExams(loaded);
       } catch (err) {
-        console.error('Failed to load exams:', err);
+        console.warn('Notice loading cloud exams:', err);
       } finally {
-        if (isMounted) setLoading(false);
+        const combined = Array.from(examMap.values());
+        if (isMounted) {
+          setExams(combined);
+          setLoading(false);
+        }
       }
     };
 

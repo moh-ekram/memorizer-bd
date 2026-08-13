@@ -2398,7 +2398,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           }`}
         >
           <Award className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
-          <span className="truncate">Exam & Game Upload</span>
+          <span className="truncate">Game Upload</span>
         </button>
 
         <button
@@ -3977,9 +3977,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         <div className="space-y-8 animate-fade-in">
           {/* Header */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs">
-            <h3 className="font-extrabold text-slate-800 text-lg">গেম ও এক্সাম ডাটা আপলোড অ্যান্ড এক্সেল ম্যানেজমেন্ট</h3>
+            <h3 className="font-extrabold text-slate-800 text-lg">গেম ডাটা আপলোড অ্যান্ড এক্সেল ম্যানেজমেন্ট</h3>
             <p className="text-xs text-slate-500 font-medium mt-1">
-              একই সাথে সকল গেম ও এক্সামের ডেটা এক্সেল ফাইলের একাধিক শীট (Multi-Sheet) অথবা নির্দিষ্ট গেমের শীট থেকে সহজেই আপলোড করুন।
+              একই সাথে সকল গেমের ডেটা এক্সেল ফাইলের একাধিক শীট (Multi-Sheet) অথবা নির্দিষ্ট গেমের শীট থেকে সহজেই আপলোড করুন। (অনলাইন এক্সাম এখন 'Question Bank' মেনু থেকে সরাসরি তৈরি করা হয়)।
             </p>
 
             {/* Template Download Buttons */}
@@ -3992,7 +3992,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <FileSpreadsheet className="w-4 h-4" />
-                <span>মাল্টি-শীট গেম ও এক্সাম টেমপ্লেট (All-in-One)</span>
+                <span>মাল্টি-শীট গেম টেমপ্লেট (All-in-One)</span>
               </button>
 
               <button
@@ -4025,15 +4025,6 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition cursor-pointer"
               >
                 MCQ Quiz
-              </button>
-
-              <button
-                type="button"
-                onClick={() => downloadExamExcelTemplate()}
-                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-              >
-                <Award className="w-4 h-4" />
-                <span>অনলাইন এক্সাম টেমপ্লেট (Online Exam)</span>
               </button>
             </div>
           </div>
@@ -4135,23 +4126,6 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                           setMultiSheetUploadProgress(88);
                           await saveBulkDocs('mcq_questions', res.mcqQs);
                           total += res.mcqQs.length;
-                        }
-
-                        if (res.examQs.length > 0) {
-                          setMultiSheetStatusMessage(`অনলাইন এক্সাম সিরিজ ক্লাউডে তৈরি করা হচ্ছে...`);
-                          setMultiSheetUploadProgress(95);
-                          const newExam: Exam = {
-                            id: `exam_${Date.now()}`,
-                            title: file.name.replace(/\.[^/.]+$/, "") || 'নতুন অনলাইন এক্সাম',
-                            durationMinutes: 15,
-                            marksPerQuestion: 1,
-                            negativeMarking: 0.25,
-                            totalMarks: res.examQs.length,
-                            questions: res.examQs,
-                            createdAt: new Date().toISOString()
-                          };
-                          await setDoc(doc(db, 'exams', newExam.id), newExam, { merge: true });
-                          total += res.examQs.length;
                         }
 
                         setMultiSheetUploadProgress(100);

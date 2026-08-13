@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Sliders,
   Check,
+  Award,
   Info
 } from 'lucide-react';
 import { db, doc, setDoc, deleteDoc, writeBatch, collection, getDocs } from '../lib/db';
@@ -76,42 +77,94 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
   ]);
 
   // Generated Exam Preview State
+  const [creationMode, setCreationMode] = useState<'selected' | 'random'>('selected');
   const [generatedExam, setGeneratedExam] = useState<Exam | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishSuccess, setPublishSuccess] = useState(false);
   const [permissionNotice, setPermissionNotice] = useState<string | null>(null);
 
-  // Fetch Question Bank from Firestore with LocalStorage Fallback
+  // Fetch Question Bank from Firestore with LocalStorage Fallback & Blank Questions Migration
   const fetchQuestions = async () => {
     setLoading(true);
     setPermissionNotice(null);
+    const itemMap = new Map<string, QuestionBankItem>();
+
+    // 1. Local Storage cache
     try {
-      const snap = await getDocs(collection(db, 'question_bank'));
-      const list: QuestionBankItem[] = [];
-      snap.forEach(docSnap => {
-        list.push({ id: docSnap.id, ...docSnap.data() } as QuestionBankItem);
-      });
-      setQuestions(list);
-      safeSetLocalStorage('local_question_bank', JSON.stringify(list));
-    } catch (err: any) {
-      console.warn('Question bank Firestore fetch notice:', err);
-      // Fallback to local storage cache
       const cached = safeGetLocalStorage('local_question_bank', null);
       if (cached) {
-        try {
-          const list = JSON.parse(cached);
-          if (Array.isArray(list) && list.length > 0) {
-            setQuestions(list);
-            setPermissionNotice('ক্লাউড কানেকশন বা পারমিশন সীমিত থাকায় লোকাল ডিভাইস ক্যাশ থেকে প্রশ্নাবলী লোড করা হয়েছে।');
-          }
-        } catch (_) {}
-      } else {
-        setPermissionNotice('ক্লাউড ডাটাবেজ থেকে প্রশ্ন লোড করা যায়নি (পারমিশন সীমাবদ্ধতা)। এক্সেল দিয়ে নতুন প্রশ্ন আপলোড করলে তা লোকাল ডিভাইসেও অটোমেটিক সেভ থাকবে।');
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((q: QuestionBankItem) => { if (q && q.id) itemMap.set(q.id, q); });
+        }
       }
-    } finally {
-      setLoading(false);
+    } catch (_) {}
+
+    // 2. Question Bank from Firestore
+    try {
+      const snap = await getDocs(collection(db, 'question_bank'));
+      snap.forEach(docSnap => {
+        itemMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as QuestionBankItem);
+      });
+    } catch (err: any) {
+      console.warn('Question bank Firestore fetch notice:', err);
     }
+
+    // 3. Migrate all existing blank_questions into Question Bank
+    try {
+      const bSnap = await getDocs(collection(db, 'blank_questions'));
+      bSnap.forEach(docSnap => {
+        const data = docSnap.data();
+        const questionStr = data.sentence || data.question || '';
+        if (!questionStr) return;
+
+        const opts: string[] = Array.isArray(data.options)
+          ? data.options
+          : [data.optionA || '', data.optionB || '', data.optionC || '', data.optionD || ''];
+
+        const optA = opts[0] || data.optionA || '';
+        const optB = opts[1] || data.optionB || '';
+        const optC = opts[2] || data.optionC || '';
+        const optD = opts[3] || data.optionD || '';
+
+        let corr = (data.answer || data.correctAnswer || 'A').toString().trim();
+        if (corr.length > 1) {
+          const idx = opts.findIndex((o: string) => o.trim() === corr);
+          if (idx >= 0 && idx < 4) {
+            corr = ['A', 'B', 'C', 'D'][idx];
+          } else {
+            corr = 'A';
+          }
+        }
+
+        const bqId = `bq_${docSnap.id}`;
+        if (!itemMap.has(bqId)) {
+          itemMap.set(bqId, {
+            id: bqId,
+            question: questionStr,
+            optionA: optA,
+            optionB: optB,
+            optionC: optC,
+            optionD: optD,
+            correctAnswer: corr,
+            explanation: data.explanation || 'Blank Filling Question',
+            group1: 'Blank Filling',
+            group2: data.courseId || 'General',
+            group3: 'Existing Database',
+            courseId: data.courseId,
+            createdAt: data.createdAt || new Date().toISOString()
+          });
+        }
+      });
+    } catch (bErr) {
+      console.warn('Notice reading blank_questions:', bErr);
+    }
+
+    const finalList = Array.from(itemMap.values());
+    setQuestions(finalList);
+    safeSetLocalStorage('local_question_bank', JSON.stringify(finalList));
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -332,7 +385,63 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     }
   };
 
-  // --- EXAM SCHEDULER LOGIC ---
+  // --- EXAM SCHEDULER & SELECTION LOGIC ---
+  const handleCreateExamFromSelected = () => {
+    if (selectedIds.size === 0) {
+      alert('অনুগ্রহ করে অন্তত ১টি প্রশ্ন সিলেক্ট করুন।');
+      return;
+    }
+
+    const selectedQs = questions.filter(q => selectedIds.has(q.id));
+    const compiledExamQuestions: ExamQuestion[] = selectedQs.map(q => ({
+      id: q.id,
+      question: q.question,
+      options: [q.optionA, q.optionB, q.optionC, q.optionD].filter(Boolean),
+      answer: q.correctAnswer,
+      explanation: q.explanation
+    }));
+
+    const targetCourse = courses.find(c => c.id === targetCourseId);
+    const totalMarks = compiledExamQuestions.length * (Number(marksPerQuestion) || 1);
+
+    const defaultTitle = examTitle.trim() || `বাছাইকৃত মডেল টেস্ট (${compiledExamQuestions.length} টি প্রশ্ন)`;
+    if (!examTitle.trim()) {
+      setExamTitle(defaultTitle);
+    }
+
+    const examObj: Exam = {
+      id: `exam-${Date.now()}`,
+      title: defaultTitle,
+      description: `কুয়েশ্চন ব্যাংক থেকে হাতে বাছাই করা ${compiledExamQuestions.length} টি প্রশ্নের অনলাইন এক্সাম।`,
+      courseId: targetCourseId || undefined,
+      courseTitle: targetCourse ? targetCourse.title : 'সকল শিক্ষার্থী / সাধারণ পরীক্ষা',
+      durationMinutes: Number(durationMinutes) || 15,
+      marksPerQuestion: Number(marksPerQuestion) || 1,
+      negativeMarking: Number(negativeMarking) || 0.25,
+      totalMarks,
+      questions: compiledExamQuestions,
+      createdAt: new Date().toISOString()
+    };
+
+    setGeneratedExam(examObj);
+    setCreationMode('selected');
+    setActiveTab('scheduler');
+  };
+
+  const handleRemoveQuestionFromExam = (qId: string) => {
+    if (!generatedExam) return;
+    const updatedQs = generatedExam.questions.filter(q => q.id !== qId);
+    if (updatedQs.length === 0) {
+      setGeneratedExam(null);
+      return;
+    }
+    setGeneratedExam({
+      ...generatedExam,
+      questions: updatedQs,
+      totalMarks: updatedQs.length * (Number(marksPerQuestion) || 1)
+    });
+  };
+
   const handleAddRule = () => {
     setRules(prev => [
       ...prev,
@@ -414,10 +523,10 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
       const examObj: Exam = {
         id: `exam-${Date.now()}`,
-        title: examTitle.trim() || `Scheduled Random Exam (${compiledExamQuestions.length} Questions)`,
-        description: `Randomized exam generated from Question Bank with ${compiledExamQuestions.length} questions.`,
+        title: examTitle.trim() || `র্যান্ডম জেনারেটেড মডেল টেস্ট (${compiledExamQuestions.length} টি প্রশ্ন)`,
+        description: `কুয়েশ্চন ব্যাংক থেকে ফিল্টার করে তৈরি করা ${compiledExamQuestions.length} টি প্রশ্নের অনলাইন এক্সাম।`,
         courseId: targetCourseId || undefined,
-        courseTitle: targetCourse ? targetCourse.title : 'Global Practice Exam',
+        courseTitle: targetCourse ? targetCourse.title : 'সকল শিক্ষার্থী / সাধারণ পরীক্ষা',
         durationMinutes: Number(durationMinutes) || 15,
         marksPerQuestion: Number(marksPerQuestion) || 1,
         negativeMarking: Number(negativeMarking) || 0.25,
@@ -427,25 +536,57 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       };
 
       setGeneratedExam(examObj);
+      setCreationMode('random');
       setIsGenerating(false);
     }, 200);
   };
 
-  // Publish Exam to Firestore
+  // Publish Exam to Firestore & Local Storage
   const handlePublishExam = async () => {
     if (!generatedExam) return;
 
     setIsPublishing(true);
     setPublishSuccess(false);
 
+    const targetCourse = courses.find(c => c.id === targetCourseId);
+    const finalExamObj: Exam = {
+      ...generatedExam,
+      title: examTitle.trim() || generatedExam.title,
+      durationMinutes: Number(durationMinutes) || generatedExam.durationMinutes,
+      marksPerQuestion: Number(marksPerQuestion) || generatedExam.marksPerQuestion,
+      negativeMarking: Number(negativeMarking) || generatedExam.negativeMarking,
+      totalMarks: generatedExam.questions.length * (Number(marksPerQuestion) || 1),
+      courseId: targetCourseId || undefined,
+      courseTitle: targetCourse ? targetCourse.title : 'সকল শিক্ষার্থী / সাধারণ পরীক্ষা'
+    };
+
     try {
-      await setDoc(doc(db, 'exams', generatedExam.id), generatedExam);
+      // 1. Cloud save
+      try {
+        await setDoc(doc(db, 'exams', finalExamObj.id), finalExamObj, { merge: true });
+      } catch (fsErr) {
+        console.warn('Cloud exam save notice (saved locally):', fsErr);
+      }
+
+      // 2. Local storage save
+      const existingLocalExamsStr = safeGetLocalStorage('local_exams', '[]');
+      let localExams: Exam[] = [];
+      try {
+        localExams = JSON.parse(existingLocalExamsStr);
+        if (!Array.isArray(localExams)) localExams = [];
+      } catch (_) {
+        localExams = [];
+      }
+      const updatedLocalExams = [finalExamObj, ...localExams.filter(e => e.id !== finalExamObj.id)];
+      safeSetLocalStorage('local_exams', JSON.stringify(updatedLocalExams));
+
       setPublishSuccess(true);
+      setSelectedIds(new Set());
       if (onExamPublished) onExamPublished();
       setTimeout(() => setPublishSuccess(false), 4000);
     } catch (err) {
       console.error('Error publishing exam:', err);
-      alert('Failed to publish exam to Firestore.');
+      alert('Failed to publish exam.');
     } finally {
       setIsPublishing(false);
     }
@@ -638,17 +779,28 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
           {/* Bulk Action Controls */}
           {selectedIds.size > 0 && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-4 animate-fadeIn">
-              <span className="text-xs font-extrabold text-rose-900">
+            <div className="p-3.5 bg-indigo-50 border border-indigo-200 rounded-2xl flex flex-wrap items-center justify-between gap-3 animate-fadeIn shadow-xs">
+              <span className="text-xs font-black text-indigo-900">
                 {selectedIds.size} টি প্রশ্ন সিলেক্ট করা হয়েছে
               </span>
-              <button
-                onClick={handleDeleteSelected}
-                className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>সিলেক্ট করা প্রশ্ন ডিলিট করুন</span>
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCreateExamFromSelected}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-md"
+                >
+                  <Award className="w-4 h-4" />
+                  <span>সিলেক্ট করা ({selectedIds.size}) প্রশ্ন দিয়ে এক্সাম তৈরি করুন</span>
+                </button>
+
+                <button
+                  onClick={handleDeleteSelected}
+                  className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>ডিলিট করুন</span>
+                </button>
+              </div>
             </div>
           )}
 
@@ -1043,12 +1195,23 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               <div className="space-y-3 max-h-[450px] overflow-y-auto pr-2">
                 <h4 className="font-extrabold text-xs text-slate-500 uppercase tracking-wider">নির্বাচিত প্রশ্নসমূহ ({generatedExam.questions.length}):</h4>
                 {generatedExam.questions.map((q, idx) => (
-                  <div key={q.id} className="p-4 bg-slate-50 border border-slate-200/60 rounded-2xl space-y-2">
-                    <div className="flex items-start gap-2">
-                      <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 font-black rounded-md text-[11px] shrink-0">
-                        #{idx + 1}
-                      </span>
-                      <p className="font-extrabold text-slate-900 text-xs leading-relaxed">{q.question}</p>
+                  <div key={q.id} className="p-4 bg-slate-50 border border-slate-200/60 rounded-2xl space-y-2 relative group">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2">
+                        <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 font-black rounded-md text-[11px] shrink-0">
+                          #{idx + 1}
+                        </span>
+                        <p className="font-extrabold text-slate-900 text-xs leading-relaxed">{q.question}</p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveQuestionFromExam(q.id)}
+                        className="p-1 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
+                        title="এই পরীক্ষা থেকে প্রশ্নটি বাদ দিন"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 pt-1 text-[11px] font-medium text-slate-600 pl-7">
