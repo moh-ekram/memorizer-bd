@@ -62,6 +62,7 @@ import {
   X, 
   CheckCircle, 
   CheckCircle2,
+  Loader2,
   AlertTriangle, 
   XCircle, 
   Copy, 
@@ -3354,8 +3355,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   <div className="p-5 bg-slate-50 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-end gap-2.5">
                     <button
                       type="button"
-                      onClick={() => setSelectedActionRequest(null)}
-                      disabled={isProcessingAction}
+                      onClick={() => {
+                        setIsProcessingAction(false);
+                        setSelectedActionRequest(null);
+                      }}
                       className="w-full sm:w-auto px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-extrabold text-xs rounded-xl transition cursor-pointer"
                     >
                       Cancel
@@ -3363,37 +3366,66 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     <button
                       type="button"
                       onClick={async () => {
-                        if (!selectedActionRequest) return;
+                        if (!selectedActionRequest || isProcessingAction) return;
                         setIsProcessingAction(true);
-                        await handleRejectAccessRequest(selectedActionRequest.id);
-                        setIsProcessingAction(false);
-                        setSelectedActionRequest(null);
+                        try {
+                          const actionPromise = handleRejectAccessRequest(selectedActionRequest.id);
+                          const timeoutPromise = new Promise((_, reject) =>
+                            setTimeout(() => reject(new Error('Operation timed out. Please check network connection.')), 12000)
+                          );
+                          await Promise.race([actionPromise, timeoutPromise]);
+                          setSelectedActionRequest(null);
+                        } catch (err: any) {
+                          console.error('Error rejecting request:', err);
+                          showToast(`❌ ${err.message || 'Action failed'}`, 'error');
+                        } finally {
+                          setIsProcessingAction(false);
+                        }
                       }}
                       disabled={isProcessingAction}
-                      className="w-full sm:w-auto px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold text-xs rounded-xl border border-rose-200 transition cursor-pointer flex items-center justify-center gap-1.5"
+                      className="w-full sm:w-auto px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold text-xs rounded-xl border border-rose-200 transition cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
                     >
                       <XCircle className="w-4 h-4" />
-                      <span>Decline</span>
+                      <span>{isProcessingAction ? 'Declining...' : 'Decline'}</span>
                     </button>
                     <button
                       type="button"
                       onClick={async () => {
-                        if (!selectedActionRequest) return;
+                        if (!selectedActionRequest || isProcessingAction) return;
                         const balNum = Number(actionBalanceInput);
                         if (isNaN(balNum) || actionBalanceInput === '') {
                           alert('Please enter a valid balance/price');
                           return;
                         }
                         setIsProcessingAction(true);
-                        await handleApproveAccessRequest(selectedActionRequest, balNum);
-                        setIsProcessingAction(false);
-                        setSelectedActionRequest(null);
+                        try {
+                          const actionPromise = handleApproveAccessRequest(selectedActionRequest, balNum);
+                          const timeoutPromise = new Promise((_, reject) =>
+                            setTimeout(() => reject(new Error('Operation timed out. Please check network connection.')), 12000)
+                          );
+                          await Promise.race([actionPromise, timeoutPromise]);
+                          setSelectedActionRequest(null);
+                        } catch (err: any) {
+                          console.error('Error approving request:', err);
+                          showToast(`❌ ${err.message || 'Action failed'}`, 'error');
+                        } finally {
+                          setIsProcessingAction(false);
+                        }
                       }}
                       disabled={isProcessingAction}
-                      className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center justify-center gap-1.5"
+                      className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-75"
                     >
-                      <CheckCircle className="w-4 h-4" />
-                      <span>{isProcessingAction ? 'Processing...' : 'Approve'}</span>
+                      {isProcessingAction ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Processing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-4 h-4" />
+                          <span>Approve</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
