@@ -276,6 +276,30 @@ export interface ExamQuestion {
   explanation?: string;
 }
 
+export interface QuestionBankItem {
+  id: string;
+  question: string;
+  optionA: string;
+  optionB: string;
+  optionC: string;
+  optionD: string;
+  correctAnswer: string; // 'A', 'B', 'C', 'D' or option text
+  explanation?: string;
+  group1?: string; // e.g. Subject (Bangla, English, Math, GK)
+  group2?: string; // e.g. Topic (Grammar, Vocabulary, Algebra)
+  group3?: string; // e.g. Category / Tag / Difficulty (BCS, Bank, Varsity)
+  courseId?: string;
+  createdAt?: string;
+}
+
+export interface QuestionBankRule {
+  id: string;
+  group1?: string;
+  group2?: string;
+  group3?: string;
+  count: number;
+}
+
 export interface Exam {
   id: string;
   title: string;

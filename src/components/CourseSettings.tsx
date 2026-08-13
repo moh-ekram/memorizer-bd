@@ -175,9 +175,13 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [courseOrder, setCourseOrder] = useState<number>(course.order !== undefined ? course.order : 0);
 
-  // Sync state whenever the course prop changes
+  const prevCourseIdRef = useRef<string | null>(null);
+
+  // Sync state whenever course ID or course prop initializes
   useEffect(() => {
-    if (course) {
+    if (!course) return;
+    if (prevCourseIdRef.current !== course.id) {
+      prevCourseIdRef.current = course.id;
       setTitle(course.title || '');
       setDescription(course.description || '');
       setLocalPlaceLabels(course.placeLabels || {});
@@ -192,9 +196,10 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
       setAccessDurationDays(course.accessDurationDays || 365);
       setCourseOrder(course.order !== undefined ? course.order : 0);
       setVerifiedPayments(course.verifiedPayments || []);
-      setLocalWords(course.words || []);
+      setLocalWords(sanitizeWordsList(course.words || []));
       setLocalStories(course.stories || []);
       setLocalArticles(course.articles || []);
+      setBulkInput((course.allowedUsers || []).join('\n'));
       setEnabledGames({
         quiz: true,
         match: true,
@@ -218,8 +223,18 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
         audio: true,
         ...(course.variableToggles || {})
       });
+      setSelectedWordIds(new Set());
+      const normalized = getNormalizedActiveTab(initialTab);
+      setActiveTab(normalized);
+      if (initialTab === 'students') setAccessSubTab('students');
+      else if (initialTab === 'verification') setAccessSubTab('verification');
+      else if (initialTab === 'access') setAccessSubTab('access');
+
+      if (initialTab === 'addwords') setWordlistSubTab('addwords');
+      else if (initialTab === 'wordlist') setWordlistSubTab('wordlist');
+      setHasAutoOpened(false);
     }
-  }, [course]);
+  }, [course?.id, initialTab]);
 
   // --- AUTO-VERIFICATION PAYMENT STATES ---
   const [verifiedPayments, setVerifiedPayments] = useState<{ bkashNumber: string; trxId: string; amount?: number }[]>(course.verifiedPayments || []);
@@ -1204,55 +1219,12 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   const [excelSuccess, setExcelSuccess] = useState<string | null>(null);
   const [dragActiveWords, setDragActiveWords] = useState(false);
 
-  // --- GENERAL ACTIONS ---
+  // General state flags
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [hasAutoOpened, setHasAutoOpened] = useState(false);
-
-  const prevCourseIdRef = useRef<string | null>(null);
-
-  // Synchronize on course prop changes (only reset when course ID changes)
-  useEffect(() => {
-    if (!course) return;
-    if (prevCourseIdRef.current !== course.id) {
-      prevCourseIdRef.current = course.id;
-      setTitle(course.title);
-      setDescription(course.description);
-      setIsDefault(!!course.isDefault);
-      setIsRestricted(!!course.isRestricted);
-      setHidden(!!course.hidden);
-      setPrice((course.price && course.price > 0) ? course.price : 30);
-      setBkashNumber((course.bkashNumber && course.bkashNumber !== '01700000000' && course.bkashNumber.trim() !== '') ? course.bkashNumber : '01581624202');
-      setGoogleSearchQuery(course.googleSearchQuery || '');
-      setAllowedUsers(course.allowedUsers || []);
-      setAllowedUsersExpiry(course.allowedUsersExpiry || {});
-      setAccessDurationDays(course.accessDurationDays || 365);
-      setBulkInput((course.allowedUsers || []).join('\n'));
-      setLocalWords(sanitizeWordsList(course.words || []));
-      setVerifiedPayments(course.verifiedPayments || []);
-      setToggles({
-        meaning: true,
-        synonyms: true,
-        extraWord: true,
-        extraMeaning: true,
-        example: true,
-        audio: true,
-        ...(course.variableToggles || {})
-      });
-      setSelectedWordIds(new Set());
-      const normalized = getNormalizedActiveTab(initialTab);
-      setActiveTab(normalized);
-      if (initialTab === 'students') setAccessSubTab('students');
-      else if (initialTab === 'verification') setAccessSubTab('verification');
-      else if (initialTab === 'access') setAccessSubTab('access');
-
-      if (initialTab === 'addwords') setWordlistSubTab('addwords');
-      else if (initialTab === 'wordlist') setWordlistSubTab('wordlist');
-      setHasAutoOpened(false);
-    }
-  }, [course?.id, initialTab]);
 
   // Handle auto-editing of a specified word
   useEffect(() => {

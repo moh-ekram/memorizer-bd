@@ -1,5 +1,5 @@
 import { read, utils, writeFile } from 'xlsx';
-import { BlankQuestion, OddOneOutQuestion, WordAnalogyQuestion, CustomMcqQuestion, ExamQuestion } from '../types';
+import { BlankQuestion, OddOneOutQuestion, WordAnalogyQuestion, CustomMcqQuestion, ExamQuestion, QuestionBankItem } from '../types';
 
 /**
  * Normalizes text for matching (lowercase, trims whitespace, removes hidden unicode)
@@ -830,4 +830,157 @@ export async function parseMultiSheetGamesExcel(file: File, courseId: string): P
     };
     reader.readAsArrayBuffer(file);
   });
+}
+
+// ==========================================
+// QUESTION BANK EXCEL UTILS
+// ==========================================
+
+export function downloadQuestionBankExcelTemplate() {
+  const sampleData = [
+    [
+      'Question ID',
+      'Question (প্রশ্ন)',
+      'Option A (অপশন ক)',
+      'Option B (অপশন খ)',
+      'Option C (অপশন গ)',
+      'Option D (অপশন ঘ)',
+      'Correct Answer (সঠিক উত্তর A/B/C/D)',
+      'Explanation (ব্যাখ্যা)',
+      'Group 1 / Subject (বিষয়)',
+      'Group 2 / Topic (অধ্যায়/টপিক)',
+      'Group 3 / Difficulty or Category (ক্যাটাগরি)'
+    ],
+    [
+      'qb-101',
+      'An explicit order was given to the team. What does "explicit" mean?',
+      'Clear and direct',
+      'Vague and hidden',
+      'Complicated',
+      'Optional',
+      'A',
+      'Explicit means clear, precise, and leaving no room for doubt.',
+      'English',
+      'Vocabulary',
+      'BCS'
+    ],
+    [
+      'qb-102',
+      'কোনটি কাজী নজরুল ইসলামের প্রথম কাব্যগ্রন্থ?',
+      'অগ্নিবীণা',
+      'সোনার তরী',
+      'গীতাঞ্জলি',
+      'কবর',
+      'A',
+      'অগ্নিবীণা কাজী নজরুল ইসলামের প্রথম কাব্যগ্রন্থ (১৯২২)।',
+      'Bangla',
+      'Literature',
+      'BCS'
+    ],
+    [
+      'qb-103',
+      'x + y = 10 এবং x - y = 4 হলে x এর মান কত?',
+      '7',
+      '3',
+      '6',
+      '14',
+      'A',
+      '২x = ১৪ => x = ৭',
+      'Math',
+      'Algebra',
+      'Bank'
+    ]
+  ];
+  const ws = utils.aoa_to_sheet(sampleData);
+  const wb = utils.book_new();
+  utils.book_append_sheet(wb, ws, "Question Bank");
+  writeFile(wb, "Question_Bank_Template.xlsx");
+}
+
+export async function parseQuestionBankExcel(file: File): Promise<QuestionBankItem[]> {
+  const data = await file.arrayBuffer();
+  const workbook = read(data);
+  const sheetName = workbook.SheetNames[0];
+  const sheet = workbook.Sheets[sheetName];
+  const rows: any[][] = utils.sheet_to_json(sheet, { header: 1 });
+
+  if (!rows || rows.length < 2) return [];
+
+  const questions: QuestionBankItem[] = [];
+  const headerRow = rows[0].map(c => cleanText(c).toLowerCase());
+
+  const findCol = (keywords: string[]) => {
+    return headerRow.findIndex(h => keywords.some(k => h.includes(k)));
+  };
+
+  const idCol = findCol(['id', 'serial', 'sl']);
+  const questionCol = findCol(['question', 'প্রশ্ন']);
+  const optACol = findCol(['option a', 'option 1', 'অপশন ক', 'অপশন ১', 'opt a', 'a']);
+  const optBCol = findCol(['option b', 'option 2', 'অপশন খ', 'অপশন ২', 'opt b', 'b']);
+  const optCCol = findCol(['option c', 'option 3', 'অপশন গ', 'অপশন ৩', 'opt c', 'c']);
+  const optDCol = findCol(['option d', 'option 4', 'অপশন ঘ', 'অপশন ৪', 'opt d', 'd']);
+  const ansCol = findCol(['correct', 'answer', 'সঠিক', 'উত্তর', 'ans']);
+  const expCol = findCol(['exp', 'explanation', 'ব্যাখ্যা']);
+  const g1Col = findCol(['group 1', 'group1', 'subject', 'বিষয়', 'গ্রুপ ১', 'গ্রুপ১']);
+  const g2Col = findCol(['group 2', 'group2', 'topic', 'অধ্যায়', 'টপিক', 'গ্রুপ ২', 'গ্রুপ২']);
+  const g3Col = findCol(['group 3', 'group3', 'difficulty', 'category', 'tag', 'ক্যাটাগরি', 'গ্রুপ ৩', 'গ্রুপ৩']);
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.length === 0) continue;
+
+    const qText = questionCol >= 0 ? cleanText(row[questionCol]) : cleanText(row[0]);
+    if (!qText) continue;
+
+    const optA = optACol >= 0 ? cleanText(row[optACol]) : cleanText(row[1]);
+    const optB = optBCol >= 0 ? cleanText(row[optBCol]) : cleanText(row[2]);
+    const optC = optCCol >= 0 ? cleanText(row[optCCol]) : cleanText(row[3]);
+    const optD = optDCol >= 0 ? cleanText(row[optDCol]) : cleanText(row[4]);
+
+    if (!optA || !optB) continue;
+
+    let idVal = idCol >= 0 ? cleanText(row[idCol]) : '';
+    if (!idVal) {
+      idVal = `qb-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 4)}`;
+    }
+
+    let rawAns = ansCol >= 0 ? cleanText(row[ansCol]) : cleanText(row[5]);
+    let finalAns = rawAns || optA;
+
+    if (/^[a-dA-D]$/.test(rawAns)) {
+      const idx = rawAns.toUpperCase().charCodeAt(0) - 65;
+      const optionsArr = [optA, optB, optC, optD];
+      if (optionsArr[idx]) {
+        finalAns = optionsArr[idx];
+      }
+    } else if (/^[1-4]$/.test(rawAns)) {
+      const idx = parseInt(rawAns, 10) - 1;
+      const optionsArr = [optA, optB, optC, optD];
+      if (optionsArr[idx]) {
+        finalAns = optionsArr[idx];
+      }
+    }
+
+    const expText = expCol >= 0 ? cleanText(row[expCol]) : cleanText(row[6]) || DEFAULT_EXPLANATION;
+    const group1 = g1Col >= 0 ? cleanText(row[g1Col]) : cleanText(row[7]) || 'General';
+    const group2 = g2Col >= 0 ? cleanText(row[g2Col]) : cleanText(row[8]) || 'General';
+    const group3 = g3Col >= 0 ? cleanText(row[g3Col]) : cleanText(row[9]) || 'General';
+
+    questions.push({
+      id: idVal,
+      question: qText,
+      optionA: optA,
+      optionB: optB,
+      optionC: optC || 'N/A',
+      optionD: optD || 'N/A',
+      correctAnswer: finalAns,
+      explanation: expText,
+      group1: group1 || 'General',
+      group2: group2 || 'General',
+      group3: group3 || 'General',
+      createdAt: new Date().toISOString()
+    });
+  }
+
+  return questions;
 }

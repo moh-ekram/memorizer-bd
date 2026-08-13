@@ -38,6 +38,7 @@ import TransactionHistoryView from './TransactionHistoryView';
 import { logAdminActivity } from '../lib/activityLogger';
 import { BulkCsvStudentModal } from './BulkCsvStudentModal';
 import { ActivityLogsView } from './ActivityLogsView';
+import { QuestionBankView } from './QuestionBankView';
 import { SupabaseRlsModal } from './SupabaseRlsModal';
 import { TransactionDebugger, TransactionLogItem } from './TransactionDebugger';
 import { Code, Bug, TerminalSquare, AlertCircle } from 'lucide-react';
@@ -339,7 +340,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const [activeWordFilter, setActiveWordFilter] = useState<'all' | 'know' | 'confusion' | 'dont_know'>('all');
 
   // Course management and upload states
-  const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'courses' | 'reports' | 'access-requests' | 'autoverify' | 'system-settings' | 'blank-questions' | 'activity-logs' | 'transaction-debugger'>('courses');
+  const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'courses' | 'reports' | 'access-requests' | 'autoverify' | 'system-settings' | 'blank-questions' | 'activity-logs' | 'transaction-debugger' | 'question-bank'>('courses');
   const [requestsSubTab, setRequestsSubTab] = useState<'pending' | 'autoverify' | 'history' | 'debugger'>('pending');
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [bulkCsvCourse, setBulkCsvCourse] = useState<Course | null>(null);
@@ -2363,7 +2364,19 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       </div>
 
       {/* Admin Tab Navigation - Responsive Wrapping Pill Grid */}
-      <div className="bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5">
+      <div className="bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-9 gap-1.5">
+        <button
+          onClick={() => setActiveAdminTab('question-bank')}
+          className={`px-3 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center ${
+            activeAdminTab === 'question-bank'
+              ? 'bg-indigo-600 text-white shadow-md font-black border border-indigo-700'
+              : 'bg-indigo-50 text-indigo-900 hover:bg-indigo-100 border border-indigo-200/80'
+          }`}
+        >
+          <Database className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+          <span className="truncate">Question Bank</span>
+        </button>
+
         <button
           onClick={() => setActiveAdminTab('courses')}
           className={`px-3 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center ${
@@ -2470,6 +2483,11 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           <span className="truncate">Tx Debugger</span>
         </button>
       </div>
+
+      {/* Question Bank Tab View */}
+      {activeAdminTab === 'question-bank' && (
+        <QuestionBankView courses={customCourses} />
+      )}
 
       {/* Main Grid: Directory */}
       {activeAdminTab === 'users' && (
