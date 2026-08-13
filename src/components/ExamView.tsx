@@ -210,190 +210,195 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
   // ==========================================
   if (activeExam && !isExamCompleted) {
     const questions = activeExam.questions || [];
-    const currentQ = questions[currentQIndex];
     const answeredCount = Object.keys(userAnswers).length;
 
+    const scrollToQuestion = (idx: number) => {
+      const el = document.getElementById(`exam-q-${idx}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    };
+
     return (
-      <div className="max-w-5xl mx-auto px-4 py-6">
-        {/* Header Bar with Countdown Timer */}
-        <div className="bg-slate-900 text-white p-4 md:p-6 rounded-3xl shadow-xl mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-1">
-              <Zap className="w-4 h-4" />
-              <span>লাইভ পরীক্ষা চলছে</span>
+      <div className="w-full max-w-7xl mx-auto px-1 sm:px-3 md:px-6 py-2 md:py-6">
+        {/* Sticky Header Bar with Countdown Timer & Jump Buttons */}
+        <div className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md text-white p-3 md:p-4 rounded-2xl md:rounded-3xl shadow-xl mb-4 border border-slate-800">
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            <div>
+              <div className="flex items-center gap-1.5 text-indigo-400 text-[11px] md:text-xs font-bold uppercase tracking-wider">
+                <Zap className="w-3.5 h-3.5 shrink-0" />
+                <span>অনলাইন পরীক্ষা চলছে</span>
+              </div>
+              <h2 className="text-base md:text-xl font-black text-white truncate max-w-xs sm:max-w-md">{activeExam.title}</h2>
+              <p className="text-slate-400 text-[11px] hidden sm:block">
+                মোট প্রশ্ন: {questions.length} টি | উত্তর দেওয়া হয়েছে: <span className="text-emerald-400 font-bold">{answeredCount}</span>/{questions.length}
+              </p>
             </div>
-            <h2 className="text-xl md:text-2xl font-bold">{activeExam.title}</h2>
-            <p className="text-slate-400 text-xs mt-1">
-              মোট প্রশ্ন: {questions.length} টি | সঠিক উত্তর: +{activeExam.marksPerQuestion || 1} | ভুল উত্তর: -{activeExam.negativeMarking || 0}
-            </p>
+
+            <div className="flex items-center gap-2.5">
+              {/* Timer Badge */}
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-xl md:rounded-2xl border font-mono font-bold text-sm md:text-lg shadow-inner ${
+                timeLeft < 180 ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 animate-pulse' : 'bg-slate-800 text-amber-300 border-slate-700'
+              }`}>
+                <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>{formatTime(timeLeft)}</span>
+              </div>
+
+              <button
+                onClick={() => setShowSubmitConfirm(true)}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-1.5 md:px-5 md:py-2 rounded-xl md:rounded-2xl font-extrabold text-xs md:text-sm transition shadow-lg flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>জমা দিন</span>
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            {/* Timer Badge */}
-            <div className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border font-mono font-bold text-lg md:text-xl shadow-inner ${
-              timeLeft < 180 ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 animate-pulse' : 'bg-slate-800 text-amber-300 border-slate-700'
-            }`}>
-              <Clock className="w-5 h-5 text-amber-400" />
-              <span>{formatTime(timeLeft)}</span>
-            </div>
+          {/* Quick Jump Question Buttons Horizontal Scroll Bar */}
+          <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">
+              প্রশ্ন লাফান:
+            </span>
+            {questions.map((q, idx) => {
+              const isAns = !!userAnswers[q.id];
+              const isFlag = !!flaggedQs[q.id];
 
-            <button
-              onClick={() => setShowSubmitConfirm(true)}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-2xl font-semibold text-sm transition shadow-lg flex items-center gap-2 cursor-pointer"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>জমা দিন</span>
-            </button>
+              let pillStyle = 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700';
+              if (isFlag) pillStyle = 'bg-amber-500 text-slate-950 font-black border-amber-400';
+              else if (isAns) pillStyle = 'bg-emerald-600 text-white font-bold border-emerald-500';
+
+              return (
+                <button
+                  key={q.id || idx}
+                  onClick={() => scrollToQuestion(idx)}
+                  className={`min-w-[28px] h-7 px-1.5 rounded-lg border text-[11px] font-mono flex items-center justify-center transition cursor-pointer shrink-0 ${pillStyle}`}
+                  title={`প্রশ্ন ${idx + 1}`}
+                >
+                  {idx + 1}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Question Palette & Navigation Bar */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Main Question Card */}
-          <div className="lg:col-span-3 bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
-            {currentQ ? (
-              <div>
-                <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
-                  <span className="text-xs font-extrabold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">
-                    প্রশ্ন {currentQIndex + 1} / {questions.length}
-                  </span>
+        {/* Serial Stacked Questions List */}
+        <div className="space-y-3 md:space-y-4">
+          {questions.map((q, idx) => {
+            const isAnswered = !!userAnswers[q.id];
+            const isFlagged = !!flaggedQs[q.id];
 
-                  <button
-                    onClick={() => {
-                      setFlaggedQs(prev => ({ ...prev, [currentQ.id]: !prev[currentQ.id] }));
-                    }}
-                    className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition flex items-center gap-1.5 cursor-pointer ${
-                      flaggedQs[currentQ.id]
-                        ? 'bg-amber-50 text-amber-700 border-amber-300'
-                        : 'text-slate-500 hover:bg-slate-100 border-slate-200'
-                    }`}
-                  >
-                    <HelpCircle className="w-3.5 h-3.5" />
-                    <span>{flaggedQs[currentQ.id] ? 'রিভিউ চিহ্নিত' : 'রিভিউর জন্য রাখুন'}</span>
-                  </button>
+            return (
+              <div
+                key={q.id || idx}
+                id={`exam-q-${idx}`}
+                className={`bg-white p-3.5 sm:p-5 md:p-6 rounded-2xl md:rounded-3xl border transition-all scroll-mt-24 ${
+                  isAnswered
+                    ? 'border-emerald-200/90 shadow-2xs bg-white'
+                    : isFlagged
+                    ? 'border-amber-300 shadow-2xs bg-amber-50/10'
+                    : 'border-slate-200/90 shadow-2xs'
+                }`}
+              >
+                {/* Header Row: Question Number, Actions */}
+                <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-extrabold text-indigo-700 bg-indigo-50/90 px-2.5 py-1 rounded-lg border border-indigo-100 flex items-center gap-1">
+                      <span className="font-mono text-[11px]">#{idx + 1}</span>
+                      <span>প্রশ্ন {idx + 1}</span>
+                    </span>
+                    {isAnswered && (
+                      <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                        উত্তর দেওয়া হয়েছে
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {isAnswered && (
+                      <button
+                        onClick={() => {
+                          const next = { ...userAnswers };
+                          delete next[q.id];
+                          setUserAnswers(next);
+                        }}
+                        className="text-[11px] text-rose-600 hover:text-rose-700 font-bold px-2 py-0.5 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                      >
+                        উত্তর রিসেট
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setFlaggedQs(prev => ({ ...prev, [q.id]: !prev[q.id] }));
+                      }}
+                      className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition flex items-center gap-1 cursor-pointer ${
+                        isFlagged
+                          ? 'bg-amber-50 text-amber-700 border-amber-300 font-bold'
+                          : 'text-slate-400 hover:bg-slate-100 border-slate-200'
+                      }`}
+                    >
+                      <HelpCircle className="w-3 h-3" />
+                      <span>{isFlagged ? 'ফ্ল্যাগড' : 'রিভিউ'}</span>
+                    </button>
+                  </div>
                 </div>
 
-                <h3 className="text-lg md:text-xl font-bold text-slate-800 mb-6 leading-relaxed">
-                  {currentQ.question}
+                {/* Question Text */}
+                <h3 className="text-sm sm:text-base md:text-lg font-extrabold text-slate-850 mb-3 leading-snug">
+                  <span className="text-indigo-600 font-mono mr-1.5">{idx + 1}.</span>
+                  {q.question}
                 </h3>
 
-                {/* Options List */}
-                <div className="space-y-3 mb-8">
-                  {currentQ.options.map((opt, oIdx) => {
-                    const isSelected = userAnswers[currentQ.id] === opt;
+                {/* Compact Options Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {q.options.map((opt, oIdx) => {
+                    const isSelected = userAnswers[q.id] === opt;
                     return (
                       <button
                         key={oIdx}
                         onClick={() => {
-                          setUserAnswers(prev => ({ ...prev, [currentQ.id]: opt }));
+                          setUserAnswers(prev => ({ ...prev, [q.id]: opt }));
                         }}
-                        className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center justify-between cursor-pointer ${
+                        className={`w-full text-left py-2 px-2.5 sm:px-3 rounded-xl border text-xs sm:text-sm transition-all flex items-center justify-between cursor-pointer ${
                           isSelected
-                            ? 'bg-indigo-50 border-indigo-500 text-indigo-900 shadow-sm font-semibold'
-                            : 'bg-slate-50/70 hover:bg-slate-100 border-slate-200 text-slate-700'
+                            ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs font-bold ring-2 ring-indigo-300'
+                            : 'bg-slate-50/80 hover:bg-slate-100/90 border-slate-200/90 text-slate-700 font-medium'
                         }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <span className={`w-7 h-7 rounded-xl text-xs font-bold flex items-center justify-center shrink-0 ${
-                            isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'
+                        <div className="flex items-center gap-2 min-w-0 pr-1">
+                          <span className={`w-5 h-5 rounded-lg text-[11px] font-mono font-black flex items-center justify-center shrink-0 ${
+                            isSelected ? 'bg-white text-indigo-700' : 'bg-slate-200 text-slate-600'
                           }`}>
                             {String.fromCharCode(65 + oIdx)}
                           </span>
-                          <span className="text-sm">{opt}</span>
+                          <span className="truncate leading-tight">{opt}</span>
                         </div>
-                        {isSelected && <CheckCircle2 className="w-5 h-5 text-indigo-600 shrink-0" />}
+                        {isSelected && <CheckCircle2 className="w-4 h-4 text-white shrink-0" />}
                       </button>
                     );
                   })}
                 </div>
-
-                {userAnswers[currentQ.id] && (
-                  <button
-                    onClick={() => {
-                      const next = { ...userAnswers };
-                      delete next[currentQ.id];
-                      setUserAnswers(next);
-                    }}
-                    className="text-xs text-rose-500 hover:text-rose-700 font-semibold mb-4 inline-block cursor-pointer"
-                  >
-                    উত্তর বাতিল করুন (Clear Selection)
-                  </button>
-                )}
               </div>
-            ) : null}
+            );
+          })}
+        </div>
 
-            {/* Bottom Question Controls */}
-            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-              <button
-                disabled={currentQIndex === 0}
-                onClick={() => setCurrentQIndex(prev => Math.max(0, prev - 1))}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold text-xs disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span>পূর্ববর্তী</span>
-              </button>
-
-              <span className="text-xs text-slate-400 font-mono">
-                {answeredCount} টি উত্তর দেওয়া হয়েছে
-              </span>
-
-              <button
-                disabled={currentQIndex === questions.length - 1}
-                onClick={() => setCurrentQIndex(prev => Math.min(questions.length - 1, prev + 1))}
-                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 shadow-sm cursor-pointer"
-              >
-                <span>পরবর্তী</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+        {/* Bottom Submit Banner */}
+        <div className="mt-6 bg-slate-900 text-white p-4 rounded-2xl md:rounded-3xl shadow-xl flex items-center justify-between gap-4">
+          <div>
+            <p className="text-xs text-slate-300 font-medium">
+              সবগুলো প্রশ্নের উত্তর দেওয়া হয়ে থাকলে নিচের বাটনে ক্লিক করে পরীক্ষা সম্পন্ন করুন।
+            </p>
+            <p className="text-xs font-bold text-emerald-400 mt-0.5">
+              মোট উত্তর: {answeredCount} / {questions.length}
+            </p>
           </div>
-
-          {/* Right Column: Question Grid Palette */}
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col">
-            <h4 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <ListFilter className="w-4 h-4 text-indigo-600" />
-              <span>প্রশ্ন নেভিগেশন</span>
-            </h4>
-
-            <div className="grid grid-cols-5 gap-2 max-h-80 overflow-y-auto p-1 scrollbar-thin">
-              {questions.map((q, idx) => {
-                const isAns = !!userAnswers[q.id];
-                const isFlag = !!flaggedQs[q.id];
-                const isCurr = idx === currentQIndex;
-
-                let btnStyle = 'bg-slate-100 text-slate-600 border-slate-200';
-                if (isCurr) btnStyle = 'bg-indigo-600 text-white font-bold ring-2 ring-indigo-400';
-                else if (isFlag) btnStyle = 'bg-amber-100 text-amber-800 border-amber-300 font-bold';
-                else if (isAns) btnStyle = 'bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold';
-
-                return (
-                  <button
-                    key={q.id}
-                    onClick={() => setCurrentQIndex(idx)}
-                    className={`h-9 rounded-xl border text-xs flex items-center justify-center transition cursor-pointer ${btnStyle}`}
-                  >
-                    {idx + 1}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Color Legend */}
-            <div className="mt-6 pt-4 border-t border-slate-100 space-y-2 text-[11px] text-slate-500">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
-                <span>উত্তর দেওয়া হয়েছে ({answeredCount})</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-slate-200"></div>
-                <span>উত্তর দেওয়া হয়নি ({questions.length - answeredCount})</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-amber-400"></div>
-                <span>রিভিউর জন্য ফ্ল্যাগড</span>
-              </div>
-            </div>
-          </div>
+          <button
+            onClick={() => setShowSubmitConfirm(true)}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl md:rounded-2xl font-extrabold text-sm transition shadow-lg flex items-center gap-2 cursor-pointer shrink-0"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            <span>পরীক্ষা জমা দিন</span>
+          </button>
         </div>
 
         {/* Submit Confirmation Modal */}
