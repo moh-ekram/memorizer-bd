@@ -448,6 +448,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const [pasteInputText, setPasteInputText] = useState('');
 
   // Multi-sheet and game excel upload state with visual loading & buffering fix
+  const [selectedGameCourseId, setSelectedGameCourseId] = useState<string>('');
   const [isUploadingMultiSheet, setIsUploadingMultiSheet] = useState(false);
   const [multiSheetUploadProgress, setMultiSheetUploadProgress] = useState<number>(0);
   const [multiSheetStatusMessage, setMultiSheetStatusMessage] = useState<string>('');
@@ -4172,6 +4173,39 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 </p>
               </div>
 
+              {/* Mandatory Target Course Selection Dropdown */}
+              <div className="bg-indigo-50/70 p-4 rounded-2xl border border-indigo-200/80 space-y-2">
+                <label className="text-xs font-extrabold text-indigo-950 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-rose-600 font-extrabold text-sm">*</span>
+                    <span>টার্গেট কোর্স নির্ধারণ করুন (Mandatory Target Course Selection)</span>
+                  </span>
+                  {selectedGameCourseId && (
+                    <span className="text-[10px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-md uppercase">
+                      Selected: {selectedGameCourseId}
+                    </span>
+                  )}
+                </label>
+                <select
+                  value={selectedGameCourseId}
+                  onChange={(e) => {
+                    setSelectedGameCourseId(e.target.value);
+                    setExcelUploadError(null);
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-extrabold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs"
+                >
+                  <option value="">-- অনুগ্রহ করে কন্টেন্টের জন্য একটি নির্দিষ্ট কোর্স সিলেক্ট করুন (Required) --</option>
+                  {customCourses.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.title} ({c.id.toUpperCase()})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                  ⚠️ গেমের ডেটা বা কন্টেন্ট শুধুমাত্র আপনার সিলেক্ট করা নির্দিষ্ট কোর্সের সাথেই যুক্ত থাকবে (সকল কোর্সে স্বয়ংক্রিয়ভাবে গ্লোবালি যাবে না)।
+                </p>
+              </div>
+
               {/* Upload Drop Zone & Visual Processing State */}
               <div className="space-y-3">
                 <div className={`border-2 border-dashed rounded-2xl p-6 text-center transition relative ${
@@ -4186,13 +4220,20 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
+
+                      if (!selectedGameCourseId) {
+                        setExcelUploadError('আপলোড করার আগে অবশ্যই একটি নির্দিষ্ট কোর্স নির্বাচন করতে হবে (Mandatory Target Course Required)।');
+                        e.target.value = '';
+                        return;
+                      }
+
                       setExcelUploadError(null);
                       setMultiSheetSuccessMessage(null);
                       setIsUploadingMultiSheet(true);
                       setMultiSheetUploadProgress(15);
                       setMultiSheetStatusMessage('এক্সেল ফাইল প্রসেস করা হচ্ছে এবং প্রশ্নাবলী এক্সট্র্যাক্ট করা হচ্ছে...');
                       try {
-                        const res = await parseMultiSheetGamesExcel(file, 'all');
+                        const res = await parseMultiSheetGamesExcel(file, selectedGameCourseId);
                         let total = 0;
 
                         if (res.blankQs.length > 0) {

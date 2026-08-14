@@ -139,8 +139,9 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     { id: 'rule-1', group1: 'all', group2: 'all', group3: 'all', count: 10 }
   ]);
 
-  // Helper to generate exam title from selected rule categories
+  // Helper to generate exam title from selected rule categories and total question count
   const generateTitleFromRules = (rulesList: QuestionBankRule[]): string => {
+    const totalRuleQuestions = rulesList.reduce((acc, r) => acc + (Number(r.count) || 0), 0);
     const g1Set = new Set<string>();
     const g2Set = new Set<string>();
     const g3Set = new Set<string>();
@@ -156,20 +157,31 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     if (g1Set.size > 0) parts.push(Array.from(g1Set).join(', '));
     if (g3Set.size > 0) parts.push(Array.from(g3Set).join(', '));
 
-    return parts.join(' ').trim();
+    const categoryText = parts.join(' ').trim();
+    if (categoryText) {
+      return `Selected Model Test - ${categoryText} (${totalRuleQuestions} Questions)`;
+    }
+    return `Selected Model Test (${totalRuleQuestions} Questions)`;
   };
+
+  // Automatically sync active repository filters into group matching rules
+  useEffect(() => {
+    setRules(prevRules => prevRules.map(rule => ({
+      ...rule,
+      group1: filterGroup1 !== 'all' ? filterGroup1 : rule.group1,
+      group2: filterGroup2 !== 'all' ? filterGroup2 : rule.group2,
+      group3: filterGroup3 !== 'all' ? filterGroup3 : rule.group3,
+    })));
+  }, [filterGroup1, filterGroup2, filterGroup3]);
 
   // Auto-sync duration (1 minute per question) and exam title based on rules
   useEffect(() => {
+    const totalRuleQuestions = rules.reduce((acc, r) => acc + (Number(r.count) || 0), 0);
     if (!isDurationUserEdited) {
-      const totalRuleQuestions = rules.reduce((acc, r) => acc + (Number(r.count) || 0), 0);
       setDurationMinutes(totalRuleQuestions > 0 ? totalRuleQuestions : 10);
     }
     if (!isTitleUserEdited) {
-      const autoTitle = generateTitleFromRules(rules);
-      if (autoTitle) {
-        setExamTitle(autoTitle);
-      }
+      setExamTitle(generateTitleFromRules(rules));
     }
   }, [rules, isDurationUserEdited, isTitleUserEdited]);
 
@@ -1397,11 +1409,86 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               </div>
             </div>
 
+            {/* Smart Exam Preset Suggestions */}
+            <div className="p-4 bg-gradient-to-r from-indigo-50/90 via-purple-50/70 to-slate-50 rounded-2xl border border-indigo-100/90 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <div className="flex items-center gap-2 text-indigo-950 font-extrabold text-xs">
+                  <Sparkles className="w-4 h-4 text-indigo-600" />
+                  <span>স্মার্ট এক্সাম সাজেস্টেন (Suggested Exam Templates)</span>
+                </div>
+                <span className="text-[11px] text-slate-500 font-medium">
+                  {filteredQuestions.length} টি প্রশ্ন পাওয়া গেছে • ১ মিনিট/প্রশ্ন ডিফল্ট সম্বলিত কুইক টেমপ্লেট
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const qCount = Math.min(10, filteredQuestions.length || 10);
+                    setRules([{ id: `rule-${Date.now()}`, group1: filterGroup1, group2: filterGroup2, group3: filterGroup3, count: qCount }]);
+                    setDurationMinutes(qCount);
+                    setIsDurationUserEdited(false);
+                    setIsTitleUserEdited(false);
+                  }}
+                  className="p-3 bg-white hover:bg-indigo-50/90 border border-slate-200/80 hover:border-indigo-300 rounded-xl text-left transition shadow-2xs group cursor-pointer"
+                >
+                  <div className="flex items-center justify-between text-xs font-black text-slate-800 group-hover:text-indigo-600">
+                    <span>⚡ Quick Speed Test</span>
+                    <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-mono font-bold">10 Qs</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1 font-medium">১০ মিনিট সময় • ১০টি নির্বাচিত প্রশ্ন</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const qCount = Math.min(25, filteredQuestions.length || 25);
+                    setRules([{ id: `rule-${Date.now()}`, group1: filterGroup1, group2: filterGroup2, group3: filterGroup3, count: qCount }]);
+                    setDurationMinutes(qCount);
+                    setIsDurationUserEdited(false);
+                    setIsTitleUserEdited(false);
+                  }}
+                  className="p-3 bg-white hover:bg-indigo-50/90 border border-slate-200/80 hover:border-indigo-300 rounded-xl text-left transition shadow-2xs group cursor-pointer"
+                >
+                  <div className="flex items-center justify-between text-xs font-black text-slate-800 group-hover:text-indigo-600">
+                    <span>🎯 Standard Practice</span>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-mono font-bold">25 Qs</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1 font-medium">২৫ মিনিট সময় • ২৫টি নির্বাচিত প্রশ্ন</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const qCount = Math.min(50, filteredQuestions.length || 50);
+                    setRules([{ id: `rule-${Date.now()}`, group1: filterGroup1, group2: filterGroup2, group3: filterGroup3, count: qCount }]);
+                    setDurationMinutes(qCount);
+                    setIsDurationUserEdited(false);
+                    setIsTitleUserEdited(false);
+                  }}
+                  className="p-3 bg-white hover:bg-indigo-50/90 border border-slate-200/80 hover:border-indigo-300 rounded-xl text-left transition shadow-2xs group cursor-pointer"
+                >
+                  <div className="flex items-center justify-between text-xs font-black text-slate-800 group-hover:text-indigo-600">
+                    <span>🏆 Full Model Test</span>
+                    <span className="text-[10px] bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-mono font-bold">50 Qs</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1 font-medium">৫০ মিনিট সময় • ৫০টি নির্বাচিত প্রশ্ন</p>
+                </button>
+              </div>
+            </div>
+
             {/* Group Matching Rules Table */}
             <div className="space-y-4 pt-4 border-t border-slate-100">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="font-extrabold text-slate-900 text-sm">Group Matching Rules</h4>
+                  <h4 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                    <span>Group Matching Rules</span>
+                    {(filterGroup1 !== 'all' || filterGroup2 !== 'all' || filterGroup3 !== 'all') && (
+                      <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-200">
+                        🔒 Repositories Filters Locked
+                      </span>
+                    )}
+                  </h4>
                   <p className="text-xs text-slate-400 font-medium">
                     Specify how many questions should be randomly picked for each category condition.
                   </p>
@@ -1430,47 +1517,80 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                       <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 flex-1">
                         {/* Suitable Course */}
                         <div>
-                          <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">Suitable Course</label>
-                          <select
-                            value={rule.group1 || 'all'}
-                            onChange={(e) => handleRuleChange(rule.id, 'group1', e.target.value)}
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
-                          >
-                            <option value="all">All Suitable Courses</option>
-                            {uniqueGroups1.map(g => (
-                              <option key={g} value={g}>{g}</option>
-                            ))}
-                          </select>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[10px] font-extrabold text-slate-400 uppercase block">Suitable Course</label>
+                            {filterGroup1 !== 'all' && (
+                              <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1 rounded">Locked</span>
+                            )}
+                          </div>
+                          {filterGroup1 !== 'all' ? (
+                            <div className="w-full px-2.5 py-1.5 bg-slate-200/80 border border-slate-300 rounded-lg text-xs font-extrabold text-indigo-900 truncate" title={`Locked by Question Repository filter: ${filterGroup1}`}>
+                              🔒 {filterGroup1}
+                            </div>
+                          ) : (
+                            <select
+                              value={rule.group1 || 'all'}
+                              onChange={(e) => handleRuleChange(rule.id, 'group1', e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
+                            >
+                              <option value="all">All Suitable Courses</option>
+                              {uniqueGroups1.map(g => (
+                                <option key={g} value={g}>{g}</option>
+                              ))}
+                            </select>
+                          )}
                         </div>
 
                         {/* Q.Type */}
                         <div>
-                          <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">Q.Type</label>
-                          <select
-                            value={rule.group2 || 'all'}
-                            onChange={(e) => handleRuleChange(rule.id, 'group2', e.target.value)}
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
-                          >
-                            <option value="all">All Question Types</option>
-                            {uniqueGroups2.map(g => (
-                              <option key={g} value={g}>{g}</option>
-                            ))}
-                          </select>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[10px] font-extrabold text-slate-400 uppercase block">Q.Type</label>
+                            {filterGroup2 !== 'all' && (
+                              <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1 rounded">Locked</span>
+                            )}
+                          </div>
+                          {filterGroup2 !== 'all' ? (
+                            <div className="w-full px-2.5 py-1.5 bg-slate-200/80 border border-slate-300 rounded-lg text-xs font-extrabold text-indigo-900 truncate" title={`Locked by Question Repository filter: ${filterGroup2}`}>
+                              🔒 {filterGroup2}
+                            </div>
+                          ) : (
+                            <select
+                              value={rule.group2 || 'all'}
+                              onChange={(e) => handleRuleChange(rule.id, 'group2', e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
+                            >
+                              <option value="all">All Question Types</option>
+                              {uniqueGroups2.map(g => (
+                                <option key={g} value={g}>{g}</option>
+                              ))}
+                            </select>
+                          )}
                         </div>
 
                         {/* Others */}
                         <div>
-                          <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">Others</label>
-                          <select
-                            value={rule.group3 || 'all'}
-                            onChange={(e) => handleRuleChange(rule.id, 'group3', e.target.value)}
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
-                          >
-                            <option value="all">All Other Categories</option>
-                            {uniqueGroups3.map(g => (
-                              <option key={g} value={g}>{g}</option>
-                            ))}
-                          </select>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[10px] font-extrabold text-slate-400 uppercase block">Others</label>
+                            {filterGroup3 !== 'all' && (
+                              <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1 rounded">Locked</span>
+                            )}
+                          </div>
+                          {filterGroup3 !== 'all' ? (
+                            <div className="w-full px-2.5 py-1.5 bg-slate-200/80 border border-slate-300 rounded-lg text-xs font-extrabold text-indigo-900 truncate" title={`Locked by Question Repository filter: ${filterGroup3}`}>
+                              🔒 {filterGroup3}
+                            </div>
+                          ) : (
+                            <select
+                              value={rule.group3 || 'all'}
+                              onChange={(e) => handleRuleChange(rule.id, 'group3', e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
+                            >
+                              <option value="all">All Other Categories</option>
+                              {uniqueGroups3.map(g => (
+                                <option key={g} value={g}>{g}</option>
+                              ))}
+                            </select>
+                          )}
                         </div>
 
                         {/* Question Count */}
