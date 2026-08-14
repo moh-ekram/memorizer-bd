@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { db, doc, setDoc, deleteDoc, writeBatch, collection, getDocs, saveBulkDocs } from '../lib/db';
 import { QuestionBankItem, QuestionBankRule, Course, Exam, ExamQuestion } from '../types';
-import { downloadQuestionBankExcelTemplate, parseQuestionBankExcel } from '../lib/gameExcelUtils';
+import { downloadQuestionBankExcelTemplate, parseQuestionBankExcel, exportQuestionBankToExcel } from '../lib/gameExcelUtils';
 import { safeGetLocalStorage, safeSetLocalStorage } from '../lib/storage';
 
 interface QuestionBankViewProps {
@@ -55,6 +55,33 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [showGuidelineModal, setShowGuidelineModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+
+  const handleExportQuestions = (type: 'all' | 'filtered' | 'selected') => {
+    let listToExport: QuestionBankItem[] = [];
+    let fileSuffix = '';
+
+    if (type === 'selected' && selectedIds.size > 0) {
+      listToExport = questions.filter(q => selectedIds.has(q.id));
+      fileSuffix = `_Selected_${selectedIds.size}`;
+    } else if (type === 'filtered') {
+      listToExport = filteredQuestions;
+      fileSuffix = `_Filtered_${filteredQuestions.length}`;
+    } else {
+      listToExport = questions;
+      fileSuffix = `_All_${questions.length}`;
+    }
+
+    if (listToExport.length === 0) {
+      alert('এক্সপোর্ট করার মতো কোনো প্রশ্ন পাওয়া যায়নি।');
+      return;
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const fileName = `Question_Bank_Export${fileSuffix}_${todayStr}.xlsx`;
+    exportQuestionBankToExcel(listToExport, fileName);
+    setShowExportModal(false);
+  };
 
   // Delete Confirmation Modal State
   const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
@@ -924,6 +951,15 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               </label>
 
               <button
+                onClick={() => setShowExportModal(true)}
+                className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/90 rounded-xl text-xs font-extrabold shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                title="প্রশ্ন ব্যাংকের প্রশ্নসমূহ এক্সেল ফাইলে ডাউনলোড/ব্যাকআপ করুন"
+              >
+                <Download className="w-4 h-4 text-emerald-600" />
+                <span>এক্সপোর্ট (Excel)</span>
+              </button>
+
+              <button
                 onClick={() => {
                   setEditingQuestion(null);
                   setFormData({
@@ -985,6 +1021,15 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 >
                   <Award className="w-4 h-4" />
                   <span>সিলেক্ট করা ({selectedIds.size}) প্রশ্ন দিয়ে এক্সাম তৈরি করুন</span>
+                </button>
+
+                <button
+                  onClick={() => handleExportQuestions('selected')}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  title="সিলেক্ট করা প্রশ্নসমূহ এক্সেল ফাইল হিসেবে ডাউনলোড করুন"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>এক্সপোর্ট ({selectedIds.size})</span>
                 </button>
 
                 <button
@@ -2010,6 +2055,105 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               >
                 <Trash2 className="w-4 h-4" />
                 <span>হ্যাঁ, মুছে ফেলুন (Confirm Delete)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EXPORT OPTIONS MODAL */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 space-y-5 shadow-2xl relative animate-scaleUp border border-slate-100">
+            <button
+              onClick={() => setShowExportModal(false)}
+              className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-600 rounded-full transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+              <div className="w-11 h-11 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0 shadow-xs">
+                <FileSpreadsheet className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900">
+                  প্রশ্ন ব্যাংক এক্সপোর্ট (Export Excel)
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  ব্যাকআপ বা অফলাইন সংশোধনের জন্য এক্সেল (.xlsx) ফাইল ডাউনলোড করুন
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {/* Option 1: Selected Questions */}
+              {selectedIds.size > 0 && (
+                <button
+                  onClick={() => handleExportQuestions('selected')}
+                  className="w-full p-4 bg-indigo-50/80 hover:bg-indigo-100/80 border border-indigo-200/90 rounded-2xl text-left transition flex items-center justify-between group cursor-pointer"
+                >
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-black text-indigo-950 block flex items-center gap-1.5">
+                      <Check className="w-4 h-4 text-indigo-600" />
+                      সিলেক্ট করা প্রশ্নসমূহ এক্সপোর্ট করুন
+                    </span>
+                    <span className="text-[11px] text-indigo-700/80 font-medium block">
+                      আপনার ম্যানুয়ালি চেককৃত {selectedIds.size} টি প্রশ্ন
+                    </span>
+                  </div>
+                  <span className="px-3 py-1 bg-indigo-600 text-white text-xs font-extrabold rounded-lg shrink-0 shadow-xs">
+                    {selectedIds.size} টি
+                  </span>
+                </button>
+              )}
+
+              {/* Option 2: Filtered Questions */}
+              <button
+                onClick={() => handleExportQuestions('filtered')}
+                className="w-full p-4 bg-emerald-50/80 hover:bg-emerald-100/80 border border-emerald-200/90 rounded-2xl text-left transition flex items-center justify-between group cursor-pointer"
+              >
+                <div className="space-y-0.5">
+                  <span className="text-xs font-black text-emerald-950 block flex items-center gap-1.5">
+                    <Download className="w-4 h-4 text-emerald-600" />
+                    ফিল্টার করা প্রশ্নসমূহ এক্সপোর্ট করুন
+                  </span>
+                  <span className="text-[11px] text-emerald-700/80 font-medium block">
+                    বর্তমানে সার্চ ও ফিল্টারে প্রদর্শিত {filteredQuestions.length} টি প্রশ্ন
+                  </span>
+                </div>
+                <span className="px-3 py-1 bg-emerald-600 text-white text-xs font-extrabold rounded-lg shrink-0 shadow-xs">
+                  {filteredQuestions.length} টি
+                </span>
+              </button>
+
+              {/* Option 3: All Questions */}
+              <button
+                onClick={() => handleExportQuestions('all')}
+                className="w-full p-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-2xl text-left transition flex items-center justify-between group cursor-pointer"
+              >
+                <div className="space-y-0.5">
+                  <span className="text-xs font-black text-slate-900 block flex items-center gap-1.5">
+                    <Database className="w-4 h-4 text-slate-600" />
+                    সম্পূর্ণ প্রশ্ন ব্যাংকের সকল প্রশ্ন (Full Backup)
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-medium block">
+                    ডাটাবেজের সমস্ত {questions.length} টি প্রশ্নের সম্পূর্ণ ব্যাকআপ ফাইল
+                  </span>
+                </div>
+                <span className="px-3 py-1 bg-slate-800 text-white text-xs font-extrabold rounded-lg shrink-0 shadow-xs">
+                  {questions.length} টি
+                </span>
+              </button>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowExportModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                বন্ধ করুন (Close)
               </button>
             </div>
           </div>

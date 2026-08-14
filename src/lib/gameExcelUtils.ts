@@ -910,6 +910,67 @@ export function downloadQuestionBankExcelTemplate() {
   writeFile(wb, "Question_Bank_Template.xlsx");
 }
 
+export function exportQuestionBankToExcel(questions: QuestionBankItem[], fileName = 'Question_Bank_Export.xlsx') {
+  const headers = [
+    'Question ID',
+    'Question (প্রশ্ন)',
+    'Option A (অপশন ক)',
+    'Option B (অপশন খ)',
+    'Option C (অপশন গ)',
+    'Option D (অপশন ঘ)',
+    'Correct Answer (সঠিক উত্তর A/B/C/D)',
+    'Explanation (ব্যাখ্যা)',
+    'Suitable Course',
+    'Q.Type',
+    'Others'
+  ];
+
+  const rows = questions.map((q, idx) => {
+    const optA = (q as any).options?.[0] ?? q.optionA ?? '';
+    const optB = (q as any).options?.[1] ?? q.optionB ?? '';
+    const optC = (q as any).options?.[2] ?? q.optionC ?? '';
+    const optD = (q as any).options?.[3] ?? q.optionD ?? '';
+    
+    let ans = q.correctAnswer || 'A';
+
+    return [
+      q.id || `qb-${idx + 101}`,
+      q.question || '',
+      optA,
+      optB,
+      optC,
+      optD,
+      ans,
+      q.explanation || '',
+      q.group1 || 'General',
+      q.group2 || 'General',
+      q.group3 || 'General'
+    ];
+  });
+
+  const exportData = [headers, ...rows];
+  const ws = utils.aoa_to_sheet(exportData);
+
+  // Set column widths
+  ws['!cols'] = [
+    { wch: 14 }, // ID
+    { wch: 50 }, // Question
+    { wch: 22 }, // Option A
+    { wch: 22 }, // Option B
+    { wch: 22 }, // Option C
+    { wch: 22 }, // Option D
+    { wch: 16 }, // Answer
+    { wch: 40 }, // Explanation
+    { wch: 20 }, // Suitable Course
+    { wch: 20 }, // Q.Type
+    { wch: 20 }  // Others
+  ];
+
+  const wb = utils.book_new();
+  utils.book_append_sheet(wb, ws, "Question Bank");
+  writeFile(wb, fileName);
+}
+
 export async function parseQuestionBankExcel(file: File): Promise<QuestionBankItem[]> {
   const data = await file.arrayBuffer();
   const workbook = read(data);
