@@ -2175,14 +2175,15 @@ const getActiveCourse = (
                       setProfileSubTab('flashcard');
                     }
                   }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-extrabold text-sm transition cursor-pointer ${
+                  title="Flashcard"
+                  className={`flex-1 flex items-center justify-center gap-2 py-3 px-3 sm:px-4 rounded-xl font-extrabold text-sm transition cursor-pointer ${
                     profileSubTab === 'flashcard'
                       ? 'bg-[#5241f3] text-white shadow-md shadow-indigo-500/25'
                       : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200/60'
                   }`}
                 >
-                  <CreditCard className="w-4 h-4" />
-                  <span>Flashcard</span>
+                  <CreditCard className="w-4 h-4 shrink-0" />
+                  <span className="hidden sm:inline">Flashcard</span>
                 </button>
 
                 <button
@@ -2191,14 +2192,15 @@ const getActiveCourse = (
                     setActiveTab('profile');
                     setProfileSubTab('my_courses');
                   }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-extrabold text-sm transition cursor-pointer ${
+                  title="My Courses"
+                  className={`flex-1 flex items-center justify-center gap-2 py-3 px-3 sm:px-4 rounded-xl font-extrabold text-sm transition cursor-pointer ${
                     profileSubTab === 'my_courses'
                       ? 'bg-[#5241f3] text-white shadow-md shadow-indigo-500/25'
                       : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200/60'
                   }`}
                 >
-                  <BookOpen className="w-4 h-4" />
-                  <span>My Courses</span>
+                  <BookOpen className="w-4 h-4 shrink-0" />
+                  <span className="hidden sm:inline">My Courses</span>
                 </button>
               </div>
 

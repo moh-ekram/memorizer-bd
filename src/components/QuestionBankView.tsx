@@ -73,7 +73,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     }
 
     if (listToExport.length === 0) {
-      alert('এক্সপোর্ট করার মতো কোনো প্রশ্ন পাওয়া যায়নি।');
+      alert('No questions found to export.');
       return;
     }
 
@@ -267,7 +267,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
   // Delete Exam handler
   const handleDeleteExam = async (examId: string) => {
-    if (!window.confirm('আপনি কি নিশ্চিত যে এই শিডিউলড এক্সামটি মুছে ফেলতে চান?')) return;
+    if (!window.confirm('Are you sure you want to delete this scheduled exam?')) return;
 
     const updatedExams = allExams.filter(e => e.id !== examId);
     setAllExams(updatedExams);
@@ -334,18 +334,18 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     if (!file) return;
 
     setIsUploading(true);
-    setUploadStatus('এক্সেল ফাইল প্রসেস করা হচ্ছে...');
+    setUploadStatus('Processing Excel file...');
 
     try {
       const parsed = await parseQuestionBankExcel(file);
       if (parsed.length === 0) {
-        alert('এক্সেল ফাইলে কোনো সঠিক প্রশ্ন পাওয়া যায়নি। অনুগ্রহ করে ফাইলটির কলাম ফরম্যাট চেক করুন।');
+        alert('No valid questions found in the Excel file. Please check column formatting.');
         setIsUploading(false);
         setUploadStatus(null);
         return;
       }
 
-      setUploadStatus(`মোট ${parsed.length} টি প্রশ্ন সেভ করা হচ্ছে...`);
+      setUploadStatus(`Saving total ${parsed.length} questions...`);
 
       // 1. Update local state & local storage immediately
       const existingMap = new Map(questions.map(q => [q.id, q]));
@@ -361,11 +361,11 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
         console.warn('Cloud batch save notice (saved locally):', fsErr);
       }
 
-      setUploadStatus(`সফলভাবে মোট ${parsed.length} টি প্রশ্ন জেনারেট ও সংরক্ষিত হয়েছে!`);
+      setUploadStatus(`Successfully generated and saved ${parsed.length} questions!`);
       setTimeout(() => setUploadStatus(null), 3500);
     } catch (err: any) {
       console.error('Upload notice:', err);
-      setUploadStatus('প্রশ্নসমূহ লোকাল ডিভাইসে সংরক্ষিত হয়েছে!');
+      setUploadStatus('Questions saved to local device storage.');
       setTimeout(() => setUploadStatus(null), 3000);
     } finally {
       setIsUploading(false);
@@ -397,7 +397,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       optionC: formData.optionC.trim() || 'N/A',
       optionD: formData.optionD.trim() || 'N/A',
       correctAnswer: ansVal,
-      explanation: formData.explanation.trim() || 'সঠিক উত্তরের ব্যাখ্যা শীঘ্রই সংযুক্ত করা হবে।',
+      explanation: formData.explanation.trim() || 'Explanation for the correct answer will be added soon.',
       group1: formData.group1.trim() || 'General',
       group2: formData.group2.trim() || 'General',
       group3: formData.group3.trim() || 'General',
@@ -457,11 +457,11 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
   const handleDeleteSingle = (id: string) => {
     const qItem = questions.find(q => q.id === id);
-    const qTitle = qItem ? `"${qItem.question.slice(0, 45)}${qItem.question.length > 45 ? '...' : ''}"` : 'সিলেক্ট করা প্রশ্ন';
+    const qTitle = qItem ? `"${qItem.question.slice(0, 45)}${qItem.question.length > 45 ? '...' : ''}"` : 'Selected Question';
 
     setDeleteConfirmModal({
       isOpen: true,
-      title: 'প্রশ্ন মুছে ফেলার নিশ্চিতকরণ',
+      title: 'Confirm Question Deletion',
       description: qTitle,
       count: 1,
       type: 'single',
@@ -496,8 +496,8 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
     setDeleteConfirmModal({
       isOpen: true,
-      title: 'সিলেক্ট করা প্রশ্নসমূহ মুছে ফেলার নিশ্চিতকরণ',
-      description: `হাতে সিলেক্ট করা ${selectedIds.size} টি প্রশ্ন`,
+      title: 'Confirm Delete Selected Questions',
+      description: `${selectedIds.size} manually selected questions`,
       count: selectedIds.size,
       type: 'selected',
       onConfirm: async () => {
@@ -530,7 +530,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
   const handleDeleteExistingDatabaseQuestions = () => {
     if (existingDbQuestions.length === 0) {
-      alert('বর্তমানে কোনো "Existing Database" চিহ্নিত প্রশ্ন ডাটাবেজে পাওয়া যায়নি।');
+      alert('No "Existing Database" marked questions were found in the database.');
       return;
     }
 
@@ -538,8 +538,8 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
     setDeleteConfirmModal({
       isOpen: true,
-      title: 'সব Existing Database প্রশ্ন মুছে ফেলা',
-      description: 'ডিফল্ট/মাইগ্রেটেড "Existing Database" চিহ্নিত প্রশ্নসমূহ',
+      title: 'Delete All Existing Database Questions',
+      description: 'Default & migrated "Existing Database" tagged questions',
       count: existingDbQuestions.length,
       type: 'existing_db',
       onConfirm: async () => {
@@ -577,7 +577,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
   // --- EXAM SCHEDULER & SELECTION LOGIC ---
   const handleCreateExamFromSelected = () => {
     if (selectedIds.size === 0) {
-      alert('অনুগ্রহ করে অন্তত ১টি প্রশ্ন সিলেক্ট করুন।');
+      alert('Please select at least 1 question.');
       return;
     }
 
@@ -593,7 +593,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     const targetCourse = courses.find(c => c.id === targetCourseId);
     const totalMarks = compiledExamQuestions.length * (Number(marksPerQuestion) || 1);
 
-    const defaultTitle = examTitle.trim() || `বাছাইকৃত মডেল টেস্ট (${compiledExamQuestions.length} টি প্রশ্ন)`;
+    const defaultTitle = examTitle.trim() || `Selected Model Test (${compiledExamQuestions.length} Questions)`;
     if (!examTitle.trim()) {
       setExamTitle(defaultTitle);
     }
@@ -601,9 +601,9 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     const examObj: Exam = {
       id: `exam-${Date.now()}`,
       title: defaultTitle,
-      description: `কুয়েশ্চন ব্যাংক থেকে হাতে বাছাই করা ${compiledExamQuestions.length} টি প্রশ্নের অনলাইন এক্সাম।`,
+      description: `Online exam containing ${compiledExamQuestions.length} manually selected questions from Question Bank.`,
       courseId: targetCourseId || undefined,
-      courseTitle: targetCourse ? targetCourse.title : 'সকল শিক্ষার্থী / সাধারণ পরীক্ষা',
+      courseTitle: targetCourse ? targetCourse.title : 'All Students / General Exam',
       durationMinutes: Number(durationMinutes) || 15,
       marksPerQuestion: Number(marksPerQuestion) || 1,
       negativeMarking: Number(negativeMarking) || 0.25,
@@ -712,10 +712,10 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
       const examObj: Exam = {
         id: `exam-${Date.now()}`,
-        title: examTitle.trim() || `র্যান্ডম জেনারেটেড মডেল টেস্ট (${compiledExamQuestions.length} টি প্রশ্ন)`,
-        description: `কুয়েশ্চন ব্যাংক থেকে ফিল্টার করে তৈরি করা ${compiledExamQuestions.length} টি প্রশ্নের অনলাইন এক্সাম।`,
+        title: examTitle.trim() || `Random Generated Model Test (${compiledExamQuestions.length} Questions)`,
+        description: `Online exam containing ${compiledExamQuestions.length} filtered questions generated from Question Bank.`,
         courseId: targetCourseId || undefined,
-        courseTitle: targetCourse ? targetCourse.title : 'সকল শিক্ষার্থী / সাধারণ পরীক্ষা',
+        courseTitle: targetCourse ? targetCourse.title : 'All Students / General Exam',
         durationMinutes: Number(durationMinutes) || 15,
         marksPerQuestion: Number(marksPerQuestion) || 1,
         negativeMarking: Number(negativeMarking) || 0.25,
@@ -746,7 +746,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       negativeMarking: Number(negativeMarking) || generatedExam.negativeMarking,
       totalMarks: generatedExam.questions.length * (Number(marksPerQuestion) || 1),
       courseId: targetCourseId || undefined,
-      courseTitle: targetCourse ? targetCourse.title : 'সকল শিক্ষার্থী / সাধারণ পরীক্ষা'
+      courseTitle: targetCourse ? targetCourse.title : 'All Students / General Exam'
     };
 
     try {
@@ -794,47 +794,50 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
             <span>Master Question Bank Engine</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-            প্রশ্ন ব্যাংক ও র্যান্ডম এক্সাম শিডিউলার
+            Question Bank & Random Exam Scheduler
           </h2>
           <p className="text-slate-300 text-xs sm:text-sm font-medium max-w-xl leading-relaxed">
-            এক্সেল দিয়ে প্রশ্ন আপলোড করুন, গ্রুপ কন্ডিশন সেট করুন এবং স্বয়ংক্রিয়ভাবে র্যান্ডম প্রশ্ন বেছে অনলাইন পরীক্ষা প্রকাশ করুন।
+            Upload questions via Excel, set group matching rules, and automatically publish random online exams.
           </p>
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex flex-wrap bg-slate-800/80 p-1.5 rounded-2xl border border-slate-700/60 z-10 shrink-0 gap-1">
+        <div className="flex bg-slate-800/80 p-1.5 rounded-2xl border border-slate-700/60 z-10 shrink-0 gap-1 items-center justify-center">
           <button
             onClick={() => setActiveTab('repository')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-black transition flex items-center gap-2 ${
+            title={`Question Repository (${questions.length})`}
+            className={`px-3 sm:px-4 py-2.5 rounded-xl text-xs font-black transition flex items-center gap-2 ${
               activeTab === 'repository'
                 ? 'bg-indigo-600 text-white shadow-lg'
                 : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
             }`}
           >
-            <Database className="w-4 h-4" />
-            <span>প্রশ্ন ভাণ্ডার ({questions.length})</span>
+            <Database className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">Question Repository ({questions.length})</span>
           </button>
           <button
             onClick={() => setActiveTab('scheduler')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-black transition flex items-center gap-2 ${
+            title="Rule Exam Scheduler"
+            className={`px-3 sm:px-4 py-2.5 rounded-xl text-xs font-black transition flex items-center gap-2 ${
               activeTab === 'scheduler'
                 ? 'bg-indigo-600 text-white shadow-lg'
                 : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
             }`}
           >
-            <Shuffle className="w-4 h-4" />
-            <span>গ্রুপ কন্ডিশন এক্সাম শিডিউলার</span>
+            <Shuffle className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">Rule Exam Scheduler</span>
           </button>
           <button
             onClick={() => setActiveTab('scheduled_exams')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-black transition flex items-center gap-2 ${
+            title={`Scheduled Exams (${allExams.length})`}
+            className={`px-3 sm:px-4 py-2.5 rounded-xl text-xs font-black transition flex items-center gap-2 ${
               activeTab === 'scheduled_exams'
                 ? 'bg-indigo-600 text-white shadow-lg'
                 : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
             }`}
           >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-            <span>শিডিউলড এক্সাম তালিকা ({allExams.length})</span>
+            <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="hidden sm:inline">Scheduled Exams ({allExams.length})</span>
           </button>
         </div>
       </div>
@@ -869,7 +872,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="প্রশ্ন বা উত্তর খুঁজুন..."
+                  placeholder="Search questions or answers..."
                   className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-indigo-500 focus:bg-white transition"
                 />
               </div>
@@ -884,7 +887,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 }}
                 className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500"
               >
-                <option value="all">সব Suitable Course</option>
+                <option value="all">All Suitable Courses</option>
                 {uniqueGroups1.map(g => (
                   <option key={g} value={g}>{g}</option>
                 ))}
@@ -899,7 +902,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 }}
                 className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500"
               >
-                <option value="all">সব Q.Type (প্রশ্নের ধরণ)</option>
+                <option value="all">All Question Types</option>
                 {uniqueGroups2.map(g => (
                   <option key={g} value={g}>{g}</option>
                 ))}
@@ -911,7 +914,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 onChange={(e) => setFilterGroup3(e.target.value)}
                 className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500"
               >
-                <option value="all">সব Others (অন্যান্য/সাল)</option>
+                <option value="all">All Other Categories</option>
                 {uniqueGroups3.map(g => (
                   <option key={g} value={g}>{g}</option>
                 ))}
@@ -926,21 +929,21 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 title="Download Excel Format Sample"
               >
                 <Download className="w-3.5 h-3.5 text-indigo-600" />
-                <span>টেমপ্লেট ডাউনলোড</span>
+                <span>Download Sample</span>
               </button>
 
               <button
                 onClick={() => setShowGuidelineModal(true)}
                 className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-indigo-200/80 shadow-xs"
-                title="এক্সেল আপলোড লিখিত গাইডলাইন দেখুন"
+                title="View Excel upload formatting instructions"
               >
                 <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
-                <span>লিখিত গাইডলাইন</span>
+                <span>Upload Guidelines</span>
               </button>
 
               <label className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold shadow-sm transition flex items-center gap-1.5 cursor-pointer shrink-0">
                 <FileSpreadsheet className="w-4 h-4" />
-                <span>এক্সেল আপলোড</span>
+                <span>Excel Upload</span>
                 <input
                   type="file"
                   accept=".xlsx,.xls,.csv"
@@ -953,10 +956,10 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               <button
                 onClick={() => setShowExportModal(true)}
                 className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/90 rounded-xl text-xs font-extrabold shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
-                title="প্রশ্ন ব্যাংকের প্রশ্নসমূহ এক্সেল ফাইলে ডাউনলোড/ব্যাকআপ করুন"
+                title="Export or backup question bank questions to Excel"
               >
                 <Download className="w-4 h-4 text-emerald-600" />
-                <span>এক্সপোর্ট (Excel)</span>
+                <span>Export (Excel)</span>
               </button>
 
               <button
@@ -971,17 +974,17 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold shadow-md transition flex items-center gap-1.5 cursor-pointer shrink-0"
               >
                 <Plus className="w-4 h-4" />
-                <span>নতুন প্রশ্ন যোগ করুন</span>
+                <span>Add New Question</span>
               </button>
 
               {existingDbQuestions.length > 0 && (
                 <button
                   onClick={handleDeleteExistingDatabaseQuestions}
                   className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs"
-                  title="ডাটাবেজ থেকে সকল Existing Database প্রশ্ন মুছে ফেলুন"
+                  title="Delete all Existing Database marked questions"
                 >
                   <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                  <span>Existing Database প্রশ্নসমূহ মুছুন ({existingDbQuestions.length})</span>
+                  <span>Delete Existing Database Questions ({existingDbQuestions.length})</span>
                 </button>
               )}
             </div>
@@ -990,20 +993,20 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
           {/* Stats Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-sm space-y-1">
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">মোট প্রশ্ন</span>
-              <span className="text-xl font-black text-indigo-600">{questions.length} টি</span>
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">Total Questions</span>
+              <span className="text-xl font-black text-indigo-600">{questions.length}</span>
             </div>
             <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-sm space-y-1">
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">Suitable Course</span>
-              <span className="text-xl font-black text-slate-800">{uniqueGroups1.length} টি</span>
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">Suitable Courses</span>
+              <span className="text-xl font-black text-slate-800">{uniqueGroups1.length}</span>
             </div>
             <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-sm space-y-1">
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">Q.Type</span>
-              <span className="text-xl font-black text-slate-800">{uniqueGroups2.length} টি</span>
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">Q.Types</span>
+              <span className="text-xl font-black text-slate-800">{uniqueGroups2.length}</span>
             </div>
             <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-sm space-y-1">
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">Others (অন্যান্য)</span>
-              <span className="text-xl font-black text-slate-800">{uniqueGroups3.length} টি</span>
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">Other Categories</span>
+              <span className="text-xl font-black text-slate-800">{uniqueGroups3.length}</span>
             </div>
           </div>
 
@@ -1011,7 +1014,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
           {selectedIds.size > 0 && (
             <div className="p-3.5 bg-indigo-50 border border-indigo-200 rounded-2xl flex flex-wrap items-center justify-between gap-3 animate-fadeIn shadow-xs">
               <span className="text-xs font-black text-indigo-900">
-                {selectedIds.size} টি প্রশ্ন সিলেক্ট করা হয়েছে
+                {selectedIds.size} questions selected
               </span>
 
               <div className="flex items-center gap-2">
@@ -1020,16 +1023,16 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-md"
                 >
                   <Award className="w-4 h-4" />
-                  <span>সিলেক্ট করা ({selectedIds.size}) প্রশ্ন দিয়ে এক্সাম তৈরি করুন</span>
+                  <span>Create Exam with Selected ({selectedIds.size})</span>
                 </button>
 
                 <button
                   onClick={() => handleExportQuestions('selected')}
                   className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
-                  title="সিলেক্ট করা প্রশ্নসমূহ এক্সেল ফাইল হিসেবে ডাউনলোড করুন"
+                  title="Export selected questions to Excel file"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5" />
-                  <span>এক্সপোর্ট ({selectedIds.size})</span>
+                  <span>Export ({selectedIds.size})</span>
                 </button>
 
                 <button
@@ -1037,7 +1040,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                   className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>ডিলিট করুন</span>
+                  <span>Delete Selected</span>
                 </button>
               </div>
             </div>
@@ -1063,12 +1066,12 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                         className="rounded border-slate-300 text-indigo-600"
                       />
                     </th>
-                    <th className="p-3 min-w-[240px]">প্রশ্ন (Question)</th>
-                    <th className="p-3 min-w-[200px]">অপশনসমূহ & উত্তর</th>
+                    <th className="p-3 min-w-[240px]">Question Text</th>
+                    <th className="p-3 min-w-[200px]">Options & Answer</th>
                     <th className="p-3 w-36">Suitable Course</th>
                     <th className="p-3 w-36">Q.Type</th>
                     <th className="p-3 w-32">Others</th>
-                    <th className="p-3 w-20 text-center">অ্যাকশন</th>
+                    <th className="p-3 w-20 text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
@@ -1076,13 +1079,13 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                     <tr>
                       <td colSpan={7} className="p-12 text-center text-slate-400">
                         <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-600" />
-                        <span>প্রশ্ন ভাণ্ডার লোড হচ্ছে...</span>
+                        <span>Loading question bank...</span>
                       </td>
                     </tr>
                   ) : filteredQuestions.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="p-12 text-center text-slate-400 font-semibold">
-                        কোনো প্রশ্ন পাওয়া যায়নি। "নতুন প্রশ্ন যোগ করুন" বা "এক্সেল আপলোড" বাটনে ক্লিক করুন।
+                        No questions found. Click "Add New Question" or "Excel Upload" to add questions.
                       </td>
                     </tr>
                   ) : (
@@ -1105,7 +1108,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                           <span className="font-extrabold text-slate-900 block leading-relaxed">{q.question}</span>
                           {q.explanation && (
                             <span className="text-[11px] text-slate-400 block font-normal italic">
-                              ব্যাখ্যা: {q.explanation}
+                              Explanation: {q.explanation}
                             </span>
                           )}
                         </td>
@@ -1176,23 +1179,23 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
             <div className="border-b border-slate-100 pb-4">
               <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
                 <Sliders className="w-5 h-5 text-indigo-600" />
-                <span>অনলাইন এক্সাম কনফিগারেশন</span>
+                <span>Online Exam Configuration</span>
               </h3>
               <p className="text-xs text-slate-500 font-medium mt-1">
-                পরীক্ষার নাম, সময়সীমা, মার্কস এবং গ্রুপ কন্ডিশন নির্ধারণ করে র্যান্ডম এক্সাম তৈরি করুন।
+                Configure exam title, time duration, marks, and group rules to generate random exams.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Target Course */}
               <div className="space-y-1.5">
-                <label className="text-xs font-extrabold text-slate-700 block">টার্গেট কোর্স</label>
+                <label className="text-xs font-extrabold text-slate-700 block">Target Course</label>
                 <select
                   value={targetCourseId}
                   onChange={(e) => setTargetCourseId(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
                 >
-                  <option value="">গ্লোবাল / ফ্রি প্র্যাকটিস এক্সাম</option>
+                  <option value="">Global / Free Practice Exam</option>
                   {courses.map(c => (
                     <option key={c.id} value={c.id}>{c.title}</option>
                   ))}
@@ -1201,7 +1204,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
               {/* Exam Title */}
               <div className="space-y-1.5 md:col-span-2">
-                <label className="text-xs font-extrabold text-slate-700 block">পরীক্ষার শিরোনাম (Title)</label>
+                <label className="text-xs font-extrabold text-slate-700 block">Exam Title</label>
                 <input
                   type="text"
                   value={examTitle}
@@ -1213,7 +1216,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
               {/* Duration Minutes */}
               <div className="space-y-1.5">
-                <label className="text-xs font-extrabold text-slate-700 block">সময় (মিনিট)</label>
+                <label className="text-xs font-extrabold text-slate-700 block">Duration (Minutes)</label>
                 <input
                   type="number"
                   value={durationMinutes}
@@ -1226,7 +1229,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
               {/* Marks per question */}
               <div className="space-y-1.5">
-                <label className="text-xs font-extrabold text-slate-700 block">প্রতি প্রশ্নের মান (Marks)</label>
+                <label className="text-xs font-extrabold text-slate-700 block">Marks per Question</label>
                 <input
                   type="number"
                   step="0.5"
@@ -1239,7 +1242,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
               {/* Negative Marking */}
               <div className="space-y-1.5">
-                <label className="text-xs font-extrabold text-slate-700 block">নেগেটিভ মার্কিং (প্রতি ভুল উত্তর)</label>
+                <label className="text-xs font-extrabold text-slate-700 block">Negative Marking (Per Wrong Answer)</label>
                 <input
                   type="number"
                   step="0.05"
@@ -1255,9 +1258,9 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
             <div className="space-y-4 pt-4 border-t border-slate-100">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="font-extrabold text-slate-900 text-sm">গ্রুপ কন্ডিশন ম্যাচিং রুলস (Rules)</h4>
+                  <h4 className="font-extrabold text-slate-900 text-sm">Group Matching Rules</h4>
                   <p className="text-xs text-slate-400 font-medium">
-                    নির্দিষ্ট কন্ডিশন পূরণ করে কতটি প্রশ্ন বেছে নেওয়া হবে তা ঠিক করুন।
+                    Specify how many questions should be randomly picked for each category condition.
                   </p>
                 </div>
                 <button
@@ -1266,7 +1269,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                   className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>নতুন রুল যোগ করুন</span>
+                  <span>Add New Rule</span>
                 </button>
               </div>
 
@@ -1290,7 +1293,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                             onChange={(e) => handleRuleChange(rule.id, 'group1', e.target.value)}
                             className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
                           >
-                            <option value="all">সব Suitable Course</option>
+                            <option value="all">All Suitable Courses</option>
                             {uniqueGroups1.map(g => (
                               <option key={g} value={g}>{g}</option>
                             ))}
@@ -1305,7 +1308,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                             onChange={(e) => handleRuleChange(rule.id, 'group2', e.target.value)}
                             className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
                           >
-                            <option value="all">সব Q.Type (প্রশ্নের ধরণ)</option>
+                            <option value="all">All Question Types</option>
                             {uniqueGroups2.map(g => (
                               <option key={g} value={g}>{g}</option>
                             ))}
@@ -1320,7 +1323,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                             onChange={(e) => handleRuleChange(rule.id, 'group3', e.target.value)}
                             className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
                           >
-                            <option value="all">সব Others (অন্যান্য)</option>
+                            <option value="all">All Other Categories</option>
                             {uniqueGroups3.map(g => (
                               <option key={g} value={g}>{g}</option>
                             ))}
@@ -1329,7 +1332,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
                         {/* Question Count */}
                         <div>
-                          <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">প্রশ্নের সংখ্যা</label>
+                          <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">Question Count</label>
                           <input
                             type="number"
                             value={rule.count}
@@ -1344,10 +1347,10 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                       <div className="flex items-center gap-3 shrink-0">
                         <div className="text-right">
                           <span className={`text-[11px] font-extrabold block ${isInsufficient ? 'text-amber-600' : 'text-emerald-600'}`}>
-                            ব্যাংকে আছে: {matchingCount} টি
+                            Available in Bank: {matchingCount}
                           </span>
                           <span className="text-[10px] text-slate-400 block font-medium">
-                            পিক করবে: {rule.count} টি
+                            To Pick: {rule.count}
                           </span>
                         </div>
 
@@ -1378,12 +1381,12 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 {isGenerating ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>প্রশ্ন নির্বাচন হচ্ছে...</span>
+                    <span>Selecting Questions...</span>
                   </>
                 ) : (
                   <>
                     <Shuffle className="w-4 h-4" />
-                    <span>র্যান্ডম এক্সাম জেনারেট করুন</span>
+                    <span>Generate Random Exam</span>
                   </>
                 )}
               </button>
@@ -1397,11 +1400,11 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 <div>
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-black mb-2">
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>পরীক্ষা প্রস্তুত করা হয়েছে</span>
+                    <span>Exam Prepared</span>
                   </div>
                   <h3 className="text-xl font-black text-slate-900">{generatedExam.title}</h3>
                   <p className="text-xs text-slate-500 font-medium mt-1">
-                    মোট প্রশ্ন: {generatedExam.questions.length} টি | সময়: {generatedExam.durationMinutes} মিনিট | মোট নম্বর: {generatedExam.totalMarks}
+                    Questions: {generatedExam.questions.length} | Time: {generatedExam.durationMinutes} Minutes | Total Marks: {generatedExam.totalMarks}
                   </p>
                 </div>
 
@@ -1414,17 +1417,17 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                   {isPublishing ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>পাবলিশ হচ্ছে...</span>
+                      <span>Publishing...</span>
                     </>
                   ) : publishSuccess ? (
                     <>
                       <Check className="w-4 h-4 text-white" />
-                      <span>সফলভাবে অনলাইন এক্সামে প্রকাশিত!</span>
+                      <span>Published to Online Exams!</span>
                     </>
                   ) : (
                     <>
                       <Play className="w-4 h-4" />
-                      <span>অনলাইন এক্সাম লিস্টে প্রকাশ করুন</span>
+                      <span>Publish to Online Exams</span>
                     </>
                   )}
                 </button>
@@ -1432,7 +1435,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
               {/* Questions List Preview */}
               <div className="space-y-3 max-h-[450px] overflow-y-auto pr-2">
-                <h4 className="font-extrabold text-xs text-slate-500 uppercase tracking-wider">নির্বাচিত প্রশ্নসমূহ ({generatedExam.questions.length}):</h4>
+                <h4 className="font-extrabold text-xs text-slate-500 uppercase tracking-wider">Selected Questions ({generatedExam.questions.length}):</h4>
                 {generatedExam.questions.map((q, idx) => (
                   <div key={q.id} className="p-4 bg-slate-50 border border-slate-200/60 rounded-2xl space-y-2 relative group">
                     <div className="flex items-start justify-between gap-2">
@@ -1447,7 +1450,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                         type="button"
                         onClick={() => handleRemoveQuestionFromExam(q.id)}
                         className="p-1 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
-                        title="এই পরীক্ষা থেকে প্রশ্নটি বাদ দিন"
+                        title="Remove question from this exam"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -1481,8 +1484,8 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 <BookOpen className="w-6 h-6" />
               </div>
               <div>
-                <span className="text-xs text-slate-500 font-semibold block">মোট কোর্স</span>
-                <strong className="text-xl font-extrabold text-slate-900">{courses.length} টি</strong>
+                <span className="text-xs text-slate-500 font-semibold block">Total Courses</span>
+                <strong className="text-xl font-extrabold text-slate-900">{courses.length}</strong>
               </div>
             </div>
 
@@ -1491,8 +1494,8 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 <FileSpreadsheet className="w-6 h-6" />
               </div>
               <div>
-                <span className="text-xs text-slate-500 font-semibold block">মোট শিডিউলড এক্সাম</span>
-                <strong className="text-xl font-extrabold text-slate-900">{allExams.length} টি</strong>
+                <span className="text-xs text-slate-500 font-semibold block">Total Scheduled Exams</span>
+                <strong className="text-xl font-extrabold text-slate-900">{allExams.length}</strong>
               </div>
             </div>
 
@@ -1501,9 +1504,9 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 <HelpCircle className="w-6 h-6" />
               </div>
               <div>
-                <span className="text-xs text-slate-500 font-semibold block">এক্সামে মোট প্রশ্ন সংখ্যা</span>
+                <span className="text-xs text-slate-500 font-semibold block">Total Exam Questions</span>
                 <strong className="text-xl font-extrabold text-slate-900">
-                  {allExams.reduce((acc, e) => acc + (e.questions?.length || 0), 0)} টি
+                  {allExams.reduce((acc, e) => acc + (e.questions?.length || 0), 0)}
                 </strong>
               </div>
             </div>
@@ -1514,27 +1517,27 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <Layers className="w-5 h-5 text-indigo-600" />
-                <span>কোর্স ভিত্তিক এক্সাম শিডিউল বিবরণ</span>
+                <span>Course-wise Scheduled Exams</span>
               </h3>
               <button
                 onClick={fetchScheduledExams}
                 className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${loadingExams ? 'animate-spin' : ''}`} />
-                <span>রিফ্রেশ</span>
+                <span>Refresh</span>
               </button>
             </div>
 
             {loadingExams ? (
               <div className="bg-white rounded-2xl p-8 text-center text-slate-400 text-sm">
-                শিডিউলড এক্সামের তথ্য লোড হচ্ছে...
+                Loading scheduled exams...
               </div>
             ) : allExams.length === 0 ? (
               <div className="bg-white rounded-2xl p-10 border border-slate-200 text-center text-slate-500">
                 <FileSpreadsheet className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                <p className="font-bold text-slate-800">কোন এক্সাম শিডিউল করা নেই</p>
+                <p className="font-bold text-slate-800">No scheduled exams found</p>
                 <p className="text-xs text-slate-400 mt-1">
-                  "গ্রুপ কন্ডিশন এক্সাম শিডিউলার" ট্যাব থেকে নতুন পরীক্ষা তৈরি ও শিডিউল করুন।
+                  Create and schedule exams from the "Rule Exam Scheduler" tab.
                 </p>
               </div>
             ) : (
@@ -1562,7 +1565,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                               )}
                             </div>
                             <p className="text-xs text-slate-500 mt-0.5">
-                              মোট প্রশ্ন: <span className="font-bold text-slate-700">{totalQ} টি</span>
+                              Total Questions: <span className="font-bold text-slate-700">{totalQ}</span>
                             </p>
                           </div>
                         </div>
@@ -1573,7 +1576,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                               ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
                               : 'bg-slate-100 text-slate-500 border border-slate-200'
                           }`}>
-                            {courseExams.length} টি এক্সাম শিডিউলড
+                            {courseExams.length} Exams Scheduled
                           </span>
                         </div>
                       </div>
@@ -1581,7 +1584,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                       {/* Exam Cards inside Course */}
                       {courseExams.length === 0 ? (
                         <div className="p-4 text-center text-xs text-slate-400 italic">
-                          এই কোর্সে এখনও কোনো এক্সাম শিডিউল করা হয়নি।
+                          No exams scheduled for this course yet.
                         </div>
                       ) : (
                         <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3.5 bg-white">
@@ -1591,20 +1594,20 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                                 <div className="flex items-center justify-between gap-2 mb-1.5">
                                   <h5 className="font-bold text-slate-900 text-sm">{exam.title}</h5>
                                   <span className="text-[11px] font-mono text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 shrink-0">
-                                    {exam.durationMinutes} মি.
+                                    {exam.durationMinutes} m
                                   </span>
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-2">
-                                  <span>প্রশ্ন: <strong className="text-slate-800 font-bold">{exam.questions?.length || 0} টি</strong></span>
-                                  <span>নম্বর: <strong className="text-slate-800 font-bold">{exam.totalMarks || ((exam.questions?.length || 0) * (exam.marksPerQuestion || 1))}</strong></span>
-                                  <span>নেগেটিভ: <strong className="text-rose-600 font-bold">-{exam.negativeMarking || 0}</strong></span>
+                                  <span>Questions: <strong className="text-slate-800 font-bold">{exam.questions?.length || 0}</strong></span>
+                                  <span>Marks: <strong className="text-slate-800 font-bold">{exam.totalMarks || ((exam.questions?.length || 0) * (exam.marksPerQuestion || 1))}</strong></span>
+                                  <span>Negative: <strong className="text-rose-600 font-bold">-{exam.negativeMarking || 0}</strong></span>
                                 </div>
                               </div>
 
                               <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 text-xs">
                                 <span className="text-[11px] text-slate-400">
-                                  {exam.createdAt ? new Date(exam.createdAt).toLocaleDateString() : 'শিডিউলড'}
+                                  {exam.createdAt ? new Date(exam.createdAt).toLocaleDateString() : 'Scheduled'}
                                 </span>
 
                                 <button
@@ -1612,7 +1615,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                                   className="px-2.5 py-1 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg font-bold text-xs flex items-center gap-1 transition cursor-pointer"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
-                                  <span>মুছুন</span>
+                                  <span>Delete</span>
                                 </button>
                               </div>
                             </div>
@@ -1632,11 +1635,11 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs mt-6">
                       <div className="p-4 sm:p-5 bg-amber-50/60 border-b border-amber-200/80 flex items-center justify-between">
                         <div>
-                          <h4 className="font-extrabold text-amber-900 text-base">সাধারণ / অল-কোর্স পরীক্ষা</h4>
-                          <p className="text-xs text-amber-700">কোন সুনির্দিষ্ট কোর্সে যুক্ত নয় এমন এক্সামসমূহ</p>
+                          <h4 className="font-extrabold text-amber-900 text-base">General / All-Course Exams</h4>
+                          <p className="text-xs text-amber-700">Exams not linked to a specific course</p>
                         </div>
                         <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-800 border border-amber-200">
-                          {generalExams.length} টি এক্সাম
+                          {generalExams.length} Exams
                         </span>
                       </div>
 
@@ -1647,20 +1650,20 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                               <div className="flex items-center justify-between gap-2 mb-1.5">
                                 <h5 className="font-bold text-slate-900 text-sm">{exam.title}</h5>
                                 <span className="text-[11px] font-mono text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 shrink-0">
-                                  {exam.durationMinutes} মি.
+                                  {exam.durationMinutes} m
                                 </span>
                               </div>
 
                               <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-2">
-                                <span>প্রশ্ন: <strong className="text-slate-800 font-bold">{exam.questions?.length || 0} টি</strong></span>
-                                <span>নম্বর: <strong className="text-slate-800 font-bold">{exam.totalMarks || ((exam.questions?.length || 0) * (exam.marksPerQuestion || 1))}</strong></span>
-                                <span>নেগেটিভ: <strong className="text-rose-600 font-bold">-{exam.negativeMarking || 0}</strong></span>
+                                <span>Questions: <strong className="text-slate-800 font-bold">{exam.questions?.length || 0}</strong></span>
+                                <span>Marks: <strong className="text-slate-800 font-bold">{exam.totalMarks || ((exam.questions?.length || 0) * (exam.marksPerQuestion || 1))}</strong></span>
+                                <span>Negative: <strong className="text-rose-600 font-bold">-{exam.negativeMarking || 0}</strong></span>
                               </div>
                             </div>
 
                             <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 text-xs">
                               <span className="text-[11px] text-slate-400">
-                                {exam.createdAt ? new Date(exam.createdAt).toLocaleDateString() : 'শিডিউলড'}
+                                {exam.createdAt ? new Date(exam.createdAt).toLocaleDateString() : 'Scheduled'}
                               </span>
 
                               <button
@@ -1668,7 +1671,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                                 className="px-2.5 py-1 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg font-bold text-xs flex items-center gap-1 transition cursor-pointer"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
-                                <span>মুছুন</span>
+                                <span>Delete</span>
                               </button>
                             </div>
                           </div>
@@ -1694,19 +1697,19 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
             <div className="border-b border-slate-100 pb-3">
               <h3 className="text-lg font-black text-slate-900">
-                {editingQuestion ? 'প্রশ্ন এডিট করুন' : 'নতুন প্রশ্ন যোগ করুন'}
+                {editingQuestion ? 'Edit Question' : 'Add New Question'}
               </h3>
             </div>
 
             <form onSubmit={handleSaveQuestion} className="space-y-4">
               {/* Question Text */}
               <div className="space-y-1">
-                <label className="text-xs font-extrabold text-slate-700 block">প্রশ্ন (Question)</label>
+                <label className="text-xs font-extrabold text-slate-700 block">Question Text</label>
                 <textarea
                   rows={3}
                   value={formData.question}
                   onChange={(e) => setFormData({ ...formData, question: e.target.value })}
-                  placeholder="এখানে প্রশ্নটি লিখুন..."
+                  placeholder="Enter question text here..."
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
                   required
                 />
@@ -1715,7 +1718,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               {/* Options Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-extrabold text-slate-600 block">অপশন A (ক)</label>
+                  <label className="text-[11px] font-extrabold text-slate-600 block">Option A</label>
                   <input
                     type="text"
                     value={formData.optionA}
@@ -1725,7 +1728,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] font-extrabold text-slate-600 block">অপশন B (খ)</label>
+                  <label className="text-[11px] font-extrabold text-slate-600 block">Option B</label>
                   <input
                     type="text"
                     value={formData.optionB}
@@ -1735,7 +1738,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] font-extrabold text-slate-600 block">অপশন C (গ)</label>
+                  <label className="text-[11px] font-extrabold text-slate-600 block">Option C</label>
                   <input
                     type="text"
                     value={formData.optionC}
@@ -1744,7 +1747,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] font-extrabold text-slate-600 block">অপশন D (ঘ)</label>
+                  <label className="text-[11px] font-extrabold text-slate-600 block">Option D</label>
                   <input
                     type="text"
                     value={formData.optionD}
@@ -1757,26 +1760,26 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               {/* Correct Answer & Explanation */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-extrabold text-slate-600 block">সঠিক উত্তর</label>
+                  <label className="text-[11px] font-extrabold text-slate-600 block">Correct Answer</label>
                   <select
                     value={formData.correctAnswer}
                     onChange={(e) => setFormData({ ...formData, correctAnswer: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                   >
-                    <option value="A">A (অপশন ক)</option>
-                    <option value="B">B (অপশন খ)</option>
-                    <option value="C">C (অপশন গ)</option>
-                    <option value="D">D (অপশন ঘ)</option>
+                    <option value="A">A (Option A)</option>
+                    <option value="B">B (Option B)</option>
+                    <option value="C">C (Option C)</option>
+                    <option value="D">D (Option D)</option>
                   </select>
                 </div>
 
                 <div className="space-y-1 sm:col-span-2">
-                  <label className="text-[11px] font-extrabold text-slate-600 block">ব্যাখ্যা (Explanation)</label>
+                  <label className="text-[11px] font-extrabold text-slate-600 block">Explanation</label>
                   <input
                     type="text"
                     value={formData.explanation}
                     onChange={(e) => setFormData({ ...formData, explanation: e.target.value })}
-                    placeholder="সঠিক উত্তরের ব্যাখ্যা..."
+                    placeholder="Explanation for the correct answer..."
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium"
                   />
                 </div>
@@ -1823,13 +1826,13 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                   onClick={() => setShowAddModal(false)}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
                 >
-                  বাতিল
+                  Cancel
                 </button>
                 <button
                   type="submit"
                   className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
                 >
-                  সেভ করুন
+                  Save Question
                 </button>
               </div>
             </form>
@@ -1854,10 +1857,10 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               </div>
               <div>
                 <h3 className="text-lg font-black text-slate-900">
-                  এক্সেল আপলোড লিখিত নির্দেশিকা (Excel Guidelines)
+                  Excel Upload Guidelines
                 </h3>
                 <p className="text-xs text-slate-500 font-medium">
-                  এক্সেল ফাইলে প্রশ্ন সাজানোর নিয়ম এবং প্রতিটি কলামের বিকল্প নামের তালিকা।
+                  Rules for formatting questions in Excel files and supported column aliases.
                 </p>
               </div>
             </div>
@@ -1866,93 +1869,93 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               <div className="p-3.5 bg-indigo-50/70 border border-indigo-100 rounded-2xl space-y-1">
                 <p className="font-extrabold text-indigo-950 flex items-center gap-1.5">
                   <Info className="w-4 h-4 text-indigo-600 shrink-0" />
-                  <span>কলামের মূল নামসমূহ ও ফরম্যাট:</span>
+                  <span>Column Headers & Format:</span>
                 </p>
                 <p className="text-[11px] text-indigo-900 leading-relaxed">
-                  এক্সেল ফাইলের ১ম সারিতে (Header row) কলামগুলোর নাম থাকবে। সিস্টেমে স্বয়ংক্রিয় কলাম শনাক্তকরণের সুবিধা রয়েছে, তাই নিচের বিকল্প নামগুলোর যেকোনোটি ব্যবহার করতে পারবেন।
+                  The 1st row of your Excel file must contain column headers. The system automatically identifies headers based on the column aliases below.
                 </p>
               </div>
 
               <div className="space-y-2.5 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
                 <h4 className="font-black text-slate-900 text-xs border-b border-slate-200/60 pb-2">
-                  সবগুলো কলামের তালিকা ও বিকল্প নামসূচক চিহ্ন:
+                  List of Supported Column Names and Aliases:
                 </h4>
 
                 <ul className="space-y-2 text-slate-700 font-medium leading-relaxed">
                   <li className="flex items-start gap-2">
                     <span className="text-indigo-600 font-bold shrink-0">•</span>
                     <div>
-                      <strong className="text-slate-900">Question ID / ID / Serial / SL:</strong> (ঐচ্ছিক) প্রশ্নের অনন্য আইডি (যেমন: <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">qb-101</code>)। ঘর ফাঁকা রাখলে অটো জেনারেট হবে।
+                      <strong className="text-slate-900">Question ID / ID / Serial / SL:</strong> (Optional) Unique Question ID (e.g. <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">qb-101</code>). Left blank to auto-generate.
                     </div>
                   </li>
 
                   <li className="flex items-start gap-2">
                     <span className="text-indigo-600 font-bold shrink-0">•</span>
                     <div>
-                      <strong className="text-slate-900">Question / Question (প্রশ্ন) / QText / প্রশ্ন:</strong> (আবশ্যক) মূল প্রশ্ন বা স্টেটমেন্ট লিখুন।
+                      <strong className="text-slate-900">Question / QText:</strong> (Required) Enter main question text.
                     </div>
                   </li>
 
                   <li className="flex items-start gap-2">
                     <span className="text-indigo-600 font-bold shrink-0">•</span>
                     <div>
-                      <strong className="text-slate-900">Option A / Option A (অপশন ক) / Opt A / A / অপশন ১:</strong> (আবশ্যক) প্রথম উত্তর বিকল্প।
+                      <strong className="text-slate-900">Option A / Opt A / A:</strong> (Required) First option.
                     </div>
                   </li>
 
                   <li className="flex items-start gap-2">
                     <span className="text-indigo-600 font-bold shrink-0">•</span>
                     <div>
-                      <strong className="text-slate-900">Option B / Option B (অপশন খ) / Opt B / B / অপশন ২:</strong> (আবশ্যক) দ্বিতীয় উত্তর বিকল্প।
+                      <strong className="text-slate-900">Option B / Opt B / B:</strong> (Required) Second option.
                     </div>
                   </li>
 
                   <li className="flex items-start gap-2">
                     <span className="text-indigo-600 font-bold shrink-0">•</span>
                     <div>
-                      <strong className="text-slate-900">Option C / Option C (অপশন গ) / Opt C / C / অপশন ৩:</strong> (আবশ্যক) তৃতীয় বিকল্প (না থাকলে N/A লিখুন)।
+                      <strong className="text-slate-900">Option C / Opt C / C:</strong> (Required) Third option (or enter N/A).
                     </div>
                   </li>
 
                   <li className="flex items-start gap-2">
                     <span className="text-indigo-600 font-bold shrink-0">•</span>
                     <div>
-                      <strong className="text-slate-900">Option D / Option D (অপশন ঘ) / Opt D / D / অপশন ৪:</strong> (আবশ্যক) চতুর্থ বিকল্প (না থাকলে N/A লিখুন)।
+                      <strong className="text-slate-900">Option D / Opt D / D:</strong> (Required) Fourth option (or enter N/A).
                     </div>
                   </li>
 
                   <li className="flex items-start gap-2">
                     <span className="text-indigo-600 font-bold shrink-0">•</span>
                     <div>
-                      <strong className="text-slate-900">Correct Answer / Correct / Answer / Ans / সঠিক উত্তর:</strong> (আবশ্যক) সঠিক উত্তর। ইংরেজি অক্ষর (<code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">A</code>, <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">B</code>, <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">C</code>, <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">D</code>) অথবা অপশনের লেখা লিখুন।
+                      <strong className="text-slate-900">Correct Answer / Correct / Answer / Ans:</strong> (Required) Correct answer option letter (<code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">A</code>, <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">B</code>, <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">C</code>, <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">D</code>) or exact text.
                     </div>
                   </li>
 
                   <li className="flex items-start gap-2">
                     <span className="text-indigo-600 font-bold shrink-0">•</span>
                     <div>
-                      <strong className="text-slate-900">Explanation / Explanation (ব্যাখ্যা) / Exp / ব্যাখ্যা:</strong> (ঐচ্ছিক) প্রশ্নের বিস্তারিত ব্যাখ্যা।
+                      <strong className="text-slate-900">Explanation / Exp:</strong> (Optional) Detailed explanation for the answer.
                     </div>
                   </li>
 
                   <li className="flex items-start gap-2">
                     <span className="text-indigo-600 font-bold shrink-0">•</span>
                     <div>
-                      <strong className="text-slate-900">Suitable Course / Course / Suitable_Course / গ্রুপ / Subject / বিষয়:</strong> (আবশ্যক/ঐচ্ছিক) কোর্স বা ক্যাটাগরি (যেমন: <span className="text-indigo-700 font-bold">BCS</span>, <span className="text-indigo-700 font-bold">Bank</span>, <span className="text-indigo-700 font-bold">সমাস</span>, <span className="text-indigo-700 font-bold">বাগধারা</span>, <span className="text-indigo-700 font-bold">IELTS</span> ইত্যাদি)।
+                      <strong className="text-slate-900">Suitable Course / Course / Suitable_Course / Subject:</strong> (Required/Optional) Course or category (e.g. <span className="text-indigo-700 font-bold">BCS</span>, <span className="text-indigo-700 font-bold">Bank</span>, <span className="text-indigo-700 font-bold">IELTS</span>, etc.).
                     </div>
                   </li>
 
                   <li className="flex items-start gap-2">
                     <span className="text-indigo-600 font-bold shrink-0">•</span>
                     <div>
-                      <strong className="text-slate-900">Q.Type / Question Type / QType / Q_Type / টাইপ / Topic / টপিক:</strong> (আবশ্যক/ঐচ্ছিক) প্রশ্নের ধরণ বা ফরম্যাট (যেমন: <span className="text-indigo-700 font-bold">MCQ</span>, <span className="text-indigo-700 font-bold">Blank filling</span>, <span className="text-indigo-700 font-bold">OOO</span>, <span className="text-indigo-700 font-bold">Analogy</span> ইত্যাদি)।
+                      <strong className="text-slate-900">Q.Type / Question Type / QType / Q_Type / Topic:</strong> (Required/Optional) Question type or format (e.g. <span className="text-indigo-700 font-bold">MCQ</span>, <span className="text-indigo-700 font-bold">Blank filling</span>, <span className="text-indigo-700 font-bold">OOO</span>, <span className="text-indigo-700 font-bold">Analogy</span>, etc.).
                     </div>
                   </li>
 
                   <li className="flex items-start gap-2">
                     <span className="text-indigo-600 font-bold shrink-0">•</span>
                     <div>
-                      <strong className="text-slate-900">Others / Other / Subject / Year / ক্যাটাগরি / Tag / সাল:</strong> (ঐচ্ছিক) অন্যান্য মেটাডেটা যেমন বিষয়, সাল বা অন্যান্য নোট (যেমন: <span className="text-indigo-700 font-bold">বাংলা সাহিত্য</span>, <span className="text-indigo-700 font-bold">2024</span>, <span className="text-indigo-700 font-bold">৩৮তম বিসিএস</span> ইত্যাদি)।
+                      <strong className="text-slate-900">Others / Other / Subject / Year / Category / Tag:</strong> (Optional) Other metadata like year or notes (e.g. <span className="text-indigo-700 font-bold">2024</span>, <span className="text-indigo-700 font-bold">38th BCS</span>, etc.).
                     </div>
                   </li>
                 </ul>
@@ -1966,7 +1969,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>স্যাম্পল এক্সেল ডাউনলোড</span>
+                <span>Download Sample Excel</span>
               </button>
 
               <button
@@ -1974,7 +1977,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 onClick={() => setShowGuidelineModal(false)}
                 className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
               >
-                ঠিক আছে
+                Got It
               </button>
             </div>
           </div>
@@ -2001,7 +2004,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                   {deleteConfirmModal.title}
                 </h3>
                 <p className="text-xs text-slate-500 font-medium">
-                  প্রশ্ন ব্যাংক থেকে স্থায়ীভাবে মুছে ফেলার পূর্ব সতর্কতা
+                  Warning before permanent deletion from question bank
                 </p>
               </div>
             </div>
@@ -2012,10 +2015,10 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                 <div className="space-y-1">
                   <h4 className="text-xs font-black text-rose-950 uppercase tracking-wide">
-                    জরুরি সতর্কবার্তা (Critical Alert)
+                    Critical Warning
                   </h4>
                   <p className="text-xs text-rose-900 leading-relaxed font-medium">
-                    প্রশ্ন ব্যাংক থেকে প্রশ্ন মুছে ফেললে তা এই প্রশ্নগুলোর সাথে যুক্ত <strong className="font-extrabold text-rose-950 underline decoration-rose-400">সকল পাবলিশড বা চালুকৃত পরীক্ষা (Launched Exams)</strong>-কে প্রভাবিত করবে এবং শিক্ষার্থীরা পরীক্ষায় এই প্রশ্নগুলো আর পাবে না।
+                    Deleting questions from the question bank will affect <strong className="font-extrabold text-rose-950 underline decoration-rose-400">all launched exams</strong> containing these questions, and students will no longer see them in exams.
                   </p>
                 </div>
               </div>
@@ -2024,14 +2027,14 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
             {/* SUMMARY DETAILS */}
             <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-2 text-xs text-slate-700">
               <div className="flex justify-between items-center border-b border-slate-200/60 pb-1.5">
-                <span className="text-slate-500 font-bold">আইটেমের বিবরণ:</span>
+                <span className="text-slate-500 font-bold">Item Description:</span>
                 <span className="font-extrabold text-slate-900 truncate max-w-[200px]" title={deleteConfirmModal.description}>
                   {deleteConfirmModal.description}
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-500 font-bold">মোট মুছে ফেলার প্রশ্ন:</span>
-                <span className="font-black text-rose-600 text-sm">{deleteConfirmModal.count} টি</span>
+                <span className="text-slate-500 font-bold">Total Questions to Delete:</span>
+                <span className="font-black text-rose-600 text-sm">{deleteConfirmModal.count}</span>
               </div>
             </div>
 
@@ -2042,7 +2045,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 onClick={() => setDeleteConfirmModal(null)}
                 className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
               >
-                বাতিল করুন (Cancel)
+                Cancel
               </button>
               <button
                 type="button"
@@ -2054,7 +2057,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-extrabold shadow-md transition flex items-center gap-1.5 cursor-pointer"
               >
                 <Trash2 className="w-4 h-4" />
-                <span>হ্যাঁ, মুছে ফেলুন (Confirm Delete)</span>
+                <span>Confirm Delete</span>
               </button>
             </div>
           </div>
@@ -2078,10 +2081,10 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               </div>
               <div>
                 <h3 className="text-lg font-black text-slate-900">
-                  প্রশ্ন ব্যাংক এক্সপোর্ট (Export Excel)
+                  Export Excel
                 </h3>
                 <p className="text-xs text-slate-500 font-medium">
-                  ব্যাকআপ বা অফলাইন সংশোধনের জন্য এক্সেল (.xlsx) ফাইল ডাউনলোড করুন
+                  Download an Excel (.xlsx) file for backup or offline editing
                 </p>
               </div>
             </div>
@@ -2096,14 +2099,14 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                   <div className="space-y-0.5">
                     <span className="text-xs font-black text-indigo-950 block flex items-center gap-1.5">
                       <Check className="w-4 h-4 text-indigo-600" />
-                      সিলেক্ট করা প্রশ্নসমূহ এক্সপোর্ট করুন
+                      Export Selected Questions
                     </span>
                     <span className="text-[11px] text-indigo-700/80 font-medium block">
-                      আপনার ম্যানুয়ালি চেককৃত {selectedIds.size} টি প্রশ্ন
+                      {selectedIds.size} questions checked manually
                     </span>
                   </div>
                   <span className="px-3 py-1 bg-indigo-600 text-white text-xs font-extrabold rounded-lg shrink-0 shadow-xs">
-                    {selectedIds.size} টি
+                    {selectedIds.size}
                   </span>
                 </button>
               )}
@@ -2116,14 +2119,14 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 <div className="space-y-0.5">
                   <span className="text-xs font-black text-emerald-950 block flex items-center gap-1.5">
                     <Download className="w-4 h-4 text-emerald-600" />
-                    ফিল্টার করা প্রশ্নসমূহ এক্সপোর্ট করুন
+                    Export Filtered Questions
                   </span>
                   <span className="text-[11px] text-emerald-700/80 font-medium block">
-                    বর্তমানে সার্চ ও ফিল্টারে প্রদর্শিত {filteredQuestions.length} টি প্রশ্ন
+                    {filteredQuestions.length} questions matching search & filter
                   </span>
                 </div>
                 <span className="px-3 py-1 bg-emerald-600 text-white text-xs font-extrabold rounded-lg shrink-0 shadow-xs">
-                  {filteredQuestions.length} টি
+                  {filteredQuestions.length}
                 </span>
               </button>
 
@@ -2135,14 +2138,14 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 <div className="space-y-0.5">
                   <span className="text-xs font-black text-slate-900 block flex items-center gap-1.5">
                     <Database className="w-4 h-4 text-slate-600" />
-                    সম্পূর্ণ প্রশ্ন ব্যাংকের সকল প্রশ্ন (Full Backup)
+                    All Question Bank Questions (Full Backup)
                   </span>
                   <span className="text-[11px] text-slate-500 font-medium block">
-                    ডাটাবেজের সমস্ত {questions.length} টি প্রশ্নের সম্পূর্ণ ব্যাকআপ ফাইল
+                    Complete backup file of all {questions.length} questions in the database
                   </span>
                 </div>
                 <span className="px-3 py-1 bg-slate-800 text-white text-xs font-extrabold rounded-lg shrink-0 shadow-xs">
-                  {questions.length} টি
+                  {questions.length}
                 </span>
               </button>
             </div>
@@ -2153,7 +2156,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 onClick={() => setShowExportModal(false)}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
               >
-                বন্ধ করুন (Close)
+                Close
               </button>
             </div>
           </div>
