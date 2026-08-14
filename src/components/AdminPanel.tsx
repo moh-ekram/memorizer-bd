@@ -743,12 +743,12 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   };
 
   const processAccessRequest = async (req: AccessRequest, action: 'approve' | 'reject', overrideBalance?: number): Promise<boolean> => {
-    const finalPrice = overrideBalance !== undefined ? overrideBalance : (req.totalPrice || req.price || 0);
-    const userEmail = req.email.toLowerCase().trim();
-    const nowISO = new Date().toISOString();
     const isRecharge = req.courseId === 'wallet_recharge' || 
                        req.courseTitle?.toLowerCase().includes('recharge') ||
                        req.courseTitle?.toLowerCase().includes('wallet');
+    const finalPrice = overrideBalance !== undefined ? overrideBalance : ((req as any).amount || req.totalPrice || req.price || (isRecharge ? 50 : 30));
+    const userEmail = req.email.toLowerCase().trim();
+    const nowISO = new Date().toISOString();
 
     if (action === 'reject') {
       try {
@@ -3197,14 +3197,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                                 )}
                               </div>
                               <div className="text-[10px] text-emerald-700 font-bold font-mono">
-                                ৳{req.totalPrice || req.price} BDT
+                                ৳{(req as any).amount || req.totalPrice || req.price || 30} BDT
                               </div>
                             </div>
                           ) : (
                             <div>
                               <div className="font-extrabold text-slate-800 text-xs truncate max-w-[180px]" title={req.courseTitle}>{req.courseTitle}</div>
                               <div className="text-[10px] text-indigo-600 font-bold font-mono mt-0.5">
-                                ৳{req.totalPrice || req.price || 30} BDT
+                                ৳{(req as any).amount || req.totalPrice || req.price || (req.courseId === 'wallet_recharge' ? 50 : 30)} BDT
                               </div>
                             </div>
                           )}

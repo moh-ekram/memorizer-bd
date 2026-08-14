@@ -82,7 +82,7 @@ export const TransactionDebugger: React.FC<TransactionDebuggerProps> = ({
     return true;
   });
 
-  const totalPendingValue = pendingRecharges.reduce((sum, r) => sum + (r.totalPrice || r.price || 0), 0);
+  const totalPendingValue = pendingRecharges.reduce((sum, r) => sum + ((r as any).amount || r.totalPrice || r.price || 50), 0);
 
   return (
     <div className="space-y-6 font-sans">
@@ -278,7 +278,7 @@ export const TransactionDebugger: React.FC<TransactionDebuggerProps> = ({
                         </div>
                       </td>
                       <td className="px-3.5 py-3 font-mono font-extrabold text-emerald-700 text-sm">
-                        ৳{req.totalPrice || req.price || 50}
+                        ৳{(req as any).amount || req.totalPrice || req.price || 50}
                       </td>
                       <td className="px-3.5 py-3">
                         <div className="flex items-center gap-1.5 flex-wrap text-[10px]">

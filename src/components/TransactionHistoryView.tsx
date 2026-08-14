@@ -77,7 +77,7 @@ export default function TransactionHistoryView({
     );
     const approvedRechargeAmount = totalRecharges
       .filter(r => r.status === 'approved')
-      .reduce((sum, r) => sum + (r.price || r.totalPrice || 0), 0);
+      .reduce((sum, r) => sum + ((r as any).amount || r.totalPrice || r.price || 50), 0);
 
     return { total, pending, approved, rejected, approvedRechargeAmount };
   }, [requests]);
@@ -224,7 +224,7 @@ export default function TransactionHistoryView({
 
                       {/* Amount */}
                       <td className="py-3.5 px-4 font-black font-mono text-slate-900 text-sm">
-                        ৳{req.price || req.totalPrice || 0}
+                        ৳{(req as any).amount || req.totalPrice || req.price || (isRecharge ? 50 : 30)}
                       </td>
 
                       {/* bKash & TrxID */}

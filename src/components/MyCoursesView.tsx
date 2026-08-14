@@ -476,8 +476,9 @@ export default function MyCoursesView({
             status: 'pending',
             verificationMethod: 'manual',
             spent: false,
-            price: 0,
-            totalPrice: 0,
+            price: 50,
+            totalPrice: 50,
+            amount: 50,
             createdAt: nowISO,
             requestedBy: user?.email || cleanEmail
           }, { merge: true });
@@ -629,8 +630,9 @@ export default function MyCoursesView({
             status: 'pending',
             verificationMethod: 'manual',
             spent: false,
-            price: 0,
-            totalPrice: 0,
+            price: 50,
+            totalPrice: 50,
+            amount: 50,
             createdAt: nowISO,
             requestedBy: user?.email || cleanEmail
           });
