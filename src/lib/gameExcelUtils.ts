@@ -847,9 +847,9 @@ export function downloadQuestionBankExcelTemplate() {
       'Option D (অপশন ঘ)',
       'Correct Answer (সঠিক উত্তর A/B/C/D)',
       'Explanation (ব্যাখ্যা)',
-      'Group 1 / Subject (বিষয়)',
-      'Group 2 / Topic (অধ্যায়/টপিক)',
-      'Group 3 / Difficulty or Category (ক্যাটাগরি)'
+      'Suitable Course',
+      'Q.Type',
+      'Others'
     ],
     [
       'qb-101',
@@ -860,9 +860,9 @@ export function downloadQuestionBankExcelTemplate() {
       'Optional',
       'A',
       'Explicit means clear, precise, and leaving no room for doubt.',
-      'English',
-      'Vocabulary',
-      'BCS'
+      'BCS',
+      'MCQ',
+      'English'
     ],
     [
       'qb-102',
@@ -873,22 +873,35 @@ export function downloadQuestionBankExcelTemplate() {
       'কবর',
       'A',
       'অগ্নিবীণা কাজী নজরুল ইসলামের প্রথম কাব্যগ্রন্থ (১৯২২)।',
-      'Bangla',
-      'Literature',
-      'BCS'
+      'সমাস',
+      'Blank filling',
+      'বাংলা সাহিত্য (২০২৪)'
     ],
     [
       'qb-103',
-      'x + y = 10 এবং x - y = 4 হলে x এর মান কত?',
-      '7',
-      '3',
-      '6',
-      '14',
+      'Analogy: LIGHT : BLIND :: SOUND : ?',
+      'Deaf',
+      'Silence',
+      'Quiet',
+      'Noise',
       'A',
-      '২x = ১৪ => x = ৭',
-      'Math',
-      'Algebra',
-      'Bank'
+      'Deaf lacks hearing sound, just as blind lacks seeing light.',
+      'IELTS',
+      'Analogy',
+      '2025'
+    ],
+    [
+      'qb-104',
+      'কোন বানানটি সঠিক?',
+      'স্বায়ত্তশাসন',
+      'স্বায়ত্বশাসন',
+      'সায়ত্বশাসন',
+      'স্বায়ত্ব শাসন',
+      'A',
+      'সঠিক বানান হলো "স্বায়ত্তশাসন"।',
+      'বানান',
+      'MCQ',
+      'বাংলা ব্যাকরণ'
     ]
   ];
   const ws = utils.aoa_to_sheet(sampleData);
@@ -921,9 +934,9 @@ export async function parseQuestionBankExcel(file: File): Promise<QuestionBankIt
   const optDCol = findCol(['option d', 'option 4', 'অপশন ঘ', 'অপশন ৪', 'opt d', 'd']);
   const ansCol = findCol(['correct', 'answer', 'সঠিক', 'উত্তর', 'ans']);
   const expCol = findCol(['exp', 'explanation', 'ব্যাখ্যা']);
-  const g1Col = findCol(['group 1', 'group1', 'subject', 'বিষয়', 'গ্রুপ ১', 'গ্রুপ১']);
-  const g2Col = findCol(['group 2', 'group2', 'topic', 'অধ্যায়', 'টপিক', 'গ্রুপ ২', 'গ্রুপ২']);
-  const g3Col = findCol(['group 3', 'group3', 'difficulty', 'category', 'tag', 'ক্যাটাগরি', 'গ্রুপ ৩', 'গ্রুপ৩']);
+  const g1Col = findCol(['suitable course', 'suitable_course', 'suitablecourse', 'suitable', 'course', 'group 1', 'group1', 'subject', 'বিষয়', 'গ্রুপ ১', 'গ্রুপ১']);
+  const g2Col = findCol(['q.type', 'q type', 'qtype', 'q_type', 'question type', 'q-type', 'type', 'group 2', 'group2', 'topic', 'অধ্যায়', 'টপিক', 'গ্রুপ ২', 'গ্রুপ২']);
+  const g3Col = findCol(['others', 'other', 'group 3', 'group3', 'difficulty', 'category', 'tag', 'ক্যাটাগরি', 'গ্রুপ ৩', 'গ্রুপ৩', 'সাল', 'year']);
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];

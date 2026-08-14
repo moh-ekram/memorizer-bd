@@ -53,6 +53,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
   // Upload & Upload Status
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const [showGuidelineModal, setShowGuidelineModal] = useState(false);
 
   // Manual Add/Edit Form State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -726,7 +727,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 />
               </div>
 
-              {/* Group 1 Filter */}
+              {/* Suitable Course Filter */}
               <select
                 value={filterGroup1}
                 onChange={(e) => {
@@ -736,13 +737,13 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 }}
                 className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500"
               >
-                <option value="all">সব বিষয় (Group 1)</option>
+                <option value="all">সব Suitable Course</option>
                 {uniqueGroups1.map(g => (
                   <option key={g} value={g}>{g}</option>
                 ))}
               </select>
 
-              {/* Group 2 Filter */}
+              {/* Q.Type Filter */}
               <select
                 value={filterGroup2}
                 onChange={(e) => {
@@ -751,19 +752,19 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 }}
                 className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500"
               >
-                <option value="all">সব টপিক (Group 2)</option>
+                <option value="all">সব Q.Type (প্রশ্নের ধরণ)</option>
                 {uniqueGroups2.map(g => (
                   <option key={g} value={g}>{g}</option>
                 ))}
               </select>
 
-              {/* Group 3 Filter */}
+              {/* Others Filter */}
               <select
                 value={filterGroup3}
                 onChange={(e) => setFilterGroup3(e.target.value)}
                 className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500"
               >
-                <option value="all">সব ক্যাটাগরি (Group 3)</option>
+                <option value="all">সব Others (অন্যান্য/সাল)</option>
                 {uniqueGroups3.map(g => (
                   <option key={g} value={g}>{g}</option>
                 ))}
@@ -779,6 +780,15 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               >
                 <Download className="w-3.5 h-3.5 text-indigo-600" />
                 <span>টেমপ্লেট ডাউনলোড</span>
+              </button>
+
+              <button
+                onClick={() => setShowGuidelineModal(true)}
+                className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-indigo-200/80 shadow-xs"
+                title="এক্সেল আপলোড লিখিত গাইডলাইন দেখুন"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
+                <span>লিখিত গাইডলাইন</span>
               </button>
 
               <label className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold shadow-sm transition flex items-center gap-1.5 cursor-pointer shrink-0">
@@ -817,16 +827,16 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               <span className="text-xl font-black text-indigo-600">{questions.length} টি</span>
             </div>
             <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-sm space-y-1">
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">বিষয় (Group 1)</span>
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">Suitable Course</span>
               <span className="text-xl font-black text-slate-800">{uniqueGroups1.length} টি</span>
             </div>
             <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-sm space-y-1">
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">টপিক (Group 2)</span>
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">Q.Type</span>
               <span className="text-xl font-black text-slate-800">{uniqueGroups2.length} টি</span>
             </div>
             <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-sm space-y-1">
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">ফিল্টার করা দেখাচ্ছে</span>
-              <span className="text-xl font-black text-emerald-600">{filteredQuestions.length} টি</span>
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">Others (অন্যান্য)</span>
+              <span className="text-xl font-black text-slate-800">{uniqueGroups3.length} টি</span>
             </div>
           </div>
 
@@ -879,9 +889,9 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                     </th>
                     <th className="p-3 min-w-[240px]">প্রশ্ন (Question)</th>
                     <th className="p-3 min-w-[200px]">অপশনসমূহ & উত্তর</th>
-                    <th className="p-3 w-36">গ্রুপ/বিষয়</th>
-                    <th className="p-3 w-36">টপিক/অধ্যায়</th>
-                    <th className="p-3 w-32">ক্যাটাগরি</th>
+                    <th className="p-3 w-36">Suitable Course</th>
+                    <th className="p-3 w-36">Q.Type</th>
+                    <th className="p-3 w-32">Others</th>
                     <th className="p-3 w-20 text-center">অ্যাকশন</th>
                   </tr>
                 </thead>
@@ -1096,45 +1106,45 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                       </span>
 
                       <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 flex-1">
-                        {/* Group 1 */}
+                        {/* Suitable Course */}
                         <div>
-                          <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">Group 1 / বিষয়</label>
+                          <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">Suitable Course</label>
                           <select
                             value={rule.group1 || 'all'}
                             onChange={(e) => handleRuleChange(rule.id, 'group1', e.target.value)}
                             className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
                           >
-                            <option value="all">সব বিষয় (Any Subject)</option>
+                            <option value="all">সব Suitable Course</option>
                             {uniqueGroups1.map(g => (
                               <option key={g} value={g}>{g}</option>
                             ))}
                           </select>
                         </div>
 
-                        {/* Group 2 */}
+                        {/* Q.Type */}
                         <div>
-                          <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">Group 2 / টপিক</label>
+                          <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">Q.Type</label>
                           <select
                             value={rule.group2 || 'all'}
                             onChange={(e) => handleRuleChange(rule.id, 'group2', e.target.value)}
                             className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
                           >
-                            <option value="all">সব টপিক (Any Topic)</option>
+                            <option value="all">সব Q.Type (প্রশ্নের ধরণ)</option>
                             {uniqueGroups2.map(g => (
                               <option key={g} value={g}>{g}</option>
                             ))}
                           </select>
                         </div>
 
-                        {/* Group 3 */}
+                        {/* Others */}
                         <div>
-                          <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">Group 3 / ক্যাটাগরি</label>
+                          <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">Others</label>
                           <select
                             value={rule.group3 || 'all'}
                             onChange={(e) => handleRuleChange(rule.id, 'group3', e.target.value)}
                             className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
                           >
-                            <option value="all">সব ক্যাটাগরি (Any Tag)</option>
+                            <option value="all">সব Others (অন্যান্য)</option>
                             {uniqueGroups3.map(g => (
                               <option key={g} value={g}>{g}</option>
                             ))}
@@ -1599,32 +1609,32 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               {/* Group Metadata */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-extrabold text-slate-600 block">Group 1 (বিষয়)</label>
+                  <label className="text-[11px] font-extrabold text-slate-600 block">Suitable Course</label>
                   <input
                     type="text"
                     value={formData.group1}
                     onChange={(e) => setFormData({ ...formData, group1: e.target.value })}
-                    placeholder="e.g. English, Bangla"
+                    placeholder="e.g. BCS, Bank, সমাস, বাগধারা, IELTS"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] font-extrabold text-slate-600 block">Group 2 (টপিক)</label>
+                  <label className="text-[11px] font-extrabold text-slate-600 block">Q.Type</label>
                   <input
                     type="text"
                     value={formData.group2}
                     onChange={(e) => setFormData({ ...formData, group2: e.target.value })}
-                    placeholder="e.g. Grammar, Algebra"
+                    placeholder="e.g. MCQ, Blank filling, OOO, Analogy"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] font-extrabold text-slate-600 block">Group 3 (ক্যাটাগরি)</label>
+                  <label className="text-[11px] font-extrabold text-slate-600 block">Others</label>
                   <input
                     type="text"
                     value={formData.group3}
                     onChange={(e) => setFormData({ ...formData, group3: e.target.value })}
-                    placeholder="e.g. BCS, Bank, Varsity"
+                    placeholder="e.g. Subject, 2024, Exam Note"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"
                   />
                 </div>
@@ -1647,6 +1657,150 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* EXCEL GUIDELINE MODAL */}
+      {showGuidelineModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 space-y-5 shadow-2xl relative animate-scaleUp">
+            <button
+              onClick={() => setShowGuidelineModal(false)}
+              className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-600 rounded-full transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900">
+                  এক্সেল আপলোড লিখিত নির্দেশিকা (Excel Guidelines)
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  এক্সেল ফাইলে প্রশ্ন সাজানোর নিয়ম এবং প্রতিটি কলামের বিকল্প নামের তালিকা।
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1 text-xs text-slate-700">
+              <div className="p-3.5 bg-indigo-50/70 border border-indigo-100 rounded-2xl space-y-1">
+                <p className="font-extrabold text-indigo-950 flex items-center gap-1.5">
+                  <Info className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span>কলামের মূল নামসমূহ ও ফরম্যাট:</span>
+                </p>
+                <p className="text-[11px] text-indigo-900 leading-relaxed">
+                  এক্সেল ফাইলের ১ম সারিতে (Header row) কলামগুলোর নাম থাকবে। সিস্টেমে স্বয়ংক্রিয় কলাম শনাক্তকরণের সুবিধা রয়েছে, তাই নিচের বিকল্প নামগুলোর যেকোনোটি ব্যবহার করতে পারবেন।
+                </p>
+              </div>
+
+              <div className="space-y-2.5 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
+                <h4 className="font-black text-slate-900 text-xs border-b border-slate-200/60 pb-2">
+                  সবগুলো কলামের তালিকা ও বিকল্প নামসূচক চিহ্ন:
+                </h4>
+
+                <ul className="space-y-2 text-slate-700 font-medium leading-relaxed">
+                  <li className="flex items-start gap-2">
+                    <span className="text-indigo-600 font-bold shrink-0">•</span>
+                    <div>
+                      <strong className="text-slate-900">Question ID / ID / Serial / SL:</strong> (ঐচ্ছিক) প্রশ্নের অনন্য আইডি (যেমন: <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">qb-101</code>)। ঘর ফাঁকা রাখলে অটো জেনারেট হবে।
+                    </div>
+                  </li>
+
+                  <li className="flex items-start gap-2">
+                    <span className="text-indigo-600 font-bold shrink-0">•</span>
+                    <div>
+                      <strong className="text-slate-900">Question / Question (প্রশ্ন) / QText / প্রশ্ন:</strong> (আবশ্যক) মূল প্রশ্ন বা স্টেটমেন্ট লিখুন।
+                    </div>
+                  </li>
+
+                  <li className="flex items-start gap-2">
+                    <span className="text-indigo-600 font-bold shrink-0">•</span>
+                    <div>
+                      <strong className="text-slate-900">Option A / Option A (অপশন ক) / Opt A / A / অপশন ১:</strong> (আবশ্যক) প্রথম উত্তর বিকল্প।
+                    </div>
+                  </li>
+
+                  <li className="flex items-start gap-2">
+                    <span className="text-indigo-600 font-bold shrink-0">•</span>
+                    <div>
+                      <strong className="text-slate-900">Option B / Option B (অপশন খ) / Opt B / B / অপশন ২:</strong> (আবশ্যক) দ্বিতীয় উত্তর বিকল্প।
+                    </div>
+                  </li>
+
+                  <li className="flex items-start gap-2">
+                    <span className="text-indigo-600 font-bold shrink-0">•</span>
+                    <div>
+                      <strong className="text-slate-900">Option C / Option C (অপশন গ) / Opt C / C / অপশন ৩:</strong> (আবশ্যক) তৃতীয় বিকল্প (না থাকলে N/A লিখুন)।
+                    </div>
+                  </li>
+
+                  <li className="flex items-start gap-2">
+                    <span className="text-indigo-600 font-bold shrink-0">•</span>
+                    <div>
+                      <strong className="text-slate-900">Option D / Option D (অপশন ঘ) / Opt D / D / অপশন ৪:</strong> (আবশ্যক) চতুর্থ বিকল্প (না থাকলে N/A লিখুন)।
+                    </div>
+                  </li>
+
+                  <li className="flex items-start gap-2">
+                    <span className="text-indigo-600 font-bold shrink-0">•</span>
+                    <div>
+                      <strong className="text-slate-900">Correct Answer / Correct / Answer / Ans / সঠিক উত্তর:</strong> (আবশ্যক) সঠিক উত্তর। ইংরেজি অক্ষর (<code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">A</code>, <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">B</code>, <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">C</code>, <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">D</code>) অথবা অপশনের লেখা লিখুন।
+                    </div>
+                  </li>
+
+                  <li className="flex items-start gap-2">
+                    <span className="text-indigo-600 font-bold shrink-0">•</span>
+                    <div>
+                      <strong className="text-slate-900">Explanation / Explanation (ব্যাখ্যা) / Exp / ব্যাখ্যা:</strong> (ঐচ্ছিক) প্রশ্নের বিস্তারিত ব্যাখ্যা।
+                    </div>
+                  </li>
+
+                  <li className="flex items-start gap-2">
+                    <span className="text-indigo-600 font-bold shrink-0">•</span>
+                    <div>
+                      <strong className="text-slate-900">Suitable Course / Course / Suitable_Course / গ্রুপ / Subject / বিষয়:</strong> (আবশ্যক/ঐচ্ছিক) কোর্স বা ক্যাটাগরি (যেমন: <span className="text-indigo-700 font-bold">BCS</span>, <span className="text-indigo-700 font-bold">Bank</span>, <span className="text-indigo-700 font-bold">সমাস</span>, <span className="text-indigo-700 font-bold">বাগধারা</span>, <span className="text-indigo-700 font-bold">IELTS</span> ইত্যাদি)।
+                    </div>
+                  </li>
+
+                  <li className="flex items-start gap-2">
+                    <span className="text-indigo-600 font-bold shrink-0">•</span>
+                    <div>
+                      <strong className="text-slate-900">Q.Type / Question Type / QType / Q_Type / টাইপ / Topic / টপিক:</strong> (আবশ্যক/ঐচ্ছিক) প্রশ্নের ধরণ বা ফরম্যাট (যেমন: <span className="text-indigo-700 font-bold">MCQ</span>, <span className="text-indigo-700 font-bold">Blank filling</span>, <span className="text-indigo-700 font-bold">OOO</span>, <span className="text-indigo-700 font-bold">Analogy</span> ইত্যাদি)।
+                    </div>
+                  </li>
+
+                  <li className="flex items-start gap-2">
+                    <span className="text-indigo-600 font-bold shrink-0">•</span>
+                    <div>
+                      <strong className="text-slate-900">Others / Other / Subject / Year / ক্যাটাগরি / Tag / সাল:</strong> (ঐচ্ছিক) অন্যান্য মেটাডেটা যেমন বিষয়, সাল বা অন্যান্য নোট (যেমন: <span className="text-indigo-700 font-bold">বাংলা সাহিত্য</span>, <span className="text-indigo-700 font-bold">2024</span>, <span className="text-indigo-700 font-bold">৩৮তম বিসিএস</span> ইত্যাদি)।
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
+              <button
+                type="button"
+                onClick={downloadQuestionBankExcelTemplate}
+                className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>স্যাম্পল এক্সেল ডাউনলোড</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowGuidelineModal(false)}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
+              >
+                ঠিক আছে
+              </button>
+            </div>
           </div>
         </div>
       )}
