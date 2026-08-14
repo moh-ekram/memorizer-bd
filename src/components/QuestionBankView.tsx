@@ -57,6 +57,17 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
   const [showGuidelineModal, setShowGuidelineModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
 
+  // Upload Preview State
+  const [pendingUploadQuestions, setPendingUploadQuestions] = useState<QuestionBankItem[]>([]);
+  const [showUploadPreviewModal, setShowUploadPreviewModal] = useState(false);
+  const [previewSearch, setPreviewSearch] = useState('');
+  const [previewPage, setPreviewPage] = useState(1);
+  const PREVIEW_ITEMS_PER_PAGE = 15;
+
+  // Title and Duration auto sync state flags
+  const [isTitleUserEdited, setIsTitleUserEdited] = useState(false);
+  const [isDurationUserEdited, setIsDurationUserEdited] = useState(false);
+
   const handleExportQuestions = (type: 'all' | 'filtered' | 'selected') => {
     let listToExport: QuestionBankItem[] = [];
     let fileSuffix = '';
@@ -127,6 +138,40 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
   const [rules, setRules] = useState<QuestionBankRule[]>([
     { id: 'rule-1', group1: 'all', group2: 'all', group3: 'all', count: 10 }
   ]);
+
+  // Helper to generate exam title from selected rule categories
+  const generateTitleFromRules = (rulesList: QuestionBankRule[]): string => {
+    const g1Set = new Set<string>();
+    const g2Set = new Set<string>();
+    const g3Set = new Set<string>();
+
+    rulesList.forEach(r => {
+      if (r.group1 && r.group1 !== 'all') g1Set.add(r.group1);
+      if (r.group2 && r.group2 !== 'all') g2Set.add(r.group2);
+      if (r.group3 && r.group3 !== 'all') g3Set.add(r.group3);
+    });
+
+    const parts: string[] = [];
+    if (g2Set.size > 0) parts.push(Array.from(g2Set).join(', '));
+    if (g1Set.size > 0) parts.push(Array.from(g1Set).join(', '));
+    if (g3Set.size > 0) parts.push(Array.from(g3Set).join(', '));
+
+    return parts.join(' ').trim();
+  };
+
+  // Auto-sync duration (1 minute per question) and exam title based on rules
+  useEffect(() => {
+    if (!isDurationUserEdited) {
+      const totalRuleQuestions = rules.reduce((acc, r) => acc + (Number(r.count) || 0), 0);
+      setDurationMinutes(totalRuleQuestions > 0 ? totalRuleQuestions : 10);
+    }
+    if (!isTitleUserEdited) {
+      const autoTitle = generateTitleFromRules(rules);
+      if (autoTitle) {
+        setExamTitle(autoTitle);
+      }
+    }
+  }, [rules, isDurationUserEdited, isTitleUserEdited]);
 
   // Generated Exam Preview State
   const [creationMode, setCreationMode] = useState<'selected' | 'random'>('selected');
@@ -328,7 +373,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     });
   }, [questions, filterGroup1, filterGroup2, filterGroup3, searchQuery]);
 
-  // Handle Excel Upload
+  // Handle Excel Upload -> Parse and Open Preview Modal
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -345,31 +390,55 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
         return;
       }
 
-      setUploadStatus(`Saving total ${parsed.length} questions...`);
+      setPendingUploadQuestions(parsed);
+      setPreviewSearch('');
+      setPreviewPage(1);
+      setShowUploadPreviewModal(true);
+      setUploadStatus(null);
+    } catch (err: any) {
+      console.error('Upload notice:', err);
+      alert('Failed to parse Excel file. Please check column layout.');
+      setUploadStatus(null);
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
+    }
+  };
 
+  // Confirm and Save Uploaded Questions to Database
+  const handleConfirmUpload = async () => {
+    if (pendingUploadQuestions.length === 0) return;
+
+    setIsUploading(true);
+    setUploadStatus(`Saving ${pendingUploadQuestions.length} questions...`);
+
+    try {
       // 1. Update local state & local storage immediately
       const existingMap = new Map(questions.map(q => [q.id, q]));
-      parsed.forEach(q => existingMap.set(q.id, q));
+      pendingUploadQuestions.forEach(q => existingMap.set(q.id, q));
       const updatedList = Array.from(existingMap.values());
       setQuestions(updatedList);
       safeSetLocalStorage('local_question_bank', JSON.stringify(updatedList));
 
       // 2. Try batch save to Firestore safely
       try {
-        await saveBulkDocs('question_bank', parsed);
+        await saveBulkDocs('question_bank', pendingUploadQuestions);
       } catch (fsErr) {
         console.warn('Cloud batch save notice (saved locally):', fsErr);
       }
 
-      setUploadStatus(`Successfully generated and saved ${parsed.length} questions!`);
+      setUploadStatus(`Successfully generated and saved ${pendingUploadQuestions.length} questions!`);
       setTimeout(() => setUploadStatus(null), 3500);
+      setShowUploadPreviewModal(false);
+      setPendingUploadQuestions([]);
     } catch (err: any) {
       console.error('Upload notice:', err);
       setUploadStatus('Questions saved to local device storage.');
       setTimeout(() => setUploadStatus(null), 3000);
+      setShowUploadPreviewModal(false);
+      setPendingUploadQuestions([]);
     } finally {
       setIsUploading(false);
-      e.target.value = '';
     }
   };
 
@@ -781,6 +850,28 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       setIsPublishing(false);
     }
   };
+
+  // Upload Preview Memos
+  const filteredPreviewQuestions = useMemo(() => {
+    if (!previewSearch.trim()) return pendingUploadQuestions;
+    const q = previewSearch.toLowerCase().trim();
+    return pendingUploadQuestions.filter(item => 
+      item.question.toLowerCase().includes(q) ||
+      item.optionA.toLowerCase().includes(q) ||
+      item.optionB.toLowerCase().includes(q) ||
+      item.optionC.toLowerCase().includes(q) ||
+      item.optionD.toLowerCase().includes(q) ||
+      (item.group1 && item.group1.toLowerCase().includes(q)) ||
+      (item.group2 && item.group2.toLowerCase().includes(q)) ||
+      (item.group3 && item.group3.toLowerCase().includes(q))
+    );
+  }, [pendingUploadQuestions, previewSearch]);
+
+  const totalPreviewPages = Math.ceil(filteredPreviewQuestions.length / PREVIEW_ITEMS_PER_PAGE) || 1;
+  const currentPreviewItems = useMemo(() => {
+    const start = (previewPage - 1) * PREVIEW_ITEMS_PER_PAGE;
+    return filteredPreviewQuestions.slice(start, start + PREVIEW_ITEMS_PER_PAGE);
+  }, [filteredPreviewQuestions, previewPage]);
 
   return (
     <div className="space-y-6">
@@ -1204,23 +1295,75 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
               {/* Exam Title */}
               <div className="space-y-1.5 md:col-span-2">
-                <label className="text-xs font-extrabold text-slate-700 block">Exam Title</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-extrabold text-slate-700 block">
+                    Exam Title (Title)
+                  </label>
+                  {isTitleUserEdited ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsTitleUserEdited(false);
+                        const auto = generateTitleFromRules(rules);
+                        if (auto) setExamTitle(auto);
+                      }}
+                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-extrabold flex items-center gap-1 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>Reset Auto Title</span>
+                    </button>
+                  ) : (
+                    <span className="text-[10px] text-indigo-600 font-extrabold bg-indigo-50 px-1.5 py-0.5 rounded">
+                      Auto-synced from Rules
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={examTitle}
-                  onChange={(e) => setExamTitle(e.target.value)}
-                  placeholder="e.g. BCS Special Practice Exam 01"
+                  onChange={(e) => {
+                    setExamTitle(e.target.value);
+                    if (e.target.value.trim() === '') {
+                      setIsTitleUserEdited(false);
+                    } else {
+                      setIsTitleUserEdited(true);
+                    }
+                  }}
+                  placeholder="e.g. 50th BCS English"
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               {/* Duration Minutes */}
               <div className="space-y-1.5">
-                <label className="text-xs font-extrabold text-slate-700 block">Duration (Minutes)</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-extrabold text-slate-700 block">Duration (Minutes)</label>
+                  {isDurationUserEdited ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsDurationUserEdited(false);
+                        const totalRuleQuestions = rules.reduce((acc, r) => acc + (Number(r.count) || 0), 0);
+                        setDurationMinutes(totalRuleQuestions > 0 ? totalRuleQuestions : 10);
+                      }}
+                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-extrabold flex items-center gap-1 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>Reset 1 min/q</span>
+                    </button>
+                  ) : (
+                    <span className="text-[10px] text-emerald-600 font-extrabold bg-emerald-50 px-1.5 py-0.5 rounded">
+                      1 min/q default
+                    </span>
+                  )}
+                </div>
                 <input
                   type="number"
                   value={durationMinutes}
-                  onChange={(e) => setDurationMinutes(Number(e.target.value))}
+                  onChange={(e) => {
+                    setDurationMinutes(Number(e.target.value));
+                    setIsDurationUserEdited(true);
+                  }}
                   min={1}
                   max={300}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
@@ -2158,6 +2301,212 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EXCEL UPLOAD PREVIEW MODAL */}
+      {showUploadPreviewModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl relative animate-scaleUp border border-slate-100 overflow-hidden">
+            {/* Header */}
+            <div className="p-5 sm:p-6 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between gap-4 shrink-0 border-b border-indigo-900/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-600/30 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shrink-0">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-black text-white">Question Upload Preview</h3>
+                    <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-xs font-black">
+                      {pendingUploadQuestions.length} Questions Parsed
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 font-medium mt-0.5">
+                    Review parsed Excel questions before confirming save to Question Bank
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUploadPreviewModal(false);
+                  setPendingUploadQuestions([]);
+                }}
+                className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Summary & Search Bar */}
+            <div className="p-4 sm:p-5 bg-slate-50 border-b border-slate-200/80 shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-extrabold text-slate-700 shadow-2xs">
+                  Total Parsed: <strong className="text-indigo-600 font-black">{pendingUploadQuestions.length}</strong>
+                </span>
+                <span className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-600 shadow-2xs">
+                  Suitable Courses: <strong className="text-slate-900">{new Set(pendingUploadQuestions.map(q => q.group1 || 'General')).size}</strong>
+                </span>
+                <span className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-600 shadow-2xs">
+                  Q.Types: <strong className="text-slate-900">{new Set(pendingUploadQuestions.map(q => q.group2 || 'General')).size}</strong>
+                </span>
+                <span className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-600 shadow-2xs">
+                  Categories: <strong className="text-slate-900">{new Set(pendingUploadQuestions.map(q => q.group3 || 'General')).size}</strong>
+                </span>
+              </div>
+
+              <div className="relative min-w-[240px]">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={previewSearch}
+                  onChange={(e) => {
+                    setPreviewSearch(e.target.value);
+                    setPreviewPage(1);
+                  }}
+                  placeholder="Search parsed questions..."
+                  className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-500 shadow-2xs"
+                />
+              </div>
+            </div>
+
+            {/* Questions Table */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3 min-h-[250px]">
+              {currentPreviewItems.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 font-bold text-sm">
+                  No matching questions found for "{previewSearch}".
+                </div>
+              ) : (
+                <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-100/80 text-[11px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                        <th className="p-3 w-12 text-center">#</th>
+                        <th className="p-3">Question & Options</th>
+                        <th className="p-3 w-32">Suitable Course</th>
+                        <th className="p-3 w-32">Q.Type</th>
+                        <th className="p-3 w-32">Others</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs">
+                      {currentPreviewItems.map((q, idx) => {
+                        const globalIdx = (previewPage - 1) * PREVIEW_ITEMS_PER_PAGE + idx + 1;
+                        return (
+                          <tr key={q.id || idx} className="hover:bg-slate-50/80 transition">
+                            <td className="p-3 text-center font-extrabold text-slate-400">
+                              {globalIdx}
+                            </td>
+                            <td className="p-3 space-y-2">
+                              <p className="font-extrabold text-slate-900 leading-relaxed">
+                                {q.question}
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
+                                <div className={`px-2 py-1 rounded-lg border ${q.correctAnswer === q.optionA ? 'bg-emerald-50 border-emerald-200 font-extrabold text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                                  A: {q.optionA} {q.correctAnswer === q.optionA && '✓ (Correct)'}
+                                </div>
+                                <div className={`px-2 py-1 rounded-lg border ${q.correctAnswer === q.optionB ? 'bg-emerald-50 border-emerald-200 font-extrabold text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                                  B: {q.optionB} {q.correctAnswer === q.optionB && '✓ (Correct)'}
+                                </div>
+                                {q.optionC && (
+                                  <div className={`px-2 py-1 rounded-lg border ${q.correctAnswer === q.optionC ? 'bg-emerald-50 border-emerald-200 font-extrabold text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                                    C: {q.optionC} {q.correctAnswer === q.optionC && '✓ (Correct)'}
+                                  </div>
+                                )}
+                                {q.optionD && (
+                                  <div className={`px-2 py-1 rounded-lg border ${q.correctAnswer === q.optionD ? 'bg-emerald-50 border-emerald-200 font-extrabold text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                                    D: {q.optionD} {q.correctAnswer === q.optionD && '✓ (Correct)'}
+                                  </div>
+                                )}
+                              </div>
+                              {q.explanation && (
+                                <p className="text-[11px] text-slate-500 italic bg-amber-50/60 border border-amber-200/60 p-2 rounded-xl">
+                                  💡 <strong>Explanation:</strong> {q.explanation}
+                                </p>
+                              )}
+                            </td>
+                            <td className="p-3 align-top">
+                              <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 font-extrabold rounded-lg text-[10px] inline-block">
+                                {q.group1 || 'General'}
+                              </span>
+                            </td>
+                            <td className="p-3 align-top">
+                              <span className="px-2.5 py-1 bg-slate-100 text-slate-700 font-bold rounded-lg text-[10px] inline-block">
+                                {q.group2 || 'General'}
+                              </span>
+                            </td>
+                            <td className="p-3 align-top">
+                              <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 font-bold rounded-lg text-[10px] inline-block">
+                                {q.group3 || 'General'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Footer with Pagination & Action Buttons */}
+            <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200/80 shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3">
+              {/* Pagination */}
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                <span>Page {previewPage} of {totalPreviewPages}</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={previewPage <= 1}
+                    onClick={() => setPreviewPage(p => Math.max(1, p - 1))}
+                    className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold disabled:opacity-40 cursor-pointer"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    disabled={previewPage >= totalPreviewPages}
+                    onClick={() => setPreviewPage(p => Math.min(totalPreviewPages, p + 1))}
+                    className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold disabled:opacity-40 cursor-pointer"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUploadPreviewModal(false);
+                    setPendingUploadQuestions([]);
+                  }}
+                  className="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-extrabold transition cursor-pointer"
+                >
+                  Cancel & Discard
+                </button>
+                <button
+                  type="button"
+                  disabled={isUploading || pendingUploadQuestions.length === 0}
+                  onClick={handleConfirmUpload}
+                  className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-lg transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isUploading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Saving Questions...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Confirm & Save All ({pendingUploadQuestions.length})</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
