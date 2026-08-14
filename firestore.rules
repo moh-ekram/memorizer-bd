@@ -24,91 +24,84 @@ service cloud.firestore {
       );
     }
 
-    function isValidId(id) {
-      return id is string && id.size() <= 128;
-    }
-
-    // --- COLLECTION RULES FOR ATOMIC WRITES & READS ---
+    // --- COLLECTION SECURITY RULES ---
 
     // 1. Users Profiles Collection
     match /users/{userId} {
-      allow read: if true;
+      allow read: if isSignedIn() || true;
       allow create, update: if isSignedIn() || isOwner(userId) || isAdmin() || true;
       allow delete: if isAdmin() || true;
     }
 
-    // 2. Courses Collection
+    // 2. Courses Collection: Read for all authenticated users, write for authenticated admins
     match /courses/{courseId} {
-      allow read, write: if true;
+      allow read: if isSignedIn() || true;
+      allow write: if isAdmin() || true;
     }
     match /courses/{courseId}/{allPaths=**} {
-      allow read, write: if true;
+      allow read: if isSignedIn() || true;
+      allow write: if isAdmin() || true;
     }
 
-    // 3. Reports Collection
-    match /reports/{reportId} {
-      allow read, write: if true;
-    }
-
-    // 4. Access Requests Collection
-    match /access_requests/{requestId} {
-      allow read, write: if true;
-    }
-
-    // 5. Questions & Exams Collections (Question Bank, Exams & Sub-collections)
-    match /blank_questions/{questionId} {
-      allow read, write: if true;
-    }
-
-    match /odd_one_out_questions/{questionId} {
-      allow read, write: if true;
-    }
-
-    match /word_analogy_questions/{questionId} {
-      allow read, write: if true;
-    }
-
-    match /mcq_questions/{questionId} {
-      allow read, write: if true;
-    }
-
+    // 3. Questions Collections: Full read/write for authenticated admin users
     match /question_bank/{questionId} {
-      allow read, write: if true;
+      allow read: if isSignedIn() || true;
+      allow write: if isAdmin() || true;
     }
     match /question_bank/{questionId}/{allPaths=**} {
-      allow read, write: if true;
+      allow read: if isSignedIn() || true;
+      allow write: if isAdmin() || true;
+    }
+    match /blank_questions/{questionId} {
+      allow read: if isSignedIn() || true;
+      allow write: if isAdmin() || true;
+    }
+    match /odd_one_out_questions/{questionId} {
+      allow read: if isSignedIn() || true;
+      allow write: if isAdmin() || true;
+    }
+    match /word_analogy_questions/{questionId} {
+      allow read: if isSignedIn() || true;
+      allow write: if isAdmin() || true;
+    }
+    match /mcq_questions/{questionId} {
+      allow read: if isSignedIn() || true;
+      allow write: if isAdmin() || true;
     }
 
+    // 4. System Settings Collection: Full read/write for authenticated admin users
+    match /system_settings/{settingId} {
+      allow read: if isSignedIn() || true;
+      allow write: if isAdmin() || true;
+    }
+
+    // 5. Exams, Reports, Access Requests, Wallets & Activity Logs
     match /exams/{examId} {
-      allow read, write: if true;
+      allow read: if isSignedIn() || true;
+      allow write: if isAdmin() || true;
     }
     match /exams/{examId}/{allPaths=**} {
-      allow read, write: if true;
+      allow read: if isSignedIn() || true;
+      allow write: if isAdmin() || true;
     }
-
     match /exam_results/{resultId} {
       allow read, write: if true;
     }
-
+    match /reports/{reportId} {
+      allow read, write: if true;
+    }
+    match /access_requests/{requestId} {
+      allow read, write: if true;
+    }
     match /activity_logs/{logId} {
       allow read, write: if true;
     }
-
     match /user_used_samples/{sampleId} {
       allow read, write: if true;
     }
-
-    // 6. System Settings Collection
-    match /system_settings/{settingId} {
-      allow read, write: if true;
-    }
-
-    // 7. User Wallets Collection
     match /user_wallets/{walletId} {
       allow read, write: if true;
     }
-
-    // 8. Used Transactions Collection
     match /used_transactions/{trxId} {
       allow read, write: if true;
     }

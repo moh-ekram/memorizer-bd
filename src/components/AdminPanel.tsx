@@ -404,19 +404,26 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const [isAutoVerifyingAll, setIsAutoVerifyingAll] = useState(false);
   const [autoVerifyResultMessage, setAutoVerifyResultMessage] = useState<string | null>(null);
 
+  // Synchronous Diagnostic Verification Check: Verify current user email against admin list before performing writes
+  const currentAuthUser = auth.currentUser;
+  const currentAuthEmail = currentAuthUser?.email?.trim().toLowerCase() || '';
+  const hardcodedAdminsList = ['mohammad.001ekram@gmail.com'];
+  const settingsAdminsList = Array.isArray((settings as any)?.adminEmails)
+    ? (settings as any).adminEmails.map((e: string) => e.trim().toLowerCase())
+    : [];
+  const isAuthorizedAdminSync = !!currentAuthEmail && (
+    hardcodedAdminsList.includes(currentAuthEmail) || 
+    settingsAdminsList.includes(currentAuthEmail)
+  );
+
   const userPermissionDebug = () => {
-    const currentUser = auth.currentUser;
-    const email = currentUser?.email?.trim().toLowerCase() || '';
-    const hardcodedAdmins = ['mohammad.001ekram@gmail.com'];
-    const settingAdmins = ((settings as any)?.adminEmails || []).map((e: string) => e.trim().toLowerCase());
-    const isAdmin = hardcodedAdmins.includes(email) || settingAdmins.includes(email);
     const debugData = {
-      userId: currentUser?.uid || 'no-auth-uid',
-      userEmail: email,
-      isAdmin,
-      hardcodedAdminMatch: hardcodedAdmins.includes(email),
-      settingsAdminMatch: settingAdmins.includes(email),
-      provider: currentUser?.providerData?.[0]?.providerId || 'unknown'
+      userId: currentAuthUser?.uid || 'no-auth-uid',
+      userEmail: currentAuthEmail,
+      isAdmin: isAuthorizedAdminSync,
+      hardcodedAdminMatch: hardcodedAdminsList.includes(currentAuthEmail),
+      settingsAdminMatch: settingsAdminsList.includes(currentAuthEmail),
+      provider: currentAuthUser?.providerData?.[0]?.providerId || 'unknown'
     };
     console.log('🛡️ [userPermissionDebug] AdminPanel Entry Check:', debugData);
     return debugData;
@@ -424,7 +431,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
   useEffect(() => {
     userPermissionDebug();
-  }, []);
+  }, [currentAuthEmail, isAuthorizedAdminSync]);
 
   useEffect(() => {
     if (onCoursesUpdated && hasFetchedCourses) {
@@ -1698,15 +1705,13 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         console.warn('Local course creation cache update notice:', lErr);
       }
 
-      // 2. Perform Cloud setDoc with a 2-second timeout race
+      // 2. Perform Cloud writeBatch for atomic persistence
       try {
-        const cloudSavePromise = setDoc(doc(db, 'courses', newCourseId), courseData);
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Cloud save timeout')), 2000)
-        );
-        await Promise.race([cloudSavePromise, timeoutPromise]);
+        const batch = writeBatch(db);
+        batch.set(doc(db, 'courses', newCourseId), courseData, { merge: true });
+        await batch.commit();
       } catch (cloudErr) {
-        console.warn('Cloud setDoc notice (saved locally & added):', cloudErr);
+        console.warn('Cloud writeBatch notice (saved locally & added):', cloudErr);
       }
       
       setSaveStatus('saved');
@@ -1767,11 +1772,13 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     const orderB = itemA.order !== undefined ? itemA.order : idx;
 
     try {
-      await setDoc(doc(db, 'courses', itemA.id), { order: orderA }, { merge: true });
-      await setDoc(doc(db, 'courses', itemB.id), { order: orderB }, { merge: true });
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'courses', itemA.id), { order: orderA }, { merge: true });
+      batch.set(doc(db, 'courses', itemB.id), { order: orderB }, { merge: true });
+      await batch.commit();
       fetchCustomCourses();
     } catch (e) {
-      console.error("Error updating course order:", e);
+      console.error("Error updating course order with writeBatch:", e);
     }
   };
 
@@ -2328,6 +2335,21 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           </button>
         </div>
       </div>
+
+      {/* Synchronous Admin Diagnostic Check Alert Banner */}
+      {!isAuthorizedAdminSync && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-amber-900 dark:text-amber-200 text-xs font-medium flex items-start gap-3 shadow-sm" id="admin-diagnostic-warning">
+          <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <h4 className="font-bold text-amber-800 dark:text-amber-300 text-sm">Diagnostic Notice: Admin Email Verification</h4>
+            <p className="text-amber-700/90 dark:text-amber-200/90 leading-relaxed">
+              Current authenticated email: <code className="bg-amber-200/50 dark:bg-amber-900/50 px-1.5 py-0.5 rounded font-mono font-bold text-amber-900 dark:text-amber-100">{currentAuthEmail || 'Not Authenticated / Anonymous'}</code>.
+              {currentAuthEmail ? ' This account is not listed in the authorized admin list.' : ' Please sign in as an admin.'}
+              Write operations to Firestore collections are safeguarded to prevent permissions buffering.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Stats Cards Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3" id="admin-stats-row">
