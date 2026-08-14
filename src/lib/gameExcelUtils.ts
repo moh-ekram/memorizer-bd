@@ -983,42 +983,80 @@ export async function parseQuestionBankExcel(file: File): Promise<QuestionBankIt
   const questions: QuestionBankItem[] = [];
   const headerRow = rows[0].map(c => cleanText(c).toLowerCase());
 
-  const findCol = (keywords: string[]) => {
-    return headerRow.findIndex(h => keywords.some(k => h.includes(k)));
+  // Precise column match helper
+  const findColExact = (keywords: string[]) => {
+    return headerRow.findIndex(h => keywords.some(k => {
+      const cleanK = k.toLowerCase().trim();
+      return h === cleanK || h.includes(cleanK);
+    }));
   };
 
-  const idCol = findCol(['id', 'serial', 'sl']);
-  const questionCol = findCol(['question', 'প্রশ্ন']);
-  const optACol = findCol(['option a', 'option 1', 'অপশন ক', 'অপশন ১', 'opt a', 'a']);
-  const optBCol = findCol(['option b', 'option 2', 'অপশন খ', 'অপশন ২', 'opt b', 'b']);
-  const optCCol = findCol(['option c', 'option 3', 'অপশন গ', 'অপশন ৩', 'opt c', 'c']);
-  const optDCol = findCol(['option d', 'option 4', 'অপশন ঘ', 'অপশন ৪', 'opt d', 'd']);
-  const ansCol = findCol(['correct', 'answer', 'সঠিক', 'উত্তর', 'ans']);
-  const expCol = findCol(['exp', 'explanation', 'ব্যাখ্যা']);
-  const g1Col = findCol(['suitable course', 'suitable_course', 'suitablecourse', 'suitable', 'course', 'group 1', 'group1', 'subject', 'বিষয়', 'গ্রুপ ১', 'গ্রুপ১']);
-  const g2Col = findCol(['q.type', 'q type', 'qtype', 'q_type', 'question type', 'q-type', 'type', 'group 2', 'group2', 'topic', 'অধ্যায়', 'টপিক', 'গ্রুপ ২', 'গ্রুপ২']);
-  const g3Col = findCol(['others', 'other', 'group 3', 'group3', 'difficulty', 'category', 'tag', 'ক্যাটাগরি', 'গ্রুপ ৩', 'গ্রুপ৩', 'সাল', 'year']);
+  // 1. Identify ID column first (e.g. "Question ID", "ID", "SL")
+  let idCol = findColExact(['question id', 'question_id', 'q_id', 'qid', 'serial', 'sl', 'id']);
+
+  // 2. Identify Question Text column (must NOT be the ID column)
+  let questionCol = headerRow.findIndex((h, idx) => {
+    if (idx === idCol) return false;
+    return h.includes('question') || h.includes('প্রশ্ন') || h.includes('sentence') || h.includes('title');
+  });
+
+  // Fallback for Question Column
+  if (questionCol < 0) {
+    if (idCol === 0 && headerRow.length > 1) {
+      questionCol = 1;
+    } else {
+      questionCol = findColExact(['question', 'প্রশ্ন']);
+      if (questionCol === idCol) questionCol = idCol === 0 ? 1 : 0;
+    }
+  }
+
+  // 3. Precise Option Column Mapping (avoiding dangerous single-character includes)
+  let optACol = findColExact(['option a', 'option 1', 'অপশন ক', 'অপশন ১', 'opt a', 'opt 1', 'option_a', 'option1']);
+  let optBCol = findColExact(['option b', 'option 2', 'অপশন খ', 'অপশন ২', 'opt b', 'opt 2', 'option_b', 'option2']);
+  let optCCol = findColExact(['option c', 'option 3', 'অপশন গ', 'অপশন ৩', 'opt c', 'opt 3', 'option_c', 'option3']);
+  let optDCol = findColExact(['option d', 'option 4', 'অপশন ঘ', 'অপশন ৪', 'opt d', 'opt 4', 'option_d', 'option4']);
+
+  // If option headers are simple "A", "B", "C", "D"
+  if (optACol < 0) optACol = headerRow.findIndex(h => /^opt(ion)?\s*a$/i.test(h) || /^a$/i.test(h) || h === 'ক');
+  if (optBCol < 0) optBCol = headerRow.findIndex(h => /^opt(ion)?\s*b$/i.test(h) || /^b$/i.test(h) || h === 'খ');
+  if (optCCol < 0) optCCol = headerRow.findIndex(h => /^opt(ion)?\s*c$/i.test(h) || /^c$/i.test(h) || h === 'গ');
+  if (optDCol < 0) optDCol = headerRow.findIndex(h => /^opt(ion)?\s*d$/i.test(h) || /^d$/i.test(h) || h === 'ঘ');
+
+  // Fallback index positioning if options could not be matched by headers
+  if (optACol < 0) optACol = Math.max(idCol, questionCol) + 1;
+  if (optBCol < 0) optBCol = optACol + 1;
+  if (optCCol < 0) optCCol = optBCol + 1;
+  if (optDCol < 0) optDCol = optCCol + 1;
+
+  const ansCol = findColExact(['correct answer', 'correct_answer', 'correct', 'answer', 'সঠিক উত্তর', 'সঠিক', 'উত্তর', 'ans']);
+  const expCol = findColExact(['explanation', 'ব্যাখ্যা', 'exp']);
+  const g1Col = findColExact(['suitable course', 'suitable_course', 'suitablecourse', 'suitable', 'course', 'group 1', 'group1', 'subject', 'বিষয়', 'গ্রুপ ১', 'গ্রুপ১']);
+  const g2Col = findColExact(['q.type', 'q type', 'qtype', 'q_type', 'question type', 'q-type', 'type', 'group 2', 'group2', 'topic', 'অধ্যায়', 'টপিক', 'গ্রুপ ২', 'গ্রুপ২']);
+  const g3Col = findColExact(['others', 'other', 'group 3', 'group3', 'difficulty', 'category', 'tag', 'ক্যাটাগরি', 'গ্রুপ ৩', 'গ্রুপ৩', 'সাল', 'year']);
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row || row.length === 0) continue;
 
-    const qText = questionCol >= 0 ? cleanText(row[questionCol]) : cleanText(row[0]);
+    let qText = questionCol >= 0 ? cleanText(row[questionCol]) : '';
+    if (!qText && idCol >= 0 && idCol !== 0) {
+      qText = cleanText(row[0]);
+    }
     if (!qText) continue;
 
-    const optA = optACol >= 0 ? cleanText(row[optACol]) : cleanText(row[1]);
-    const optB = optBCol >= 0 ? cleanText(row[optBCol]) : cleanText(row[2]);
-    const optC = optCCol >= 0 ? cleanText(row[optCCol]) : cleanText(row[3]);
-    const optD = optDCol >= 0 ? cleanText(row[optDCol]) : cleanText(row[4]);
+    const optA = optACol >= 0 ? cleanText(row[optACol]) : '';
+    const optB = optBCol >= 0 ? cleanText(row[optBCol]) : '';
+    const optC = optCCol >= 0 ? cleanText(row[optCCol]) : '';
+    const optD = optDCol >= 0 ? cleanText(row[optDCol]) : '';
 
     if (!optA || !optB) continue;
 
     let idVal = idCol >= 0 ? cleanText(row[idCol]) : '';
-    if (!idVal) {
+    if (!idVal || idVal === qText) {
       idVal = `qb-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 4)}`;
     }
 
-    let rawAns = ansCol >= 0 ? cleanText(row[ansCol]) : cleanText(row[5]);
+    let rawAns = ansCol >= 0 ? cleanText(row[ansCol]) : '';
     let finalAns = rawAns || optA;
 
     if (/^[a-dA-D]$/.test(rawAns)) {
@@ -1035,10 +1073,10 @@ export async function parseQuestionBankExcel(file: File): Promise<QuestionBankIt
       }
     }
 
-    const expText = expCol >= 0 ? cleanText(row[expCol]) : cleanText(row[6]) || DEFAULT_EXPLANATION;
-    const group1 = g1Col >= 0 ? cleanText(row[g1Col]) : cleanText(row[7]) || 'General';
-    const group2 = g2Col >= 0 ? cleanText(row[g2Col]) : cleanText(row[8]) || 'General';
-    const group3 = g3Col >= 0 ? cleanText(row[g3Col]) : cleanText(row[9]) || 'General';
+    const expText = expCol >= 0 ? cleanText(row[expCol]) : DEFAULT_EXPLANATION;
+    const group1 = g1Col >= 0 ? cleanText(row[g1Col]) : 'General';
+    const group2 = g2Col >= 0 ? cleanText(row[g2Col]) : 'General';
+    const group3 = g3Col >= 0 ? cleanText(row[g3Col]) : 'General';
 
     questions.push({
       id: idVal,
@@ -1048,7 +1086,7 @@ export async function parseQuestionBankExcel(file: File): Promise<QuestionBankIt
       optionC: optC || 'N/A',
       optionD: optD || 'N/A',
       correctAnswer: finalAns,
-      explanation: expText,
+      explanation: expText || DEFAULT_EXPLANATION,
       group1: group1 || 'General',
       group2: group2 || 'General',
       group3: group3 || 'General',

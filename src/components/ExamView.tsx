@@ -303,6 +303,47 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
     return e.courseId === selectedCourseFilter;
   });
 
+  // Helper to check if an option is the correct answer
+  const checkIsRightOption = (opt: string, optIndex: number, questionAnswer: string, allOptions: string[] = []): boolean => {
+    if (!questionAnswer || !opt) return false;
+    const cleanAns = questionAnswer.trim().toLowerCase();
+    const cleanOpt = opt.trim().toLowerCase();
+
+    // 1. Direct equality
+    if (cleanOpt === cleanAns) return true;
+
+    // 2. Single letter matching (a, b, c, d)
+    const letters = ['a', 'b', 'c', 'd', 'e', 'f'];
+    if (cleanAns.length === 1 && letters[optIndex] === cleanAns) return true;
+
+    // 3. Index matching (0, 1, 2, 3 or 1, 2, 3, 4)
+    if (cleanAns === String(optIndex) || cleanAns === String(optIndex + 1)) return true;
+
+    // 4. Prefix removal matching e.g. "A. Antedate" vs "Antedate"
+    const stripPrefix = (str: string) => str.replace(/^[a-f0-9][\.\)\:\-]\s*/i, '').trim().toLowerCase();
+    if (stripPrefix(cleanOpt) === stripPrefix(cleanAns)) return true;
+
+    return false;
+  };
+
+  // Helper to check if an option was selected by the user
+  const checkIsUserSelected = (opt: string, optIndex: number, userAns?: string): boolean => {
+    if (!userAns || !opt) return false;
+    const cleanUser = userAns.trim().toLowerCase();
+    const cleanOpt = opt.trim().toLowerCase();
+
+    if (cleanOpt === cleanUser) return true;
+    const letters = ['a', 'b', 'c', 'd', 'e', 'f'];
+    if (cleanUser.length === 1 && letters[optIndex] === cleanUser) return true;
+    if (cleanUser === String(optIndex) || cleanUser === String(optIndex + 1)) return true;
+
+    const stripPrefix = (str: string) => str.replace(/^[a-f0-9][\.\)\:\-]\s*/i, '').trim().toLowerCase();
+    if (stripPrefix(cleanOpt) === stripPrefix(cleanUser)) return true;
+
+    return false;
+  };
+
+  // Format time in MM:SS
   const formatTime = (secs: number) => {
     const mins = Math.floor(secs / 60);
     const rem = secs % 60;
@@ -553,160 +594,225 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
     const percent = Math.min(100, Math.round((examResult.score / examResult.totalMarks) * 100));
 
     return (
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden mb-8">
-          {/* Header Banner */}
-          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-8 text-center relative overflow-hidden">
-            <div className="w-20 h-20 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-indigo-400/30">
-              <Trophy className="w-10 h-10 text-amber-400" />
+      <div className="w-full max-w-full px-1 sm:px-3 py-2 sm:py-4">
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-md p-2.5 sm:p-4 mb-4">
+          {/* Top Compact Header Banner */}
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-3 sm:p-4 rounded-xl flex flex-wrap items-center justify-between gap-2.5 shadow-sm">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center shrink-0">
+                <Trophy className="w-4 h-4 text-amber-400" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h2 className="text-xs sm:text-sm font-extrabold text-white leading-tight">Exam Results</h2>
+                  <span className="text-[10px] bg-amber-400/20 text-amber-300 font-extrabold px-1.5 py-0.2 rounded border border-amber-400/30">Completed</span>
+                </div>
+                <p className="text-[11px] text-indigo-200 truncate max-w-[200px] sm:max-w-md font-medium">{activeExam.title}</p>
+              </div>
             </div>
-            <h2 className="text-2xl md:text-3xl font-extrabold mb-1">Exam Results</h2>
-            <p className="text-indigo-200 text-sm">{activeExam.title}</p>
 
-            <div className="mt-6 inline-flex items-center gap-3 bg-white/10 backdrop-blur-md px-6 py-3 rounded-2xl border border-white/20">
-              <span className="text-3xl font-black text-amber-300 font-mono">{examResult.score}</span>
-              <span className="text-slate-300 font-medium text-sm">/ {examResult.totalMarks} Points ({percent}%)</span>
+            <div className="bg-white/10 backdrop-blur-xs border border-white/20 px-3 py-1.5 rounded-xl text-xs font-black text-amber-300 font-mono flex items-center gap-1.5 shrink-0">
+              <span>Score:</span>
+              <span className="text-amber-200 text-sm">{examResult.score}</span>
+              <span className="text-slate-300 font-medium text-[11px]">/ {examResult.totalMarks} Marks ({percent}%)</span>
             </div>
           </div>
 
-          {/* Detailed Statistics Cards */}
-          <div className="p-6 md:p-8">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-              <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 text-center">
-                <CheckCircle2 className="w-6 h-6 text-emerald-600 mx-auto mb-1" />
-                <span className="text-2xl font-bold text-emerald-700">{examResult.correctCount}</span>
-                <p className="text-xs text-emerald-600 font-medium">Correct Answers</p>
+          {/* Compact 4-Stat Row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2.5 mb-2.5">
+            <div className="bg-emerald-50/90 border border-emerald-200/80 p-2 rounded-xl flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="text-xs font-extrabold text-emerald-900">Correct</span>
               </div>
-
-              <div className="bg-rose-50 p-4 rounded-2xl border border-rose-100 text-center">
-                <XCircle className="w-6 h-6 text-rose-600 mx-auto mb-1" />
-                <span className="text-2xl font-bold text-rose-700">{examResult.wrongCount}</span>
-                <p className="text-xs text-rose-600 font-medium">Wrong Answers (-{examResult.negativeDeduction})</p>
-              </div>
-
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center">
-                <HelpCircle className="w-6 h-6 text-slate-500 mx-auto mb-1" />
-                <span className="text-2xl font-bold text-slate-700">{examResult.unansweredCount}</span>
-                <p className="text-xs text-slate-500 font-medium">Unanswered</p>
-              </div>
-
-              <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 text-center">
-                <Clock className="w-6 h-6 text-indigo-600 mx-auto mb-1" />
-                <span className="text-xl font-bold text-indigo-700 font-mono">{formatTime(examResult.timeTakenSeconds)}</span>
-                <p className="text-xs text-indigo-600 font-medium">Total Time Taken</p>
-              </div>
+              <span className="text-xs font-black text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md font-mono">{examResult.correctCount}</span>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-6 border-b border-slate-100">
+            <div className="bg-rose-50/90 border border-rose-200/80 p-2 rounded-xl flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span className="text-xs font-extrabold text-rose-900">Wrong (-{examResult.negativeDeduction})</span>
+              </div>
+              <span className="text-xs font-black text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md font-mono">{examResult.wrongCount}</span>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200/90 p-2 rounded-xl flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <HelpCircle className="w-4 h-4 text-slate-500 shrink-0" />
+                <span className="text-xs font-extrabold text-slate-800">Skipped</span>
+              </div>
+              <span className="text-xs font-black text-slate-700 bg-slate-200 px-2 py-0.5 rounded-md font-mono">{examResult.unansweredCount}</span>
+            </div>
+
+            <div className="bg-indigo-50/90 border border-indigo-200/80 p-2 rounded-xl flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span className="text-xs font-extrabold text-indigo-900">Time</span>
+              </div>
+              <span className="text-xs font-black text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-md font-mono">{formatTime(examResult.timeTakenSeconds)}</span>
+            </div>
+          </div>
+
+          {/* Action Buttons Row */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+            <button
+              onClick={() => {
+                setActiveExam(null);
+                setIsExamCompleted(false);
+              }}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 transition cursor-pointer"
+            >
+              ← Back to Exams List
+            </button>
+
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => {
-                  setActiveExam(null);
-                  setIsExamCompleted(false);
+                  const targetExam = activeExam;
+                  if (targetExam) {
+                    setIsExamCompleted(false);
+                    handleStartExam(targetExam);
+                  }
                 }}
-                className="px-4 py-2.5 rounded-2xl border border-slate-200 text-slate-700 font-semibold text-xs hover:bg-slate-50 cursor-pointer"
+                className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 cursor-pointer transition active:scale-95"
               >
-                ← Back to Exams List
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Retake Exam</span>
               </button>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    const targetExam = activeExam;
-                    if (targetExam) {
-                      setIsExamCompleted(false);
-                      handleStartExam(targetExam);
-                    }
-                  }}
-                  className="px-5 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-md flex items-center gap-1.5 cursor-pointer transition active:scale-95"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  <span>Retake Exam</span>
-                </button>
-
-                <button
-                  onClick={() => handleViewMeritList(activeExam)}
-                  className="px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md flex items-center gap-1.5 cursor-pointer transition"
-                >
-                  <Award className="w-4 h-4" />
-                  <span>View Merit List</span>
-                </button>
-              </div>
+              <button
+                onClick={() => handleViewMeritList(activeExam)}
+                className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 cursor-pointer transition"
+              >
+                <Award className="w-3.5 h-3.5" />
+                <span>View Merit List</span>
+              </button>
             </div>
+          </div>
 
-            {/* Detailed Question by Question Review */}
-            <div className="mt-8">
-              <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-indigo-600" />
-                <span>Question Review & Explanations</span>
-              </h3>
+          {/* Detailed Question Review & Explanations Section */}
+          <div className="mt-4 pt-3 border-t border-slate-100">
+            <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 mb-3 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-indigo-600" />
+              <span>Question Review & Explanations (উত্তর ও ব্যাখ্যা)</span>
+            </h3>
 
-              <div className="space-y-6">
-                {questions.map((q, idx) => {
-                  const userAns = examResult.userAnswers?.[q.id];
-                  const isCorrect = userAns && userAns.trim().toLowerCase() === q.answer.trim().toLowerCase();
-                  const isSkipped = !userAns;
+            <div className="space-y-3">
+              {questions.map((q, idx) => {
+                const userAns = examResult.userAnswers?.[q.id];
+                const isSkipped = !userAns;
 
-                  return (
-                    <div
-                      key={q.id}
-                      className={`p-6 rounded-2xl border transition ${
-                        isCorrect
-                          ? 'bg-emerald-50/40 border-emerald-200'
+                // Check if user answered correctly
+                let isUserCorrect = false;
+                if (!isSkipped) {
+                  q.options.forEach((opt, oIdx) => {
+                    const isRight = checkIsRightOption(opt, oIdx, q.answer, q.options);
+                    const isUserSel = checkIsUserSelected(opt, oIdx, userAns);
+                    if (isRight && isUserSel) {
+                      isUserCorrect = true;
+                    }
+                  });
+                }
+
+                return (
+                  <div
+                    key={q.id || idx}
+                    className={`p-3 sm:p-4 rounded-xl border transition ${
+                      isUserCorrect
+                        ? 'bg-emerald-50/30 border-emerald-200/90'
+                        : isSkipped
+                        ? 'bg-slate-50/60 border-slate-200/90'
+                        : 'bg-rose-50/30 border-rose-200/90'
+                    }`}
+                  >
+                    {/* Question Header */}
+                    <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-slate-100">
+                      <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 border border-slate-200 font-mono">
+                        Q.{idx + 1}
+                      </span>
+
+                      <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-md flex items-center gap-1 ${
+                        isUserCorrect
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                           : isSkipped
-                          ? 'bg-slate-50 border-slate-200'
-                          : 'bg-rose-50/40 border-rose-200'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-4 mb-3">
-                        <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-white border text-slate-700 shadow-xs">
-                          Question {idx + 1}
-                        </span>
-
-                        <span className={`text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 ${
-                          isCorrect
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : isSkipped
-                            ? 'bg-slate-200 text-slate-700'
-                            : 'bg-rose-100 text-rose-800'
-                        }`}>
-                          {isCorrect ? <CheckCircle2 className="w-3.5 h-3.5" /> : isSkipped ? <HelpCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
-                          <span>{isCorrect ? 'Correct' : isSkipped ? 'Skipped' : 'Incorrect'}</span>
-                        </span>
-                      </div>
-
-                      <h4 className="text-base font-bold text-slate-800 mb-4">{q.question}</h4>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
-                        {q.options.map((opt, oIdx) => {
-                          const isUserSelected = userAns === opt;
-                          const isRightOption = opt.trim().toLowerCase() === q.answer.trim().toLowerCase();
-
-                          let optStyle = 'bg-white border-slate-200 text-slate-600';
-                          if (isRightOption) optStyle = 'bg-emerald-100 border-emerald-400 text-emerald-900 font-bold';
-                          else if (isUserSelected && !isRightOption) optStyle = 'bg-rose-100 border-rose-400 text-rose-900 font-bold';
-
-                          return (
-                            <div key={oIdx} className={`p-3 rounded-xl border text-xs flex items-center justify-between ${optStyle}`}>
-                              <span>{opt}</span>
-                              {isRightOption && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
-                              {isUserSelected && !isRightOption && <XCircle className="w-4 h-4 text-rose-600" />}
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Explanation */}
-                      {q.explanation && (
-                        <div className="bg-white/80 p-3.5 rounded-xl border border-slate-200 text-xs text-slate-600">
-                          <strong className="text-indigo-600 block mb-1">Explanation:</strong>
-                          <p>{q.explanation}</p>
-                        </div>
-                      )}
+                          ? 'bg-slate-200 text-slate-700 border border-slate-300'
+                          : 'bg-rose-100 text-rose-800 border border-rose-300'
+                      }`}>
+                        {isUserCorrect ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : isSkipped ? <HelpCircle className="w-3.5 h-3.5 text-slate-500" /> : <XCircle className="w-3.5 h-3.5 text-rose-600" />}
+                        <span>{isUserCorrect ? 'Correct (সঠিক)' : isSkipped ? 'Skipped (উত্তর দেওয়া হয়নি)' : 'Incorrect (ভুল)'}</span>
+                      </span>
                     </div>
-                  );
-                })}
-              </div>
+
+                    {/* Question Text */}
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 mb-3 leading-relaxed">
+                      {q.question}
+                    </h4>
+
+                    {/* Options Grid with Dual Highlight */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                      {q.options.map((opt, oIdx) => {
+                        const isRightOption = checkIsRightOption(opt, oIdx, q.answer, q.options);
+                        const isUserSelected = checkIsUserSelected(opt, oIdx, userAns);
+
+                        let optCardStyle = 'bg-slate-50/80 border-slate-200 text-slate-700 font-medium';
+                        let badgeContent = null;
+
+                        if (isRightOption && isUserSelected) {
+                          // User picked correct answer
+                          optCardStyle = 'bg-emerald-100/90 border-2 border-emerald-500 text-emerald-950 font-black shadow-2xs';
+                          badgeContent = (
+                            <span className="text-[10px] bg-emerald-700 text-white font-extrabold px-2 py-0.5 rounded-md flex items-center gap-1 shrink-0">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-200" />
+                              <span>আপনার উত্তর (সঠিক)</span>
+                            </span>
+                          );
+                        } else if (isRightOption) {
+                          // Correct option (which user missed or skipped)
+                          optCardStyle = 'bg-emerald-50 border-2 border-emerald-400 text-emerald-900 font-bold';
+                          badgeContent = (
+                            <span className="text-[10px] bg-emerald-700 text-white font-extrabold px-2 py-0.5 rounded-md flex items-center gap-1 shrink-0">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-200" />
+                              <span>সঠিক উত্তর (Correct)</span>
+                            </span>
+                          );
+                        } else if (isUserSelected) {
+                          // User's incorrect choice
+                          optCardStyle = 'bg-rose-100/90 border-2 border-rose-500 text-rose-950 font-black shadow-2xs';
+                          badgeContent = (
+                            <span className="text-[10px] bg-rose-600 text-white font-extrabold px-2 py-0.5 rounded-md flex items-center gap-1 shrink-0">
+                              <XCircle className="w-3 h-3 text-rose-200" />
+                              <span>আপনার উত্তর (ভুল)</span>
+                            </span>
+                          );
+                        }
+
+                        return (
+                          <div
+                            key={oIdx}
+                            className={`p-2.5 sm:p-3 rounded-xl border text-xs flex items-center justify-between gap-2 transition-all ${optCardStyle}`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0 pr-1">
+                              <span className="w-5 h-5 rounded-md text-[10px] font-mono font-bold flex items-center justify-center shrink-0 bg-white/80 border border-slate-300/80 text-slate-700">
+                                {String.fromCharCode(65 + oIdx)}
+                              </span>
+                              <span className="truncate leading-snug">{opt}</span>
+                            </div>
+                            {badgeContent}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Explanation Box */}
+                    {q.explanation && (
+                      <div className="p-2.5 sm:p-3 rounded-xl bg-indigo-50/60 border border-indigo-100 text-xs text-slate-800 leading-relaxed">
+                        <strong className="text-indigo-900 font-extrabold block mb-1">💡 সমাধান ও ব্যাখ্যা (Explanation):</strong>
+                        <p className="text-slate-700 font-medium">{q.explanation}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
