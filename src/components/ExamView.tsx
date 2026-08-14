@@ -209,7 +209,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
       examTitle: activeExam.title,
       userId: userId || `user_${Date.now()}`,
       userEmail: userEmail || 'guest@user.com',
-      userDisplayName: userDisplayName || userEmail?.split('@')[0] || 'শিক্ষার্থী',
+      userDisplayName: userDisplayName || userEmail?.split('@')[0] || 'Student',
       score: finalScore,
       totalMarks,
       correctCount,
@@ -331,11 +331,11 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
             <div>
               <div className="flex items-center gap-1.5 text-indigo-400 text-[11px] md:text-xs font-bold uppercase tracking-wider">
                 <Zap className="w-3.5 h-3.5 shrink-0" />
-                <span>অনলাইন পরীক্ষা চলছে</span>
+                <span>Online Exam in Progress</span>
               </div>
               <h2 className="text-base md:text-xl font-black text-white truncate max-w-xs sm:max-w-md">{activeExam.title}</h2>
               <p className="text-slate-400 text-[11px] hidden sm:block">
-                মোট প্রশ্ন: {questions.length} টি | উত্তর দেওয়া হয়েছে: <span className="text-emerald-400 font-bold">{answeredCount}</span>/{questions.length}
+                Total Questions: {questions.length} | Answered: <span className="text-emerald-400 font-bold">{answeredCount}</span>/{questions.length}
               </p>
             </div>
 
@@ -353,7 +353,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                 className="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-1.5 md:px-5 md:py-2 rounded-xl md:rounded-2xl font-extrabold text-xs md:text-sm transition shadow-lg flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                <span>জমা দিন</span>
+                <span>Submit</span>
               </button>
             </div>
           </div>
@@ -361,7 +361,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
           {/* Quick Jump Question Buttons Horizontal Scroll Bar */}
           <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">
-              প্রশ্ন লাফান:
+              Jump to:
             </span>
             {questions.map((q, idx) => {
               const isAns = !!userAnswers[q.id];
@@ -376,7 +376,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                   key={q.id || idx}
                   onClick={() => scrollToQuestion(idx)}
                   className={`min-w-[28px] h-7 px-1.5 rounded-lg border text-[11px] font-mono flex items-center justify-center transition cursor-pointer shrink-0 ${pillStyle}`}
-                  title={`প্রশ্ন ${idx + 1}`}
+                  title={`Question ${idx + 1}`}
                 >
                   {idx + 1}
                 </button>
@@ -408,11 +408,11 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-extrabold text-indigo-700 bg-indigo-50/90 px-2.5 py-1 rounded-lg border border-indigo-100 flex items-center gap-1">
                       <span className="font-mono text-[11px]">#{idx + 1}</span>
-                      <span>প্রশ্ন {idx + 1}</span>
+                      <span>Question {idx + 1}</span>
                     </span>
                     {isAnswered && (
                       <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                        উত্তর দেওয়া হয়েছে
+                        Answered
                       </span>
                     )}
                   </div>
@@ -427,7 +427,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                         }}
                         className="text-[11px] text-rose-600 hover:text-rose-700 font-bold px-2 py-0.5 rounded-lg hover:bg-rose-50 transition cursor-pointer"
                       >
-                        উত্তর রিসেট
+                        Reset Answer
                       </button>
                     )}
                     <button
@@ -441,7 +441,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                       }`}
                     >
                       <HelpCircle className="w-3 h-3" />
-                      <span>{isFlagged ? 'ফ্ল্যাগড' : 'রিভিউ'}</span>
+                      <span>{isFlagged ? 'Flagged' : 'Review'}</span>
                     </button>
                   </div>
                 </div>
@@ -490,10 +490,10 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
         <div className="mt-6 bg-slate-900 text-white p-4 rounded-2xl md:rounded-3xl shadow-xl flex items-center justify-between gap-4">
           <div>
             <p className="text-xs text-slate-300 font-medium">
-              সবগুলো প্রশ্নের উত্তর দেওয়া হয়ে থাকলে নিচের বাটনে ক্লিক করে পরীক্ষা সম্পন্ন করুন।
+              Once you have answered all questions, click the button below to submit your exam.
             </p>
             <p className="text-xs font-bold text-emerald-400 mt-0.5">
-              মোট উত্তর: {answeredCount} / {questions.length}
+              Total Answered: {answeredCount} / {questions.length}
             </p>
           </div>
           <button
@@ -501,7 +501,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
             className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl md:rounded-2xl font-extrabold text-sm transition shadow-lg flex items-center gap-2 cursor-pointer shrink-0"
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span>পরীক্ষা জমা দিন</span>
+            <span>Submit Exam</span>
           </button>
         </div>
 
@@ -518,9 +518,9 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                 <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <ShieldCheck className="w-8 h-8" />
                 </div>
-                <h3 className="text-xl font-bold text-slate-900 mb-2">পরীক্ষা জমা নিশ্চিতকরণ</h3>
+                <h3 className="text-xl font-bold text-slate-900 mb-2">Confirm Exam Submission</h3>
                 <p className="text-slate-600 text-sm mb-6">
-                  আপনি <strong className="text-emerald-600 font-bold">{answeredCount}</strong> টি প্রশ্নের উত্তর দিয়েছেন। বাকি <strong className="text-rose-500 font-bold">{questions.length - answeredCount}</strong> টি প্রশ্ন খালি রয়েছে।
+                  You have answered <strong className="text-emerald-600 font-bold">{answeredCount}</strong> questions. <strong className="text-rose-500 font-bold">{questions.length - answeredCount}</strong> questions remain unanswered.
                 </p>
 
                 <div className="flex items-center gap-3">
@@ -528,13 +528,13 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                     onClick={() => setShowSubmitConfirm(false)}
                     className="flex-1 py-3 rounded-xl border border-slate-200 font-semibold text-slate-600 text-sm hover:bg-slate-50 cursor-pointer"
                   >
-                    ফিরে যান
+                    Go Back
                   </button>
                   <button
                     onClick={() => handleSubmitExam(false)}
                     className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm shadow-md cursor-pointer"
                   >
-                    জমা দিন
+                    Submit
                   </button>
                 </div>
               </motion.div>
@@ -560,12 +560,12 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
             <div className="w-20 h-20 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-indigo-400/30">
               <Trophy className="w-10 h-10 text-amber-400" />
             </div>
-            <h2 className="text-2xl md:text-3xl font-extrabold mb-1">পরীক্ষার ফলাফল</h2>
+            <h2 className="text-2xl md:text-3xl font-extrabold mb-1">Exam Results</h2>
             <p className="text-indigo-200 text-sm">{activeExam.title}</p>
 
             <div className="mt-6 inline-flex items-center gap-3 bg-white/10 backdrop-blur-md px-6 py-3 rounded-2xl border border-white/20">
               <span className="text-3xl font-black text-amber-300 font-mono">{examResult.score}</span>
-              <span className="text-slate-300 font-medium text-sm">/ {examResult.totalMarks} পয়েন্ট ({percent}%)</span>
+              <span className="text-slate-300 font-medium text-sm">/ {examResult.totalMarks} Points ({percent}%)</span>
             </div>
           </div>
 
@@ -575,25 +575,25 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
               <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 text-center">
                 <CheckCircle2 className="w-6 h-6 text-emerald-600 mx-auto mb-1" />
                 <span className="text-2xl font-bold text-emerald-700">{examResult.correctCount}</span>
-                <p className="text-xs text-emerald-600 font-medium">সঠিক উত্তর</p>
+                <p className="text-xs text-emerald-600 font-medium">Correct Answers</p>
               </div>
 
               <div className="bg-rose-50 p-4 rounded-2xl border border-rose-100 text-center">
                 <XCircle className="w-6 h-6 text-rose-600 mx-auto mb-1" />
                 <span className="text-2xl font-bold text-rose-700">{examResult.wrongCount}</span>
-                <p className="text-xs text-rose-600 font-medium">ভুল উত্তর (-{examResult.negativeDeduction})</p>
+                <p className="text-xs text-rose-600 font-medium">Wrong Answers (-{examResult.negativeDeduction})</p>
               </div>
 
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center">
                 <HelpCircle className="w-6 h-6 text-slate-500 mx-auto mb-1" />
                 <span className="text-2xl font-bold text-slate-700">{examResult.unansweredCount}</span>
-                <p className="text-xs text-slate-500 font-medium">উত্তর দেওয়া হয়নি</p>
+                <p className="text-xs text-slate-500 font-medium">Unanswered</p>
               </div>
 
               <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 text-center">
                 <Clock className="w-6 h-6 text-indigo-600 mx-auto mb-1" />
                 <span className="text-xl font-bold text-indigo-700 font-mono">{formatTime(examResult.timeTakenSeconds)}</span>
-                <p className="text-xs text-indigo-600 font-medium">মোট সময় লেগেছে</p>
+                <p className="text-xs text-indigo-600 font-medium">Total Time Taken</p>
               </div>
             </div>
 
@@ -606,7 +606,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                 }}
                 className="px-4 py-2.5 rounded-2xl border border-slate-200 text-slate-700 font-semibold text-xs hover:bg-slate-50 cursor-pointer"
               >
-                ← পরীক্ষার তালিকায় ফিরুন
+                ← Back to Exams List
               </button>
 
               <div className="flex items-center gap-2">
@@ -621,7 +621,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                   className="px-5 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-md flex items-center gap-1.5 cursor-pointer transition active:scale-95"
                 >
                   <RotateCcw className="w-4 h-4" />
-                  <span>Retake Exam (পুনরায় পরীক্ষা দিন)</span>
+                  <span>Retake Exam</span>
                 </button>
 
                 <button
@@ -629,7 +629,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                   className="px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md flex items-center gap-1.5 cursor-pointer transition"
                 >
                   <Award className="w-4 h-4" />
-                  <span>মেরিট লিস্ট দেখুন</span>
+                  <span>View Merit List</span>
                 </button>
               </div>
             </div>
@@ -638,7 +638,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
             <div className="mt-8">
               <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-indigo-600" />
-                <span>প্রশ্নোত্তর ও ব্যাখ্যা বিশ্লেষণ</span>
+                <span>Question Review & Explanations</span>
               </h3>
 
               <div className="space-y-6">
@@ -660,7 +660,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                     >
                       <div className="flex items-start justify-between gap-4 mb-3">
                         <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-white border text-slate-700 shadow-xs">
-                          প্রশ্ন {idx + 1}
+                          Question {idx + 1}
                         </span>
 
                         <span className={`text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 ${
@@ -671,7 +671,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                             : 'bg-rose-100 text-rose-800'
                         }`}>
                           {isCorrect ? <CheckCircle2 className="w-3.5 h-3.5" /> : isSkipped ? <HelpCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
-                          <span>{isCorrect ? 'সঠিক' : isSkipped ? 'এড়িয়ে যাওয়া হয়েছে' : 'ভুল উত্তর'}</span>
+                          <span>{isCorrect ? 'Correct' : isSkipped ? 'Skipped' : 'Incorrect'}</span>
                         </span>
                       </div>
 
@@ -699,7 +699,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                       {/* Explanation */}
                       {q.explanation && (
                         <div className="bg-white/80 p-3.5 rounded-xl border border-slate-200 text-xs text-slate-600">
-                          <strong className="text-indigo-600 block mb-1">ব্যাখ্যা:</strong>
+                          <strong className="text-indigo-600 block mb-1">Explanation:</strong>
                           <p>{q.explanation}</p>
                         </div>
                       )}
@@ -725,7 +725,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
             <div>
               <div className="flex items-center gap-2 text-indigo-600 font-bold text-xs uppercase tracking-wide mb-1">
                 <Trophy className="w-4 h-4 text-amber-500" />
-                <span>অফিসিয়াল মেরিট লিস্ট</span>
+                <span>Official Merit List</span>
               </div>
               <h2 className="text-2xl font-extrabold text-slate-900">{meritListExam.title}</h2>
             </div>
@@ -742,39 +742,39 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                 className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md flex items-center gap-1.5 cursor-pointer transition active:scale-95"
               >
                 <RotateCcw className="w-4 h-4" />
-                <span>Retake Exam (পুনরায় পরীক্ষা দিন)</span>
+                <span>Retake Exam</span>
               </button>
 
               <button
                 onClick={() => setMeritListExam(null)}
                 className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 cursor-pointer"
               >
-                ← পরীক্ষার তালিকায় ফিরুন
+                ← Back to Exams List
               </button>
             </div>
           </div>
 
           {loadingMerit ? (
             <div className="py-12 text-center text-slate-400 text-sm">
-              মেরিট লিস্ট লোড হচ্ছে...
+              Loading merit list...
             </div>
           ) : meritResults.length === 0 ? (
             <div className="py-12 text-center text-slate-500">
               <Users className="w-12 h-12 text-slate-300 mx-auto mb-2" />
-              <p className="font-semibold text-sm">এখনও কেউ এই পরীক্ষায় অংশগ্রহণ করেনি।</p>
-              <p className="text-xs text-slate-400 mt-1">প্রথম অংশ নিয়ে মেধা তালিকার শীর্ষে চলে আসুন!</p>
+              <p className="font-semibold text-sm">No students have taken this exam yet.</p>
+              <p className="text-xs text-slate-400 mt-1">Be the first to take this exam and top the merit list!</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold text-xs">
-                    <th className="p-3">র‍্যাংক</th>
-                    <th className="p-3">শিক্ষার্থী / ইমেইল</th>
-                    <th className="p-3 text-center">স্কোর</th>
-                    <th className="p-3 text-center">সঠিক / ভুল</th>
-                    <th className="p-3 text-center">সময়</th>
-                    <th className="p-3 text-right">তারিখ</th>
+                    <th className="p-3">Rank</th>
+                    <th className="p-3">Student / Email</th>
+                    <th className="p-3 text-center">Score</th>
+                    <th className="p-3 text-center">Correct / Wrong</th>
+                    <th className="p-3 text-center">Time</th>
+                    <th className="p-3 text-right">Date</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -796,7 +796,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
 
                         <td className="p-3">
                           <div>
-                            <span className="font-bold text-slate-800 block">{res.userDisplayName || 'শিক্ষার্থী'}</span>
+                            <span className="font-bold text-slate-800 block">{res.userDisplayName || 'Student'}</span>
                             <span className="text-[11px] text-slate-400 font-mono">{res.userEmail}</span>
                           </div>
                         </td>
@@ -806,7 +806,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                         </td>
 
                         <td className="p-3 text-center text-xs">
-                          <span className="text-emerald-600 font-bold">{res.correctCount}টি</span> / <span className="text-rose-500 font-semibold">{res.wrongCount}টি</span>
+                          <span className="text-emerald-600 font-bold">{res.correctCount}</span> / <span className="text-rose-500 font-semibold">{res.wrongCount}</span>
                         </td>
 
                         <td className="p-3 text-center text-xs font-mono text-slate-600">
@@ -838,23 +838,23 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
         <div>
           <div className="flex items-center gap-2 text-indigo-600 font-bold text-xs uppercase tracking-wider mb-1">
             <Sparkles className="w-4 h-4 text-amber-500" />
-            <span>লাইভ মডেল টেস্ট ও পরীক্ষা হল</span>
+            <span>Live Model Tests & Exam Hall</span>
           </div>
-          <h1 className="text-3xl font-extrabold text-slate-900">অনলাইন এক্সাম সেকশন</h1>
+          <h1 className="text-3xl font-extrabold text-slate-900">Online Exam Section</h1>
           <p className="text-slate-600 text-sm mt-1">
-            টাইমার, নেগেটিভ মার্কিং ও তাৎক্ষণিক মেরিট লিস্টের সাথে নিজেকে প্রস্তুত করুন
+            Prepare yourself with timers, negative marking, and instant merit lists
           </p>
         </div>
 
         {/* Filter by Course */}
         <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
-          <span className="text-xs font-medium text-slate-500 pl-2">কোর্স নির্বাচন:</span>
+          <span className="text-xs font-medium text-slate-500 pl-2">Select Course:</span>
           <select
             value={selectedCourseFilter}
             onChange={(e) => setSelectedCourseFilter(e.target.value)}
             className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
           >
-            <option value="all">সকল কোর্স</option>
+            <option value="all">All Courses</option>
             {courses.map(c => (
               <option key={c.id} value={c.id}>{c.title}</option>
             ))}
@@ -865,14 +865,14 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
       {/* Exam Cards Grid */}
       {loading ? (
         <div className="py-16 text-center text-slate-400 text-sm font-medium">
-          পরীক্ষার তালিকা লোড হচ্ছে...
+          Loading exam list...
         </div>
       ) : filteredExams.length === 0 ? (
         <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center max-w-lg mx-auto shadow-sm">
           <FileSpreadsheet className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-lg font-bold text-slate-800">কোন পরীক্ষা পাওয়া যায়নি</h3>
+          <h3 className="text-lg font-bold text-slate-800">No Exams Found</h3>
           <p className="text-slate-500 text-xs mt-1">
-            এডমিন প্যানেল থেকে নতুন পরীক্ষা আপলোড করা হলে এখানে প্রদর্শিত হবে।
+            New exams uploaded from the admin panel will appear here.
           </p>
         </div>
       ) : (
@@ -893,12 +893,12 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                   {/* Top Badges */}
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[11px] font-bold px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-100">
-                      {courses.find(c => c.id === exam.courseId)?.title || 'সাধারণ পরীক্ষা'}
+                      {courses.find(c => c.id === exam.courseId)?.title || 'General Exam'}
                     </span>
 
                     <span className="text-xs font-mono font-bold text-slate-500 flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5 text-amber-500" />
-                      <span>{exam.durationMinutes} মিনিট</span>
+                      <span>{exam.durationMinutes} mins</span>
                     </span>
                   </div>
 
@@ -906,7 +906,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                   {isParticipated && (
                     <div className="mb-3 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-full text-[11px] font-extrabold shadow-2xs">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span>অংশগ্রহণ করা হয়েছে (প্রাপ্ত নম্বর: {userResult.score}/{userResult.totalMarks})</span>
+                      <span>Participated (Score: {userResult.score}/{userResult.totalMarks})</span>
                     </div>
                   )}
 
@@ -921,19 +921,19 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                   {/* Exam Specs */}
                   <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 grid grid-cols-2 gap-2 text-xs text-slate-600 mb-6">
                     <div>
-                      <span className="text-slate-400 block text-[10px]">মোট প্রশ্ন</span>
-                      <strong className="text-slate-800 font-bold">{qCount} টি</strong>
+                      <span className="text-slate-400 block text-[10px]">Total Questions</span>
+                      <strong className="text-slate-800 font-bold">{qCount}</strong>
                     </div>
                     <div>
-                      <span className="text-slate-400 block text-[10px]">মোট নম্বর</span>
+                      <span className="text-slate-400 block text-[10px]">Total Marks</span>
                       <strong className="text-slate-800 font-bold">{totalMarks}</strong>
                     </div>
                     <div>
-                      <span className="text-slate-400 block text-[10px]">প্রতি প্রশ্নে নম্বর</span>
+                      <span className="text-slate-400 block text-[10px]">Marks Per Question</span>
                       <strong className="text-slate-800 font-bold">+{marksPerQ}</strong>
                     </div>
                     <div>
-                      <span className="text-slate-400 block text-[10px]">নেগেটিভ মার্জিন</span>
+                      <span className="text-slate-400 block text-[10px]">Negative Margin</span>
                       <strong className="text-rose-600 font-bold">-{exam.negativeMarking || 0}</strong>
                     </div>
                   </div>
@@ -944,7 +944,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                     onClick={() => handleStartExam(exam)}
                     className="flex-1 w-full py-3 px-4 rounded-2xl font-bold text-xs text-white bg-indigo-600 hover:bg-indigo-500 shadow-md flex items-center justify-center gap-2 transition cursor-pointer"
                   >
-                    <span>{isParticipated ? 'পুনরায় পরীক্ষা দিন' : 'পরীক্ষা শুরু করুন'}</span>
+                    <span>{isParticipated ? 'Retake Exam' : 'Start Exam'}</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
 
@@ -955,17 +955,17 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
                         setExamResult(userResult);
                         setIsExamCompleted(true);
                       }}
-                      title="পূর্ববর্তী মার্কশীট দেখুন"
+                      title="View Marksheet"
                       className="w-full sm:w-auto px-3.5 py-3 rounded-2xl border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shrink-0"
                     >
                       <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                      <span>মার্কশীট</span>
+                      <span>Marksheet</span>
                     </button>
                   )}
 
                   <button
                     onClick={() => handleViewMeritList(exam)}
-                    title="মেরিট লিস্ট / লিডারবোর্ড দেখুন"
+                    title="View Merit List / Leaderboard"
                     className="w-full sm:w-auto p-3 rounded-2xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition cursor-pointer flex items-center justify-center gap-1 shrink-0"
                   >
                     <Trophy className="w-4 h-4 text-amber-500" />

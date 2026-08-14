@@ -165,7 +165,7 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
 
   // Handle Delete Exam
   const handleDeleteExam = async (examId: string) => {
-    if (!window.confirm('আপনি কি নিশ্চিত যে এই শিডিউলড এক্সামটি মুছে ফেলতে চান?')) return;
+    if (!window.confirm('Are you sure you want to delete this scheduled exam?')) return;
 
     setDeletingExamId(examId);
     const updatedExams = exams.filter(e => e.id !== examId);
@@ -197,10 +197,10 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
               <span>Exam Activity Monitor</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
-              কোর্স ও শিডিউলড এক্সাম সমারি (Course & Scheduled Exam Summary)
+              Course & Scheduled Exam Summary
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed font-medium">
-              এডমিন প্যানেল থেকে সমস্ত কোর্স এবং প্রতিটি কোর্সের আওতায় বর্তমানে শিডিউলকৃত অ্যাক্টিভ পরীক্ষার সংখ্যা একনজরে তদারকি করুন।
+              Monitor all courses and currently scheduled active exams across your platform at a glance.
             </p>
           </div>
 
@@ -210,7 +210,7 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
             className="self-start md:self-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-extrabold shadow-md transition flex items-center gap-2 cursor-pointer shrink-0"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            <span>রিফ্রেশ করুন</span>
+            <span>Refresh</span>
           </button>
         </div>
       </div>
@@ -222,8 +222,8 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
             <GraduationCap className="w-6 h-6" />
           </div>
           <div className="min-w-0">
-            <span className="text-xs text-slate-500 font-bold block truncate">মোট কোর্স</span>
-            <span className="text-xl sm:text-2xl font-black text-slate-900">{totalCourses} টি</span>
+            <span className="text-xs text-slate-500 font-bold block truncate">Total Courses</span>
+            <span className="text-xl sm:text-2xl font-black text-slate-900">{totalCourses}</span>
           </div>
         </div>
 
@@ -232,8 +232,8 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
             <CalendarCheck2 className="w-6 h-6" />
           </div>
           <div className="min-w-0">
-            <span className="text-xs text-slate-500 font-bold block truncate">মোট শিডিউলড এক্সাম</span>
-            <span className="text-xl sm:text-2xl font-black text-emerald-600">{totalExams} টি</span>
+            <span className="text-xs text-slate-500 font-bold block truncate">Total Scheduled Exams</span>
+            <span className="text-xl sm:text-2xl font-black text-emerald-600">{totalExams}</span>
           </div>
         </div>
 
@@ -242,8 +242,8 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
             <Award className="w-6 h-6" />
           </div>
           <div className="min-w-0">
-            <span className="text-xs text-slate-500 font-bold block truncate">পরীক্ষা থাকা কোর্স</span>
-            <span className="text-xl sm:text-2xl font-black text-slate-900">{activeCoursesWithExamsCount} টি</span>
+            <span className="text-xs text-slate-500 font-bold block truncate">Courses with Exams</span>
+            <span className="text-xl sm:text-2xl font-black text-slate-900">{activeCoursesWithExamsCount}</span>
           </div>
         </div>
 
@@ -252,8 +252,8 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
             <HelpCircle className="w-6 h-6" />
           </div>
           <div className="min-w-0">
-            <span className="text-xs text-slate-500 font-bold block truncate">মোট শিডিউল প্রশ্ন</span>
-            <span className="text-xl sm:text-2xl font-black text-slate-900">{totalQuestionsScheduled} টি</span>
+            <span className="text-xs text-slate-500 font-bold block truncate">Total Scheduled Questions</span>
+            <span className="text-xl sm:text-2xl font-black text-slate-900">{totalQuestionsScheduled}</span>
           </div>
         </div>
       </div>
@@ -266,7 +266,7 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="কোর্সের নাম বা আইডি দিয়ে খুঁজুন..."
+              placeholder="Search by course title or ID..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
@@ -291,7 +291,7 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              সকল কোর্স ({courses.length})
+              All Courses ({courses.length})
             </button>
             <button
               onClick={() => setFilterMode('with_exams')}
@@ -301,7 +301,7 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              পরীক্ষা আছে ({activeCoursesWithExamsCount})
+              With Exams ({activeCoursesWithExamsCount})
             </button>
             <button
               onClick={() => setFilterMode('no_exams')}
@@ -311,7 +311,7 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              পরীক্ষা নেই ({courses.length - activeCoursesWithExamsCount})
+              No Exams ({courses.length - activeCoursesWithExamsCount})
             </button>
           </div>
 
@@ -323,9 +323,9 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
               onChange={e => setSortMode(e.target.value as any)}
               className="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
             >
-              <option value="exams_desc">সবচেয়ে বেশি পরীক্ষা আগে</option>
-              <option value="title_asc">কোর্সের নাম (A-Z)</option>
-              <option value="words_desc">ভোকাবুলারি সংখ্যা অনুযায়ী</option>
+              <option value="exams_desc">Most Exams First</option>
+              <option value="title_asc">Course Title (A-Z)</option>
+              <option value="words_desc">Vocabulary Count</option>
             </select>
           </div>
         </div>
@@ -336,13 +336,13 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
         {loading ? (
           <div className="p-12 text-center bg-white rounded-2xl border border-slate-200/80 shadow-2xs space-y-3">
             <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin mx-auto" />
-            <p className="text-xs text-slate-500 font-bold">কোর্স ও পরীক্ষার উপাত্ত লোড হচ্ছে...</p>
+            <p className="text-xs text-slate-500 font-bold">Loading courses and exam data...</p>
           </div>
         ) : filteredCourses.length === 0 ? (
           <div className="p-12 text-center bg-white rounded-2xl border border-slate-200/80 shadow-2xs space-y-3">
             <AlertCircle className="w-8 h-8 text-slate-400 mx-auto" />
-            <h3 className="text-sm font-bold text-slate-700">কোনো কোর্স পাওয়া যায়নি</h3>
-            <p className="text-xs text-slate-500">আপনার বর্তমান ফিল্টার বা সার্চ দিয়ে কোনো ফলাফল মেলেনি।</p>
+            <h3 className="text-sm font-bold text-slate-700">No Courses Found</h3>
+            <p className="text-xs text-slate-500">No courses match your current search or filter criteria.</p>
           </div>
         ) : (
           filteredCourses.map(course => {
@@ -372,7 +372,7 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
                         </span>
                         {course.isDefault && (
                           <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md text-[10px] font-extrabold">
-                            ডিফল্ট ফ্রি
+                            Default Free
                           </span>
                         )}
                         {course.price ? (
@@ -383,13 +383,13 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
                       </div>
 
                       <p className="text-xs text-slate-500 line-clamp-1 font-medium">
-                        {course.description || 'কোর্সের বিবরণ উপলব্ধ নেই'}
+                        {course.description || 'No course description available'}
                       </p>
 
                       <div className="flex items-center gap-4 text-xs text-slate-400 font-semibold pt-0.5">
                         <span className="flex items-center gap-1">
                           <BookOpen className="w-3.5 h-3.5 text-slate-400" />
-                          {wordCount} টি ভোকাবুলারি
+                          {wordCount} Words
                         </span>
                       </div>
                     </div>
@@ -404,7 +404,7 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
                         : 'bg-slate-50 text-slate-500 border-slate-200'
                     }`}>
                       <CalendarCheck2 className={`w-4 h-4 ${courseExams.length > 0 ? 'text-emerald-600' : 'text-slate-400'}`} />
-                      <span>{courseExams.length} টি পরীক্ষা শিডিউলড</span>
+                      <span>{courseExams.length} Scheduled Exams</span>
                     </div>
 
                     {/* Expand/Collapse Exams Button */}
@@ -412,7 +412,7 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
                       onClick={() => toggleExpandCourse(course.id)}
                       className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 cursor-pointer"
                     >
-                      <span>পরীক্ষাসমূহ {isExpanded ? 'লুকান' : 'দেখুন'}</span>
+                      <span>{isExpanded ? 'Hide' : 'View'} Exams</span>
                       {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </button>
 
@@ -421,10 +421,10 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
                       <button
                         onClick={() => onNavigateToQuestionBank(course.id)}
                         className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-                        title="এই কোর্সের জন্য নতুন মডেল টেস্ট/পরীক্ষা শিডিউল করুন"
+                        title="Schedule a new exam for this course"
                       >
                         <Plus className="w-4 h-4" />
-                        <span className="hidden sm:inline">নতুন পরীক্ষা তৈরি</span>
+                        <span className="hidden sm:inline">Create New Exam</span>
                       </button>
                     )}
                   </div>
@@ -436,7 +436,7 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
                     <div className="flex items-center justify-between pb-1">
                       <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-2">
                         <CalendarCheck2 className="w-4 h-4 text-indigo-600" />
-                        {course.title} — শিডিউলড পরীক্ষাসমূহ ({courseExams.length} টি)
+                        {course.title} — Scheduled Exams ({courseExams.length})
                       </h4>
 
                       {onNavigateToQuestionBank && (
@@ -445,7 +445,7 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
                           className="text-xs text-indigo-600 hover:text-indigo-800 font-extrabold flex items-center gap-1 cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5" />
-                          <span>প্রশ্ন ব্যাংক থেকে এক্সাম তৈরি করুন</span>
+                          <span>Create Exam from Question Bank</span>
                         </button>
                       )}
                     </div>
@@ -454,10 +454,10 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
                       <div className="p-6 bg-white rounded-xl border border-dashed border-slate-200 text-center space-y-2">
                         <AlertCircle className="w-6 h-6 text-slate-400 mx-auto" />
                         <p className="text-xs text-slate-600 font-bold">
-                          এই কোর্সের জন্য বর্তমানে কোনো শিডিউলড পরীক্ষা বা মডেল টেস্ট নেই।
+                          There are currently no scheduled exams or model tests for this course.
                         </p>
                         <p className="text-[11px] text-slate-400">
-                          কোয়েশ্চন ব্যাংক (Question Bank) সেকশন থেকে যেকোনো প্রশ্ন বাছাই করে বা র্যান্ডম জেনারেট করে পরীক্ষা চালু করুন।
+                          Use the Question Bank section to select questions or generate a random test.
                         </p>
                       </div>
                     ) : (
@@ -470,7 +470,7 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
                             <div className="flex items-start justify-between gap-2">
                               <div className="space-y-0.5">
                                 <span className="text-[10px] text-indigo-600 font-black uppercase tracking-wide block">
-                                  পরীক্ষা #{idx + 1}
+                                  Exam #{idx + 1}
                                 </span>
                                 <h5 className="text-xs font-black text-slate-900 leading-snug">
                                   {exam.title}
@@ -481,7 +481,7 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
                                 onClick={() => handleDeleteExam(exam.id)}
                                 disabled={deletingExamId === exam.id}
                                 className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                                title="পরীক্ষাটি মুছে ফেলুন"
+                                title="Delete Exam"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -490,15 +490,15 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
                             {/* Exam Meta Info */}
                             <div className="grid grid-cols-3 gap-2 py-2 px-3 bg-slate-50 rounded-lg text-[11px] font-bold text-slate-700">
                               <div>
-                                <span className="text-slate-400 block text-[9px] uppercase">প্রশ্ন সংখ্যা</span>
-                                <span className="font-extrabold text-indigo-700">{exam.questions?.length || 0} টি</span>
+                                <span className="text-slate-400 block text-[9px] uppercase">Questions</span>
+                                <span className="font-extrabold text-indigo-700">{exam.questions?.length || 0}</span>
                               </div>
                               <div>
-                                <span className="text-slate-400 block text-[9px] uppercase">সময়সীমা</span>
-                                <span className="font-extrabold text-slate-900">{exam.durationMinutes} মি.</span>
+                                <span className="text-slate-400 block text-[9px] uppercase">Duration</span>
+                                <span className="font-extrabold text-slate-900">{exam.durationMinutes} mins</span>
                               </div>
                               <div>
-                                <span className="text-slate-400 block text-[9px] uppercase">মোট নম্বর</span>
+                                <span className="text-slate-400 block text-[9px] uppercase">Total Marks</span>
                                 <span className="font-extrabold text-slate-900">{exam.totalMarks}</span>
                               </div>
                             </div>
@@ -506,7 +506,7 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
                             {/* Exam Action Bar */}
                             <div className="flex items-center justify-between text-[11px] pt-1">
                               <span className="text-slate-400 text-[10px] font-medium">
-                                তৈরি: {exam.createdAt ? new Date(exam.createdAt).toLocaleDateString('bn-BD') : 'সম্প্রতি'}
+                                Created: {exam.createdAt ? new Date(exam.createdAt).toLocaleDateString() : 'Recently'}
                               </span>
 
                               <button

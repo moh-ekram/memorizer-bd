@@ -342,7 +342,7 @@ export default function PracticeCenter({
     },
     {
       key: 'exam',
-      title: 'Exam Section (পরীক্ষা সেকশন)',
+      title: 'Exam Section',
       tag: 'Model Test',
       btnText: 'Start Exam',
       iconBg: 'bg-amber-50 text-amber-600 border-amber-100',
@@ -432,37 +432,40 @@ export default function PracticeCenter({
   return (
     <div className="space-y-6" id="practice-center-wrapper">
       {/* Practice Center View Mode Switcher Header */}
-      <div className="flex items-center gap-2 p-1.5 bg-slate-100 rounded-2xl w-fit border border-slate-200/80">
+      <div className="flex items-center gap-1.5 sm:gap-2 p-1.5 bg-slate-100 rounded-2xl w-full sm:w-fit border border-slate-200/80 overflow-x-auto scrollbar-none">
         <button
           type="button"
           onClick={() => setSubTab('hub')}
-          className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-2 cursor-pointer ${
+          title="Games Hub"
+          className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0 flex-1 sm:flex-initial ${
             subTab === 'hub' ? 'bg-white text-indigo-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          <Gamepad2 className="w-4 h-4 text-indigo-600" />
-          <span>Games Hub</span>
+          <Gamepad2 className="w-4 h-4 text-indigo-600 shrink-0" />
+          <span className="hidden sm:inline whitespace-nowrap">Games Hub</span>
         </button>
         <button
           type="button"
           onClick={() => setSubTab('exam')}
-          className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-2 cursor-pointer ${
+          title="Exam Hall"
+          className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0 flex-1 sm:flex-initial ${
             subTab === 'exam' ? 'bg-white text-indigo-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          <GraduationCap className="w-4 h-4 text-amber-500" />
-          <span>Exam Hall (অনলাইন এক্সাম)</span>
+          <GraduationCap className="w-4 h-4 text-amber-500 shrink-0" />
+          <span className="hidden sm:inline whitespace-nowrap">Exam Hall</span>
         </button>
         <button
           type="button"
           onClick={() => setSubTab('analytics')}
-          className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-2 cursor-pointer ${
+          title="Tracking Dashboard"
+          className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0 flex-1 sm:flex-initial ${
             subTab === 'analytics' ? 'bg-white text-indigo-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          <BarChart3 className="w-4 h-4 text-emerald-600" />
-          <span>Tracking Dashboard</span>
-          <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black rounded-full uppercase">
+          <BarChart3 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span className="hidden sm:inline whitespace-nowrap">Tracking Dashboard</span>
+          <span className="hidden sm:inline-block px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black rounded-full uppercase">
             Correct %
           </span>
         </button>
@@ -512,7 +515,7 @@ export default function PracticeCenter({
               <div className="flex items-center justify-between gap-2 mb-4 relative z-10">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400/20 text-amber-300 border border-amber-400/40 rounded-full text-[11px] font-black uppercase tracking-wider shadow-2xs backdrop-blur-md">
                   <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-                  <span>📌 পিন করা বিশেষ সেকশন</span>
+                  <span>📌 PINNED FEATURED SECTION</span>
                 </div>
                 <span className="text-[10px] font-extrabold px-2.5 py-0.5 bg-indigo-500/30 text-indigo-200 rounded-md border border-indigo-400/30 font-mono uppercase">
                   Model Test & Exam
@@ -527,10 +530,10 @@ export default function PracticeCenter({
                   </div>
                   <div>
                     <h3 className="text-lg sm:text-xl font-extrabold text-white group-hover:text-amber-300 transition-colors flex items-center gap-2">
-                      <span>অনলাইন মডেল টেস্ট ও লাইভ এক্সাম</span>
+                      <span>Online Model Test & Live Exams</span>
                     </h3>
                     <p className="text-xs sm:text-sm text-slate-300 font-medium mt-1 leading-relaxed">
-                      কোর্স ভিত্তিক টাইমার এক্সাম, নেগেটিভ মার্কিং, ফলাফল ও সার্বজনীন মেরিট লিস্ট।
+                      Course-based timed exams, negative marking, detailed results, and global merit lists.
                     </p>
                   </div>
                 </div>
@@ -544,7 +547,7 @@ export default function PracticeCenter({
                     }}
                     className="w-full sm:w-auto px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs sm:text-sm shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 transition cursor-pointer border border-amber-300"
                   >
-                    <span>পরীক্ষা হলে প্রবেশ করুন</span>
+                    <span>Enter Exam Hall</span>
                     <ChevronRight className="w-4 h-4 text-slate-950" />
                   </button>
                 </div>
@@ -557,7 +560,7 @@ export default function PracticeCenter({
             <div className="h-px bg-slate-200 flex-1" />
             <span className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
               <Gamepad2 className="w-3.5 h-3.5 text-indigo-500" />
-              <span>ইন্টারঅ্যাক্টিভ গেমস & অনুশীলন</span>
+              <span>Interactive Games & Practice</span>
             </span>
             <div className="h-px bg-slate-200 flex-1" />
           </div>
