@@ -2391,66 +2391,74 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         </div>
       </div>
 
-      {/* Admin Tab Navigation - Responsive Wrapping Pill Grid */}
-      <div className="bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10 gap-1.5">
+      {/* Admin Tab Navigation - Single Line Icon & Label Bar */}
+      <div className="bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-1 sm:gap-1.5 overflow-x-auto scrollbar-none">
         <button
           onClick={() => setActiveAdminTab('question-bank')}
-          className={`px-3 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center ${
+          title="Question Bank (প্রশ্ন ব্যাংক)"
+          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
             activeAdminTab === 'question-bank'
               ? 'bg-indigo-600 text-white shadow-md font-black border border-indigo-700'
-              : 'bg-indigo-50 text-indigo-900 hover:bg-indigo-100 border border-indigo-200/80'
+              : 'bg-indigo-50/80 text-indigo-900 hover:bg-indigo-100 border border-indigo-200/80'
           }`}
         >
-          <Database className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-          <span className="truncate">Question Bank</span>
+          <Database className="w-4 h-4 text-indigo-400 shrink-0" />
+          <span className="hidden xl:inline whitespace-nowrap">Question Bank</span>
         </button>
 
         <button
           onClick={() => setActiveAdminTab('exam-summary')}
-          className={`px-3 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center ${
+          title="Exam Summary (পরীক্ষার সমারি)"
+          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
             activeAdminTab === 'exam-summary'
               ? 'bg-emerald-600 text-white shadow-md font-black border border-emerald-700'
-              : 'bg-emerald-50 text-emerald-900 hover:bg-emerald-100 border border-emerald-200/80'
+              : 'bg-emerald-50/80 text-emerald-900 hover:bg-emerald-100 border border-emerald-200/80'
           }`}
         >
-          <Calendar className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-          <span className="truncate">Exam Summary</span>
+          <Calendar className="w-4 h-4 text-emerald-500 shrink-0" />
+          <span className="hidden xl:inline whitespace-nowrap">Exam Summary</span>
         </button>
 
         <button
           onClick={() => setActiveAdminTab('courses')}
-          className={`px-3 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center ${
+          title={`Courses (${customCourses.length})`}
+          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
             activeAdminTab === 'courses'
               ? 'bg-white text-indigo-700 shadow-xs font-black border border-indigo-200/60'
               : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
           }`}
         >
-          <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-          <span className="truncate">Courses ({customCourses.length})</span>
+          <FileSpreadsheet className="w-4 h-4 text-indigo-600 shrink-0" />
+          <span className="hidden xl:inline whitespace-nowrap">Courses</span>
+          <span className="px-1.5 py-0.2 bg-slate-200/80 text-slate-700 rounded-md text-[10px] font-extrabold">
+            {customCourses.length}
+          </span>
         </button>
 
         <button
           onClick={() => setActiveAdminTab('blank-questions')}
-          className={`px-3 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center ${
+          title="Game Upload (গেমিং প্রশ্ন আপলোড)"
+          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
             activeAdminTab === 'blank-questions'
               ? 'bg-emerald-600 text-white shadow-xs font-black border border-emerald-700'
-              : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/80'
+              : 'bg-emerald-50/80 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/80'
           }`}
         >
-          <Award className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
-          <span className="truncate">Game Upload</span>
+          <Award className="w-4 h-4 text-emerald-500 shrink-0" />
+          <span className="hidden xl:inline whitespace-nowrap">Game Upload</span>
         </button>
 
         <button
           onClick={() => setActiveAdminTab('users')}
-          className={`px-3 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center ${
+          title="Users & Stats (শিক্ষার্থী ও পরিসংখ্যান)"
+          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
             activeAdminTab === 'users'
               ? 'bg-white text-indigo-700 shadow-xs font-black border border-indigo-200/60'
               : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
           }`}
         >
-          <Users className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-          <span className="truncate">Users & Stats</span>
+          <Users className="w-4 h-4 text-indigo-600 shrink-0" />
+          <span className="hidden xl:inline whitespace-nowrap">Users</span>
         </button>
 
         <button
@@ -2458,14 +2466,18 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             setActiveAdminTab('reports');
             fetchReports();
           }}
-          className={`px-3 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center ${
+          title={`Reports (${reports.length})`}
+          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
             activeAdminTab === 'reports'
               ? 'bg-white text-indigo-700 shadow-xs font-black border border-indigo-200/60'
               : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
           }`}
         >
-          <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-          <span className="truncate">Reports ({reports.length})</span>
+          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+          <span className="hidden xl:inline whitespace-nowrap">Reports</span>
+          <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded-md text-[10px] font-extrabold">
+            {reports.length}
+          </span>
         </button>
 
         <button
@@ -2474,14 +2486,15 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             fetchAccessRequests();
             fetchGlobalVerifiedPayments();
           }}
-          className={`px-3 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center relative ${
+          title={`bKash Gateway (${accessRequests.filter(r => r.status === 'pending').length})`}
+          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 relative ${
             activeAdminTab === 'access-requests' || activeAdminTab === 'autoverify'
               ? 'bg-amber-400 text-slate-950 font-black shadow-xs border border-amber-300'
               : 'bg-white text-slate-700 hover:text-slate-900 hover:bg-white/50 border border-slate-200/60'
           }`}
         >
-          <Zap className="w-3.5 h-3.5 fill-slate-950 text-slate-950 shrink-0" />
-          <span className="truncate">bKash Gateway ({accessRequests.filter(r => r.status === 'pending').length})</span>
+          <Zap className="w-4 h-4 fill-slate-950 text-slate-950 shrink-0" />
+          <span className="hidden xl:inline whitespace-nowrap">bKash</span>
           {accessRequests.filter(r => r.status === 'pending').length > 0 && (
             <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0 animate-pulse" />
           )}
@@ -2489,38 +2502,41 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
         <button
           onClick={() => setActiveAdminTab('activity-logs')}
-          className={`px-3 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center ${
+          title="Activity Logs (অ্যাক্টিভিটি লগ)"
+          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
             activeAdminTab === 'activity-logs'
               ? 'bg-white text-indigo-700 shadow-xs font-black border border-indigo-200/60'
               : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
           }`}
         >
-          <History className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-          <span className="truncate">Activity Logs</span>
+          <History className="w-4 h-4 text-indigo-600 shrink-0" />
+          <span className="hidden xl:inline whitespace-nowrap">Logs</span>
         </button>
 
         <button
           onClick={() => setActiveAdminTab('system-settings')}
-          className={`px-3 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center ${
+          title="Settings (সিস্টেম সেটিংস)"
+          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
             activeAdminTab === 'system-settings'
               ? 'bg-white text-indigo-700 shadow-xs font-black border border-indigo-200/60'
               : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
           }`}
         >
-          <Sliders className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-          <span className="truncate">Settings</span>
+          <Sliders className="w-4 h-4 text-indigo-600 shrink-0" />
+          <span className="hidden xl:inline whitespace-nowrap">Settings</span>
         </button>
 
         <button
           onClick={() => setActiveAdminTab('transaction-debugger')}
-          className={`px-3 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center ${
+          title="Tx Debugger (ট্রানজেকশন ডিবাগার)"
+          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
             activeAdminTab === 'transaction-debugger'
               ? 'bg-indigo-600 text-white shadow-xs font-black border border-indigo-700'
               : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
           }`}
         >
-          <Bug className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-          <span className="truncate">Tx Debugger</span>
+          <Bug className="w-4 h-4 text-amber-500 shrink-0" />
+          <span className="hidden xl:inline whitespace-nowrap">Tx Debugger</span>
         </button>
       </div>
 
