@@ -22,7 +22,8 @@ import {
   Sliders,
   Check,
   Award,
-  Info
+  Info,
+  AlertTriangle
 } from 'lucide-react';
 import { db, doc, setDoc, deleteDoc, writeBatch, collection, getDocs, saveBulkDocs } from '../lib/db';
 import { QuestionBankItem, QuestionBankRule, Course, Exam, ExamQuestion } from '../types';
@@ -54,6 +55,25 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [showGuidelineModal, setShowGuidelineModal] = useState(false);
+
+  // Delete Confirmation Modal State
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    count: number;
+    type: 'single' | 'selected' | 'existing_db' | 'all';
+    targetId?: string;
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
+
+  const recordDeletedIds = (idsToDelete: string[]) => {
+    try {
+      const existing: string[] = JSON.parse(safeGetLocalStorage('deleted_question_ids', '[]')) || [];
+      const merged = Array.from(new Set([...existing, ...idsToDelete]));
+      safeSetLocalStorage('deleted_question_ids', JSON.stringify(merged));
+    } catch (_) {}
+  };
 
   // Manual Add/Edit Form State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -95,13 +115,25 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     setPermissionNotice(null);
     const itemMap = new Map<string, QuestionBankItem>();
 
+    const deletedSet = new Set<string>();
+    try {
+      const deletedArr = JSON.parse(safeGetLocalStorage('deleted_question_ids', '[]'));
+      if (Array.isArray(deletedArr)) {
+        deletedArr.forEach((id: string) => deletedSet.add(id));
+      }
+    } catch (_) {}
+
     // 1. Local Storage cache
     try {
       const cached = safeGetLocalStorage('local_question_bank', null);
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed)) {
-          parsed.forEach((q: QuestionBankItem) => { if (q && q.id) itemMap.set(q.id, q); });
+          parsed.forEach((q: QuestionBankItem) => {
+            if (q && q.id && !deletedSet.has(q.id)) {
+              itemMap.set(q.id, q);
+            }
+          });
         }
       }
     } catch (_) {}
@@ -110,7 +142,9 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     try {
       const snap = await getDocs(collection(db, 'question_bank'));
       snap.forEach(docSnap => {
-        itemMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as QuestionBankItem);
+        if (!deletedSet.has(docSnap.id)) {
+          itemMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as QuestionBankItem);
+        }
       });
     } catch (err: any) {
       console.warn('Question bank Firestore fetch notice:', err);
@@ -123,6 +157,9 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
         const data = docSnap.data();
         const questionStr = data.sentence || data.question || '';
         if (!questionStr) return;
+
+        const bqId = `bq_${docSnap.id}`;
+        if (deletedSet.has(bqId)) return;
 
         const opts: string[] = Array.isArray(data.options)
           ? data.options
@@ -143,7 +180,6 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
           }
         }
 
-        const bqId = `bq_${docSnap.id}`;
         if (!itemMap.has(bqId)) {
           itemMap.set(bqId, {
             id: bqId,
@@ -386,45 +422,129 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     setShowAddModal(true);
   };
 
-  const handleDeleteSingle = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this question?')) return;
-    const updatedList = questions.filter(q => q.id !== id);
-    setQuestions(updatedList);
-    safeSetLocalStorage('local_question_bank', JSON.stringify(updatedList));
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
+  const existingDbQuestions = useMemo(() => {
+    return questions.filter(
+      q => q.group3 === 'Existing Database' || q.id.startsWith('bq_') || q.group1 === 'Existing Database'
+    );
+  }, [questions]);
 
-    try {
-      await deleteDoc(doc(db, 'question_bank', id));
-    } catch (err) {
-      console.warn('Cloud deleteDoc notice:', err);
-    }
+  const handleDeleteSingle = (id: string) => {
+    const qItem = questions.find(q => q.id === id);
+    const qTitle = qItem ? `"${qItem.question.slice(0, 45)}${qItem.question.length > 45 ? '...' : ''}"` : 'সিলেক্ট করা প্রশ্ন';
+
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: 'প্রশ্ন মুছে ফেলার নিশ্চিতকরণ',
+      description: qTitle,
+      count: 1,
+      type: 'single',
+      targetId: id,
+      onConfirm: async () => {
+        recordDeletedIds([id]);
+        const updatedList = questions.filter(q => q.id !== id);
+        setQuestions(updatedList);
+        safeSetLocalStorage('local_question_bank', JSON.stringify(updatedList));
+        setSelectedIds(prev => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+
+        try {
+          await deleteDoc(doc(db, 'question_bank', id));
+          if (id.startsWith('bq_')) {
+            const origBqId = id.replace(/^bq_/, '');
+            await deleteDoc(doc(db, 'blank_questions', origBqId));
+          }
+        } catch (err) {
+          console.warn('Cloud deleteDoc notice:', err);
+        }
+      }
+    });
   };
 
-  const handleDeleteSelected = async () => {
+  const handleDeleteSelected = () => {
     if (selectedIds.size === 0) return;
-    if (!window.confirm(`Are you sure you want to delete ${selectedIds.size} selected questions?`)) return;
+    const idsArr: string[] = Array.from(selectedIds);
 
-    const updatedList = questions.filter(q => !selectedIds.has(q.id));
-    setQuestions(updatedList);
-    safeSetLocalStorage('local_question_bank', JSON.stringify(updatedList));
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: 'সিলেক্ট করা প্রশ্নসমূহ মুছে ফেলার নিশ্চিতকরণ',
+      description: `হাতে সিলেক্ট করা ${selectedIds.size} টি প্রশ্ন`,
+      count: selectedIds.size,
+      type: 'selected',
+      onConfirm: async () => {
+        recordDeletedIds(idsArr);
+        const deleteSet = new Set(idsArr);
+        const updatedList = questions.filter(q => !deleteSet.has(q.id));
+        setQuestions(updatedList);
+        safeSetLocalStorage('local_question_bank', JSON.stringify(updatedList));
+        setSelectedIds(new Set());
 
-    try {
-      const idsArr = Array.from(selectedIds);
-      setSelectedIds(new Set());
-      for (let i = 0; i < idsArr.length; i += 100) {
-        const batch = writeBatch(db as any);
-        idsArr.slice(i, i + 100).forEach((id: string) => {
-          batch.delete(doc(db as any, 'question_bank', id));
-        });
-        await batch.commit();
+        try {
+          for (let i = 0; i < idsArr.length; i += 100) {
+            const batch = writeBatch(db as any);
+            const chunk = idsArr.slice(i, i + 100);
+            chunk.forEach((id: string) => {
+              batch.delete(doc(db as any, 'question_bank', id));
+              if (id.startsWith('bq_')) {
+                const origBqId = id.replace(/^bq_/, '');
+                batch.delete(doc(db as any, 'blank_questions', origBqId));
+              }
+            });
+            await batch.commit();
+          }
+        } catch (err) {
+          console.warn('Cloud bulk delete notice:', err);
+        }
       }
-    } catch (err) {
-      console.warn('Cloud bulk delete notice:', err);
+    });
+  };
+
+  const handleDeleteExistingDatabaseQuestions = () => {
+    if (existingDbQuestions.length === 0) {
+      alert('বর্তমানে কোনো "Existing Database" চিহ্নিত প্রশ্ন ডাটাবেজে পাওয়া যায়নি।');
+      return;
     }
+
+    const idsArr = existingDbQuestions.map(q => q.id);
+
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: 'সব Existing Database প্রশ্ন মুছে ফেলা',
+      description: 'ডিফল্ট/মাইগ্রেটেড "Existing Database" চিহ্নিত প্রশ্নসমূহ',
+      count: existingDbQuestions.length,
+      type: 'existing_db',
+      onConfirm: async () => {
+        recordDeletedIds(idsArr);
+        const deleteSet = new Set(idsArr);
+        const updatedList = questions.filter(q => !deleteSet.has(q.id));
+        setQuestions(updatedList);
+        safeSetLocalStorage('local_question_bank', JSON.stringify(updatedList));
+        setSelectedIds(prev => {
+          const next = new Set(prev);
+          idsArr.forEach(id => next.delete(id));
+          return next;
+        });
+
+        try {
+          for (let i = 0; i < idsArr.length; i += 100) {
+            const batch = writeBatch(db as any);
+            const chunk = idsArr.slice(i, i + 100);
+            chunk.forEach((id: string) => {
+              batch.delete(doc(db as any, 'question_bank', id));
+              if (id.startsWith('bq_')) {
+                const origBqId = id.replace(/^bq_/, '');
+                batch.delete(doc(db as any, 'blank_questions', origBqId));
+              }
+            });
+            await batch.commit();
+          }
+        } catch (err) {
+          console.warn('Cloud delete existing db notice:', err);
+        }
+      }
+    });
   };
 
   // --- EXAM SCHEDULER & SELECTION LOGIC ---
@@ -817,6 +937,17 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 <Plus className="w-4 h-4" />
                 <span>নতুন প্রশ্ন যোগ করুন</span>
               </button>
+
+              {existingDbQuestions.length > 0 && (
+                <button
+                  onClick={handleDeleteExistingDatabaseQuestions}
+                  className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs"
+                  title="ডাটাবেজ থেকে সকল Existing Database প্রশ্ন মুছে ফেলুন"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Existing Database প্রশ্নসমূহ মুছুন ({existingDbQuestions.length})</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1799,6 +1930,86 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
               >
                 ঠিক আছে
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL WITH ALERT WARNING */}
+      {deleteConfirmModal && deleteConfirmModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 space-y-5 shadow-2xl relative animate-scaleUp border border-slate-100">
+            <button
+              onClick={() => setDeleteConfirmModal(null)}
+              className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-600 rounded-full transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+              <div className="w-11 h-11 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shrink-0 shadow-xs">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900">
+                  {deleteConfirmModal.title}
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  প্রশ্ন ব্যাংক থেকে স্থায়ীভাবে মুছে ফেলার পূর্ব সতর্কতা
+                </p>
+              </div>
+            </div>
+
+            {/* CRITICAL WARNING ALERT */}
+            <div className="p-4 bg-rose-50/90 border border-rose-200/90 rounded-2xl space-y-2">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h4 className="text-xs font-black text-rose-950 uppercase tracking-wide">
+                    জরুরি সতর্কবার্তা (Critical Alert)
+                  </h4>
+                  <p className="text-xs text-rose-900 leading-relaxed font-medium">
+                    প্রশ্ন ব্যাংক থেকে প্রশ্ন মুছে ফেললে তা এই প্রশ্নগুলোর সাথে যুক্ত <strong className="font-extrabold text-rose-950 underline decoration-rose-400">সকল পাবলিশড বা চালুকৃত পরীক্ষা (Launched Exams)</strong>-কে প্রভাবিত করবে এবং শিক্ষার্থীরা পরীক্ষায় এই প্রশ্নগুলো আর পাবে না।
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* SUMMARY DETAILS */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-2 text-xs text-slate-700">
+              <div className="flex justify-between items-center border-b border-slate-200/60 pb-1.5">
+                <span className="text-slate-500 font-bold">আইটেমের বিবরণ:</span>
+                <span className="font-extrabold text-slate-900 truncate max-w-[200px]" title={deleteConfirmModal.description}>
+                  {deleteConfirmModal.description}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 font-bold">মোট মুছে ফেলার প্রশ্ন:</span>
+                <span className="font-black text-rose-600 text-sm">{deleteConfirmModal.count} টি</span>
+              </div>
+            </div>
+
+            {/* ACTIONS */}
+            <div className="pt-2 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmModal(null)}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                বাতিল করুন (Cancel)
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const onConf = deleteConfirmModal.onConfirm;
+                  setDeleteConfirmModal(null);
+                  await onConf();
+                }}
+                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-extrabold shadow-md transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>হ্যাঁ, মুছে ফেলুন (Confirm Delete)</span>
               </button>
             </div>
           </div>
