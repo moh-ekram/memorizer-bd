@@ -432,17 +432,18 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       setQuestions(updatedList);
       safeSetLocalStorage('local_question_bank', JSON.stringify(updatedList));
 
-      // 2. Try batch save to Firestore safely
-      try {
-        await saveBulkDocs('question_bank', pendingUploadQuestions);
-      } catch (fsErr) {
-        console.warn('Cloud batch save notice (saved locally):', fsErr);
-      }
-
-      setUploadStatus(`Successfully generated and saved ${pendingUploadQuestions.length} questions!`);
-      setTimeout(() => setUploadStatus(null), 3500);
+      // Close modal immediately so UI doesn't buffer/hang
       setShowUploadPreviewModal(false);
+      setUploadStatus(`Saved ${pendingUploadQuestions.length} questions successfully!`);
+      setTimeout(() => setUploadStatus(null), 3500);
+
+      const itemsToSave = [...pendingUploadQuestions];
       setPendingUploadQuestions([]);
+
+      // 2. Sync to Firestore in background safely
+      saveBulkDocs('question_bank', itemsToSave).catch(fsErr => {
+        console.warn('Cloud batch save background notice:', fsErr);
+      });
     } catch (err: any) {
       console.error('Upload notice:', err);
       setUploadStatus('Questions saved to local device storage.');
