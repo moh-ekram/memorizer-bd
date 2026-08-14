@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { db, collection, getDocs, doc, setDoc } from '../lib/db';
 import { Exam, ExamQuestion, ExamResult, Course } from '../types';
-import { safeGetLocalStorage, safeSetLocalStorage } from '../lib/storage';
+import { safeGetLocalStorage, safeSetLocalStorage, getLargeStorage } from '../lib/storage';
 
 interface ExamViewProps {
   courses: Course[];
@@ -113,12 +113,11 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
       setLoading(true);
       const examMap = new Map<string, Exam>();
 
-      // Load from local storage first
+      // Load from local storage (IndexedDB & LocalStorage) first
       try {
-        const localData = safeGetLocalStorage('local_exams', '[]');
-        const parsed = JSON.parse(localData);
-        if (Array.isArray(parsed)) {
-          parsed.forEach((e: Exam) => { if (e && e.id) examMap.set(e.id, e); });
+        const localData = await getLargeStorage<Exam[]>('local_exams', []);
+        if (Array.isArray(localData)) {
+          localData.forEach((e: Exam) => { if (e && e.id) examMap.set(e.id, e); });
         }
       } catch (_) {}
 

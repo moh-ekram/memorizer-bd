@@ -312,12 +312,11 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     setLoadingExams(true);
     const examMap = new Map<string, Exam>();
 
-    // 1. Local Cache
+    // 1. Local Cache (IndexedDB & LocalStorage)
     try {
-      const localData = safeGetLocalStorage('local_exams', '[]');
-      const parsed = JSON.parse(localData);
-      if (Array.isArray(parsed)) {
-        parsed.forEach((e: Exam) => { if (e && e.id) examMap.set(e.id, e); });
+      const localData = await getLargeStorage<Exam[]>('local_exams', []);
+      if (Array.isArray(localData)) {
+        localData.forEach((e: Exam) => { if (e && e.id) examMap.set(e.id, e); });
       }
     } catch (_) {}
 
@@ -343,7 +342,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
     const updatedExams = allExams.filter(e => e.id !== examId);
     setAllExams(updatedExams);
-    safeSetLocalStorage('local_exams', JSON.stringify(updatedExams));
+    await setLargeStorage('local_exams', updatedExams);
 
     try {
       await deleteDoc(doc(db, 'exams', examId));
@@ -847,24 +846,27 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     };
 
     try {
-      // 1. Cloud save
-      try {
-        await setDoc(doc(db, 'exams', finalExamObj.id), finalExamObj, { merge: true });
-      } catch (fsErr) {
-        console.warn('Cloud exam save notice (saved locally):', fsErr);
-      }
-
-      // 2. Local storage save
-      const existingLocalExamsStr = safeGetLocalStorage('local_exams', '[]');
+      // 1. Local storage save (IndexedDB for large exam payloads like 190+ questions)
       let localExams: Exam[] = [];
       try {
-        localExams = JSON.parse(existingLocalExamsStr);
-        if (!Array.isArray(localExams)) localExams = [];
-      } catch (_) {
-        localExams = [];
-      }
+        const existing = await getLargeStorage<Exam[]>('local_exams', []);
+        if (Array.isArray(existing)) localExams = existing;
+      } catch (_) {}
+
       const updatedLocalExams = [finalExamObj, ...localExams.filter(e => e.id !== finalExamObj.id)];
-      safeSetLocalStorage('local_exams', JSON.stringify(updatedLocalExams));
+      await setLargeStorage('local_exams', updatedLocalExams);
+
+      // Update state immediately
+      setAllExams(prev => [finalExamObj, ...prev.filter(e => e.id !== finalExamObj.id)]);
+
+      // 2. Cloud save with 3-second timeout so UI never hangs on Publishing
+      try {
+        const cloudSavePromise = setDoc(doc(db, 'exams', finalExamObj.id), finalExamObj, { merge: true });
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Cloud save timeout')), 3000));
+        await Promise.race([cloudSavePromise, timeoutPromise]);
+      } catch (fsErr) {
+        console.warn('Cloud exam save notice (saved locally/IndexedDB):', fsErr);
+      }
 
       setPublishSuccess(true);
       setSelectedIds(new Set());
@@ -1425,73 +1427,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               </div>
             </div>
 
-            {/* Smart Exam Preset Suggestions */}
-            <div className="p-4 bg-gradient-to-r from-indigo-50/90 via-purple-50/70 to-slate-50 rounded-2xl border border-indigo-100/90 space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                <div className="flex items-center gap-2 text-indigo-950 font-extrabold text-xs">
-                  <Sparkles className="w-4 h-4 text-indigo-600" />
-                  <span>স্মার্ট এক্সাম সাজেস্টেন (Suggested Exam Templates)</span>
-                </div>
-                <span className="text-[11px] text-slate-500 font-medium">
-                  {filteredQuestions.length} টি প্রশ্ন পাওয়া গেছে • ১ মিনিট/প্রশ্ন ডিফল্ট সম্বলিত কুইক টেমপ্লেট
-                </span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const qCount = Math.min(10, filteredQuestions.length || 10);
-                    setRules([{ id: `rule-${Date.now()}`, group1: filterGroup1, group2: filterGroup2, group3: filterGroup3, count: qCount }]);
-                    setDurationMinutes(qCount);
-                    setIsDurationUserEdited(false);
-                    setIsTitleUserEdited(false);
-                  }}
-                  className="p-3 bg-white hover:bg-indigo-50/90 border border-slate-200/80 hover:border-indigo-300 rounded-xl text-left transition shadow-2xs group cursor-pointer"
-                >
-                  <div className="flex items-center justify-between text-xs font-black text-slate-800 group-hover:text-indigo-600">
-                    <span>⚡ Quick Speed Test</span>
-                    <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-mono font-bold">10 Qs</span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-1 font-medium">১০ মিনিট সময় • ১০টি নির্বাচিত প্রশ্ন</p>
-                </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    const qCount = Math.min(25, filteredQuestions.length || 25);
-                    setRules([{ id: `rule-${Date.now()}`, group1: filterGroup1, group2: filterGroup2, group3: filterGroup3, count: qCount }]);
-                    setDurationMinutes(qCount);
-                    setIsDurationUserEdited(false);
-                    setIsTitleUserEdited(false);
-                  }}
-                  className="p-3 bg-white hover:bg-indigo-50/90 border border-slate-200/80 hover:border-indigo-300 rounded-xl text-left transition shadow-2xs group cursor-pointer"
-                >
-                  <div className="flex items-center justify-between text-xs font-black text-slate-800 group-hover:text-indigo-600">
-                    <span>🎯 Standard Practice</span>
-                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-mono font-bold">25 Qs</span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-1 font-medium">২৫ মিনিট সময় • ২৫টি নির্বাচিত প্রশ্ন</p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const qCount = Math.min(50, filteredQuestions.length || 50);
-                    setRules([{ id: `rule-${Date.now()}`, group1: filterGroup1, group2: filterGroup2, group3: filterGroup3, count: qCount }]);
-                    setDurationMinutes(qCount);
-                    setIsDurationUserEdited(false);
-                    setIsTitleUserEdited(false);
-                  }}
-                  className="p-3 bg-white hover:bg-indigo-50/90 border border-slate-200/80 hover:border-indigo-300 rounded-xl text-left transition shadow-2xs group cursor-pointer"
-                >
-                  <div className="flex items-center justify-between text-xs font-black text-slate-800 group-hover:text-indigo-600">
-                    <span>🏆 Full Model Test</span>
-                    <span className="text-[10px] bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-mono font-bold">50 Qs</span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-1 font-medium">৫০ মিনিট সময় • ৫০টি নির্বাচিত প্রশ্ন</p>
-                </button>
-              </div>
-            </div>
 
             {/* Group Matching Rules Table */}
             <div className="space-y-4 pt-4 border-t border-slate-100">

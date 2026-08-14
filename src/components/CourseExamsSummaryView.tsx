@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { db, collection, getDocs, deleteDoc, doc } from '../lib/db';
 import { Course, Exam } from '../types';
-import { safeGetLocalStorage, safeSetLocalStorage } from '../lib/storage';
+import { safeGetLocalStorage, safeSetLocalStorage, getLargeStorage, setLargeStorage } from '../lib/storage';
 
 interface CourseExamsSummaryViewProps {
   courses: Course[];
@@ -48,12 +48,11 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
     setLoading(true);
     const examMap = new Map<string, Exam>();
 
-    // 1. Local storage cache
+    // 1. Local storage cache (IndexedDB & LocalStorage)
     try {
-      const localData = safeGetLocalStorage('local_exams', '[]');
-      const parsed = JSON.parse(localData);
-      if (Array.isArray(parsed)) {
-        parsed.forEach((e: Exam) => {
+      const localData = await getLargeStorage<Exam[]>('local_exams', []);
+      if (Array.isArray(localData)) {
+        localData.forEach((e: Exam) => {
           if (e && e.id) examMap.set(e.id, e);
         });
       }
@@ -170,7 +169,7 @@ export function CourseExamsSummaryView({ courses, onNavigateToQuestionBank }: Co
     setDeletingExamId(examId);
     const updatedExams = exams.filter(e => e.id !== examId);
     setExams(updatedExams);
-    safeSetLocalStorage('local_exams', JSON.stringify(updatedExams));
+    await setLargeStorage('local_exams', updatedExams);
 
     try {
       await deleteDoc(doc(db, 'exams', examId));
