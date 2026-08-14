@@ -28,7 +28,7 @@ import {
 import { db, doc, setDoc, deleteDoc, writeBatch, collection, getDocs, saveBulkDocs } from '../lib/db';
 import { QuestionBankItem, QuestionBankRule, Course, Exam, ExamQuestion } from '../types';
 import { downloadQuestionBankExcelTemplate, parseQuestionBankExcel, exportQuestionBankToExcel } from '../lib/gameExcelUtils';
-import { safeGetLocalStorage, safeSetLocalStorage } from '../lib/storage';
+import { safeGetLocalStorage, safeSetLocalStorage, setLargeStorage, getLargeStorage } from '../lib/storage';
 
 interface QuestionBankViewProps {
   courses: Course[];
@@ -207,18 +207,15 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       }
     } catch (_) {}
 
-    // 1. Local Storage cache
+    // 1. Local Storage & IndexedDB cache
     try {
-      const cached = safeGetLocalStorage('local_question_bank', null);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed)) {
-          parsed.forEach((q: QuestionBankItem) => {
-            if (q && q.id && !deletedSet.has(q.id)) {
-              itemMap.set(q.id, q);
-            }
-          });
-        }
+      const cachedList = await getLargeStorage<QuestionBankItem[]>('local_question_bank', null);
+      if (Array.isArray(cachedList)) {
+        cachedList.forEach((q: QuestionBankItem) => {
+          if (q && q.id && !deletedSet.has(q.id)) {
+            itemMap.set(q.id, q);
+          }
+        });
       }
     } catch (_) {}
 
@@ -227,11 +224,29 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       const snap = await getDocs(collection(db, 'question_bank'));
       snap.forEach(docSnap => {
         if (!deletedSet.has(docSnap.id)) {
-          itemMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as QuestionBankItem);
+          const dData = docSnap.data();
+          itemMap.set(docSnap.id, {
+            id: docSnap.id,
+            question: dData.question || '',
+            optionA: dData.optionA || '',
+            optionB: dData.optionB || '',
+            optionC: dData.optionC || '',
+            optionD: dData.optionD || '',
+            correctAnswer: dData.correctAnswer || 'A',
+            explanation: dData.explanation || '',
+            group1: dData.group1 || 'General',
+            group2: dData.group2 || 'General',
+            group3: dData.group3 || 'General',
+            createdAt: dData.createdAt || new Date().toISOString(),
+            ...dData
+          } as QuestionBankItem);
         }
       });
     } catch (err: any) {
       console.warn('Question bank Firestore fetch notice:', err);
+      if (err?.code === 'permission-denied' || err?.message?.includes('permission')) {
+        setPermissionNotice('Firestore Security Rules-এর কারণে ফায়ারবেস থেকে ডেটা লোড হতে বাধা পাচ্ছে। দয়া করে ফায়ারবেস কনসোলে সিকিউরিটি রুলস আপডেট করে Publish করুন।');
+      }
     }
 
     // 3. Migrate all existing blank_questions into Question Bank
@@ -288,7 +303,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
     const finalList = Array.from(itemMap.values());
     setQuestions(finalList);
-    safeSetLocalStorage('local_question_bank', JSON.stringify(finalList));
+    await setLargeStorage('local_question_bank', finalList);
     setLoading(false);
   };
 
@@ -430,7 +445,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       pendingUploadQuestions.forEach(q => existingMap.set(q.id, q));
       const updatedList = Array.from(existingMap.values());
       setQuestions(updatedList);
-      safeSetLocalStorage('local_question_bank', JSON.stringify(updatedList));
+      await setLargeStorage('local_question_bank', updatedList);
 
       // Close modal immediately so UI doesn't buffer/hang
       setShowUploadPreviewModal(false);
@@ -491,7 +506,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       ? questions.map(q => q.id === qId ? item : q)
       : [item, ...questions];
     setQuestions(updatedList);
-    safeSetLocalStorage('local_question_bank', JSON.stringify(updatedList));
+    setLargeStorage('local_question_bank', updatedList);
 
     setShowAddModal(false);
     setEditingQuestion(null);
@@ -552,7 +567,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
         recordDeletedIds([id]);
         const updatedList = questions.filter(q => q.id !== id);
         setQuestions(updatedList);
-        safeSetLocalStorage('local_question_bank', JSON.stringify(updatedList));
+        setLargeStorage('local_question_bank', updatedList);
         setSelectedIds(prev => {
           const next = new Set(prev);
           next.delete(id);
@@ -587,7 +602,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
         const deleteSet = new Set(idsArr);
         const updatedList = questions.filter(q => !deleteSet.has(q.id));
         setQuestions(updatedList);
-        safeSetLocalStorage('local_question_bank', JSON.stringify(updatedList));
+        setLargeStorage('local_question_bank', updatedList);
         setSelectedIds(new Set());
 
         try {
@@ -629,7 +644,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
         const deleteSet = new Set(idsArr);
         const updatedList = questions.filter(q => !deleteSet.has(q.id));
         setQuestions(updatedList);
-        safeSetLocalStorage('local_question_bank', JSON.stringify(updatedList));
+        setLargeStorage('local_question_bank', updatedList);
         setSelectedIds(prev => {
           const next = new Set(prev);
           idsArr.forEach(id => next.delete(id));
