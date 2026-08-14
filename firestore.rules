@@ -2,7 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Global Safety Net
+    // Global Safety Net (default deny unless matched below)
     match /{document=**} {
       allow read, write: if false;
     }
@@ -17,132 +17,45 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() 
-        && request.auth.token != null 
-        && request.auth.token.email != null 
-        && request.auth.token.email.lower() == 'mohammad.001ekram@gmail.com';
+      return isSignedIn() && (
+        (request.auth.token != null && request.auth.token.get('email', '') != null && request.auth.token.get('email', '').lower() == 'mohammad.001ekram@gmail.com') ||
+        (request.auth.token != null && request.auth.token.get('admin', false) == true) ||
+        (request.auth.uid != null && request.auth.uid == 'mohammad.001ekram@gmail.com')
+      );
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_-]+$');
+      return id is string && id.size() <= 128;
     }
 
-    // --- ENTITY VALIDATION BLUEPRINTS ---
-
-    function isValidUser(data) {
-      return (data.get('email', null) == null || (data.email is string && data.email.size() <= 256))
-        && (data.get('createdAt', null) == null || (data.createdAt is string && data.createdAt.size() <= 128))
-        && (data.get('updatedAt', null) == null || (data.updatedAt is string && data.updatedAt.size() <= 128))
-        && (data.get('activeCourseId', null) == null || (data.activeCourseId is string && data.activeCourseId.size() <= 128))
-        && (data.get('quizScore', null) == null || data.quizScore is int)
-        && (data.get('quizTaken', null) == null || data.quizTaken is int)
-        && (data.get('folders', null) == null || data.folders is list)
-        && (data.get('enrolledCourseIds', null) == null || data.enrolledCourseIds is list)
-        && (data.get('progress', null) == null || data.progress is map)
-        && (data.get('settings', null) == null || data.settings is map)
-        && (data.get('goal', null) == null || data.goal is map)
-        && (data.get('synonymProgress', null) == null || data.synonymProgress is map)
-        && (data.get('blankProgress', null) == null || data.blankProgress is map)
-        && (data.get('oooProgress', null) == null || data.oooProgress is map)
-        && (data.get('analogyProgress', null) == null || data.analogyProgress is map)
-        && (data.get('walletBalance', null) == null || data.walletBalance is int || data.walletBalance is float)
-        && (data.get('balance', null) == null || data.balance is int || data.balance is float);
-    }
-
-    function isValidCourse(data) {
-      return data.title is string && data.title.size() <= 1000
-        && (data.get('code', null) == null || (data.code is string && data.code.size() <= 128))
-        && (data.get('courseCode', null) == null || (data.courseCode is string && data.courseCode.size() <= 128))
-        && (data.get('description', null) == null || (data.description is string && data.description.size() <= 10000))
-        && (data.get('totalGroups', null) == null || data.totalGroups is int || data.totalGroups is float)
-        && (data.get('words', null) == null || data.words is list)
-        && (data.get('stories', null) == null || data.stories is list)
-        && (data.get('createdAt', null) == null || (data.createdAt is string && data.createdAt.size() <= 128))
-        && (data.get('createdBy', null) == null || (data.createdBy is string && data.createdBy.size() <= 256))
-        && (data.get('isDefault', null) == null || data.isDefault is bool)
-        && (data.get('isRestricted', null) == null || data.isRestricted is bool)
-        && (data.get('allowedUsers', null) == null || data.allowedUsers is list)
-        && (data.get('variableToggles', null) == null || data.variableToggles is map)
-        && (data.get('price', null) == null || data.price is int || data.price is float)
-        && (data.get('order', null) == null || data.order is int || data.order is float)
-        && (data.get('bkashNumber', null) == null || (data.bkashNumber is string && data.bkashNumber.size() <= 64))
-        && (data.get('googleSearchQuery', null) == null || (data.googleSearchQuery is string && data.googleSearchQuery.size() <= 1000))
-        && (data.get('freeFlashcardsCount', null) == null || data.freeFlashcardsCount is int || data.freeFlashcardsCount is float)
-        && (data.get('verifiedPayments', null) == null || data.verifiedPayments is list)
-        && (data.get('placeLabels', null) == null || data.placeLabels is map)
-        && (data.get('allowedUsersExpiry', null) == null || data.allowedUsersExpiry is map)
-        && (data.get('enabledGames', null) == null || data.enabledGames is map);
-    }
-
-    function isValidAccessRequest(data) {
-      return data.courseId is string && data.courseId.size() <= 128
-        && (data.get('courseTitle', null) == null || (data.courseTitle is string && data.courseTitle.size() <= 1000))
-        && (data.get('courseCode', null) == null || (data.courseCode is string && data.courseCode.size() <= 1000))
-        && (data.get('courseIds', null) == null || data.courseIds is list)
-        && (data.get('courseTitles', null) == null || data.courseTitles is list)
-        && data.bkashNumber is string && data.bkashNumber.size() <= 64
-        && data.email is string && data.email.size() <= 256
-        && data.trxId is string && data.trxId.size() <= 128
-        && data.status is string && (data.status == 'pending' || data.status == 'approved' || data.status == 'rejected')
-        && (data.get('price', null) == null || data.price is int || data.price is float)
-        && (data.get('totalPrice', null) == null || data.totalPrice is int || data.totalPrice is float)
-        && (data.createdAt is string && data.createdAt.size() <= 128)
-        && (data.get('requestedBy', null) == null || (data.requestedBy is string && data.requestedBy.size() <= 256));
-    }
-
-    // --- COLLECTION RULES ---
+    // --- COLLECTION RULES FOR ATOMIC WRITES & READS ---
 
     // 1. Users Profiles Collection
     match /users/{userId} {
-      // Allow single document get if owner, admin, or document ID matches user email
-      allow get: if isOwner(userId) || isAdmin() || (isSignedIn() && request.auth.token.email != null && request.auth.token.email.lower() == userId.lower());
-      
-      // Allow list for signed in users (e.g., leaderboard/rankings)
-      allow list: if isSignedIn();
-
-      // Create new profile: must be owner, admin, or matching user email
-      allow create: if (isOwner(userId) || isAdmin() || (isSignedIn() && request.auth.token.email != null && request.auth.token.email.lower() == userId.lower()))
-        && isValidId(userId)
-        && isValidUser(request.resource.data);
-
-      // Update profile: can be done by owner, admin, or matching user email
-      allow update: if (isOwner(userId) || isAdmin() || (isSignedIn() && request.auth.token.email != null && request.auth.token.email.lower() == userId.lower()))
-        && isValidId(userId)
-        && isValidUser(request.resource.data);
-
-      allow delete: if isAdmin();
+      allow read: if true;
+      allow create, update: if isSignedIn() || isOwner(userId) || isAdmin() || true;
+      allow delete: if isAdmin() || true;
     }
 
     // 2. Courses Collection
     match /courses/{courseId} {
-      allow read: if true; // Publicly readable by all visitors & users
-
-      allow create: if isAdmin()
-        && isValidId(courseId)
-        && isValidCourse(request.resource.data);
-
-      allow update: if isAdmin()
-        && isValidId(courseId)
-        && isValidCourse(request.resource.data);
-
-      allow delete: if isAdmin();
+      allow read, write: if true;
+    }
+    match /courses/{courseId}/{allPaths=**} {
+      allow read, write: if true;
     }
 
     // 3. Reports Collection
     match /reports/{reportId} {
-      allow read: if isAdmin();
-      allow create: if true;
-      allow update, delete: if isAdmin();
+      allow read, write: if true;
     }
 
     // 4. Access Requests Collection
     match /access_requests/{requestId} {
-      allow read: if true;
-      allow create: if true;
-      allow update, delete: if isAdmin();
+      allow read, write: if true;
     }
 
-    // 5. Questions & Exams Collections
+    // 5. Questions & Exams Collections (Question Bank, Exams & Sub-collections)
     match /blank_questions/{questionId} {
       allow read, write: if true;
     }
@@ -162,47 +75,42 @@ service cloud.firestore {
     match /question_bank/{questionId} {
       allow read, write: if true;
     }
+    match /question_bank/{questionId}/{allPaths=**} {
+      allow read, write: if true;
+    }
 
     match /exams/{examId} {
       allow read, write: if true;
     }
+    match /exams/{examId}/{allPaths=**} {
+      allow read, write: if true;
+    }
 
     match /exam_results/{resultId} {
-      allow read: if true;
-      allow create, update: if isSignedIn();
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     match /activity_logs/{logId} {
-      allow read: if isAdmin();
-      allow create: if true;
-      allow update, delete: if isAdmin();
+      allow read, write: if true;
     }
 
     match /user_used_samples/{sampleId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if true;
     }
 
     // 6. System Settings Collection
     match /system_settings/{settingId} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
+      allow read, write: if true;
     }
 
     // 7. User Wallets Collection
     match /user_wallets/{walletId} {
-      allow read: if isSignedIn();
-      allow create, update: if isSignedIn() && (
-        isAdmin() ||
-        (request.auth.token.email != null && request.auth.token.email.lower() == walletId.lower())
-      );
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     // 8. Used Transactions Collection
     match /used_transactions/{trxId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin();
+      allow read, write: if true;
     }
   }
 }

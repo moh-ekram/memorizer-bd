@@ -859,11 +859,9 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       // Update state immediately
       setAllExams(prev => [finalExamObj, ...prev.filter(e => e.id !== finalExamObj.id)]);
 
-      // 2. Cloud save with 3-second timeout so UI never hangs on Publishing
+      // 2. Cloud save to Firestore
       try {
-        const cloudSavePromise = setDoc(doc(db, 'exams', finalExamObj.id), finalExamObj, { merge: true });
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Cloud save timeout')), 3000));
-        await Promise.race([cloudSavePromise, timeoutPromise]);
+        await setDoc(doc(db, 'exams', finalExamObj.id), finalExamObj, { merge: true });
       } catch (fsErr) {
         console.warn('Cloud exam save notice (saved locally/IndexedDB):', fsErr);
       }
