@@ -5,8 +5,7 @@ import {
   doc, 
   setDoc, 
   deleteDoc, 
-  onSnapshot,
-  writeBatch
+  onSnapshot
 } from '../lib/db';
 import { LibraryType, SeatBooking, LibraryRoomConfig, LibraryConfig, DEFAULT_LIBRARY_CONFIG } from '../types/library';
 import { 
@@ -17,21 +16,17 @@ import {
   Hourglass, 
   LogOut, 
   ArrowLeft, 
-  RotateCcw, 
   Coffee, 
   LogIn,
   Search, 
-  Check,
-  Flame,
-  UserCheck,
   Shield,
   Settings2,
   Plus,
   Trash2,
-  AlertTriangle,
-  Users,
   Timer,
-  UserPlus
+  UserPlus,
+  Hash,
+  Layers
 } from 'lucide-react';
 
 interface LibrarySeatBookingViewProps {
@@ -43,6 +38,31 @@ interface LibrarySeatBookingViewProps {
 }
 
 const ADMIN_EMAIL = 'mohammad.001ekram@gmail.com';
+
+// Helper to compute formatted seat serial label
+export const formatSeatLabel = (seatNum: number, roomConfig?: LibraryRoomConfig): string => {
+  if (!roomConfig) return `${seatNum}`;
+
+  const style = roomConfig.numberingStyle || (roomConfig.seatPrefix ? 'prefix' : 'numeric');
+
+  if (style === 'prefix' && roomConfig.seatPrefix) {
+    return `${roomConfig.seatPrefix}${seatNum}`;
+  }
+
+  if (style === 'grid_rows') {
+    const rowIdx = Math.floor((seatNum - 1) / 10);
+    const colIdx = ((seatNum - 1) % 10) + 1;
+    const rowLetter = String.fromCharCode(65 + (rowIdx % 26)); // A, B, C, D...
+    const rowPrefix = rowIdx >= 26 ? `${Math.floor(rowIdx / 26) + 1}` : '';
+    return `${rowLetter}${rowPrefix}${colIdx}`;
+  }
+
+  if (roomConfig.seatPrefix && roomConfig.seatPrefix.trim() !== '') {
+    return `${roomConfig.seatPrefix}${seatNum}`;
+  }
+
+  return `${seatNum}`;
+};
 
 export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
   libraryType,
@@ -98,7 +118,7 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
     return hour >= 8 && hour < 22; // 8:00 to 21:59:59
   }, [currentTime]);
 
-  // Load Library Config (Rooms & Capacities)
+  // Load Library Config (Rooms & Capacities & Serial Layouts)
   useEffect(() => {
     try {
       const cachedConfig = localStorage.getItem(localConfigCacheKey);
@@ -179,7 +199,13 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
 
   // Current active room config
   const currentRoomConfig = useMemo(() => {
-    return config.rooms.find(r => r.id === selectedRoom) || config.rooms[0] || { id: 1, name: 'রুম ১', capacity: 100 };
+    return config.rooms.find(r => r.id === selectedRoom) || config.rooms[0] || { 
+      id: 1, 
+      name: 'রুম ১', 
+      capacity: 100, 
+      seatPrefix: '', 
+      numberingStyle: 'numeric' 
+    };
   }, [config.rooms, selectedRoom]);
 
   // Current user's existing primary OR secondary booking across this library
@@ -270,7 +296,9 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
 
     if (hasAnyActiveBooking) {
       const existing = myPrimaryBooking || mySecondaryBooking;
-      alert(`আপনি ইতিমধ্যে রুম ${existing?.roomId}-এ সিট #${existing?.seatNumber} বরাদ্দ নিয়েছেন। একজন শিক্ষার্থী সর্বোচ্চ ১টি সিট নিতে পারেন। নতুন সিট নিতে আগেরটি ছেড়ে দিন।`);
+      const existingRoom = config.rooms.find(r => r.id === existing?.roomId);
+      const formattedNum = formatSeatLabel(existing?.seatNumber || 1, existingRoom);
+      alert(`আপনি ইতিমধ্যে ${existingRoom?.name || `রুম ${existing?.roomId}`}-এ সিট ${formattedNum} বরাদ্দ নিয়েছেন। একজন শিক্ষার্থী সর্বোচ্চ ১টি সিট নিতে পারেন। নতুন সিট নিতে আগেরটি ছেড়ে দিন।`);
       return;
     }
 
@@ -314,7 +342,9 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
 
     if (hasAnyActiveBooking) {
       const existing = myPrimaryBooking || mySecondaryBooking;
-      alert(`আপনি ইতিমধ্যে রুম ${existing?.roomId}-এ সিট #${existing?.seatNumber} বরাদ্দ নিয়েছেন। নতুন সিট নেয়ার পূর্বে আগের সিট ছেড়ে দিন।`);
+      const existingRoom = config.rooms.find(r => r.id === existing?.roomId);
+      const formattedNum = formatSeatLabel(existing?.seatNumber || 1, existingRoom);
+      alert(`আপনি ইতিমধ্যে ${existingRoom?.name || `রুম ${existing?.roomId}`}-এ সিট ${formattedNum} বরাদ্দ নিয়েছেন। নতুন সিট নেয়ার পূর্বে আগের সিট ছেড়ে দিন।`);
       return;
     }
 
@@ -381,14 +411,15 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
     }
   };
 
-  // 🌟 Handle Release Seat (Primary or Secondary or Admin)
-  const handleReleaseSeat = async (bookingToRelease?: SeatBooking) => {
-    const target = bookingToRelease || myPrimaryBooking || mySecondaryBooking;
+  // 🌟 Handle Release Seat (Student releases their own seat; Admin cannot forcibly empty other's seats)
+  const handleReleaseSeat = async () => {
+    const target = myPrimaryBooking || mySecondaryBooking;
     if (!target) return;
 
     // If user is secondary booker, only release their secondary reservation
-    if (mySecondaryBooking && target.seatNumber === mySecondaryBooking.seatNumber && target.roomId === mySecondaryBooking.roomId && !isAdmin) {
-      if (!confirm(`আপনি কি সিট #${target.seatNumber}-এর সেকেন্ডারি ব্যবহার ছেড়ে দিতে চান?`)) return;
+    if (mySecondaryBooking && target.seatNumber === mySecondaryBooking.seatNumber && target.roomId === mySecondaryBooking.roomId) {
+      const formattedLabel = formatSeatLabel(target.seatNumber, currentRoomConfig);
+      if (!confirm(`আপনি কি সিট ${formattedLabel}-এর সেকেন্ডারি ব্যবহার ছেড়ে দিতে চান?`)) return;
       const docId = `r${target.roomId}_s${target.seatNumber}`;
       const updatedBooking: SeatBooking = {
         ...target,
@@ -408,7 +439,8 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
       return;
     }
 
-    if (!confirm(`আপনি কি নিশ্চিতভাবে রুম ${target.roomId}-এর সিট #${target.seatNumber} সম্পূর্ণরূপে ছেড়ে দিতে চান?`)) {
+    const formattedLabel = formatSeatLabel(target.seatNumber, currentRoomConfig);
+    if (!confirm(`আপনি কি নিশ্চিতভাবে রুম ${target.roomId}-এর সিট ${formattedLabel} সম্পূর্ণরূপে ছেড়ে দিতে চান?`)) {
       return;
     }
 
@@ -426,7 +458,7 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
     }
   };
 
-  // 🌟 ADMIN CONTROLS: Save Room & Seat Config
+  // 🌟 ADMIN CONTROLS: Save Room & Seat Serial Config (No seat clearing powers)
   const handleSaveAdminConfig = async () => {
     if (!isAdmin) return;
     const updatedConfig: LibraryConfig = {
@@ -441,7 +473,7 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
       await setDoc(configRef, updatedConfig, { merge: true });
       setConfig(updatedConfig);
       localStorage.setItem(localConfigCacheKey, JSON.stringify(updatedConfig));
-      alert('লাইব্রেরি রুম ও সিটের কনফিগারেশন সফলভাবে সেভ হয়েছে!');
+      alert('লাইব্রেরির রুম, সিটের সংখ্যা এবং সিরিয়াল বিন্যাস সফলভাবে সেভ হয়েছে!');
       setShowAdminPanel(false);
     } catch (e: any) {
       console.error('Save config error:', e);
@@ -449,96 +481,73 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
     }
   };
 
-  // 🌟 ADMIN CONTROLS: Reset All Seats
-  const handleAdminResetAllSeats = async () => {
-    if (!isAdmin) return;
-    if (!confirm(`⚠️ সতর্কবার্তা: আপনি কি ${libraryType === 'science' ? 'সাইন্স' : 'সেন্ট্রাল'} লাইব্রেরির সব রুমের সকল সিট এক ক্লিকে খালি/রিসেট করতে চান?`)) {
-      return;
-    }
-
-    try {
-      const batch = writeBatch(db);
-      bookings.forEach(b => {
-        const docId = `r${b.roomId}_s${b.seatNumber}`;
-        const ref = doc(db, collectionName, docId);
-        batch.delete(ref);
-      });
-      await batch.commit();
-      setBookings([]);
-      localStorage.setItem(localCacheKey, JSON.stringify([]));
-      alert('সকল সিট সফলভাবে রিসেট ও খালি করা হয়েছে।');
-    } catch (err: any) {
-      console.error('Admin reset seats error:', err);
-      alert('রিসেট করতে সমস্যা হয়েছে: ' + err?.message);
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans pb-16">
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans pb-16">
       
-      {/* Top Header Bar */}
-      <header className="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40 px-4 sm:px-8 py-3.5 flex items-center justify-between shadow-lg">
+      {/* Top Header Bar - Clean Minimalist Light Mode */}
+      <header className="bg-white border-b border-slate-200/80 sticky top-0 z-40 px-4 sm:px-6 py-2.5 flex items-center justify-between shadow-2xs">
         <div className="flex items-center gap-3">
           <button
             onClick={onBackToHome}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1.5 text-xs font-bold border border-slate-700 cursor-pointer shadow-xs"
+            className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200/80 text-slate-700 hover:text-slate-900 transition flex items-center gap-1.5 text-xs font-medium cursor-pointer"
             title="হোমপেজে ফিরুন"
           >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline">হোমপেজ</span>
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">হোম</span>
           </button>
 
-          <div className="flex items-center gap-2.5">
-            <div className={`p-2 rounded-xl text-lg ${libraryType === 'science' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
+          <div className="flex items-center gap-2">
+            <span className="text-base">
               {libraryType === 'science' ? '🧪' : '🏛️'}
-            </div>
+            </span>
             <div>
-              <h1 className="text-base sm:text-lg font-black tracking-tight text-white">
+              <h1 className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
                 {libraryType === 'science' ? 'সাইন্স লাইব্রেরি' : 'সেন্ট্রাল লাইব্রেরি'}
               </h1>
-              <p className="text-[11px] text-slate-400 font-medium">
-                সিট নির্বাচন ও লাইভ বুকিং (সকাল ৮:০০ – রাত ১০:০০)
+              <p className="text-[11px] text-slate-500 font-normal">
+                সিট বুকিং • সকাল ৮:০০ – রাত ১০:০০
               </p>
             </div>
           </div>
         </div>
 
-        {/* Right Header: Admin Panel Trigger + Study Room Button */}
-        <div className="flex items-center gap-2.5">
-          {/* Admin Control Panel Button (Only for mohammad.001ekram@gmail.com) */}
+        {/* Right Header Actions */}
+        <div className="flex items-center gap-2">
+          {/* Admin Control Panel Button */}
           {isAdmin && (
             <button
-              onClick={() => setShowAdminPanel(true)}
-              className="px-3 py-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-md cursor-pointer animate-pulse"
+              onClick={() => {
+                setAdminRooms(config.rooms);
+                setShowAdminPanel(true);
+              }}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium transition flex items-center gap-1.5 cursor-pointer active:scale-95"
               title="সিট কন্ট্রোল প্যানেল"
             >
-              <Settings2 className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">সিট কন্ট্রোল প্যানেল</span>
+              <Settings2 className="w-3.5 h-3.5 text-slate-600" />
+              <span className="hidden sm:inline">সিট কন্ট্রোল</span>
             </button>
           )}
 
           {user ? (
-            <div className="hidden sm:flex items-center gap-2 bg-slate-850 border border-slate-800 px-3 py-1.5 rounded-xl text-xs">
-              <div className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] font-bold text-white">
-                {user.email ? user.email[0].toUpperCase() : 'U'}
-              </div>
-              <span className="font-bold text-slate-300 max-w-[110px] truncate">
+            <div className="hidden sm:flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg text-xs text-slate-700 font-medium">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span className="max-w-[100px] truncate">
                 {user.displayName || user.email?.split('@')[0]}
               </span>
             </div>
           ) : (
             <button
               onClick={onRequireAuth}
-              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md"
+              className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
             >
               <LogIn className="w-3.5 h-3.5" />
-              <span>লগইন করুন</span>
+              <span>লগইন</span>
             </button>
           )}
 
           <button
             onClick={onOpenStudyRoom}
-            className="px-3.5 py-1.5 sm:py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-md shadow-purple-600/30 cursor-pointer"
+            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
           >
             <BookOpen className="w-3.5 h-3.5" />
             <span>স্টাডি রুম</span>
@@ -547,84 +556,80 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
       </header>
 
       {/* Main Content Area */}
-      <div className="max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      <div className="max-w-6xl w-full mx-auto p-3.5 sm:p-5 lg:p-6 space-y-4">
         
         {/* Operating Hours Alert Banner (If outside 8:00 AM - 10:00 PM) */}
         {!isWithinOperatingHours && (
-          <div className="bg-amber-950/70 border-2 border-amber-500/60 rounded-2xl p-4 flex items-center gap-3.5 text-amber-200 shadow-lg">
-            <Clock className="w-6 h-6 text-amber-400 shrink-0" />
+          <div className="bg-amber-50/90 border border-amber-200 rounded-xl p-3 flex items-center gap-3 text-amber-900 text-xs">
+            <Clock className="w-4 h-4 text-amber-600 shrink-0" />
             <div>
-              <h4 className="text-sm font-black text-white">
-                বর্তমানে সিট বরাদ্দ বন্ধ রয়েছে
-              </h4>
-              <p className="text-xs text-amber-300/90 font-medium">
-                প্রতিদিন সকাল ৮:০০ টা থেকে রাত ১০:০০ টা পর্যন্ত সিট বরাদ্দ চালু থাকে। প্রতিদিন রাত ১০:০০ টায় সমস্ত সিট স্বয়ংক্রিয়ভাবে রিসেট হয়ে যায়।
-              </p>
+              <span className="font-bold text-amber-950">বর্তমানে সিট বরাদ্দ বন্ধ রয়েছে: </span>
+              <span className="text-amber-800 font-normal">সিট বরাদ্দ প্রতিদিন সকাল ৮:০০ টা থেকে রাত ১০:০০ টা পর্যন্ত চালু থাকে।</span>
             </div>
           </div>
         )}
 
-        {/* 🌟 USER'S ACTIVE BOOKING BANNER (Primary or Secondary) */}
+        {/* 🌟 USER'S ACTIVE BOOKING BANNER (Clean, Calm, Minimal) */}
         {hasAnyActiveBooking && (
-          <div className="bg-slate-900 border-2 border-indigo-500/60 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-lg shrink-0 shadow-md">
-                #{myPrimaryBooking?.seatNumber || mySecondaryBooking?.seatNumber}
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 sm:p-4 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-base shrink-0 shadow-2xs">
+                {formatSeatLabel(myPrimaryBooking?.seatNumber || mySecondaryBooking?.seatNumber || 1, currentRoomConfig)}
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-indigo-300">
-                    {myPrimaryBooking ? 'আপনার মূল সিট' : 'আপনার সেকেন্ডারি ব্যবহার'} (রুম {myPrimaryBooking?.roomId || mySecondaryBooking?.roomId} • #{myPrimaryBooking?.seatNumber || mySecondaryBooking?.seatNumber})
+                  <span className="text-xs font-semibold text-slate-900">
+                    {myPrimaryBooking ? 'আপনার সিট' : 'সেকেন্ডারি ব্যবহার'} ({currentRoomConfig.name} • সিট {formatSeatLabel(myPrimaryBooking?.seatNumber || mySecondaryBooking?.seatNumber || 1, currentRoomConfig)})
                   </span>
                   {mySecondaryBooking && (
-                    <span className="text-[10px] bg-purple-500/30 text-purple-300 border border-purple-400/40 px-2 py-0.5 rounded-md font-bold">
-                      সেকেন্ডারি বুকার
+                    <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded font-medium">
+                      সেকেন্ডারি
                     </span>
                   )}
                 </div>
-                <p className="text-sm font-bold text-white mt-0.5">
+                <div className="text-xs text-slate-600 mt-0.5">
                   {myPrimaryBooking?.isAway && myPrimaryBooking.awayUntil && new Date(myPrimaryBooking.awayUntil).getTime() > currentTime.getTime() ? (
-                    <span className="text-amber-400 flex items-center gap-1.5">
-                      <Hourglass className="w-4 h-4 animate-spin text-amber-400" />
+                    <span className="text-amber-700 font-medium flex items-center gap-1.5">
+                      <Hourglass className="w-3.5 h-3.5 animate-spin text-amber-600" />
                       বিরতিতে আছেন: বাকি {getRemainingTimeData(myPrimaryBooking.awayUntil)?.text} ({myPrimaryBooking.awayReason})
                     </span>
                   ) : mySecondaryBooking ? (
-                    <span className="text-purple-300 flex items-center gap-1.5">
-                      <Timer className="w-4 h-4 text-purple-400" />
-                      মূল ব্যবহারকারীর বিরতির সময়ে ব্যবহার করছেন
+                    <span className="text-purple-700 font-medium flex items-center gap-1.5">
+                      <Timer className="w-3.5 h-3.5 text-purple-600" />
+                      মূল ব্যবহারকারীর বিরতির সময় ব্যবহার করছেন
                     </span>
                   ) : (
-                    <span className="text-emerald-400 flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4" />
+                    <span className="text-emerald-700 font-medium flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                       সিট সক্রিয় ও উপস্থিত
                     </span>
                   )}
-                </p>
+                </div>
               </div>
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              {/* Only primary booker can set away timer (and cannot cancel away arbitrarily once set) */}
+              {/* Only primary booker can set away timer */}
               {myPrimaryBooking && !myPrimaryBooking.isAway && (
                 <button
                   onClick={() => setShowAwayModal(true)}
-                  className="flex-1 sm:flex-initial px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="flex-1 sm:flex-initial px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <Coffee className="w-3.5 h-3.5" />
-                  <span>সাময়িক বিরতি নিন</span>
+                  <Coffee className="w-3.5 h-3.5 text-amber-600" />
+                  <span>সাময়িক বিরতি</span>
                 </button>
               )}
 
               {myPrimaryBooking?.isAway && (
-                <div className="px-3.5 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                  <Hourglass className="w-3.5 h-3.5 animate-spin" />
-                  <span>বিরতি চলমান (ক্যান্সেল করা যাবে না)</span>
+                <div className="px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-medium text-amber-800 flex items-center gap-1.5">
+                  <Hourglass className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                  <span>বিরতি চলমান</span>
                 </div>
               )}
 
               <button
                 onClick={() => handleReleaseSeat()}
-                className="flex-1 sm:flex-initial px-4 py-2 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                className="flex-1 sm:flex-initial px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>সিট ছাড়ুন</span>
@@ -633,9 +638,9 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
           </div>
         )}
 
-        {/* Room Navigation Tabs */}
-        <div className="flex items-center justify-between gap-3 overflow-x-auto pb-1">
-          <div className="flex items-center gap-2">
+        {/* Room Navigation Tabs + Search Box */}
+        <div className="flex items-center justify-between gap-3 overflow-x-auto pb-0.5">
+          <div className="flex items-center gap-1.5 bg-slate-100/80 p-1 rounded-xl">
             {config.rooms.map((room) => {
               const isSelected = selectedRoom === room.id;
               const countInRoom = bookings.filter(b => b.roomId === room.id).length;
@@ -643,14 +648,14 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
                 <button
                   key={room.id}
                   onClick={() => setSelectedRoom(room.id)}
-                  className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer shrink-0 border ${
+                  className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
                     isSelected
-                      ? 'bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-600/30'
-                      : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
+                      ? 'bg-indigo-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                   }`}
                 >
                   <span>{room.name}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${isSelected ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-800 text-slate-400'}`}>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded font-normal ${isSelected ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-200 text-slate-600'}`}>
                     {countInRoom}/{room.capacity || 100}
                   </span>
                 </button>
@@ -659,48 +664,49 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
           </div>
 
           {/* Search Box */}
-          <div className="relative min-w-[140px] sm:min-w-[200px]">
-            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <div className="relative min-w-[130px] sm:min-w-[200px]">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="সিট নং বা নাম খুঁজুন..."
+              placeholder="সিট নং খুঁজুন..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              className="w-full pl-7 pr-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20"
             />
           </div>
         </div>
 
-        {/* Room Capacity & Legend Bar */}
-        <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-4 text-xs font-bold">
-            <div className="flex items-center gap-2">
-              <div className="w-3.5 h-3.5 rounded-md bg-emerald-500/20 border border-emerald-500/60"></div>
-              <span className="text-slate-300">খালি ({roomStats.available})</span>
+        {/* Room Capacity & Status Legend Bar */}
+        <div className="bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-3.5 sm:gap-5 text-slate-600">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-slate-200 border border-slate-300"></span>
+              <span>খালি <strong className="text-slate-800 font-bold">({roomStats.available})</strong></span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3.5 h-3.5 rounded-md bg-rose-500/30 border border-rose-500/80"></div>
-              <span className="text-slate-300">উপস্থিত ({roomStats.occupied})</span>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+              <span>উপস্থিত <strong className="text-slate-800 font-bold">({roomStats.occupied})</strong></span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3.5 h-3.5 rounded-md bg-amber-500/30 border border-amber-500/80"></div>
-              <span className="text-slate-300">সাময়িক বিরতি ({roomStats.away})</span>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+              <span>সাময়িক বিরতি <strong className="text-slate-800 font-bold">({roomStats.away})</strong></span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3.5 h-3.5 rounded-md bg-purple-500/40 border border-purple-400"></div>
-              <span className="text-slate-300">সেকেন্ডারি বুকার ({roomStats.secondaryOccupied})</span>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-purple-600"></span>
+              <span>সেকেন্ডারি <strong className="text-slate-800 font-bold">({roomStats.secondaryOccupied})</strong></span>
             </div>
           </div>
 
-          <div className="text-xs text-slate-400 font-medium">
-            রুমের মোট ক্ষমতা: <span className="font-bold text-white">{currentRoomConfig.capacity || 100} টি সিট</span>
+          <div className="text-[11px] text-slate-400 font-normal">
+            মোট সিট: <span className="text-slate-700 font-medium">{currentRoomConfig.capacity || 100}</span>
           </div>
         </div>
 
-        {/* 🌟 100-SEAT MATRIX GRID */}
-        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl">
-          <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2 sm:gap-2.5">
+        {/* 🌟 SEAT MATRIX GRID - FULLY COLORED DIVS, ONLY SEAT NUMBERS & ENLARGED BREAK TIMERS */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-5 shadow-2xs">
+          <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-1.5 sm:gap-2">
             {Array.from({ length: currentRoomConfig.capacity || 100 }, (_, i) => i + 1).map((seatNum) => {
+              const seatLabel = formatSeatLabel(seatNum, currentRoomConfig);
               const booking = roomBookingsMap.get(seatNum);
               const isMine = !!(user && booking && ((user.uid && booking.userId === user.uid) || (user.email && booking.userEmail === user.email)));
               const isMySecondary = !!(user && booking && ((user.uid && booking.secondaryUserId === user.uid) || (user.email && booking.secondaryUserEmail === user.email)));
@@ -712,14 +718,16 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
               // Filter match
               const matchesSearch = searchQuery === '' || 
                 seatNum.toString().includes(searchQuery) ||
+                seatLabel.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 booking?.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 booking?.secondaryUserName?.toLowerCase().includes(searchQuery.toLowerCase());
 
               if (!matchesSearch) return null;
 
               return (
-                <div
+                <button
                   key={seatNum}
+                  type="button"
                   onClick={() => {
                     if (!isWithinOperatingHours) {
                       alert('সিট বরাদ্দ সকাল ৮:০০ টা থেকে রাত ১০:০০ টা পর্যন্ত চালু থাকে।');
@@ -739,73 +747,42 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
                       setShowAwayModal(true);
                     } else {
                       // Occupied seat details
-                      alert(`সিট #${seatNum}\nরুম: ${currentRoomConfig.name}\nবুক করেছেন: ${booking.userName}${hasSecondary ? `\nসেকেন্ডারি বুকার: ${booking.secondaryUserName}` : ''}${isAway ? `\nবিরতি: বাকি ${remainingTime?.text}` : ''}`);
+                      alert(`সিট: ${seatLabel}\nরুম: ${currentRoomConfig.name}\nবুক করেছেন: ${booking.userName}${hasSecondary ? `\nসেকেন্ডারি বুকার: ${booking.secondaryUserName}` : ''}${isAway ? `\nবিরতি: বাকি ${remainingTime?.text}` : ''}`);
                     }
                   }}
-                  className={`relative p-2 rounded-xl flex flex-col items-center justify-between min-h-[72px] sm:min-h-[82px] border transition cursor-pointer select-none group ${
+                  className={`relative rounded-lg sm:rounded-xl aspect-square flex flex-col items-center justify-center p-1 transition cursor-pointer select-none active:scale-95 border ${
                     isMine || isMySecondary
-                      ? 'bg-indigo-600/30 border-indigo-400 shadow-md shadow-indigo-500/20 ring-2 ring-indigo-400'
+                      ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs ring-2 ring-indigo-400 ring-offset-1 z-10'
                       : hasSecondary
-                      ? 'bg-purple-950/60 border-purple-500/80 hover:border-purple-400'
+                      ? 'bg-purple-600 text-white border-purple-700 shadow-2xs'
                       : isAway
-                      ? 'bg-amber-950/40 border-amber-500/70 hover:border-amber-400 animate-pulse'
+                      ? 'bg-amber-500 text-white border-amber-600 shadow-2xs animate-pulse'
                       : booking
-                      ? 'bg-slate-850 border-rose-500/40 hover:border-rose-400/80 text-slate-300'
-                      : 'bg-slate-900/90 border-slate-800 hover:border-emerald-500/80 hover:bg-emerald-950/20 text-slate-400'
+                      ? 'bg-rose-500 text-white border-rose-600 shadow-2xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200/80 hover:border-slate-300'
                   }`}
+                  title={`সিট ${seatLabel}${booking ? ` (${booking.userName})` : ' (খালি)'}`}
                 >
-                  {/* Seat Number Badge */}
-                  <div className="flex items-center justify-between w-full">
-                    <span className={`text-[11px] font-black ${isMine ? 'text-indigo-300' : hasSecondary ? 'text-purple-300' : isAway ? 'text-amber-300' : booking ? 'text-rose-300' : 'text-slate-400'}`}>
-                      #{seatNum}
-                    </span>
-                    {isMine && (
-                      <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping"></span>
-                    )}
-                  </div>
-
-                  {/* Seat Middle Status Icon / Timer */}
-                  <div className="my-0.5 text-center">
-                    {hasSecondary ? (
-                      <div className="flex flex-col items-center">
-                        <span className="text-[9px] bg-purple-500/40 text-purple-200 px-1 py-0.5 rounded font-black leading-none">
-                          সেকেন্ডারি
-                        </span>
-                        <span className="text-[9px] text-amber-300 font-bold mt-0.5">
-                          {remainingTime?.text}
-                        </span>
-                      </div>
-                    ) : isAway ? (
-                      <div className="flex flex-col items-center">
-                        <Hourglass className="w-3.5 h-3.5 text-amber-400 animate-spin" />
-                        <span className="text-[9px] font-black text-amber-300 mt-0.5">
-                          {remainingTime?.text}
-                        </span>
-                      </div>
-                    ) : booking ? (
-                      <div className="w-5 h-5 rounded-full bg-rose-500/20 text-rose-300 flex items-center justify-center text-[9px] font-bold">
-                        {booking.userName[0]?.toUpperCase() || 'U'}
-                      </div>
-                    ) : (
-                      <span className="text-[10px] text-emerald-400 font-bold group-hover:scale-110 transition">
-                        ফাঁকা
+                  {/* If seat is on Break (Away) -> Show Seat Label + ENLARGED COUNTDOWN TIMER */}
+                  {isAway ? (
+                    <div className="flex flex-col items-center justify-center leading-none text-center w-full">
+                      <span className="text-[10px] opacity-90 font-bold mb-0.5">
+                        {seatLabel}
                       </span>
-                    )}
-                  </div>
-
-                  {/* Seat Bottom Name Tag */}
-                  <div className="w-full truncate text-[9px] text-center font-medium">
-                    {hasSecondary ? (
-                      <span className="text-purple-300 truncate font-bold">{booking?.secondaryUserName?.split(' ')[0]}</span>
-                    ) : isAway ? (
-                      <span className="text-amber-300 font-bold">বিরতি</span>
-                    ) : booking ? (
-                      <span className="text-slate-400 truncate">{booking.userName.split(' ')[0]}</span>
-                    ) : (
-                      <span className="text-slate-500 font-normal">বুক করুন</span>
-                    )}
-                  </div>
-                </div>
+                      {/* 🌟 ENLARGED TIMER FONT SIZE */}
+                      <span className="text-xs sm:text-sm font-black tracking-tight drop-shadow-xs">
+                        {remainingTime?.text}
+                      </span>
+                    </div>
+                  ) : (
+                    /* Normal Seat -> ONLY SEAT NUMBER DISPLAYED (NO OTHER TEXT) */
+                    <span className={`text-xs sm:text-sm font-bold tracking-tight ${
+                      isMine || isMySecondary || booking || hasSecondary ? 'text-white' : 'text-slate-700'
+                    }`}>
+                      {seatLabel}
+                    </span>
+                  )}
+                </button>
               );
             })}
           </div>
@@ -813,34 +790,34 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
 
       </div>
 
-      {/* 🌟 MODAL 1: BOOK SEAT CONFIRMATION (PRIMARY) */}
+      {/* 🌟 MODAL 1: BOOK SEAT CONFIRMATION (LIGHT MODE) */}
       {showBookingModal && selectedSeat && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 sm:p-7 max-w-sm w-full space-y-4 shadow-2xl text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-7 max-w-sm w-full space-y-4 shadow-2xl text-slate-900">
             <div className="text-center space-y-1">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center mx-auto text-xl font-black mb-2">
-                #{selectedSeat}
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-200 flex items-center justify-center mx-auto text-xl font-black mb-2 shadow-xs">
+                {formatSeatLabel(selectedSeat, currentRoomConfig)}
               </div>
-              <h3 className="text-lg font-black text-white">
-                সিট #{selectedSeat} বরাদ্দ নিশ্চিতকরণ
+              <h3 className="text-lg font-black text-slate-900">
+                সিট {formatSeatLabel(selectedSeat, currentRoomConfig)} বরাদ্দ নিশ্চিতকরণ
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500">
                 {currentRoomConfig.name} • {libraryType === 'science' ? 'সাইন্স লাইব্রেরি' : 'সেন্ট্রাল লাইব্রেরি'}
               </p>
             </div>
 
-            <div className="p-3.5 bg-slate-800/80 rounded-2xl text-xs space-y-2 border border-slate-700">
-              <div className="flex justify-between text-slate-400">
+            <div className="p-3.5 bg-slate-50 rounded-2xl text-xs space-y-2 border border-slate-200">
+              <div className="flex justify-between text-slate-600">
                 <span>শিক্ষার্থীর নাম:</span>
-                <span className="font-bold text-white">{user?.displayName || user?.email?.split('@')[0]}</span>
+                <span className="font-bold text-slate-900">{user?.displayName || user?.email?.split('@')[0]}</span>
               </div>
-              <div className="flex justify-between text-slate-400">
+              <div className="flex justify-between text-slate-600">
                 <span>সময়সূচী:</span>
-                <span className="font-bold text-emerald-400">রাত ১০:০০ টা পর্যন্ত</span>
+                <span className="font-bold text-emerald-600">রাত ১০:০০ টা পর্যন্ত</span>
               </div>
-              <div className="flex justify-between text-slate-400">
+              <div className="flex justify-between text-slate-600">
                 <span>নিয়মাবলী:</span>
-                <span className="font-bold text-amber-300">১ জন = সর্বোচ্চ ১টি সিট</span>
+                <span className="font-bold text-amber-700">১ জন = সর্বোচ্চ ১টি সিট</span>
               </div>
             </div>
 
@@ -848,14 +825,14 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
               <button
                 type="button"
                 onClick={() => setShowBookingModal(false)}
-                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition cursor-pointer"
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
               >
                 বাতিল
               </button>
               <button
                 type="button"
                 onClick={() => handleConfirmBooking(selectedSeat)}
-                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs rounded-xl transition shadow-lg shadow-indigo-600/30 cursor-pointer"
+                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl transition shadow-md shadow-indigo-600/20 cursor-pointer active:scale-95"
               >
                 সিট কনফার্ম করুন
               </button>
@@ -864,21 +841,21 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
         </div>
       )}
 
-      {/* 🌟 MODAL 2: SECONDARY BOOKING ON TEMPORARY AWAY SEAT */}
+      {/* 🌟 MODAL 2: SECONDARY BOOKING (LIGHT MODE) */}
       {showSecondaryBookingModal && selectedSeat && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-xs">
-          <div className="bg-slate-900 border-2 border-purple-500/50 rounded-3xl p-6 sm:p-7 max-w-sm w-full space-y-4 shadow-2xl text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white border border-purple-200 rounded-3xl p-6 sm:p-7 max-w-sm w-full space-y-4 shadow-2xl text-slate-900">
             <div className="text-center space-y-1">
-              <div className="w-12 h-12 rounded-2xl bg-purple-600/20 text-purple-400 border border-purple-500/40 flex items-center justify-center mx-auto text-xl font-black mb-2">
+              <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 border border-purple-200 flex items-center justify-center mx-auto text-xl font-black mb-2 shadow-xs">
                 <UserPlus className="w-6 h-6" />
               </div>
-              <span className="text-[10px] bg-purple-500/20 text-purple-300 font-black px-2.5 py-0.5 rounded-full border border-purple-500/30 uppercase tracking-wider">
+              <span className="text-[10px] bg-purple-100 text-purple-700 font-black px-2.5 py-0.5 rounded-full border border-purple-200 uppercase tracking-wider">
                 সেকেন্ডারি বুকার
               </span>
-              <h3 className="text-lg font-black text-white">
-                সিট #{selectedSeat} সাময়িক বুকিং
+              <h3 className="text-lg font-black text-slate-900">
+                সিট {formatSeatLabel(selectedSeat, currentRoomConfig)} সাময়িক বুকিং
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500">
                 মূল শিক্ষার্থী সাময়িক বিরতিতে থাকায় আপনি এই সময়ে সিটটি ব্যবহার করতে পারবেন।
               </p>
             </div>
@@ -887,24 +864,24 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
               const targetBooking = roomBookingsMap.get(selectedSeat);
               const remaining = getRemainingTimeData(targetBooking?.awayUntil);
               return (
-                <div className="p-3.5 bg-purple-950/30 rounded-2xl text-xs space-y-2 border border-purple-500/30">
-                  <div className="flex justify-between text-slate-300">
+                <div className="p-3.5 bg-purple-50 rounded-2xl text-xs space-y-2 border border-purple-200">
+                  <div className="flex justify-between text-slate-700">
                     <span>মূল বরাদ্দকারী:</span>
-                    <span className="font-bold text-white">{targetBooking?.userName}</span>
+                    <span className="font-bold text-slate-900">{targetBooking?.userName}</span>
                   </div>
-                  <div className="flex justify-between text-slate-300">
+                  <div className="flex justify-between text-slate-700">
                     <span>বিরতির কারণ:</span>
-                    <span className="font-bold text-amber-300">{targetBooking?.awayReason}</span>
+                    <span className="font-bold text-amber-700">{targetBooking?.awayReason}</span>
                   </div>
-                  <div className="flex justify-between text-slate-300">
+                  <div className="flex justify-between text-slate-700">
                     <span>অবশিষ্ট সময়:</span>
-                    <span className="font-black text-purple-300">{remaining?.text}</span>
+                    <span className="font-black text-purple-700">{remaining?.text}</span>
                   </div>
                 </div>
               );
             })()}
 
-            <p className="text-[11px] text-slate-400 leading-relaxed bg-slate-800/60 p-2.5 rounded-xl">
+            <p className="text-[11px] text-slate-500 leading-relaxed bg-slate-50 p-2.5 rounded-xl border border-slate-200">
               💡 মূল শিক্ষার্থী বিরতি শেষে ফিরে এলে সিটটি হস্তান্তর করতে হবে।
             </p>
 
@@ -912,14 +889,14 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
               <button
                 type="button"
                 onClick={() => setShowSecondaryBookingModal(false)}
-                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition cursor-pointer"
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
               >
                 বাতিল
               </button>
               <button
                 type="button"
                 onClick={handleConfirmSecondaryBooking}
-                className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-black text-xs rounded-xl transition shadow-lg shadow-purple-600/30 cursor-pointer"
+                className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs rounded-xl transition shadow-md shadow-purple-600/20 cursor-pointer active:scale-95"
               >
                 সেকেন্ডারি বুক করুন
               </button>
@@ -928,25 +905,25 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
         </div>
       )}
 
-      {/* 🌟 MODAL 3: TEMPORARY AWAY TIMER MODAL (WITH MANUAL MINUTE INPUT) */}
+      {/* 🌟 MODAL 3: AWAY TIMER MODAL (LIGHT MODE) */}
       {showAwayModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-xs">
-          <div className="bg-slate-900 border-2 border-amber-500/50 rounded-3xl p-6 sm:p-7 max-w-md w-full space-y-4 shadow-2xl text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white border border-amber-200 rounded-3xl p-6 sm:p-7 max-w-md w-full space-y-4 shadow-2xl text-slate-900">
             <div className="text-center space-y-1">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto text-xl mb-2">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto text-xl mb-2 shadow-xs">
                 <Coffee className="w-6 h-6" />
               </div>
-              <h3 className="text-lg font-black text-white">
+              <h3 className="text-lg font-black text-slate-900">
                 সাময়িক বিরতির সময় নির্ধারণ
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500">
                 বিরতি চলাকালীন অন্য শিক্ষার্থী প্রয়োজনে সেকেন্ডারি হিসেবে সিটটি ব্যবহার করতে পারবে।
               </p>
             </div>
 
             {/* Quick Presets */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-300">কুইক সিলেক্ট (মিনিট):</label>
+              <label className="text-xs font-bold text-slate-700">কুইক সিলেক্ট (মিনিট):</label>
               <div className="grid grid-cols-4 gap-2">
                 {[15, 30, 45, 60].map((m) => (
                   <button
@@ -958,8 +935,8 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
                     }}
                     className={`py-2 rounded-xl text-xs font-black transition border cursor-pointer ${
                       customMinutesInput === m.toString()
-                        ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md'
-                        : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-750'
+                        ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
                     {m} মিনিট
@@ -968,13 +945,13 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
               </div>
             </div>
 
-            {/* 🌟 MANUAL MINUTES INPUT OPTION */}
+            {/* 🌟 MANUAL MINUTES INPUT */}
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-300">
+              <label className="text-xs font-bold text-slate-700">
                 ম্যানুয়াল সময় নির্ধারণ (মিনিট লিখুন):
               </label>
               <div className="relative">
-                <Timer className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Timer className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="number"
                   min="5"
@@ -982,14 +959,14 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
                   placeholder="যেমন: ২৫, ৪০, ৭৫..."
                   value={customMinutesInput}
                   onChange={(e) => setCustomMinutesInput(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20"
                 />
               </div>
             </div>
 
             {/* Reason */}
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-300">বিরতির কারণ:</label>
+              <label className="text-xs font-bold text-slate-700">বিরতির কারণ:</label>
               <div className="grid grid-cols-3 gap-1.5 mb-2">
                 {['চা/নাস্তা', 'নামাযের বিরতি', 'জরুরি কাজ'].map((r) => (
                   <button
@@ -1001,8 +978,8 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
                     }}
                     className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition border cursor-pointer ${
                       customReasonInput === r
-                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                        : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-750'
+                        ? 'bg-amber-100 text-amber-800 border-amber-300'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
                     {r}
@@ -1014,11 +991,11 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
                 placeholder="অন্য কোনো কারণ লিখুন..."
                 value={customReasonInput}
                 onChange={(e) => setCustomReasonInput(e.target.value)}
-                className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20"
               />
             </div>
 
-            <div className="p-3 bg-amber-950/30 border border-amber-500/30 rounded-xl text-[11px] text-amber-300 leading-relaxed">
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800 leading-relaxed">
               ⚠️ সাময়িক বিরতি শুরু হলে নির্ধারিত সময়ের আগে বিরতি বাতিল বা ক্যান্সেল করা যাবে না।
             </div>
 
@@ -1026,14 +1003,14 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
               <button
                 type="button"
                 onClick={() => setShowAwayModal(false)}
-                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition cursor-pointer"
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
               >
                 বাতিল
               </button>
               <button
                 type="button"
                 onClick={handleSetAwayTimer}
-                className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl transition shadow-lg shadow-amber-500/30 cursor-pointer"
+                className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-xl transition shadow-md shadow-amber-500/20 cursor-pointer active:scale-95"
               >
                 বিরতি শুরু করুন
               </button>
@@ -1042,143 +1019,197 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
         </div>
       )}
 
-      {/* 🌟 MODAL 4: ADMIN SEAT CONTROL PANEL (mohammad.001ekram@gmail.com) */}
+      {/* 🌟 MODAL 4: ADMIN SEAT CONTROL PANEL (mohammad.001ekram@gmail.com) - Clean Light Mode with Serial Layout Configuration */}
       {showAdminPanel && isAdmin && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
-          <div className="bg-slate-900 border-2 border-amber-500/60 rounded-3xl p-6 sm:p-8 max-w-2xl w-full space-y-6 shadow-2xl text-white max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-md">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 max-w-3xl w-full space-y-6 shadow-2xl text-slate-900 max-h-[92vh] overflow-y-auto">
             
             {/* Header */}
-            <div className="flex justify-between items-start border-b border-slate-800 pb-4">
+            <div className="flex justify-between items-start border-b border-slate-200 pb-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  <div className="p-2 rounded-xl bg-amber-50 text-amber-600 border border-amber-200">
                     <Shield className="w-5 h-5" />
                   </div>
-                  <h3 className="text-xl font-black text-white">
+                  <h3 className="text-xl font-black text-slate-900">
                     লাইব্রেরি সিট কন্ট্রোল প্যানেল
                   </h3>
                 </div>
-                <p className="text-xs text-slate-400 font-medium">
-                  রুম নাম্বার, প্রতি রুমে সিটের সংখ্যা এবং সিটের সিরিয়াল নিয়ন্ত্রণ করুন।
+                <p className="text-xs text-slate-500 font-medium">
+                  রুম নাম্বার, প্রতি রুমে সিটের সংখ্যা এবং সিটের সিরিয়াল বিন্যাস (যেমন: A1, A2, A3... অথবা 1, 2, 3...) কনফিগার করুন।
                 </p>
               </div>
               <button
                 onClick={() => setShowAdminPanel(false)}
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition cursor-pointer"
+                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
+            {/* Notice: No forced seat clearing */}
+            <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-2xl flex items-center gap-3 text-xs text-blue-900 font-medium">
+              <Layers className="w-4 h-4 text-blue-600 shrink-0" />
+              <span>
+                <strong>নিরাপত্তা ও নিয়ম:</strong> সিটের ধারাবাহিকতা রক্ষার জন্য সিট খালি করার কোনো ম্যানুয়াল বাটন নেই। শুধুমাত্র শিক্ষার্থীরা নিজেদের সিট ছাড়তে পারেন অথবা রাত ১০টায় স্বয়ংক্রিয়ভাবে সিট রিসেট হবে।
+              </span>
+            </div>
+
             {/* Room Management List */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h4 className="text-sm font-black text-slate-200 flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-amber-400" />
-                  <span>রুম ও সিট ক্যাপাসিটি তালিকা</span>
+                <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-amber-600" />
+                  <span>রুম, সিট সংখ্যা ও সিরিয়াল বিন্যাস তালিকা</span>
                 </h4>
 
                 <button
                   type="button"
                   onClick={() => {
                     const nextId = adminRooms.length > 0 ? Math.max(...adminRooms.map(r => r.id)) + 1 : 1;
-                    setAdminRooms([...adminRooms, { id: nextId, name: `রুম ${nextId}`, capacity: 100 }]);
+                    setAdminRooms([...adminRooms, { 
+                      id: nextId, 
+                      name: `রুম ${nextId}`, 
+                      capacity: 100,
+                      seatPrefix: '',
+                      numberingStyle: 'numeric'
+                    }]);
                   }}
-                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>নতুন রুম যোগ করুন</span>
                 </button>
               </div>
 
-              <div className="space-y-3">
-                {adminRooms.map((r, index) => (
-                  <div key={r.id} className="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 w-full sm:w-auto">
-                      <span className="w-7 h-7 rounded-lg bg-slate-800 text-amber-400 font-black text-xs flex items-center justify-center shrink-0">
-                        {r.id}
-                      </span>
-                      <input
-                        type="text"
-                        value={r.name}
-                        onChange={(e) => {
-                          const updated = [...adminRooms];
-                          updated[index].name = e.target.value;
-                          setAdminRooms(updated);
-                        }}
-                        className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-bold focus:outline-none focus:border-amber-500 w-32"
-                        placeholder="রুমের নাম"
-                      />
-                    </div>
+              <div className="space-y-3.5">
+                {adminRooms.map((r, index) => {
+                  const previewLabels = [1, 2, 3].map(n => formatSeatLabel(n, r)).join(', ');
+                  return (
+                    <div key={r.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col gap-3 shadow-2xs hover:border-slate-300 transition">
+                      
+                      {/* Row Top: Room ID, Name, Capacity, Delete */}
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 flex-1 min-w-[200px]">
+                          <span className="w-7 h-7 rounded-lg bg-indigo-600 text-white font-black text-xs flex items-center justify-center shrink-0">
+                            {r.id}
+                          </span>
+                          <input
+                            type="text"
+                            value={r.name}
+                            onChange={(e) => {
+                              const updated = [...adminRooms];
+                              updated[index].name = e.target.value;
+                              setAdminRooms(updated);
+                            }}
+                            className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 w-36"
+                            placeholder="রুমের নাম"
+                          />
+                        </div>
 
-                    <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                      <div className="flex items-center gap-2">
-                        <label className="text-xs text-slate-400 font-bold">সিট সংখ্যা:</label>
-                        <input
-                          type="number"
-                          min="10"
-                          max="300"
-                          value={r.capacity}
-                          onChange={(e) => {
-                            const updated = [...adminRooms];
-                            updated[index].capacity = parseInt(e.target.value, 10) || 100;
-                            setAdminRooms(updated);
-                          }}
-                          className="w-20 px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-bold text-center focus:outline-none focus:border-amber-500"
-                        />
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            <label className="text-xs text-slate-600 font-bold">সিট সংখ্যা:</label>
+                            <input
+                              type="number"
+                              min="10"
+                              max="300"
+                              value={r.capacity}
+                              onChange={(e) => {
+                                const updated = [...adminRooms];
+                                updated[index].capacity = parseInt(e.target.value, 10) || 100;
+                                setAdminRooms(updated);
+                              }}
+                              className="w-20 px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold text-center focus:outline-none focus:border-indigo-600"
+                            />
+                          </div>
+
+                          {adminRooms.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAdminRooms(adminRooms.filter(item => item.id !== r.id));
+                              }}
+                              className="p-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition cursor-pointer"
+                              title="রুম ডিলিট করুন"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       </div>
 
-                      {adminRooms.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAdminRooms(adminRooms.filter(item => item.id !== r.id));
-                          }}
-                          className="p-2 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 rounded-xl transition cursor-pointer"
-                          title="রুম ডিলিট করুন"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+                      {/* Row Bottom: 🌟 SEAT SERIAL / NUMBERING STYLE SELECTOR */}
+                      <div className="pt-2 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+                        <div className="flex flex-wrap items-center gap-2.5">
+                          <div className="flex items-center gap-1.5 font-bold text-slate-700">
+                            <Hash className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>সিরিয়াল ফরম্যাট:</span>
+                          </div>
 
-            {/* Quick Danger Zone Operations */}
-            <div className="p-4 bg-rose-950/30 border border-rose-500/30 rounded-2xl space-y-3">
-              <h5 className="text-xs font-black text-rose-300 uppercase tracking-wider flex items-center gap-1.5">
-                <AlertTriangle className="w-4 h-4 text-rose-400" />
-                <span>জরুরি সিট রিসেট অপারেশন (Reset Zone)</span>
-              </h5>
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                <p className="text-xs text-rose-200/80">
-                  বর্তমান লাইব্রেরির সকল রুমের সিট এক ক্লিকে খালি ও রিসেট করুন।
-                </p>
-                <button
-                  type="button"
-                  onClick={handleAdminResetAllSeats}
-                  className="w-full sm:w-auto px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl transition shadow-md cursor-pointer shrink-0"
-                >
-                  সকল সিট খালি করুন
-                </button>
+                          <select
+                            value={r.numberingStyle || (r.seatPrefix ? 'prefix' : 'numeric')}
+                            onChange={(e) => {
+                              const updated = [...adminRooms];
+                              const val = e.target.value as 'numeric' | 'prefix' | 'grid_rows';
+                              updated[index].numberingStyle = val;
+                              if (val === 'prefix' && !updated[index].seatPrefix) {
+                                updated[index].seatPrefix = 'A';
+                              }
+                              setAdminRooms(updated);
+                            }}
+                            className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-600"
+                          >
+                            <option value="numeric">সংখ্যা (1, 2, 3... 100)</option>
+                            <option value="prefix">কাস্টম প্রিফিক্স (A1, A2, A3...)</option>
+                            <option value="grid_rows">রো ভিত্তিক (A1..A10, B1..B10...)</option>
+                          </select>
+
+                          {/* Custom Prefix text input if 'prefix' style selected */}
+                          {(r.numberingStyle === 'prefix' || (!r.numberingStyle && r.seatPrefix)) && (
+                            <div className="flex items-center gap-1.5">
+                              <label className="text-slate-500 font-medium">প্রিফিক্স:</label>
+                              <input
+                                type="text"
+                                maxLength={5}
+                                value={r.seatPrefix || 'A'}
+                                onChange={(e) => {
+                                  const updated = [...adminRooms];
+                                  updated[index].seatPrefix = e.target.value.toUpperCase();
+                                  setAdminRooms(updated);
+                                }}
+                                className="w-14 px-2 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-black text-center text-indigo-700 focus:outline-none focus:border-indigo-600"
+                                placeholder="A, B, S"
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Live Preview Badge */}
+                        <div className="px-3 py-1 bg-indigo-50 border border-indigo-200 rounded-xl text-[11px] font-bold text-indigo-800">
+                          প্রিভিউ: <span className="font-black text-indigo-600">{previewLabels}...</span>
+                        </div>
+                      </div>
+
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
             {/* Footer Buttons */}
-            <div className="flex gap-3 pt-2 border-t border-slate-800">
+            <div className="flex gap-3 pt-4 border-t border-slate-200">
               <button
                 type="button"
                 onClick={() => setShowAdminPanel(false)}
-                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition cursor-pointer"
+                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
               >
                 বাতিল
               </button>
               <button
                 type="button"
                 onClick={handleSaveAdminConfig}
-                className="flex-1 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl transition shadow-lg shadow-amber-500/20 cursor-pointer"
+                className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-xl transition shadow-md shadow-amber-500/20 cursor-pointer active:scale-95"
               >
                 কনফিগারেশন সেভ করুন
               </button>

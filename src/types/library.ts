@@ -26,7 +26,8 @@ export interface LibraryRoomConfig {
   id: number;
   name: string;
   capacity: number; // default 100
-  seatPrefix?: string; // default ''
+  seatPrefix?: string; // e.g. 'A', 'B', 'S', ''
+  numberingStyle?: 'numeric' | 'prefix' | 'grid_rows'; // 1,2,3 or A1,A2,A3 or Row-based (A1-A10, B1-B10)
 }
 
 export interface LibraryConfig {
@@ -38,10 +39,10 @@ export interface LibraryConfig {
 
 export const DEFAULT_LIBRARY_CONFIG: LibraryConfig = {
   rooms: [
-    { id: 1, name: 'রুম ১', capacity: 100 },
-    { id: 2, name: 'রুম ২', capacity: 100 },
-    { id: 3, name: 'রুম ৩', capacity: 100 },
-    { id: 4, name: 'রুম ৪', capacity: 100 },
+    { id: 1, name: 'রুম ১', capacity: 100, seatPrefix: '', numberingStyle: 'numeric' },
+    { id: 2, name: 'রুম ২', capacity: 100, seatPrefix: 'A', numberingStyle: 'prefix' },
+    { id: 3, name: 'রুম ৩', capacity: 100, seatPrefix: '', numberingStyle: 'numeric' },
+    { id: 4, name: 'রুম ৪', capacity: 100, seatPrefix: '', numberingStyle: 'numeric' },
   ],
   bookingStartHour: 8,
   bookingEndHour: 22,
