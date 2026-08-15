@@ -11,7 +11,10 @@ import GlobalLeaderboard from './components/GlobalLeaderboard';
 import MyCoursesView from './components/MyCoursesView';
 import AnnouncementBanner from './components/AnnouncementBanner';
 import LandingHomePage from './components/LandingHomePage';
+import FreshPortalHomePage from './components/FreshPortalHomePage';
+import LibrarySeatBookingView from './components/LibrarySeatBookingView';
 import RevisionCenter from './components/RevisionCenter';
+import { LibraryType } from './types/library';
 import { SyncConflictModal, SyncConflictData } from './components/SyncConflictModal';
 import { safeSetLocalStorage, clearNonEssentialLocalStorageCache } from './lib/storage';
 
@@ -84,6 +87,10 @@ const LOCAL_STORAGE_ENROLLED_COURSES_KEY = 'vocab_memorizer_enrolled_courses_v2'
 const LOCAL_STORAGE_ACTIVE_COURSE_KEY = 'vocab_memorizer_active_course_v2';
 
 export default function App() {
+
+  // Portal Navigation Mode: 'portal_home' | 'library_seats' | 'study_room'
+  const [portalMode, setPortalMode] = useState<'portal_home' | 'library_seats' | 'study_room'>('portal_home');
+  const [selectedLibrary, setSelectedLibrary] = useState<LibraryType>('science');
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('profile');
   const [profileSubTab, setProfileSubTab] = useState<'flashcard' | 'dashboard' | 'my_courses'>('flashcard');
@@ -1900,11 +1907,51 @@ const getActiveCourse = (
     );
   }
 
+  if (portalMode === 'portal_home') {
+    return (
+      <FreshPortalHomePage
+        user={user}
+        onSelectLibrary={(type) => {
+          setSelectedLibrary(type);
+          setPortalMode('library_seats');
+        }}
+        onOpenStudyRoom={() => {
+          if (!user) {
+            setIsAuthModalOpen(true);
+          } else {
+            setPortalMode('study_room');
+          }
+        }}
+        onRequireAuth={() => setIsAuthModalOpen(true)}
+        onLogOut={handleLogOut}
+      />
+    );
+  }
+
+  if (portalMode === 'library_seats') {
+    return (
+      <LibrarySeatBookingView
+        libraryType={selectedLibrary}
+        user={user}
+        onBackToHome={() => setPortalMode('portal_home')}
+        onOpenStudyRoom={() => {
+          if (!user) {
+            setIsAuthModalOpen(true);
+          } else {
+            setPortalMode('study_room');
+          }
+        }}
+        onRequireAuth={() => setIsAuthModalOpen(true)}
+      />
+    );
+  }
+
   if (!user) {
     return (
       <LandingHomePage 
         onAuthSuccess={() => {
           setIsAuthModalOpen(false);
+          setPortalMode('study_room');
         }} 
         courses={allAvailableCourses} 
         onImportCourse={handleImportCourse}
@@ -1919,14 +1966,26 @@ const getActiveCourse = (
       <AnnouncementBanner settings={settings} />
 
       {/* Top Header / Main Banner (Unified for Mobile & Desktop) */}
-      <header className="bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 text-white p-4 md:px-8 md:py-5 flex items-center justify-between shadow-md flex-shrink-0" id="main-header-banner">
+      <header className="bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 text-white p-4 md:px-8 md:py-4 flex items-center justify-between shadow-md flex-shrink-0" id="main-header-banner">
         <div className="flex items-center gap-2.5 md:gap-3.5 min-w-0">
+          <button
+            onClick={() => setPortalMode('portal_home')}
+            className="p-2 md:p-2.5 bg-white/10 hover:bg-white/20 border border-white/15 text-white rounded-xl transition cursor-pointer flex items-center gap-1.5 text-xs font-bold shrink-0"
+            title="হোমপেজে ফিরুন (Library & Portal)"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span className="hidden sm:inline">হোমপেজ</span>
+          </button>
+
           <div className="p-2 md:p-2.5 bg-indigo-600 rounded-xl text-white shadow-md shadow-indigo-500/20 flex-shrink-0">
             <BookOpen className="w-4 h-4 md:w-5 md:h-5" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-lg md:text-2xl font-black tracking-tight font-sans text-white uppercase leading-none">
-              Memorizer
+            <h1 className="text-lg md:text-2xl font-black tracking-tight font-sans text-white uppercase leading-none flex items-center gap-2">
+              <span>Memorizer</span>
+              <span className="hidden md:inline text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-md bg-purple-500/30 text-purple-200 border border-purple-400/30">
+                স্টাডি রুম
+              </span>
             </h1>
             <p className="text-[10px] md:text-xs font-semibold text-emerald-400 mt-1 truncate max-w-[120px] sm:max-w-xs md:max-w-md" title={activeCourse?.title}>
               {activeCourse?.title || 'Default Course'}

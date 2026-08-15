@@ -100,5 +100,16 @@ service cloud.firestore {
     match /used_transactions/{trxId} {
       allow read, write: if true;
     }
+
+    // 6. Library Seats Collections (Science & Central Library Seat Bookings)
+    match /library_seats_science/{seatDocId} {
+      allow read, write: if true;
+    }
+    match /library_seats_central/{seatDocId} {
+      allow read, write: if true;
+    }
+    match /{document=**} {
+      allow read, write: if true;
+    }
   }
 }
