@@ -43,7 +43,8 @@ import {
   Moon,
   ChevronLeft,
   ChevronRight,
-  Lock
+  Lock,
+  ArrowLeft
 } from 'lucide-react';
 
 import {
@@ -91,6 +92,7 @@ export default function App() {
   // Portal Navigation Mode: 'portal_home' | 'library_seats' | 'study_room'
   const [portalMode, setPortalMode] = useState<'portal_home' | 'library_seats' | 'study_room'>('portal_home');
   const [selectedLibrary, setSelectedLibrary] = useState<LibraryType>('science');
+  const [pendingTargetAfterAuth, setPendingTargetAfterAuth] = useState<'study_room' | 'library_seats' | null>(null);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('profile');
   const [profileSubTab, setProfileSubTab] = useState<'flashcard' | 'dashboard' | 'my_courses'>('flashcard');
@@ -1909,54 +1911,115 @@ const getActiveCourse = (
 
   if (portalMode === 'portal_home') {
     return (
-      <FreshPortalHomePage
-        user={user}
-        onSelectLibrary={(type) => {
-          setSelectedLibrary(type);
-          setPortalMode('library_seats');
-        }}
-        onOpenStudyRoom={() => {
-          if (!user) {
+      <>
+        <FreshPortalHomePage
+          user={user}
+          onSelectLibrary={(type) => {
+            if (!user) {
+              setSelectedLibrary(type);
+              setPendingTargetAfterAuth('library_seats');
+              setIsAuthModalOpen(true);
+            } else {
+              setSelectedLibrary(type);
+              setPortalMode('library_seats');
+            }
+          }}
+          onOpenStudyRoom={() => {
+            if (!user) {
+              setPendingTargetAfterAuth('study_room');
+              setIsAuthModalOpen(true);
+            } else {
+              setPortalMode('study_room');
+            }
+          }}
+          onRequireAuth={() => {
+            setPendingTargetAfterAuth(null);
             setIsAuthModalOpen(true);
-          } else {
-            setPortalMode('study_room');
-          }
-        }}
-        onRequireAuth={() => setIsAuthModalOpen(true)}
-        onLogOut={handleLogOut}
-      />
+          }}
+          onLogOut={handleLogOut}
+        />
+        <AuthModal 
+          isOpen={isAuthModalOpen} 
+          onClose={() => {
+            setIsAuthModalOpen(false);
+            setPendingTargetAfterAuth(null);
+          }} 
+          onAuthSuccess={() => {
+            setIsAuthModalOpen(false);
+            if (pendingTargetAfterAuth) {
+              setPortalMode(pendingTargetAfterAuth);
+              setPendingTargetAfterAuth(null);
+            }
+          }}
+        />
+      </>
     );
   }
 
   if (portalMode === 'library_seats') {
     return (
-      <LibrarySeatBookingView
-        libraryType={selectedLibrary}
-        user={user}
-        onBackToHome={() => setPortalMode('portal_home')}
-        onOpenStudyRoom={() => {
-          if (!user) {
+      <>
+        <LibrarySeatBookingView
+          libraryType={selectedLibrary}
+          user={user}
+          onBackToHome={() => setPortalMode('portal_home')}
+          onOpenStudyRoom={() => {
+            if (!user) {
+              setPendingTargetAfterAuth('study_room');
+              setIsAuthModalOpen(true);
+            } else {
+              setPortalMode('study_room');
+            }
+          }}
+          onRequireAuth={() => {
+            setPendingTargetAfterAuth('library_seats');
             setIsAuthModalOpen(true);
-          } else {
-            setPortalMode('study_room');
-          }
-        }}
-        onRequireAuth={() => setIsAuthModalOpen(true)}
-      />
+          }}
+        />
+        <AuthModal 
+          isOpen={isAuthModalOpen} 
+          onClose={() => {
+            setIsAuthModalOpen(false);
+            setPendingTargetAfterAuth(null);
+          }} 
+          onAuthSuccess={() => {
+            setIsAuthModalOpen(false);
+            if (pendingTargetAfterAuth) {
+              setPortalMode(pendingTargetAfterAuth);
+              setPendingTargetAfterAuth(null);
+            }
+          }}
+        />
+      </>
     );
   }
 
   if (!user) {
     return (
-      <LandingHomePage 
-        onAuthSuccess={() => {
-          setIsAuthModalOpen(false);
-          setPortalMode('study_room');
-        }} 
-        courses={allAvailableCourses} 
-        onImportCourse={handleImportCourse}
-        settings={settings}
-      />
+      <>
+        <LandingHomePage 
+          onAuthSuccess={() => {
+            setIsAuthModalOpen(false);
+            setPortalMode(pendingTargetAfterAuth || 'study_room');
+            setPendingTargetAfterAuth(null);
+          }} 
+          courses={allAvailableCourses} 
+          onImportCourse={handleImportCourse}
+          settings={settings}
+        />
+        <AuthModal 
+          isOpen={isAuthModalOpen} 
+          onClose={() => {
+            setIsAuthModalOpen(false);
+            setPendingTargetAfterAuth(null);
+          }} 
+          onAuthSuccess={() => {
+            setIsAuthModalOpen(false);
+            setPortalMode(pendingTargetAfterAuth || 'study_room');
+            setPendingTargetAfterAuth(null);
+          }}
+        />
+      </>
     );
   }
 
