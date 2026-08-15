@@ -7,7 +7,7 @@ import {
   signInWithPopup,
   signInWithRedirect
 } from '../lib/db';
-import { Mail, Lock, X, AlertCircle, LogIn, UserPlus, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, X, AlertCircle, LogIn, UserPlus, Sparkles, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface AuthModalProps {
@@ -33,7 +33,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
     try {
       if (isSignUp) {
         if (password.length < 6) {
-          throw new Error('পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।');
+          throw new Error('Password must be at least 6 characters long.');
         }
         await createUserWithEmailAndPassword(auth, email, password);
       } else {
@@ -42,16 +42,18 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
       if (onAuthSuccess) onAuthSuccess();
       onClose();
     } catch (err: any) {
-      console.error(err);
-      let errMsg = 'লগইনে সমস্যা হয়েছে। আবার চেষ্টা করুন।';
+      console.error('Auth Error:', err);
+      let errMsg = 'Authentication failed. Please try again.';
       if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        errMsg = 'ভুল পাসওয়ার্ড অথবা ইমেইল। সঠিক তথ্য দিয়ে চেষ্টা করুন।';
+        errMsg = 'Incorrect email or password. Please verify your credentials.';
       } else if (err.code === 'auth/user-not-found') {
-        errMsg = 'এই ইমেইলে কোনো অ্যাকাউন্ট পাওয়া যায়নি।';
+        errMsg = 'No account found with this email address.';
       } else if (err.code === 'auth/email-already-in-use') {
-        errMsg = 'এই ইমেইলটি ইতিমধ্যে ব্যবহৃত হয়েছে। লগইন করুন।';
+        errMsg = 'This email is already registered. Please log in instead.';
       } else if (err.code === 'auth/invalid-email') {
-        errMsg = 'সঠিক ইমেইল ঠিকানা প্রদান করুন।';
+        errMsg = 'Please provide a valid email address.';
+      } else if (err.code === 'auth/weak-password') {
+        errMsg = 'Password is too weak. Please use at least 6 characters.';
       } else if (err.message) {
         errMsg = err.message;
       }
@@ -87,9 +89,9 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
         }
       }
       
-      let errMsg = 'গুগল সাইন-ইন সম্পন্ন করা যায়নি।';
+      let errMsg = 'Could not complete Google Sign-In.';
       if (err.code === 'auth/unauthorized-domain') {
-        errMsg = `এই ডোমেইনটি ফায়ারবেসে অনুমোদিত নয় (${window.location.hostname})।`;
+        errMsg = `This domain (${window.location.hostname}) is not authorized in Firebase Console.`;
       } else if (err.code) {
         errMsg = `${errMsg} (${err.code})`;
       } else if (err.message) {
@@ -103,55 +105,60 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm font-sans">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm font-sans">
         {/* Backdrop overlay */}
         <div 
           onClick={onClose}
           className="absolute inset-0 cursor-pointer"
         />
 
-        {/* Modal content box */}
+        {/* Modal content card */}
         <motion.div 
           initial={{ scale: 0.95, opacity: 0, y: 10 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.95, opacity: 0, y: 10 }}
-          transition={{ duration: 0.2 }}
-          className="relative w-full max-w-md bg-slate-900 border-2 border-indigo-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl z-10 space-y-5 overflow-hidden text-white"
+          transition={{ duration: 0.18 }}
+          className="relative w-full max-w-md bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-2xl z-10 space-y-5 overflow-hidden text-slate-900"
         >
+          {/* Top Decorative Color Accent */}
+          <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600" />
+
           {/* Header */}
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-start pt-1">
             <div className="space-y-1">
-              <span className="text-[10px] bg-indigo-500/20 text-indigo-300 font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider border border-indigo-500/30">
-                ক্লাউড ব্যাকআপ ও সিঙ্ক
-              </span>
-              <h3 className="text-xl font-black text-white">
-                {isSignUp ? 'নতুন অ্যাকাউন্ট তৈরি করুন' : 'লগইন করুন'}
+              <div className="inline-flex items-center gap-1.5 text-[11px] bg-indigo-50 text-indigo-700 font-extrabold px-2.5 py-0.5 rounded-full border border-indigo-100 uppercase tracking-wider">
+                <ShieldCheck className="w-3 h-3" />
+                <span>Secure Cloud Sync</span>
+              </div>
+              <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                {isSignUp ? 'Create Account' : 'Welcome Back'}
               </h3>
-              <p className="text-xs text-slate-400">
-                আপনার লাইব্রেরি সিট বুকিং ও স্টাডি প্রগ্রেস নিরাপদে ক্লাউডে সেভ থাকবে।
+              <p className="text-xs text-slate-500 font-medium">
+                Log in to securely save your seat bookings, timer status, and study progress.
               </p>
             </div>
             <button 
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition cursor-pointer"
+              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              title="Close"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {error && (
-            <div className="p-3.5 bg-rose-950/50 border border-rose-500/40 rounded-2xl flex items-start gap-2.5 text-xs text-rose-300 leading-relaxed">
-              <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 text-xs text-rose-800 leading-relaxed font-medium">
+              <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
           )}
 
-          {/* 🌟 1-CLICK GOOGLE SIGN IN BUTTON (TOP & PROMINENT) */}
+          {/* 🌟 1-CLICK GOOGLE SIGN IN BUTTON (ENGLISH) */}
           <button
             type="button"
             onClick={handleGoogleSignIn}
             disabled={loading}
-            className="w-full py-3.5 bg-white hover:bg-slate-100 text-slate-950 rounded-2xl font-black text-sm transition flex items-center justify-center gap-3 shadow-lg hover:shadow-xl active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer border border-slate-200"
+            className="w-full py-3.5 bg-white hover:bg-slate-50 text-slate-900 rounded-2xl font-bold text-sm transition flex items-center justify-center gap-3 shadow-sm hover:shadow active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer border border-slate-200"
           >
             <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -159,47 +166,47 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
             </svg>
-            <span>Google দিয়ে ১-ক্লিকে লগইন করুন</span>
+            <span>Continue with Google</span>
           </button>
 
           {/* Divider */}
           <div className="relative flex items-center justify-center my-2">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-800"></div>
+              <div className="w-full border-t border-slate-200"></div>
             </div>
-            <span className="relative px-3 bg-slate-900 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              অথবা ইমেইল ও পাসওয়ার্ড
+            <span className="relative px-3 bg-white text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              Or with email and password
             </span>
           </div>
 
           {/* Email / Password Form */}
           <form onSubmit={handleSubmit} className="space-y-3.5">
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-300">ইমেইল ঠিকানা (Email)</label>
+              <label className="text-xs font-bold text-slate-700">Email Address</label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="email"
                   required
-                  placeholder="yourname@gmail.com"
+                  placeholder="name@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
                 />
               </div>
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-300">পাসওয়ার্ড (Password)</label>
+              <label className="text-xs font-bold text-slate-700">Password</label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="password"
                   required
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
                 />
               </div>
             </div>
@@ -207,10 +214,10 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-black text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-md shadow-indigo-600/30 cursor-pointer"
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs sm:text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-md shadow-indigo-600/20 cursor-pointer active:scale-[0.99]"
             >
               {isSignUp ? <UserPlus className="w-4 h-4" /> : <LogIn className="w-4 h-4" />}
-              <span>{loading ? 'অনুগ্রহ করে অপেক্ষা করুন...' : isSignUp ? 'অ্যাকাউন্ট তৈরি সম্পন্ন করুন' : 'ইমেইল দিয়ে লগইন'}</span>
+              <span>{loading ? 'Please wait...' : isSignUp ? 'Create My Account' : 'Sign In with Email'}</span>
             </button>
           </form>
 
@@ -222,9 +229,9 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
                 setError('');
                 setIsSignUp(!isSignUp);
               }}
-              className="text-xs text-indigo-400 hover:text-indigo-300 font-bold transition hover:underline cursor-pointer"
+              className="text-xs text-indigo-600 hover:text-indigo-800 font-bold transition hover:underline cursor-pointer"
             >
-              {isSignUp ? 'ইতিমধ্যে অ্যাকাউন্ট আছে? লগইন করুন' : 'নতুন শিক্ষার্থী? নতুন অ্যাকাউন্ট তৈরি করুন'}
+              {isSignUp ? 'Already have an account? Sign In' : "Don't have an account yet? Create one"}
             </button>
           </div>
         </motion.div>
