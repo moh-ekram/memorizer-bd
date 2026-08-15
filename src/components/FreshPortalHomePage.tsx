@@ -6,9 +6,12 @@ import {
   ArrowRight,
   BookOpen,
   Sparkles,
-  ShieldCheck,
   CheckCircle2,
-  Clock
+  Clock,
+  FlaskConical,
+  Library,
+  ChevronRight,
+  LogOut
 } from 'lucide-react';
 import { LibraryType } from '../types/library';
 
@@ -28,41 +31,37 @@ export const FreshPortalHomePage: React.FC<FreshPortalHomePageProps> = ({
   onLogOut
 }) => {
   return (
-    <div className="min-h-screen bg-slate-100/90 text-slate-800 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
-      {/* Top Navigation Bar - Clean Light Mode */}
-      <header className="border-b border-slate-200/90 bg-white/95 backdrop-blur-md sticky top-0 z-50 px-4 sm:px-8 py-3.5 flex items-center justify-between shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm shadow-indigo-500/20">
-            <BookOpen className="w-5 h-5" />
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
+      {/* Top Navigation Bar - Ultra-compact & Sleek */}
+      <header className="border-b border-slate-200/80 bg-white/95 backdrop-blur-md sticky top-0 z-50 px-3.5 sm:px-6 py-2 sm:py-2.5 flex items-center justify-between shadow-2xs">
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-2xs">
+            <BookOpen className="w-4 h-4" />
           </div>
           <div>
-            <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-900 uppercase">
+            <h1 className="text-xs sm:text-sm font-bold tracking-tight text-slate-900 leading-tight">
               স্মার্ট লাইব্রেরি ও স্টাডি পোর্টাল
             </h1>
-            <p className="text-[11px] text-slate-500 font-medium hidden sm:block">
-              সিট বরাদ্দ সকাল ৮:০০ টা – রাত ১০:০০ টা পর্যন্ত
+            <p className="text-[10px] text-slate-500 font-normal hidden sm:block">
+              সিট বুকিং ও মেমোরাইজার সিস্টেম
             </p>
           </div>
         </div>
 
         {/* User Auth Status */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {user ? (
-            <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs">
-              <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shadow-xs">
+            <div className="flex items-center gap-1.5 bg-slate-100/80 border border-slate-200/80 px-2.5 py-1 rounded-lg">
+              <div className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] font-bold text-white">
                 {user.email ? user.email[0].toUpperCase() : 'U'}
               </div>
-              <div className="hidden sm:block text-left">
-                <p className="text-xs font-black text-slate-900 leading-tight">
-                  {user.displayName || user.email?.split('@')[0]}
-                </p>
-                <p className="text-[10px] text-slate-500 font-medium">
-                  {user.email}
-                </p>
-              </div>
+              <span className="text-xs font-medium text-slate-700 max-w-[80px] sm:max-w-[120px] truncate">
+                {user.displayName || user.email?.split('@')[0]}
+              </span>
               <button
                 onClick={onLogOut}
-                className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 rounded-lg font-bold transition cursor-pointer ml-1"
+                className="text-[11px] text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-1.5 py-0.5 rounded font-medium transition cursor-pointer ml-0.5"
+                title="লগআউট"
               >
                 লগআউট
               </button>
@@ -70,153 +69,152 @@ export const FreshPortalHomePage: React.FC<FreshPortalHomePageProps> = ({
           ) : (
             <button
               onClick={onRequireAuth}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer shadow-sm shadow-indigo-600/20 active:scale-95"
+              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
             >
-              <LogIn className="w-4 h-4" />
-              <span>লগইন করুন</span>
+              <LogIn className="w-3.5 h-3.5" />
+              <span>লগইন</span>
             </button>
           )}
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col justify-center gap-4">
+      {/* Main Content Area - Fully visible within single screen viewport */}
+      <main className="flex-1 max-w-4xl w-full mx-auto p-3 sm:p-5 flex flex-col justify-center gap-2.5 sm:gap-3.5">
         
-        {/* 🌟 'সিটের তথ্য সেভ রাখতে লগ ইন করুন' BUTTON / BANNER ABOVE MATRIX DIV */}
+        {/* Compact User / Auth Notice Banner */}
         {!user ? (
-          <div className="w-full bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-purple-500/10 border-2 border-indigo-200/90 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
-            <div className="flex items-center gap-3.5 text-left">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-700 flex items-center justify-center shrink-0">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-sm sm:text-base font-black text-slate-900">
-                  সিটের তথ্য সেভ রাখতে লগ ইন করুন
-                </h4>
-                <p className="text-xs text-slate-600 font-medium">
-                  লাইব্রেরি সিট বুকিং, বিরতির সময় এবং স্টাডি প্রগ্রেস নিরাপদ রাখতে এক ক্লিকে সাইন ইন করুন।
-                </p>
-              </div>
+          <div className="w-full bg-indigo-50/70 border border-indigo-200/80 rounded-xl p-2.5 sm:p-3 flex items-center justify-between gap-2 shadow-2xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+              <p className="text-xs text-indigo-950 font-medium truncate">
+                সিট ও পড়ার অগ্রগতি সেভ রাখতে সাইন ইন করুন
+              </p>
             </div>
-
             <button
               type="button"
               onClick={onRequireAuth}
-              className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs sm:text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-md shadow-indigo-600/20 active:scale-95 shrink-0 cursor-pointer"
+              className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-[11px] rounded-lg transition shrink-0 cursor-pointer shadow-2xs active:scale-95"
             >
-              <LogIn className="w-4 h-4" />
-              <span>সিটের তথ্য সেভ রাখতে লগ ইন করুন</span>
+              লগইন করুন
             </button>
           </div>
         ) : (
-          <div className="w-full bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 px-4 flex items-center justify-between gap-3 text-emerald-900 shadow-xs">
-            <div className="flex items-center gap-2.5">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-              <p className="text-xs sm:text-sm font-bold">
-                স্বাগতম, <span className="font-black text-emerald-950">{user.displayName || user.email}</span>! আপনার সিট বরাদ্দ এবং পড়ার অগ্রগতি সুরক্ষিত রয়েছে।
+          <div className="w-full bg-emerald-50/80 border border-emerald-200/80 rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-emerald-950 shadow-2xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <p className="text-xs font-medium truncate">
+                স্বাগতম, <strong className="font-bold text-emerald-950">{user.displayName || user.email?.split('@')[0]}</strong>! সিট ও ডাটা সুরক্ষিত।
               </p>
             </div>
-            <div className="hidden sm:flex items-center gap-1.5 text-[11px] bg-emerald-100/80 text-emerald-800 px-2.5 py-1 rounded-full font-bold">
-              <Clock className="w-3.5 h-3.5" />
-              <span>৮:০০ AM - ১০:০০ PM</span>
-            </div>
+            <span className="text-[10px] text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md font-medium shrink-0 hidden xs:inline-block">
+              ৮:০০ AM - ১০:০০ PM
+            </span>
           </div>
         )}
 
-        {/* 🌟 SELECTED MAIN MATRIX CONTAINER (TARGET ELEMENT - LIGHT MODE) */}
-        <div className="border-2 border-slate-300 rounded-2xl overflow-hidden shadow-lg bg-white divide-y-2 divide-slate-300">
+        {/* 🌟 UNIFIED COMPACT DASHBOARD CONTAINER (Both Libraries + Study Room Visible Together) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
           
-          {/* Row 1: হোমপেজ Header */}
-          <div className="py-4 text-center bg-slate-900 font-black text-lg sm:text-xl text-white tracking-wider shadow-inner">
-            হোমপেজ
-          </div>
-
-          {/* Row 2: লাইব্রেরি | স্টাডি রুম */}
-          <div className="grid grid-cols-1 md:grid-cols-2 divide-y-2 md:divide-y-0 md:divide-x-2 divide-slate-300 text-center font-black text-base bg-slate-50 text-slate-800">
-            <div className="py-3.5 text-indigo-700 flex items-center justify-center gap-2 bg-indigo-50/50">
-              <Building2 className="w-5 h-5" />
-              <span>লাইব্রেরি</span>
-            </div>
-            <div className="py-3.5 text-purple-700 flex items-center justify-center gap-2 bg-purple-50/50">
-              <GraduationCap className="w-5 h-5" />
-              <span>স্টাডি রুম</span>
-            </div>
-          </div>
-
-          {/* Row 3: Action Blocks */}
-          <div className="grid grid-cols-1 md:grid-cols-2 divide-y-2 md:divide-y-0 md:divide-x-2 divide-slate-300 bg-white">
-            
-            {/* Left Half: সাইন্স লাইব্রেরি ও সেন্ট্রাল লাইব্রেরি */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 divide-y-2 sm:divide-y-0 sm:divide-x-2 divide-slate-300">
-              
-              {/* সাইন্স লাইব্রেরি */}
-              <button
-                type="button"
-                onClick={() => onSelectLibrary('science')}
-                className="p-6 flex flex-col justify-between items-center text-center gap-4 hover:bg-slate-50 transition group cursor-pointer"
-              >
-                <div className="space-y-2 w-full">
-                  <div className="text-3xl mb-1 filter drop-shadow-xs">🧪</div>
-                  <h3 className="text-base font-black text-slate-900 group-hover:text-indigo-600 transition">
-                    সাইন্স লাইব্রেরি
-                  </h3>
-                  <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                    লগ ইন করলে সাইন্স লাইব্রেরির সিট বিন্যাস দেখাবে।
-                  </p>
+          {/* Card 1: সাইন্স লাইব্রেরি (Science Library) */}
+          <div
+            onClick={() => onSelectLibrary('science')}
+            className="group relative bg-white hover:bg-indigo-50/40 border border-slate-200/90 hover:border-indigo-400 rounded-2xl p-3 sm:p-4.5 flex flex-col justify-between transition-all duration-200 cursor-pointer shadow-2xs hover:shadow-xs active:scale-[0.98]"
+          >
+            <div>
+              {/* Header with Icon + Category */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center text-base sm:text-lg group-hover:scale-105 transition shadow-2xs">
+                  🧪
                 </div>
-                <div className="w-full py-2.5 bg-indigo-50 group-hover:bg-indigo-600 text-indigo-700 group-hover:text-white border border-indigo-200 group-hover:border-indigo-600 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition shadow-xs">
-                  <span>প্রবেশ করুন</span>
-                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition" />
-                </div>
-              </button>
-
-              {/* সেন্ট্রাল লাইব্রেরি */}
-              <button
-                type="button"
-                onClick={() => onSelectLibrary('central')}
-                className="p-6 flex flex-col justify-between items-center text-center gap-4 hover:bg-slate-50 transition group cursor-pointer"
-              >
-                <div className="space-y-2 w-full">
-                  <div className="text-3xl mb-1 filter drop-shadow-xs">🏛️</div>
-                  <h3 className="text-base font-black text-slate-900 group-hover:text-amber-600 transition">
-                    সেন্ট্রাল লাইব্রেরি
-                  </h3>
-                  <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                    লগ ইন করলে সেন্ট্রাল লাইব্রেরির সিট বিন্যাস দেখাবে।
-                  </p>
-                </div>
-                <div className="w-full py-2.5 bg-amber-50 group-hover:bg-amber-600 text-amber-800 group-hover:text-white border border-amber-200 group-hover:border-amber-600 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition shadow-xs">
-                  <span>প্রবেশ করুন</span>
-                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition" />
-                </div>
-              </button>
-
-            </div>
-
-            {/* Right Half: স্টাডি রুম */}
-            <button
-              type="button"
-              onClick={onOpenStudyRoom}
-              className="p-8 flex flex-col justify-between items-center text-center gap-6 hover:bg-purple-50/40 transition group cursor-pointer"
-            >
-              <div className="space-y-3 max-w-xs">
-                <div className="w-14 h-14 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center mx-auto text-2xl group-hover:scale-105 transition shadow-xs">
-                  <GraduationCap className="w-7 h-7" />
-                </div>
-                <h3 className="text-lg font-black text-slate-900 group-hover:text-purple-700 transition">
-                  স্টাডি রুম
-                </h3>
-                <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed">
-                  লগ ইন করলে আমাদের বর্তমান মেমোরাইজার সিস্টেমে নিয়ে যাবে।
-                </p>
+                <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50/80 px-1.5 py-0.5 rounded">
+                  লাইব্রেরি
+                </span>
               </div>
 
-              <div className="w-full max-w-xs py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-md shadow-purple-600/20 transition active:scale-95">
-                <span>স্টাডি রুমে প্রবেশ করুন</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition" />
-              </div>
-            </button>
+              {/* Title & Subtitle */}
+              <h3 className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition leading-snug">
+                সাইন্স লাইব্রেরি
+              </h3>
+              <p className="text-[11px] text-slate-500 font-normal mt-0.5 line-clamp-2 leading-relaxed">
+                রুম ও লাইভ সিট বিন্যাস দেখুন
+              </p>
+            </div>
 
+            {/* Clickable Action Button / Bar */}
+            <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-indigo-600 group-hover:text-indigo-700">
+              <span className="text-[11px] font-bold">সিট বুকিং</span>
+              <div className="w-5 h-5 rounded-full bg-indigo-50 group-hover:bg-indigo-600 group-hover:text-white flex items-center justify-center transition">
+                <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition" />
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: সেন্ট্রাল লাইব্রেরি (Central Library) */}
+          <div
+            onClick={() => onSelectLibrary('central')}
+            className="group relative bg-white hover:bg-amber-50/40 border border-slate-200/90 hover:border-amber-400 rounded-2xl p-3 sm:p-4.5 flex flex-col justify-between transition-all duration-200 cursor-pointer shadow-2xs hover:shadow-xs active:scale-[0.98]"
+          >
+            <div>
+              {/* Header with Icon + Category */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 flex items-center justify-center text-base sm:text-lg group-hover:scale-105 transition shadow-2xs">
+                  🏛️
+                </div>
+                <span className="text-[10px] font-semibold text-amber-700 bg-amber-50/80 px-1.5 py-0.5 rounded">
+                  লাইব্রেরি
+                </span>
+              </div>
+
+              {/* Title & Subtitle */}
+              <h3 className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-amber-700 transition leading-snug">
+                সেন্ট্রাল লাইব্রেরি
+              </h3>
+              <p className="text-[11px] text-slate-500 font-normal mt-0.5 line-clamp-2 leading-relaxed">
+                রুম ও লাইভ সিট বিন্যাস দেখুন
+              </p>
+            </div>
+
+            {/* Clickable Action Button / Bar */}
+            <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-amber-700 group-hover:text-amber-800">
+              <span className="text-[11px] font-bold">সিট বুকিং</span>
+              <div className="w-5 h-5 rounded-full bg-amber-50 group-hover:bg-amber-600 group-hover:text-white flex items-center justify-center transition">
+                <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition" />
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3: স্টাডি রুম (Study Room - Spans 2 cols on mobile, 1 col on desktop) */}
+          <div
+            onClick={onOpenStudyRoom}
+            className="col-span-2 sm:col-span-1 group relative bg-gradient-to-br from-purple-50/80 via-white to-purple-50/30 hover:from-purple-100/80 hover:to-purple-50/60 border border-purple-200/90 hover:border-purple-400 rounded-2xl p-3 sm:p-4.5 flex flex-col justify-between transition-all duration-200 cursor-pointer shadow-2xs hover:shadow-xs active:scale-[0.98]"
+          >
+            <div>
+              {/* Header with Icon + Category */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center group-hover:scale-105 transition shadow-2xs">
+                  <GraduationCap className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                </div>
+                <span className="text-[10px] font-bold text-purple-700 bg-purple-100/90 px-2 py-0.5 rounded-full">
+                  পড়াশোনা ও প্র্যাকটিস
+                </span>
+              </div>
+
+              {/* Title & Subtitle */}
+              <h3 className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-purple-700 transition leading-snug">
+                স্টাডি রুম (মেমোরাইজার)
+              </h3>
+              <p className="text-[11px] text-slate-600 font-normal mt-0.5 line-clamp-2 leading-relaxed">
+                ফ্ল্যাশকার্ড ও প্রশ্ন সমাধান সিস্টেম
+              </p>
+            </div>
+
+            {/* Clickable Action Button */}
+            <div className="mt-3 pt-2 border-t border-purple-100 flex items-center justify-between text-purple-700 group-hover:text-purple-800">
+              <span className="text-[11px] font-bold">স্টাডি রুমে যান</span>
+              <div className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center transition group-hover:scale-110 shadow-2xs">
+                <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition" />
+              </div>
+            </div>
           </div>
 
         </div>
@@ -227,3 +225,4 @@ export const FreshPortalHomePage: React.FC<FreshPortalHomePageProps> = ({
 };
 
 export default FreshPortalHomePage;
+

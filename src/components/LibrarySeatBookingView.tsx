@@ -24,6 +24,10 @@ import {
   Plus,
   Trash2,
   Timer,
+  User,
+  Users,
+  UserCheck,
+  Armchair,
   UserPlus,
   Hash,
   Layers
@@ -677,22 +681,22 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
         </div>
 
         {/* Room Capacity & Status Legend Bar */}
-        <div className="bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex flex-wrap items-center gap-3.5 sm:gap-5 text-slate-600">
+        <div className="bg-white border border-slate-200 rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4.5 text-slate-600">
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-slate-200 border border-slate-300"></span>
+              <Armchair className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.8} />
               <span>খালি <strong className="text-slate-800 font-bold">({roomStats.available})</strong></span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+              <User className="w-3.5 h-3.5 text-rose-500" strokeWidth={2} />
               <span>উপস্থিত <strong className="text-slate-800 font-bold">({roomStats.occupied})</strong></span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+              <Coffee className="w-3.5 h-3.5 text-amber-500" strokeWidth={2} />
               <span>সাময়িক বিরতি <strong className="text-slate-800 font-bold">({roomStats.away})</strong></span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-purple-600"></span>
+              <Users className="w-3.5 h-3.5 text-purple-600" strokeWidth={2} />
               <span>সেকেন্ডারি <strong className="text-slate-800 font-bold">({roomStats.secondaryOccupied})</strong></span>
             </div>
           </div>
@@ -702,8 +706,8 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
           </div>
         </div>
 
-        {/* 🌟 SEAT MATRIX GRID - FULLY COLORED DIVS, ONLY SEAT NUMBERS & ENLARGED BREAK TIMERS */}
-        <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-5 shadow-2xs">
+        {/* 🌟 SEAT MATRIX GRID - FULLY COLORED DIVS WITH MINIMAL LINE-DRAW ICONS & SEAT NUMBERS */}
+        <div className="bg-white border border-slate-200 rounded-xl p-2.5 sm:p-4 shadow-2xs">
           <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-1.5 sm:gap-2">
             {Array.from({ length: currentRoomConfig.capacity || 100 }, (_, i) => i + 1).map((seatNum) => {
               const seatLabel = formatSeatLabel(seatNum, currentRoomConfig);
@@ -763,24 +767,45 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
                   }`}
                   title={`সিট ${seatLabel}${booking ? ` (${booking.userName})` : ' (খালি)'}`}
                 >
-                  {/* If seat is on Break (Away) -> Show Seat Label + ENLARGED COUNTDOWN TIMER */}
+                  {/* Away Seat -> Coffee Icon + Seat Label + Enlarged Countdown Timer */}
                   {isAway ? (
                     <div className="flex flex-col items-center justify-center leading-none text-center w-full">
-                      <span className="text-[10px] opacity-90 font-bold mb-0.5">
+                      <Coffee className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white mb-0.5" strokeWidth={2} />
+                      <span className="text-[9px] sm:text-[10px] text-white/90 font-semibold leading-none">
                         {seatLabel}
                       </span>
-                      {/* 🌟 ENLARGED TIMER FONT SIZE */}
-                      <span className="text-xs sm:text-sm font-black tracking-tight drop-shadow-xs">
+                      <span className="text-xs sm:text-sm font-black tracking-tight leading-tight mt-0.5 text-white drop-shadow-xs">
                         {remainingTime?.text}
                       </span>
                     </div>
+                  ) : hasSecondary ? (
+                    /* Secondary Occupied Seat -> Secondary Users Icon + Seat Label */
+                    <div className="flex flex-col items-center justify-center leading-none text-center w-full">
+                      <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white mb-0.5" strokeWidth={2} />
+                      <span className="text-[11px] sm:text-xs font-bold text-white leading-none">
+                        {seatLabel}
+                      </span>
+                    </div>
+                  ) : booking ? (
+                    /* Booked/Occupied Seat -> Minimal Line Draw User Icon + Seat Label */
+                    <div className="flex flex-col items-center justify-center leading-none text-center w-full">
+                      {isMine ? (
+                        <UserCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white mb-0.5" strokeWidth={2.2} />
+                      ) : (
+                        <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white mb-0.5" strokeWidth={2} />
+                      )}
+                      <span className="text-[11px] sm:text-xs font-bold text-white leading-none">
+                        {seatLabel}
+                      </span>
+                    </div>
                   ) : (
-                    /* Normal Seat -> ONLY SEAT NUMBER DISPLAYED (NO OTHER TEXT) */
-                    <span className={`text-xs sm:text-sm font-bold tracking-tight ${
-                      isMine || isMySecondary || booking || hasSecondary ? 'text-white' : 'text-slate-700'
-                    }`}>
-                      {seatLabel}
-                    </span>
+                    /* Empty Seat -> Minimal Line Draw Armchair Icon + Seat Label */
+                    <div className="flex flex-col items-center justify-center leading-none text-center w-full">
+                      <Armchair className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 mb-0.5" strokeWidth={1.75} />
+                      <span className="text-[11px] sm:text-xs font-semibold text-slate-700 leading-none">
+                        {seatLabel}
+                      </span>
+                    </div>
                   )}
                 </button>
               );
