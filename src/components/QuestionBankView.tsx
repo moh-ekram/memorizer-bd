@@ -23,7 +23,9 @@ import {
   Check,
   Award,
   Info,
-  AlertTriangle
+  AlertTriangle,
+  Cloud,
+  UploadCloud
 } from 'lucide-react';
 import { db, doc, setDoc, deleteDoc, writeBatch, collection, getDocs, saveBulkDocs } from '../lib/db';
 import { QuestionBankItem, QuestionBankRule, Course, Exam, ExamQuestion } from '../types';
@@ -192,8 +194,10 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishSuccess, setPublishSuccess] = useState(false);
   const [permissionNotice, setPermissionNotice] = useState<string | null>(null);
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [syncCloudMessage, setSyncCloudMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
-  // Fetch Question Bank from Firestore with LocalStorage Fallback & Blank Questions Migration
+  // Fetch Question Bank from Firestore with LocalStorage Fallback & Multi-collection aggregation
   const fetchQuestions = async () => {
     setLoading(true);
     setPermissionNotice(null);
@@ -207,7 +211,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       }
     } catch (_) {}
 
-    // 1. Local Storage & IndexedDB cache
+    // 1. Local Storage & IndexedDB cache (fast initial render)
     try {
       const cachedList = await getLargeStorage<QuestionBankItem[]>('local_question_bank', null);
       if (Array.isArray(cachedList)) {
@@ -219,7 +223,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       }
     } catch (_) {}
 
-    // 2. Question Bank from Firestore
+    // 2. Primary Question Bank collection from Firestore
     try {
       const snap = await getDocs(collection(db, 'question_bank'));
       snap.forEach(docSnap => {
@@ -249,7 +253,36 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       }
     }
 
-    // 3. Migrate all existing blank_questions into Question Bank
+    // 3. Load MCQ questions collection from Firestore
+    try {
+      const mcqSnap = await getDocs(collection(db, 'mcq_questions'));
+      mcqSnap.forEach(docSnap => {
+        const d = docSnap.data();
+        const qId = `mcq_${docSnap.id}`;
+        if (!deletedSet.has(qId) && !itemMap.has(qId) && !itemMap.has(docSnap.id)) {
+          const opts = Array.isArray(d.options) ? d.options : [d.optionA || '', d.optionB || '', d.optionC || '', d.optionD || ''];
+          itemMap.set(qId, {
+            id: qId,
+            question: d.question || '',
+            optionA: opts[0] || '',
+            optionB: opts[1] || '',
+            optionC: opts[2] || '',
+            optionD: opts[3] || '',
+            correctAnswer: d.answer || opts[0] || 'A',
+            explanation: d.explanation || 'MCQ Practice Question',
+            group1: d.courseId || 'MCQ',
+            group2: 'MCQ Question',
+            group3: 'Existing Database',
+            courseId: d.courseId,
+            createdAt: d.createdAt || new Date().toISOString()
+          });
+        }
+      });
+    } catch (mErr) {
+      console.warn('Notice reading mcq_questions:', mErr);
+    }
+
+    // 4. Load blank_questions from Firestore
     try {
       const bSnap = await getDocs(collection(db, 'blank_questions'));
       bSnap.forEach(docSnap => {
@@ -301,10 +334,96 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       console.warn('Notice reading blank_questions:', bErr);
     }
 
+    // 5. Load odd_one_out_questions from Firestore
+    try {
+      const oooSnap = await getDocs(collection(db, 'odd_one_out_questions'));
+      oooSnap.forEach(docSnap => {
+        const d = docSnap.data();
+        const qId = `ooo_${docSnap.id}`;
+        if (!deletedSet.has(qId) && !itemMap.has(qId) && Array.isArray(d.words) && d.words.length >= 2) {
+          itemMap.set(qId, {
+            id: qId,
+            question: `Odd One Out: Find the word that does not fit with the others (${d.words.join(', ')})`,
+            optionA: d.words[0] || '',
+            optionB: d.words[1] || '',
+            optionC: d.words[2] || 'N/A',
+            optionD: d.words[3] || 'N/A',
+            correctAnswer: d.answer || d.words[0] || 'A',
+            explanation: d.reason || d.explanation || 'Odd One Out Question',
+            group1: d.courseId || 'Odd One Out',
+            group2: 'Odd One Out',
+            group3: 'Existing Database',
+            courseId: d.courseId,
+            createdAt: d.createdAt || new Date().toISOString()
+          });
+        }
+      });
+    } catch (oErr) {
+      console.warn('Notice reading odd_one_out_questions:', oErr);
+    }
+
+    // 6. Load word_analogy_questions from Firestore
+    try {
+      const waSnap = await getDocs(collection(db, 'word_analogy_questions'));
+      waSnap.forEach(docSnap => {
+        const d = docSnap.data();
+        const qId = `wa_${docSnap.id}`;
+        if (!deletedSet.has(qId) && !itemMap.has(qId) && Array.isArray(d.options)) {
+          itemMap.set(qId, {
+            id: qId,
+            question: `Word Analogy: ${d.analogy || ''}`,
+            optionA: d.options[0] || '',
+            optionB: d.options[1] || '',
+            optionC: d.options[2] || '',
+            optionD: d.options[3] || '',
+            correctAnswer: d.answer || d.options[0] || 'A',
+            explanation: d.explanation || 'Analogy Question',
+            group1: d.courseId || 'Word Analogy',
+            group2: 'Word Analogy',
+            group3: 'Existing Database',
+            courseId: d.courseId,
+            createdAt: d.createdAt || new Date().toISOString()
+          });
+        }
+      });
+    } catch (waErr) {
+      console.warn('Notice reading word_analogy_questions:', waErr);
+    }
+
     const finalList = Array.from(itemMap.values());
     setQuestions(finalList);
     await setLargeStorage('local_question_bank', finalList);
     setLoading(false);
+  };
+
+  // Sync All Questions to Cloud (Push local items to Firestore so all devices can see them)
+  const handleSyncAllToCloud = async () => {
+    if (questions.length === 0) {
+      setSyncCloudMessage({ text: 'ক্লাউডে আপলোড করার মতো কোনো প্রশ্ন পাওয়া যায়নি।', type: 'info' });
+      setTimeout(() => setSyncCloudMessage(null), 4000);
+      return;
+    }
+
+    setIsSyncingCloud(true);
+    setSyncCloudMessage({ text: `ফায়ারবেস ক্লাউডে ${questions.length}টি প্রশ্ন আপলোড করা হচ্ছে...`, type: 'info' });
+
+    try {
+      await saveBulkDocs('question_bank', questions);
+      setSyncCloudMessage({ 
+        text: `✅ সফলভাবে ${questions.length}টি প্রশ্ন ফায়ারবেস ক্লাউডে আপলোড হয়েছে! এখন যেকোনো ডিভাইস থেকেই দেখা যাবে।`, 
+        type: 'success' 
+      });
+      setTimeout(() => setSyncCloudMessage(null), 6000);
+    } catch (err: any) {
+      console.error('Cloud bulk upload error:', err);
+      setSyncCloudMessage({ 
+        text: `❌ ক্লাউডে আপলোড করতে সমস্যা হয়েছে: ${err?.message || 'Firestore Rules বা ইন্টারনেট চেক করুন'}`, 
+        type: 'error' 
+      });
+      setTimeout(() => setSyncCloudMessage(null), 8000);
+    } finally {
+      setIsSyncingCloud(false);
+    }
   };
 
   // Fetch Scheduled Exams
@@ -446,18 +565,19 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       setQuestions(updatedList);
       await setLargeStorage('local_question_bank', updatedList);
 
-      // Close modal immediately so UI doesn't buffer/hang
-      setShowUploadPreviewModal(false);
-      setUploadStatus(`Saved ${pendingUploadQuestions.length} questions successfully!`);
-      setTimeout(() => setUploadStatus(null), 3500);
-
       const itemsToSave = [...pendingUploadQuestions];
       setPendingUploadQuestions([]);
+      setShowUploadPreviewModal(false);
 
-      // 2. Sync to Firestore in background safely
-      saveBulkDocs('question_bank', itemsToSave).catch(fsErr => {
-        console.warn('Cloud batch save background notice:', fsErr);
-      });
+      // 2. Sync to Firestore Cloud directly
+      try {
+        await saveBulkDocs('question_bank', itemsToSave);
+        setUploadStatus(`✅ ${itemsToSave.length}টি প্রশ্ন ক্লাউড ডাটাবেজ ও লোকাল স্টোরেজে সফলভাবে সেভ হয়েছে!`);
+      } catch (fsErr: any) {
+        console.warn('Cloud batch save notice:', fsErr);
+        setUploadStatus(`⚠️ ${itemsToSave.length}টি প্রশ্ন এই ডিভাইসে সেভ হয়েছে (ক্লাউড সিঙ্ক করতে 'Sync All to Cloud' চাপুন)`);
+      }
+      setTimeout(() => setUploadStatus(null), 5000);
     } catch (err: any) {
       console.error('Upload notice:', err);
       setUploadStatus('Questions saved to local device storage.');
@@ -1096,6 +1216,30 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 <span>Add New Question</span>
               </button>
 
+              <button
+                onClick={handleSyncAllToCloud}
+                disabled={isSyncingCloud || questions.length === 0}
+                className="px-3.5 py-2 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold shadow-sm transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                title="Sync all current questions to Firebase Firestore Cloud so other devices can access them"
+              >
+                {isSyncingCloud ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
+                ) : (
+                  <UploadCloud className="w-3.5 h-3.5 text-white" />
+                )}
+                <span>{isSyncingCloud ? 'Syncing to Cloud...' : 'Sync All to Cloud (ক্লাউডে সেভ)'}</span>
+              </button>
+
+              <button
+                onClick={fetchQuestions}
+                disabled={loading}
+                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                title="Fetch latest questions from Firebase Cloud database"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${loading ? 'animate-spin' : ''}`} />
+                <span>{loading ? 'Refreshing...' : 'Refresh from Cloud'}</span>
+              </button>
+
               {existingDbQuestions.length > 0 && (
                 <button
                   onClick={handleDeleteExistingDatabaseQuestions}
@@ -1108,6 +1252,26 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               )}
             </div>
           </div>
+
+          {/* Cloud Sync Status Banner */}
+          {syncCloudMessage && (
+            <div className={`p-4 rounded-2xl border text-xs font-bold flex items-center gap-2.5 animate-fadeIn shadow-sm ${
+              syncCloudMessage.type === 'success' 
+                ? 'bg-emerald-50 text-emerald-900 border-emerald-200' 
+                : syncCloudMessage.type === 'error'
+                ? 'bg-rose-50 text-rose-900 border-rose-200'
+                : 'bg-sky-50 text-sky-900 border-sky-200'
+            }`}>
+              {syncCloudMessage.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              ) : syncCloudMessage.type === 'error' ? (
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              ) : (
+                <Cloud className="w-4 h-4 text-sky-600 shrink-0" />
+              )}
+              <span className="leading-relaxed">{syncCloudMessage.text}</span>
+            </div>
+          )}
 
           {/* Stats Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
