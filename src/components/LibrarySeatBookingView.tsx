@@ -675,24 +675,41 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
           </div>
         )}
 
-        {/* Room Navigation Tabs + Search Box */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5">
-          <div className="flex flex-wrap items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl w-full sm:w-auto">
-            {/* Side-by-Side Dual View Toggle */}
+        {/* Room Navigation Tabs (2 Rows) + Search Box */}
+        <div className="flex flex-col gap-2 w-full">
+          {/* Row 1: 'সকল রুম' Toggle Button + Search Box */}
+          <div className="flex items-center justify-between gap-2 w-full">
             <button
               type="button"
               onClick={() => setViewMode('side_by_side')}
-              className={`px-3 py-1.5 rounded-lg font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+              className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs ${
                 viewMode === 'side_by_side'
-                  ? 'bg-indigo-600 text-white shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
               }`}
             >
-              <Columns2 className="w-3.5 h-3.5" />
-              <span>উভয় লাইব্রেরি (Side-by-Side)</span>
+              <Columns2 className="w-3.5 h-3.5 shrink-0" />
+              <span>সকল রুম</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded font-normal ${viewMode === 'side_by_side' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-600'}`}>
+                {overallStats.occupied + overallStats.away + overallStats.secondaryOccupied}/{overallStats.totalCapacity}
+              </span>
             </button>
 
-            {/* Individual Room Tabs */}
+            {/* Search Box */}
+            <div className="relative flex-1 sm:max-w-[220px]">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="সিট নং খুঁজুন..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-7 pr-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 shadow-2xs"
+              />
+            </div>
+          </div>
+
+          {/* Row 2: আলাদাভাবে প্রতিটি রুম (Individual Room Tabs) */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 w-full">
             {config.rooms.map((room) => {
               const isSelected = viewMode === room.id;
               const rStats = getRoomStats(room.id, room.capacity || 50);
@@ -704,57 +721,79 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
                     setViewMode(room.id);
                     setSelectedRoom(room.id);
                   }}
-                  className={`px-2.5 py-1.5 rounded-lg font-semibold text-xs transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                  className={`flex-1 min-w-0 px-2 sm:px-2.5 py-1.5 rounded-xl font-semibold text-xs transition flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer truncate shadow-2xs border ${
                     isSelected
-                      ? 'bg-indigo-600 text-white shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
                   }`}
                 >
-                  <span>{room.name}</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded font-normal ${isSelected ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-200 text-slate-600'}`}>
+                  <span className="truncate">{room.name}</span>
+                  <span className={`text-[10px] px-1 py-0.2 rounded font-normal shrink-0 ${isSelected ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-600'}`}>
                     {rStats.totalBooked}/{room.capacity || 50}
                   </span>
                 </button>
               );
             })}
           </div>
-
-          {/* Search Box */}
-          <div className="relative w-full sm:w-auto min-w-[140px] sm:min-w-[200px]">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="সিট নং খুঁজুন..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-7 pr-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20"
-            />
-          </div>
         </div>
 
-        {/* Room Capacity & Status Legend Bar */}
-        <div className="bg-white border border-slate-200 rounded-xl px-2.5 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-          <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 text-slate-600">
-            <div className="flex items-center gap-1">
-              <Armchair className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.8} />
-              <span>খালি <strong className="text-slate-800 font-bold">({viewMode === 'side_by_side' ? overallStats.available : roomStats.available})</strong></span>
+        {/* 🌟 2nd Div: Statistics / Legend Bar - 5 Compact Micro Divs constrained to ONE single line on mobile */}
+        <div className="w-full bg-white border border-slate-200 rounded-xl p-1.5 shadow-2xs">
+          <div className="grid grid-cols-5 gap-1 w-full text-center">
+            {/* 1. খালি */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center min-w-0">
+              <div className="flex items-center gap-0.5 text-slate-600 leading-none">
+                <Armchair className="w-2.5 h-2.5 text-slate-400 shrink-0" strokeWidth={1.8} />
+                <span className="text-[9px] font-medium truncate">খালি</span>
+              </div>
+              <span className="text-[11px] font-black text-slate-800 leading-tight mt-0.5">
+                {viewMode === 'side_by_side' ? overallStats.available : roomStats.available}
+              </span>
             </div>
-            <div className="flex items-center gap-1">
-              <User className="w-3.5 h-3.5 text-rose-500" strokeWidth={2} />
-              <span>উপস্থিত <strong className="text-slate-800 font-bold">({viewMode === 'side_by_side' ? overallStats.occupied : roomStats.occupied})</strong></span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Coffee className="w-3.5 h-3.5 text-amber-500" strokeWidth={2} />
-              <span>বিরতি <strong className="text-slate-800 font-bold">({viewMode === 'side_by_side' ? overallStats.away : roomStats.away})</strong></span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Users className="w-3.5 h-3.5 text-purple-600" strokeWidth={2} />
-              <span>সেকেন্ডারি <strong className="text-slate-800 font-bold">({viewMode === 'side_by_side' ? overallStats.secondaryOccupied : roomStats.secondaryOccupied})</strong></span>
-            </div>
-          </div>
 
-          <div className="text-[11px] text-slate-400 font-normal">
-            মোট সিট: <span className="text-slate-700 font-bold">{viewMode === 'side_by_side' ? overallStats.totalCapacity : (currentRoomConfig.capacity || 50)}</span>
+            {/* 2. উপস্থিত */}
+            <div className="bg-rose-50 border border-rose-100 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center min-w-0">
+              <div className="flex items-center gap-0.5 text-rose-700 leading-none">
+                <User className="w-2.5 h-2.5 text-rose-500 shrink-0" strokeWidth={2} />
+                <span className="text-[9px] font-medium truncate">উপস্থিত</span>
+              </div>
+              <span className="text-[11px] font-black text-rose-700 leading-tight mt-0.5">
+                {viewMode === 'side_by_side' ? overallStats.occupied : roomStats.occupied}
+              </span>
+            </div>
+
+            {/* 3. সাময়িক বিরতি */}
+            <div className="bg-amber-50 border border-amber-100 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center min-w-0">
+              <div className="flex items-center gap-0.5 text-amber-700 leading-none">
+                <Coffee className="w-2.5 h-2.5 text-amber-500 shrink-0" strokeWidth={2} />
+                <span className="text-[9px] font-medium truncate">বিরতি</span>
+              </div>
+              <span className="text-[11px] font-black text-amber-700 leading-tight mt-0.5">
+                {viewMode === 'side_by_side' ? overallStats.away : roomStats.away}
+              </span>
+            </div>
+
+            {/* 4. সেকেন্ডারি */}
+            <div className="bg-purple-50 border border-purple-100 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center min-w-0">
+              <div className="flex items-center gap-0.5 text-purple-700 leading-none">
+                <Users className="w-2.5 h-2.5 text-purple-600 shrink-0" strokeWidth={2} />
+                <span className="text-[9px] font-medium truncate">সেকেন্ডারি</span>
+              </div>
+              <span className="text-[11px] font-black text-purple-700 leading-tight mt-0.5">
+                {viewMode === 'side_by_side' ? overallStats.secondaryOccupied : roomStats.secondaryOccupied}
+              </span>
+            </div>
+
+            {/* 5. মোট সিট */}
+            <div className="bg-indigo-50 border border-indigo-100 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center min-w-0">
+              <div className="flex items-center gap-0.5 text-indigo-700 leading-none">
+                <Layers className="w-2.5 h-2.5 text-indigo-500 shrink-0" strokeWidth={2} />
+                <span className="text-[9px] font-medium truncate">মোট</span>
+              </div>
+              <span className="text-[11px] font-black text-indigo-900 leading-tight mt-0.5">
+                {viewMode === 'side_by_side' ? overallStats.totalCapacity : (currentRoomConfig.capacity || 50)}
+              </span>
+            </div>
           </div>
         </div>
 
