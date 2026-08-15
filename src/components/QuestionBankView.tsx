@@ -198,30 +198,37 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
   const [syncCloudMessage, setSyncCloudMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   // Fetch Question Bank from Firestore with LocalStorage Fallback & Multi-collection aggregation
-  const fetchQuestions = async () => {
+  const fetchQuestions = async (forceCloud = false) => {
     setLoading(true);
     setPermissionNotice(null);
     const itemMap = new Map<string, QuestionBankItem>();
 
     const deletedSet = new Set<string>();
-    try {
-      const deletedArr = JSON.parse(safeGetLocalStorage('deleted_question_ids', '[]'));
-      if (Array.isArray(deletedArr)) {
-        deletedArr.forEach((id: string) => deletedSet.add(id));
-      }
-    } catch (_) {}
+    if (!forceCloud) {
+      try {
+        const deletedArr = JSON.parse(safeGetLocalStorage('deleted_question_ids', '[]'));
+        if (Array.isArray(deletedArr)) {
+          deletedArr.forEach((id: string) => deletedSet.add(id));
+        }
+      } catch (_) {}
+    } else {
+      // Clear deleted list when user explicitly force refreshes
+      safeSetLocalStorage('deleted_question_ids', '[]');
+    }
 
-    // 1. Local Storage & IndexedDB cache (fast initial render)
-    try {
-      const cachedList = await getLargeStorage<QuestionBankItem[]>('local_question_bank', null);
-      if (Array.isArray(cachedList)) {
-        cachedList.forEach((q: QuestionBankItem) => {
-          if (q && q.id && !deletedSet.has(q.id)) {
-            itemMap.set(q.id, q);
-          }
-        });
-      }
-    } catch (_) {}
+    // 1. Local Storage & IndexedDB cache (fast initial render if not forcing cloud)
+    if (!forceCloud) {
+      try {
+        const cachedList = await getLargeStorage<QuestionBankItem[]>('local_question_bank', null);
+        if (Array.isArray(cachedList)) {
+          cachedList.forEach((q: QuestionBankItem) => {
+            if (q && q.id && !deletedSet.has(q.id)) {
+              itemMap.set(q.id, q);
+            }
+          });
+        }
+      } catch (_) {}
+    }
 
     // 2. Primary Question Bank collection from Firestore
     try {
@@ -249,7 +256,9 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     } catch (err: any) {
       console.warn('Question bank Firestore fetch notice:', err);
       if (err?.code === 'permission-denied' || err?.message?.includes('permission')) {
-        setPermissionNotice('Firestore Security Rules-এর কারণে ফায়ারবেস থেকে ডেটা লোড হতে বাধা পাচ্ছে। দয়া করে ফায়ারবেস কনসোলে সিকিউরিটি রুলস আপডেট করে Publish করুন।');
+        setPermissionNotice('Firestore Security Rules-এর কারণে ফায়ারবেস থেকে ডেটা লোড হতে বাধা পাচ্ছে। দয়া করে ফায়ারবেস কনসোলে Rules ট্যাবে পারমিশন পাবলিশ করুন।');
+      } else {
+        setPermissionNotice(`ক্লাউড থেকে ডেটা লোড করার সময় সমস্যা: ${err?.message || 'ইন্টারনেট বা ফায়ারবেস কানেকশন চেক করুন'}`);
       }
     }
 
@@ -1231,12 +1240,12 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               </button>
 
               <button
-                onClick={fetchQuestions}
+                onClick={() => fetchQuestions(true)}
                 disabled={loading}
-                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0"
-                title="Fetch latest questions from Firebase Cloud database"
+                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs"
+                title="Fetch latest questions directly from Firebase Cloud database"
               >
-                <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${loading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-3.5 h-3.5 text-white ${loading ? 'animate-spin' : ''}`} />
                 <span>{loading ? 'Refreshing...' : 'Refresh from Cloud'}</span>
               </button>
 
@@ -1252,6 +1261,22 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               )}
             </div>
           </div>
+
+          {/* Permission or Cloud Error Notice */}
+          {permissionNotice && (
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-center justify-between gap-3 animate-fadeIn shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span className="leading-relaxed">{permissionNotice}</span>
+              </div>
+              <button
+                onClick={() => fetchQuestions(true)}
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-extrabold cursor-pointer shrink-0 transition"
+              >
+                Retry
+              </button>
+            </div>
+          )}
 
           {/* Cloud Sync Status Banner */}
           {syncCloudMessage && (
@@ -1367,8 +1392,18 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                     </tr>
                   ) : filteredQuestions.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="p-12 text-center text-slate-400 font-semibold">
-                        No questions found. Click "Add New Question" or "Excel Upload" to add questions.
+                      <td colSpan={7} className="p-12 text-center text-slate-400 font-semibold space-y-3">
+                        <p className="text-slate-500">কোনো প্রশ্ন পাওয়া যায়নি। ফায়ারবেস ক্লাউড থেকে সরাসরি লোড করতে নিচের বাটনে চাপুন:</p>
+                        <div className="flex items-center justify-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => fetchQuestions(true)}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm mx-auto"
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                            <span>ফায়ারবেস থেকে লোড করুন (Force Refresh from Cloud)</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ) : (
