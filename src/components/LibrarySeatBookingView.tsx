@@ -30,7 +30,9 @@ import {
   Armchair,
   UserPlus,
   Hash,
-  Layers
+  Layers,
+  LayoutGrid,
+  Columns2
 } from 'lucide-react';
 
 interface LibrarySeatBookingViewProps {
@@ -77,10 +79,12 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
 }) => {
   // Config state (Rooms, Capacities, Operating Hours)
   const [config, setConfig] = useState<LibraryConfig>(DEFAULT_LIBRARY_CONFIG);
+  const [viewMode, setViewMode] = useState<'side_by_side' | number>('side_by_side');
   const [selectedRoom, setSelectedRoom] = useState<number>(1);
   const [bookings, setBookings] = useState<SeatBooking[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedSeat, setSelectedSeat] = useState<number | null>(null);
+  const [targetBookingRoomId, setTargetBookingRoomId] = useState<number>(1);
   
   // Modals
   const [showBookingModal, setShowBookingModal] = useState<boolean>(false);
@@ -201,16 +205,21 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
     }
   }, [libraryType]);
 
-  // Current active room config
+  // Current active room config for single view mode
   const currentRoomConfig = useMemo(() => {
     return config.rooms.find(r => r.id === selectedRoom) || config.rooms[0] || { 
       id: 1, 
-      name: 'রুম ১', 
-      capacity: 100, 
-      seatPrefix: '', 
-      numberingStyle: 'numeric' 
+      name: 'লাইব্রেরি এ', 
+      capacity: 50, 
+      seatPrefix: 'A', 
+      numberingStyle: 'prefix' 
     };
   }, [config.rooms, selectedRoom]);
+
+  // Current target room config for active modal
+  const activeBookingRoomConfig = useMemo(() => {
+    return config.rooms.find(r => r.id === targetBookingRoomId) || currentRoomConfig;
+  }, [config.rooms, targetBookingRoomId, currentRoomConfig]);
 
   // Current user's existing primary OR secondary booking across this library
   const myPrimaryBooking = useMemo(() => {
@@ -231,23 +240,14 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
 
   const hasAnyActiveBooking = !!(myPrimaryBooking || mySecondaryBooking);
 
-  // Map of room bookings: seatNumber -> booking
-  const roomBookingsMap = useMemo(() => {
-    const map = new Map<number, SeatBooking>();
-    bookings.filter(b => b.roomId === selectedRoom).forEach(b => {
-      map.set(b.seatNumber, b);
-    });
-    return map;
-  }, [bookings, selectedRoom]);
-
-  // Stats calculation
-  const roomStats = useMemo(() => {
+  // Helper to calculate statistics for any given room
+  const getRoomStats = (roomId: number, capacity: number = 50) => {
+    const roomBookings = bookings.filter(b => b.roomId === roomId);
     let occupied = 0;
     let away = 0;
     let secondaryOccupied = 0;
-    const capacity = currentRoomConfig.capacity || 100;
 
-    roomBookingsMap.forEach(b => {
+    roomBookings.forEach(b => {
       const isTimerActive = b.isAway && b.awayUntil && new Date(b.awayUntil).getTime() > currentTime.getTime();
       if (isTimerActive) {
         if (b.secondaryUserId) {
@@ -266,9 +266,40 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
       away,
       secondaryOccupied,
       available: Math.max(0, capacity - totalBooked),
+      totalBooked,
       capacity
     };
-  }, [roomBookingsMap, currentTime, currentRoomConfig]);
+  };
+
+  // Overall stats across all rooms
+  const overallStats = useMemo(() => {
+    let occupied = 0;
+    let away = 0;
+    let secondaryOccupied = 0;
+    let totalCapacity = 0;
+
+    config.rooms.forEach(r => {
+      const s = getRoomStats(r.id, r.capacity || 50);
+      occupied += s.occupied;
+      away += s.away;
+      secondaryOccupied += s.secondaryOccupied;
+      totalCapacity += s.capacity;
+    });
+
+    const totalBooked = occupied + away + secondaryOccupied;
+    return {
+      occupied,
+      away,
+      secondaryOccupied,
+      available: Math.max(0, totalCapacity - totalBooked),
+      totalCapacity
+    };
+  }, [bookings, config.rooms, currentTime]);
+
+  // Selected room stats (for single view)
+  const roomStats = useMemo(() => {
+    return getRoomStats(selectedRoom, currentRoomConfig.capacity || 50);
+  }, [bookings, selectedRoom, currentRoomConfig, currentTime]);
 
   // Format Remaining Away Time
   const getRemainingTimeData = (awayUntilStr?: string) => {
@@ -306,11 +337,12 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
       return;
     }
 
-    const docId = `r${selectedRoom}_s${seatNum}`;
+    const targetRoomId = targetBookingRoomId || selectedRoom;
+    const docId = `r${targetRoomId}_s${seatNum}`;
     const newBooking: SeatBooking = {
       seatNumber: seatNum,
       libraryId: libraryType,
-      roomId: selectedRoom,
+      roomId: targetRoomId,
       userId: user.uid || 'user_' + Date.now(),
       userEmail: user.email || '',
       userName: user.displayName || user.email?.split('@')[0] || 'শিক্ষার্থী',
@@ -321,7 +353,7 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
 
     try {
       await setDoc(doc(db, collectionName, docId), newBooking);
-      const updated = [...bookings.filter(b => !(b.roomId === selectedRoom && b.seatNumber === seatNum)), newBooking];
+      const updated = [...bookings.filter(b => !(b.roomId === targetRoomId && b.seatNumber === seatNum)), newBooking];
       setBookings(updated);
       localStorage.setItem(localCacheKey, JSON.stringify(updated));
       setShowBookingModal(false);
@@ -353,14 +385,15 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
     }
 
     if (!selectedSeat) return;
-    const target = roomBookingsMap.get(selectedSeat);
+    const targetRoomId = targetBookingRoomId || selectedRoom;
+    const target = bookings.find(b => b.roomId === targetRoomId && b.seatNumber === selectedSeat);
     if (!target || !target.isAway) {
       alert('এই সিটটি বর্তমানে সাময়িক বিরতিতে নেই।');
       setShowSecondaryBookingModal(false);
       return;
     }
 
-    const docId = `r${selectedRoom}_s${selectedSeat}`;
+    const docId = `r${targetRoomId}_s${selectedSeat}`;
     const updatedBooking: SeatBooking = {
       ...target,
       secondaryUserId: user.uid || 'sec_user_' + Date.now(),
@@ -371,7 +404,7 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
 
     try {
       await setDoc(doc(db, collectionName, docId), updatedBooking);
-      const updated = bookings.map(b => (b.roomId === selectedRoom && b.seatNumber === selectedSeat ? updatedBooking : b));
+      const updated = bookings.map(b => (b.roomId === targetRoomId && b.seatNumber === selectedSeat ? updatedBooking : b));
       setBookings(updated);
       localStorage.setItem(localCacheKey, JSON.stringify(updated));
       setShowSecondaryBookingModal(false);
@@ -643,16 +676,35 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
         )}
 
         {/* Room Navigation Tabs + Search Box */}
-        <div className="flex items-center justify-between gap-3 overflow-x-auto pb-0.5">
-          <div className="flex items-center gap-1.5 bg-slate-100/80 p-1 rounded-xl">
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl w-full sm:w-auto">
+            {/* Side-by-Side Dual View Toggle */}
+            <button
+              type="button"
+              onClick={() => setViewMode('side_by_side')}
+              className={`px-3 py-1.5 rounded-lg font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                viewMode === 'side_by_side'
+                  ? 'bg-indigo-600 text-white shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+              }`}
+            >
+              <Columns2 className="w-3.5 h-3.5" />
+              <span>উভয় লাইব্রেরি (Side-by-Side)</span>
+            </button>
+
+            {/* Individual Room Tabs */}
             {config.rooms.map((room) => {
-              const isSelected = selectedRoom === room.id;
-              const countInRoom = bookings.filter(b => b.roomId === room.id).length;
+              const isSelected = viewMode === room.id;
+              const rStats = getRoomStats(room.id, room.capacity || 50);
               return (
                 <button
                   key={room.id}
-                  onClick={() => setSelectedRoom(room.id)}
-                  className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                  type="button"
+                  onClick={() => {
+                    setViewMode(room.id);
+                    setSelectedRoom(room.id);
+                  }}
+                  className={`px-2.5 py-1.5 rounded-lg font-semibold text-xs transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
                     isSelected
                       ? 'bg-indigo-600 text-white shadow-2xs'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
@@ -660,7 +712,7 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
                 >
                   <span>{room.name}</span>
                   <span className={`text-[10px] px-1.5 py-0.2 rounded font-normal ${isSelected ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-200 text-slate-600'}`}>
-                    {countInRoom}/{room.capacity || 100}
+                    {rStats.totalBooked}/{room.capacity || 50}
                   </span>
                 </button>
               );
@@ -668,7 +720,7 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
           </div>
 
           {/* Search Box */}
-          <div className="relative min-w-[130px] sm:min-w-[200px]">
+          <div className="relative w-full sm:w-auto min-w-[140px] sm:min-w-[200px]">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -681,137 +733,269 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
         </div>
 
         {/* Room Capacity & Status Legend Bar */}
-        <div className="bg-white border border-slate-200 rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 text-xs">
-          <div className="flex flex-wrap items-center gap-3 sm:gap-4.5 text-slate-600">
-            <div className="flex items-center gap-1.5">
+        <div className="bg-white border border-slate-200 rounded-xl px-2.5 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 text-slate-600">
+            <div className="flex items-center gap-1">
               <Armchair className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.8} />
-              <span>খালি <strong className="text-slate-800 font-bold">({roomStats.available})</strong></span>
+              <span>খালি <strong className="text-slate-800 font-bold">({viewMode === 'side_by_side' ? overallStats.available : roomStats.available})</strong></span>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <User className="w-3.5 h-3.5 text-rose-500" strokeWidth={2} />
-              <span>উপস্থিত <strong className="text-slate-800 font-bold">({roomStats.occupied})</strong></span>
+              <span>উপস্থিত <strong className="text-slate-800 font-bold">({viewMode === 'side_by_side' ? overallStats.occupied : roomStats.occupied})</strong></span>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <Coffee className="w-3.5 h-3.5 text-amber-500" strokeWidth={2} />
-              <span>সাময়িক বিরতি <strong className="text-slate-800 font-bold">({roomStats.away})</strong></span>
+              <span>বিরতি <strong className="text-slate-800 font-bold">({viewMode === 'side_by_side' ? overallStats.away : roomStats.away})</strong></span>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <Users className="w-3.5 h-3.5 text-purple-600" strokeWidth={2} />
-              <span>সেকেন্ডারি <strong className="text-slate-800 font-bold">({roomStats.secondaryOccupied})</strong></span>
+              <span>সেকেন্ডারি <strong className="text-slate-800 font-bold">({viewMode === 'side_by_side' ? overallStats.secondaryOccupied : roomStats.secondaryOccupied})</strong></span>
             </div>
           </div>
 
           <div className="text-[11px] text-slate-400 font-normal">
-            মোট সিট: <span className="text-slate-700 font-medium">{currentRoomConfig.capacity || 100}</span>
+            মোট সিট: <span className="text-slate-700 font-bold">{viewMode === 'side_by_side' ? overallStats.totalCapacity : (currentRoomConfig.capacity || 50)}</span>
           </div>
         </div>
 
-        {/* 🌟 SEAT MATRIX GRID - FULLY COLORED DIVS WITH MINIMAL LINE-DRAW ICONS & SEAT NUMBERS */}
-        <div className="bg-white border border-slate-200 rounded-xl p-2.5 sm:p-4 shadow-2xs">
-          <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-1.5 sm:gap-2">
-            {Array.from({ length: currentRoomConfig.capacity || 100 }, (_, i) => i + 1).map((seatNum) => {
-              const seatLabel = formatSeatLabel(seatNum, currentRoomConfig);
-              const booking = roomBookingsMap.get(seatNum);
-              const isMine = !!(user && booking && ((user.uid && booking.userId === user.uid) || (user.email && booking.userEmail === user.email)));
-              const isMySecondary = !!(user && booking && ((user.uid && booking.secondaryUserId === user.uid) || (user.email && booking.secondaryUserEmail === user.email)));
-              
-              const isAway = !!(booking && booking.isAway && booking.awayUntil && new Date(booking.awayUntil).getTime() > currentTime.getTime());
-              const hasSecondary = !!(isAway && booking?.secondaryUserId);
-              const remainingTime = isAway ? getRemainingTimeData(booking.awayUntil) : null;
-
-              // Filter match
-              const matchesSearch = searchQuery === '' || 
-                seatNum.toString().includes(searchQuery) ||
-                seatLabel.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                booking?.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                booking?.secondaryUserName?.toLowerCase().includes(searchQuery.toLowerCase());
-
-              if (!matchesSearch) return null;
+        {/* 🌟 SEAT MATRIX GRID - COMPACT MOBILE-FIRST SIDE-BY-SIDE OR SINGLE ROOM LAYOUT */}
+        {viewMode === 'side_by_side' ? (
+          /* Side-by-Side Dual Study Rooms Grid */
+          <div className="grid grid-cols-2 gap-2 sm:gap-4 w-full min-w-0">
+            {config.rooms.map((room) => {
+              const rStats = getRoomStats(room.id, room.capacity || 50);
+              const roomBookings = bookings.filter(b => b.roomId === room.id);
+              const roomBookingsMap = new Map<number, SeatBooking>();
+              roomBookings.forEach(b => roomBookingsMap.set(b.seatNumber, b));
 
               return (
-                <button
-                  key={seatNum}
-                  type="button"
-                  onClick={() => {
-                    if (!isWithinOperatingHours) {
-                      alert('সিট বরাদ্দ সকাল ৮:০০ টা থেকে রাত ১০:০০ টা পর্যন্ত চালু থাকে।');
-                      return;
-                    }
+                <div key={room.id} className="bg-white border border-slate-200 rounded-xl p-2 sm:p-3.5 shadow-2xs flex flex-col min-w-0 overflow-hidden">
+                  {/* Room Column Header */}
+                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 gap-1 min-w-0">
+                    <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
+                      <Building2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                      <h3 className="text-xs sm:text-sm font-black text-slate-900 truncate">
+                        {room.name}
+                      </h3>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] sm:text-[11px] font-bold">
+                        খালি {rStats.available}
+                      </span>
+                      <span className="hidden sm:inline-block px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 text-[10px] sm:text-[11px] font-bold">
+                        বুকড {rStats.totalBooked}
+                      </span>
+                    </div>
+                  </div>
 
-                    if (!booking) {
-                      // Seat is empty -> open primary booking modal
-                      setSelectedSeat(seatNum);
-                      setShowBookingModal(true);
-                    } else if (isAway && !hasSecondary && !isMine) {
-                      // Seat is in temporary away & no secondary booker yet -> open secondary booking modal!
-                      setSelectedSeat(seatNum);
-                      setShowSecondaryBookingModal(true);
-                    } else if (isMine) {
-                      setSelectedSeat(seatNum);
-                      setShowAwayModal(true);
-                    } else {
-                      // Occupied seat details
-                      alert(`সিট: ${seatLabel}\nরুম: ${currentRoomConfig.name}\nবুক করেছেন: ${booking.userName}${hasSecondary ? `\nসেকেন্ডারি বুকার: ${booking.secondaryUserName}` : ''}${isAway ? `\nবিরতি: বাকি ${remainingTime?.text}` : ''}`);
-                    }
-                  }}
-                  className={`relative rounded-lg sm:rounded-xl aspect-square flex flex-col items-center justify-center p-1 transition cursor-pointer select-none active:scale-95 border ${
-                    isMine || isMySecondary
-                      ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs ring-2 ring-indigo-400 ring-offset-1 z-10'
-                      : hasSecondary
-                      ? 'bg-purple-600 text-white border-purple-700 shadow-2xs'
-                      : isAway
-                      ? 'bg-amber-500 text-white border-amber-600 shadow-2xs animate-pulse'
-                      : booking
-                      ? 'bg-rose-500 text-white border-rose-600 shadow-2xs'
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200/80 hover:border-slate-300'
-                  }`}
-                  title={`সিট ${seatLabel}${booking ? ` (${booking.userName})` : ' (খালি)'}`}
-                >
-                  {/* Away Seat -> Coffee Icon + Seat Label + Enlarged Countdown Timer */}
-                  {isAway ? (
-                    <div className="flex flex-col items-center justify-center leading-none text-center w-full">
-                      <Coffee className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white mb-0.5" strokeWidth={2} />
-                      <span className="text-[9px] sm:text-[10px] text-white/90 font-semibold leading-none">
-                        {seatLabel}
-                      </span>
-                      <span className="text-xs sm:text-sm font-black tracking-tight leading-tight mt-0.5 text-white drop-shadow-xs">
-                        {remainingTime?.text}
-                      </span>
-                    </div>
-                  ) : hasSecondary ? (
-                    /* Secondary Occupied Seat -> Secondary Users Icon + Seat Label */
-                    <div className="flex flex-col items-center justify-center leading-none text-center w-full">
-                      <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white mb-0.5" strokeWidth={2} />
-                      <span className="text-[11px] sm:text-xs font-bold text-white leading-none">
-                        {seatLabel}
-                      </span>
-                    </div>
-                  ) : booking ? (
-                    /* Booked/Occupied Seat -> Minimal Line Draw User Icon + Seat Label */
-                    <div className="flex flex-col items-center justify-center leading-none text-center w-full">
-                      {isMine ? (
-                        <UserCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white mb-0.5" strokeWidth={2.2} />
-                      ) : (
-                        <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white mb-0.5" strokeWidth={2} />
-                      )}
-                      <span className="text-[11px] sm:text-xs font-bold text-white leading-none">
-                        {seatLabel}
-                      </span>
-                    </div>
-                  ) : (
-                    /* Empty Seat -> Minimal Line Draw Armchair Icon + Seat Label */
-                    <div className="flex flex-col items-center justify-center leading-none text-center w-full">
-                      <Armchair className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 mb-0.5" strokeWidth={1.75} />
-                      <span className="text-[11px] sm:text-xs font-semibold text-slate-700 leading-none">
-                        {seatLabel}
-                      </span>
-                    </div>
-                  )}
-                </button>
+                  {/* Room Seat Grid */}
+                  <div className="grid grid-cols-4 xs:grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-1 sm:gap-1.5 w-full">
+                    {Array.from({ length: room.capacity || 50 }, (_, i) => i + 1).map((seatNum) => {
+                      const seatLabel = formatSeatLabel(seatNum, room);
+                      const booking = roomBookingsMap.get(seatNum);
+                      const isMine = !!(user && booking && ((user.uid && booking.userId === user.uid) || (user.email && booking.userEmail === user.email)));
+                      const isMySecondary = !!(user && booking && ((user.uid && booking.secondaryUserId === user.uid) || (user.email && booking.secondaryUserEmail === user.email)));
+                      
+                      const isAway = !!(booking && booking.isAway && booking.awayUntil && new Date(booking.awayUntil).getTime() > currentTime.getTime());
+                      const hasSecondary = !!(isAway && booking?.secondaryUserId);
+                      const remainingTime = isAway ? getRemainingTimeData(booking.awayUntil) : null;
+
+                      // Filter match
+                      const matchesSearch = searchQuery === '' || 
+                        seatNum.toString().includes(searchQuery) ||
+                        seatLabel.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        booking?.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        booking?.secondaryUserName?.toLowerCase().includes(searchQuery.toLowerCase());
+
+                      if (!matchesSearch) return null;
+
+                      return (
+                        <button
+                          key={seatNum}
+                          type="button"
+                          onClick={() => {
+                            if (!isWithinOperatingHours) {
+                              alert('সিট বরাদ্দ সকাল ৮:০০ টা থেকে রাত ১০:০০ টা পর্যন্ত চালু থাকে।');
+                              return;
+                            }
+
+                            setTargetBookingRoomId(room.id);
+                            setSelectedRoom(room.id);
+
+                            if (!booking) {
+                              // Empty seat -> open primary booking modal
+                              setSelectedSeat(seatNum);
+                              setShowBookingModal(true);
+                            } else if (isAway && !hasSecondary && !isMine) {
+                              // Away seat -> open secondary booking modal
+                              setSelectedSeat(seatNum);
+                              setShowSecondaryBookingModal(true);
+                            } else if (isMine) {
+                              setSelectedSeat(seatNum);
+                              setShowAwayModal(true);
+                            } else {
+                              alert(`সিট: ${seatLabel}\nরুম: ${room.name}\nবুক করেছেন: ${booking.userName}${hasSecondary ? `\nসেকেন্ডারি বুকার: ${booking.secondaryUserName}` : ''}${isAway ? `\nবিরতি: বাকি ${remainingTime?.text}` : ''}`);
+                            }
+                          }}
+                          className={`relative rounded-md sm:rounded-lg aspect-square flex flex-col items-center justify-center p-0.5 sm:p-1 transition cursor-pointer select-none active:scale-90 border ${
+                            isMine || isMySecondary
+                              ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs ring-2 ring-indigo-400 ring-offset-1 z-10'
+                              : hasSecondary
+                              ? 'bg-purple-600 text-white border-purple-700 shadow-2xs'
+                              : isAway
+                              ? 'bg-amber-500 text-white border-amber-600 shadow-2xs animate-pulse'
+                              : booking
+                              ? 'bg-rose-500 text-white border-rose-600 shadow-2xs'
+                              : 'bg-slate-100 hover:bg-slate-200/90 text-slate-700 border-slate-200'
+                          }`}
+                          title={`সিট ${seatLabel}${booking ? ` (${booking.userName})` : ' (খালি)'}`}
+                        >
+                          {isAway ? (
+                            <div className="flex flex-col items-center justify-center leading-none text-center w-full">
+                              <Coffee className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white mb-0.5" strokeWidth={2} />
+                              <span className="text-[8px] sm:text-[9px] text-white/90 font-semibold leading-none">
+                                {seatLabel}
+                              </span>
+                              <span className="text-[9px] sm:text-[11px] font-black tracking-tight leading-tight mt-0.5 text-white">
+                                {remainingTime?.text}
+                              </span>
+                            </div>
+                          ) : hasSecondary ? (
+                            <div className="flex flex-col items-center justify-center leading-none text-center w-full">
+                              <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white mb-0.5" strokeWidth={2} />
+                              <span className="text-[9px] sm:text-[11px] font-bold text-white leading-none">
+                                {seatLabel}
+                              </span>
+                            </div>
+                          ) : booking ? (
+                            <div className="flex flex-col items-center justify-center leading-none text-center w-full">
+                              {isMine ? (
+                                <UserCheck className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white mb-0.5" strokeWidth={2.2} />
+                              ) : (
+                                <User className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white mb-0.5" strokeWidth={2} />
+                              )}
+                              <span className="text-[9px] sm:text-[11px] font-bold text-white leading-none">
+                                {seatLabel}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center leading-none text-center w-full">
+                              <Armchair className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 mb-0.5" strokeWidth={1.8} />
+                              <span className="text-[9px] sm:text-[11px] font-semibold text-slate-700 leading-none">
+                                {seatLabel}
+                              </span>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               );
             })}
           </div>
-        </div>
+        ) : (
+          /* Single Room Matrix View */
+          <div className="bg-white border border-slate-200 rounded-xl p-2.5 sm:p-4 shadow-2xs">
+            <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-1.5 sm:gap-2">
+              {Array.from({ length: currentRoomConfig.capacity || 50 }, (_, i) => i + 1).map((seatNum) => {
+                const seatLabel = formatSeatLabel(seatNum, currentRoomConfig);
+                const booking = bookings.find(b => b.roomId === selectedRoom && b.seatNumber === seatNum);
+                const isMine = !!(user && booking && ((user.uid && booking.userId === user.uid) || (user.email && booking.userEmail === user.email)));
+                const isMySecondary = !!(user && booking && ((user.uid && booking.secondaryUserId === user.uid) || (user.email && booking.secondaryUserEmail === user.email)));
+                
+                const isAway = !!(booking && booking.isAway && booking.awayUntil && new Date(booking.awayUntil).getTime() > currentTime.getTime());
+                const hasSecondary = !!(isAway && booking?.secondaryUserId);
+                const remainingTime = isAway ? getRemainingTimeData(booking.awayUntil) : null;
+
+                const matchesSearch = searchQuery === '' || 
+                  seatNum.toString().includes(searchQuery) ||
+                  seatLabel.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  booking?.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  booking?.secondaryUserName?.toLowerCase().includes(searchQuery.toLowerCase());
+
+                if (!matchesSearch) return null;
+
+                return (
+                  <button
+                    key={seatNum}
+                    type="button"
+                    onClick={() => {
+                      if (!isWithinOperatingHours) {
+                        alert('সিট বরাদ্দ সকাল ৮:০০ টা থেকে রাত ১০:০০ টা পর্যন্ত চালু থাকে।');
+                        return;
+                      }
+
+                      setTargetBookingRoomId(selectedRoom);
+
+                      if (!booking) {
+                        setSelectedSeat(seatNum);
+                        setShowBookingModal(true);
+                      } else if (isAway && !hasSecondary && !isMine) {
+                        setSelectedSeat(seatNum);
+                        setShowSecondaryBookingModal(true);
+                      } else if (isMine) {
+                        setSelectedSeat(seatNum);
+                        setShowAwayModal(true);
+                      } else {
+                        alert(`সিট: ${seatLabel}\nরুম: ${currentRoomConfig.name}\nবুক করেছেন: ${booking.userName}${hasSecondary ? `\nসেকেন্ডারি বুকার: ${booking.secondaryUserName}` : ''}${isAway ? `\nবিরতি: বাকি ${remainingTime?.text}` : ''}`);
+                      }
+                    }}
+                    className={`relative rounded-lg sm:rounded-xl aspect-square flex flex-col items-center justify-center p-1 transition cursor-pointer select-none active:scale-95 border ${
+                      isMine || isMySecondary
+                        ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs ring-2 ring-indigo-400 ring-offset-1 z-10'
+                        : hasSecondary
+                        ? 'bg-purple-600 text-white border-purple-700 shadow-2xs'
+                        : isAway
+                        ? 'bg-amber-500 text-white border-amber-600 shadow-2xs animate-pulse'
+                        : booking
+                        ? 'bg-rose-500 text-white border-rose-600 shadow-2xs'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200/80 hover:border-slate-300'
+                    }`}
+                    title={`সিট ${seatLabel}${booking ? ` (${booking.userName})` : ' (খালি)'}`}
+                  >
+                    {isAway ? (
+                      <div className="flex flex-col items-center justify-center leading-none text-center w-full">
+                        <Coffee className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white mb-0.5" strokeWidth={2} />
+                        <span className="text-[9px] sm:text-[10px] text-white/90 font-semibold leading-none">
+                          {seatLabel}
+                        </span>
+                        <span className="text-xs sm:text-sm font-black tracking-tight leading-tight mt-0.5 text-white drop-shadow-xs">
+                          {remainingTime?.text}
+                        </span>
+                      </div>
+                    ) : hasSecondary ? (
+                      <div className="flex flex-col items-center justify-center leading-none text-center w-full">
+                        <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white mb-0.5" strokeWidth={2} />
+                        <span className="text-[11px] sm:text-xs font-bold text-white leading-none">
+                          {seatLabel}
+                        </span>
+                      </div>
+                    ) : booking ? (
+                      <div className="flex flex-col items-center justify-center leading-none text-center w-full">
+                        {isMine ? (
+                          <UserCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white mb-0.5" strokeWidth={2.2} />
+                        ) : (
+                          <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white mb-0.5" strokeWidth={2} />
+                        )}
+                        <span className="text-[11px] sm:text-xs font-bold text-white leading-none">
+                          {seatLabel}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center leading-none text-center w-full">
+                        <Armchair className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 mb-0.5" strokeWidth={1.75} />
+                        <span className="text-[11px] sm:text-xs font-semibold text-slate-700 leading-none">
+                          {seatLabel}
+                        </span>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
       </div>
 
@@ -821,13 +1005,13 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
           <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-7 max-w-sm w-full space-y-4 shadow-2xl text-slate-900">
             <div className="text-center space-y-1">
               <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-200 flex items-center justify-center mx-auto text-xl font-black mb-2 shadow-xs">
-                {formatSeatLabel(selectedSeat, currentRoomConfig)}
+                {formatSeatLabel(selectedSeat, activeBookingRoomConfig)}
               </div>
               <h3 className="text-lg font-black text-slate-900">
-                সিট {formatSeatLabel(selectedSeat, currentRoomConfig)} বরাদ্দ নিশ্চিতকরণ
+                সিট {formatSeatLabel(selectedSeat, activeBookingRoomConfig)} বরাদ্দ নিশ্চিতকরণ
               </h3>
               <p className="text-xs text-slate-500">
-                {currentRoomConfig.name} • {libraryType === 'science' ? 'সাইন্স লাইব্রেরি' : 'সেন্ট্রাল লাইব্রেরি'}
+                {activeBookingRoomConfig.name} • {libraryType === 'science' ? 'সাইন্স লাইব্রেরি' : 'সেন্ট্রাল লাইব্রেরি'}
               </p>
             </div>
 
@@ -878,7 +1062,7 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
                 সেকেন্ডারি বুকার
               </span>
               <h3 className="text-lg font-black text-slate-900">
-                সিট {formatSeatLabel(selectedSeat, currentRoomConfig)} সাময়িক বুকিং
+                সিট {formatSeatLabel(selectedSeat, activeBookingRoomConfig)} সাময়িক বুকিং
               </h3>
               <p className="text-xs text-slate-500">
                 মূল শিক্ষার্থী সাময়িক বিরতিতে থাকায় আপনি এই সময়ে সিটটি ব্যবহার করতে পারবেন।
@@ -886,7 +1070,7 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
             </div>
 
             {(() => {
-              const targetBooking = roomBookingsMap.get(selectedSeat);
+              const targetBooking = bookings.find(b => b.roomId === (targetBookingRoomId || selectedRoom) && b.seatNumber === selectedSeat);
               const remaining = getRemainingTimeData(targetBooking?.awayUntil);
               return (
                 <div className="p-3.5 bg-purple-50 rounded-2xl text-xs space-y-2 border border-purple-200">
@@ -920,7 +1104,7 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
               </button>
               <button
                 type="button"
-                onClick={handleConfirmSecondaryBooking}
+                onClick={() => handleConfirmSecondaryBooking()}
                 className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs rounded-xl transition shadow-md shadow-purple-600/20 cursor-pointer active:scale-95"
               >
                 সেকেন্ডারি বুক করুন

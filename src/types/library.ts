@@ -39,10 +39,10 @@ export interface LibraryConfig {
 
 export const DEFAULT_LIBRARY_CONFIG: LibraryConfig = {
   rooms: [
-    { id: 1, name: 'রুম ১', capacity: 100, seatPrefix: '', numberingStyle: 'numeric' },
-    { id: 2, name: 'রুম ২', capacity: 100, seatPrefix: 'A', numberingStyle: 'prefix' },
-    { id: 3, name: 'রুম ৩', capacity: 100, seatPrefix: '', numberingStyle: 'numeric' },
-    { id: 4, name: 'রুম ৪', capacity: 100, seatPrefix: '', numberingStyle: 'numeric' },
+    { id: 1, name: 'লাইব্রেরি এ', capacity: 50, seatPrefix: 'A', numberingStyle: 'prefix' },
+    { id: 2, name: 'লাইব্রেরি বি', capacity: 50, seatPrefix: 'B', numberingStyle: 'prefix' },
+    { id: 3, name: 'স্টাডি রুম ৩', capacity: 50, seatPrefix: 'C', numberingStyle: 'prefix' },
+    { id: 4, name: 'স্টাডি রুম ৪', capacity: 50, seatPrefix: 'D', numberingStyle: 'prefix' },
   ],
   bookingStartHour: 8,
   bookingEndHour: 22,
