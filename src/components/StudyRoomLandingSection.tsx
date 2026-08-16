@@ -335,35 +335,35 @@ export const StudyRoomLandingSection: React.FC<StudyRoomLandingSectionProps> = (
                   The explorer found himself caught in a{' '}
                   <span 
                     onClick={() => setSelectedWordPopup({ word: 'Maelstrom', meaning: 'ঘূর্ণাবর্ত বা বিশৃঙ্খলা', syn: 'Vortex, Whirlpool, Turbulence', mnemonic: 'Mael (ঘূর্ণি) + strom (ঝড়) = উত্তাল ঘূর্ণাবর্ত।' })}
-                    className={`font-bold cursor-pointer underline decoration-dotted decoration-2 ${storyHighlightColor === 'red' ? 'text-rose-600 bg-rose-50' : storyHighlightColor === 'green' ? 'text-emerald-700 bg-emerald-50' : storyHighlightColor === 'black' ? 'text-slate-900 bg-slate-100' : 'text-blue-600 bg-blue-50'} px-1 py-0.5 rounded`}
+                    className={`font-bold cursor-pointer transition ${storyHighlightColor === 'red' ? 'text-rose-600' : storyHighlightColor === 'green' ? 'text-emerald-700' : storyHighlightColor === 'black' ? 'text-slate-900' : 'text-blue-600'} hover:underline`}
                   >
                     maelstrom
                   </span>{' '}
                   of emotions as he reached the{' '}
                   <span 
                     onClick={() => setSelectedWordPopup({ word: 'Nadir', meaning: 'সর্বনিম্ন বিন্দু বা চরম অবনতি', syn: 'Lowest point, Bottom, Rock-bottom', mnemonic: 'Nadir মানে তলদেশ (Zenith এর বিপরীত)।' })}
-                    className={`font-bold cursor-pointer underline decoration-dotted decoration-2 ${storyHighlightColor === 'red' ? 'text-rose-600 bg-rose-50' : storyHighlightColor === 'green' ? 'text-emerald-700 bg-emerald-50' : storyHighlightColor === 'black' ? 'text-slate-900 bg-slate-100' : 'text-blue-600 bg-blue-50'} px-1 py-0.5 rounded`}
+                    className={`font-bold cursor-pointer transition ${storyHighlightColor === 'red' ? 'text-rose-600' : storyHighlightColor === 'green' ? 'text-emerald-700' : storyHighlightColor === 'black' ? 'text-slate-900' : 'text-blue-600'} hover:underline`}
                   >
                     nadir
                   </span>{' '}
                   of his journey. He felt a deep{' '}
                   <span 
                     onClick={() => setSelectedWordPopup({ word: 'Nostalgia', meaning: 'অতীতস্মৃতি বা গৃহকাতরতা', syn: 'Reminiscence, Wistfulness', mnemonic: 'Nostos (বাড়ি ফেরা) + algos (বেদনা)।' })}
-                    className={`font-bold cursor-pointer underline decoration-dotted decoration-2 ${storyHighlightColor === 'red' ? 'text-rose-600 bg-rose-50' : storyHighlightColor === 'green' ? 'text-emerald-700 bg-emerald-50' : storyHighlightColor === 'black' ? 'text-slate-900 bg-slate-100' : 'text-blue-600 bg-blue-50'} px-1 py-0.5 rounded`}
+                    className={`font-bold cursor-pointer transition ${storyHighlightColor === 'red' ? 'text-rose-600' : storyHighlightColor === 'green' ? 'text-emerald-700' : storyHighlightColor === 'black' ? 'text-slate-900' : 'text-blue-600'} hover:underline`}
                   >
                     nostalgia
                   </span>{' '}
                   for home. He had seen{' '}
                   <span 
                     onClick={() => setSelectedWordPopup({ word: 'Myriad', meaning: 'অসংখ্য বা অগনিত', syn: 'Countless, Innumerable, Multitude', mnemonic: 'Myriad তারা বা অসংখ্য সৃষ্টি।' })}
-                    className={`font-bold cursor-pointer underline decoration-dotted decoration-2 ${storyHighlightColor === 'red' ? 'text-rose-600 bg-rose-50' : storyHighlightColor === 'green' ? 'text-emerald-700 bg-emerald-50' : storyHighlightColor === 'black' ? 'text-slate-900 bg-slate-100' : 'text-blue-600 bg-blue-50'} px-1 py-0.5 rounded`}
+                    className={`font-bold cursor-pointer transition ${storyHighlightColor === 'red' ? 'text-rose-600' : storyHighlightColor === 'green' ? 'text-emerald-700' : storyHighlightColor === 'black' ? 'text-slate-900' : 'text-blue-600'} hover:underline`}
                   >
                     myriad
                   </span>{' '}
                   wonders. He carried an old{' '}
                   <span 
                     onClick={() => setSelectedWordPopup({ word: 'Writ', meaning: 'আদালতের লিখিত পরোয়ানা', syn: 'Legal document, Court order, Summons', mnemonic: 'Write থেকে Writ = লিখিত আদালতের আদেশ।' })}
-                    className={`font-bold cursor-pointer underline decoration-dotted decoration-2 ${storyHighlightColor === 'red' ? 'text-rose-600 bg-rose-50' : storyHighlightColor === 'green' ? 'text-emerald-700 bg-emerald-50' : storyHighlightColor === 'black' ? 'text-slate-900 bg-slate-100' : 'text-blue-600 bg-blue-50'} px-1 py-0.5 rounded`}
+                    className={`font-bold cursor-pointer transition ${storyHighlightColor === 'red' ? 'text-rose-600' : storyHighlightColor === 'green' ? 'text-emerald-700' : storyHighlightColor === 'black' ? 'text-slate-900' : 'text-blue-600'} hover:underline`}
                   >
                     writ
                   </span>{' '}
@@ -381,7 +381,7 @@ export const StudyRoomLandingSection: React.FC<StudyRoomLandingSectionProps> = (
             {activeStoryTab === 'bengali' && (
               <div className="space-y-2.5 font-sans leading-relaxed text-slate-700">
                 <p>
-                  অভিযাত্রী নিজেকে এক মানসিক <span className="font-bold text-indigo-700 bg-indigo-50 px-1 rounded">ঘূর্ণাবর্তে (Maelstrom)</span> দেখতে পেল যখন সে তার সফরের <span className="font-bold text-indigo-700 bg-indigo-50 px-1 rounded">সর্বনিম্ন বিন্দুতে (Nadir)</span> পৌঁছাল। বাড়ির প্রতি তার গভীর <span className="font-bold text-indigo-700 bg-indigo-50 px-1 rounded">অতীতস্মৃতি (Nostalgia)</span> কাজ করছিল। সে <span className="font-bold text-indigo-700 bg-indigo-50 px-1 rounded">অসংখ্য (Myriad)</span> বিস্ময় প্রত্যক্ষ করেছে এবং রাজার কাছ থেকে পাওয়া এক প্রাচীন <span className="font-bold text-indigo-700 bg-indigo-50 px-1 rounded">লিখিত আদেশ (Writ)</span> বহন করছিল।
+                  অভিযাত্রী নিজেকে এক মানসিক <span className="font-bold text-indigo-700">ঘূর্ণাবর্তে (Maelstrom)</span> দেখতে পেল যখন সে তার সফরের <span className="font-bold text-indigo-700">সর্বনিম্ন বিন্দুতে (Nadir)</span> পৌঁছাল। বাড়ির প্রতি তার গভীর <span className="font-bold text-indigo-700">অতীতস্মৃতি (Nostalgia)</span> কাজ করছিল। সে <span className="font-bold text-indigo-700">অসংখ্য (Myriad)</span> বিস্ময় প্রত্যক্ষ করেছে এবং রাজার কাছ থেকে পাওয়া এক প্রাচীন <span className="font-bold text-indigo-700">লিখিত আদেশ (Writ)</span> বহন করছিল।
                 </p>
                 <p>
                   তার সামান্য খাবারে ছিল শুকনো খাদ্যশস্য ও নানা মশলাপাতি। এক অন্ধকার অতল গহ্বরের কিনারায় দাঁড়িয়ে সে উপলব্ধি করল—এমনকি এক সামান্যতম অংশ আশাও তাকে বাঁচিয়ে রাখতে যথেষ্ট।
@@ -452,65 +452,132 @@ export const StudyRoomLandingSection: React.FC<StudyRoomLandingSectionProps> = (
           </div>
         </div>
 
-        {/* Editorial Article Card */}
-        <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs">
-          {/* Header Banner */}
-          <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white p-4">
-            <div className="flex items-center justify-between text-[10px] text-amber-100 font-bold uppercase tracking-wider mb-1">
-              <span>National Economy & Policy</span>
-              <span>5 Min Read • The Daily Star & Prothom Alo Style</span>
+        {/* Editorial Article Newspaper Style Container */}
+        <div className="border border-slate-200/90 rounded-2xl overflow-hidden bg-white shadow-xs">
+          
+          {/* Authentic Minimal Newspaper Header / Kicker & Headline */}
+          <div className="px-5 pt-5 pb-3.5 border-b border-slate-100 bg-white">
+            {/* Top Newspaper Kicker & Meta Tag */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 text-[11px]">
+              <div className="flex items-center gap-2 font-mono uppercase tracking-wider text-slate-500 font-semibold">
+                <span className="text-amber-700 font-black tracking-widest">EDITORIAL</span>
+                <span className="text-slate-300">•</span>
+                <span className="text-slate-600">Macroeconomics & Policy</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
+                <Clock className="w-3 h-3 text-slate-400" />
+                <span>5 Min Read</span>
+                <span className="text-slate-300">•</span>
+                <span className="text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded">১০+ Vocab</span>
+              </div>
             </div>
-            <h4 className="text-sm sm:text-base font-extrabold text-white leading-snug">
-              অর্থনীতির সাম্প্রতিক ঝুঁকি মোকাবিলার পথ কী? (Navigating Macroeconomic Vulnerabilities)
+
+            {/* Main Editorial Headline */}
+            <h4 className="text-base sm:text-lg font-black text-slate-900 leading-snug tracking-tight font-serif pt-1">
+              {activeEditorialLang === 'bengali' ? (
+                <span>অর্থনীতির সাম্প্রতিক ঝুঁকি মোকাবিলার পথ কী?</span>
+              ) : (
+                <span>Navigating Macroeconomic Vulnerabilities & Systemic Risks</span>
+              )}
             </h4>
-          </div>
+            
+            {/* Sub-headline / English or Bengali subtitle */}
+            <p className="text-xs text-slate-500 font-serif italic mt-1">
+              {activeEditorialLang === 'bengali' 
+                ? 'Navigating Macroeconomic Vulnerabilities — Prothom Alo & The Daily Star Style'
+                : 'Policy insights on managing currency reserves, inflation, and growth bottlenecks'}
+            </p>
 
-          {/* Lang Toggle & Controls */}
-          <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 text-xs">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Version:</span>
-              <button
-                type="button"
-                onClick={() => setActiveEditorialLang('bengali')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
-                  activeEditorialLang === 'bengali' ? 'bg-amber-500 text-white shadow-2xs' : 'bg-white text-slate-700 border border-slate-200'
-                }`}
-              >
-                বাংলা সম্পাদকীয়
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveEditorialLang('english')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
-                  activeEditorialLang === 'english' ? 'bg-amber-500 text-white shadow-2xs' : 'bg-white text-slate-700 border border-slate-200'
-                }`}
-              >
-                English Editorial
-              </button>
+            {/* Minimalist Toolbar / Language Switcher */}
+            <div className="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-slate-100">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveEditorialLang('bengali')}
+                  className={`px-3 py-1 rounded-full text-[11px] font-bold transition cursor-pointer ${
+                    activeEditorialLang === 'bengali' 
+                      ? 'bg-slate-900 text-white shadow-2xs' 
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                  }`}
+                >
+                  বাংলা সম্পাদকীয়
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveEditorialLang('english')}
+                  className={`px-3 py-1 rounded-full text-[11px] font-bold transition cursor-pointer ${
+                    activeEditorialLang === 'english' 
+                      ? 'bg-slate-900 text-white shadow-2xs' 
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                  }`}
+                >
+                  English Editorial
+                </button>
+              </div>
+
+              <span className="text-[10px] font-mono text-slate-400 hidden sm:inline-block">
+                Columnist: Daily Editorial Board
+              </span>
             </div>
-            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-              ১০+ ভোকেব অন্তর্ভুক্ত
-            </span>
           </div>
 
-          {/* Article Body */}
-          <div className="p-4 text-xs sm:text-[13px] leading-relaxed text-slate-800 space-y-3">
+          {/* Article Body with authentic newspaper layout */}
+          <div className="p-5 text-xs sm:text-[13px] leading-relaxed text-slate-800 space-y-3.5 font-serif bg-slate-50/30">
             {activeEditorialLang === 'bengali' ? (
               <>
-                <p>
-                  সাম্প্রতিক বৈশ্বিক অর্থনৈতিক অনিশ্চয়তার প্রভাবে স্থানীয় বাজারে তীব্র <span className="font-bold text-amber-700 bg-amber-50 px-1 rounded">অস্থিরতা (Turbulence)</span> তৈরি হয়েছে। বিশেষজ্ঞদের মতে, নীতি প্রণয়নে দৃঢ়তা না থাকলে প্রবৃদ্ধি <span className="font-bold text-amber-700 bg-amber-50 px-1 rounded">সর্বনিম্ন বিন্দুতে (Nadir)</span> পৌঁছাতে পারে।
+                <p className="first-letter:text-2xl first-letter:font-black first-letter:float-left first-letter:mr-1.5 first-letter:text-slate-900">
+                  সাম্প্রতিক বৈশ্বিক অর্থনৈতিক অনিশ্চয়তার প্রভাবে স্থানীয় বাজারে তীব্র{' '}
+                  <span className="font-bold text-amber-700">
+                    অস্থিরতা (Turbulence)
+                  </span>{' '}
+                  তৈরি হয়েছে। নীতি নির্ধারকদের সতর্ক করে বিশেষজ্ঞরা বলছেন, কার্যকর সংস্কারের অভাব দেখা দিলে জাতীয় প্রবৃদ্ধি ঐতিহাসিক{' '}
+                  <span className="font-bold text-amber-700">
+                    সর্বনিম্ন বিন্দুতে (Nadir)
+                  </span>{' '}
+                  নেমে আসতে পারে।
                 </p>
                 <p>
-                  মুদ্রাস্ফীতির লাগাম টেনে ধরতে কেন্দ্রীয় ব্যাংককে সুনির্দিষ্ট ও কঠোর <span className="font-bold text-amber-700 bg-amber-50 px-1 rounded">নির্দেশনা (Writ)</span> জারি করতে হবে। বৈদেশিক মুদ্রার মজুদে যে <span className="font-bold text-amber-700 bg-amber-50 px-1 rounded">ঘাটতি বা অতল গহ্বর (Abyss)</span> তৈরি হয়েছে, তা পুনরুদ্ধারে রফতানি খাতে <span className="font-bold text-amber-700 bg-amber-50 px-1 rounded">অসংখ্য (Myriad)</span> সুবিধা প্রদান জরুরি।
+                  মুদ্রাস্ফীতির ঊর্ধ্বগতি নিয়ন্ত্রণে কেন্দ্রীয় ব্যাংককে কঠোর ও সুনির্দিষ্ট{' '}
+                  <span className="font-bold text-amber-700">
+                    নির্দেশনা (Writ)
+                  </span>{' '}
+                  কার্যকর করতে হবে। বাণিজ্য ভারসাম্যের ক্ষেত্রে যে গভীর{' '}
+                  <span className="font-bold text-amber-700">
+                    ঘাটতি বা অতল গহ্বর (Abyss)
+                  </span>{' '}
+                  সৃষ্টি হয়েছে, তা পূরণে বহুমুখী রফতানি খাতে{' '}
+                  <span className="font-bold text-amber-700">
+                    অসংখ্য (Myriad)
+                  </span>{' '}
+                  প্রণোদনা নিশ্চিত করা আবশ্যক।
                 </p>
               </>
             ) : (
               <>
-                <p>
-                  The modern macroeconomic landscape is grappling with severe <span className="font-bold text-amber-700 bg-amber-50 px-1 rounded">turbulence</span> and structural bottlenecks. Without pragmatic reforms, revenue growth could plummet to its historic <span className="font-bold text-amber-700 bg-amber-50 px-1 rounded">nadir</span>.
+                <p className="first-letter:text-2xl first-letter:font-black first-letter:float-left first-letter:mr-1.5 first-letter:text-slate-900">
+                  The contemporary macroeconomic horizon is increasingly confronted with severe financial{' '}
+                  <span className="font-bold text-amber-700">
+                    turbulence
+                  </span>{' '}
+                  and deep-seated structural vulnerabilities. Leading economists caution that without prompt fiscal consolidation, productivity could drop to an unprecedented{' '}
+                  <span className="font-bold text-amber-700">
+                    nadir
+                  </span>.
                 </p>
                 <p>
-                  Regulatory authorities must enforce a decisive <span className="font-bold text-amber-700 bg-amber-50 px-1 rounded">writ</span> to curb speculative forex volatility. Addressing the trade <span className="font-bold text-amber-700 bg-amber-50 px-1 rounded">abyss</span> requires unlocking <span className="font-bold text-amber-700 bg-amber-50 px-1 rounded">myriad</span> incentives for manufacturing corridors.
+                  Monetary authorities must swiftly issue an authoritative regulatory{' '}
+                  <span className="font-bold text-amber-700">
+                    writ
+                  </span>{' '}
+                  to curb volatile exchange rate distortions. Mitigating the balance-of-payments{' '}
+                  <span className="font-bold text-amber-700">
+                    abyss
+                  </span>{' '}
+                  requires institutional support and unlocking{' '}
+                  <span className="font-bold text-amber-700">
+                    myriad
+                  </span>{' '}
+                  incentives across manufacturing export corridors.
                 </p>
               </>
             )}

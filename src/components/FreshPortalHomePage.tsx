@@ -153,6 +153,15 @@ export const FreshPortalHomePage: React.FC<FreshPortalHomePageProps> = ({
 
         </div>
 
+        {/* Generous Spacing Divider before Landing Page begins */}
+        <div className="w-full max-w-md my-8 sm:my-12 flex items-center justify-center gap-3">
+          <div className="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent flex-1" />
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-2">
+            লার্নিং মেথডোলজি ও ডেমো
+          </span>
+          <div className="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent flex-1" />
+        </div>
+
         {/* 🌟 SEQUENTIAL LANDING SECTIONS (Downwards Landing Page Layout) */}
         <StudyRoomLandingSection onOpenStudyRoom={onOpenStudyRoom} />
 
