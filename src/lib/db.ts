@@ -161,7 +161,7 @@ export async function incrementCourseClickCount(courseId: string) {
   }
 }
 
-export async function saveBulkDocs(collectionName: string, items: any[]) {
+export async function saveBulkDocs(collectionName: string, items: any[], onProgress?: (current: number, total: number) => void) {
   if (!items || items.length === 0) return;
   try {
     const processedItems = items.map((item, index) => {
@@ -172,29 +172,24 @@ export async function saveBulkDocs(collectionName: string, items: any[]) {
       });
     });
 
-    // Firestore Write Batch in concurrent chunks (200 items per batch) for ultra-fast bulk saving
-    const BATCH_SIZE = 200;
-    const batchPromises: Promise<void>[] = [];
+    // Firestore Write Batch in safe chunks (400 items per batch, under 500 max limit)
+    const BATCH_SIZE = 400;
+    const totalItems = processedItems.length;
+    let savedCount = 0;
 
-    for (let i = 0; i < processedItems.length; i += BATCH_SIZE) {
+    for (let i = 0; i < totalItems; i += BATCH_SIZE) {
       const chunk = processedItems.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
       chunk.forEach(item => {
         const docRef = doc(db, collectionName, item.id);
         batch.set(docRef, item, { merge: true });
       });
-      batchPromises.push(batch.commit());
+      await batch.commit();
+      savedCount += chunk.length;
+      if (onProgress) {
+        onProgress(savedCount, totalItems);
+      }
     }
-
-    // Execute batches concurrently with a timeout guard
-    const bulkPromise = Promise.all(batchPromises);
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('saveBulkDocs timeout')), 4000)
-    );
-
-    await Promise.race([bulkPromise, timeoutPromise]).catch(err => {
-      console.warn(`saveBulkDocs notice for ${collectionName} (local data saved):`, err);
-    });
   } catch (err) {
     console.error(`saveBulkDocs error for ${collectionName}:`, err);
     throw err;

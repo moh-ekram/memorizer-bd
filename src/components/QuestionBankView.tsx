@@ -237,7 +237,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       setLoading(true);
     }
 
-    // 2. Fetch all collections in PARALLEL with a resilient timeout guard
+    // 2. Fetch all collections in PARALLEL from Firestore
     try {
       const fetchPromise = Promise.allSettled([
         getDocs(collection(db, 'question_bank')),
@@ -247,9 +247,20 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
         getDocs(collection(db, 'word_analogy_questions'))
       ]);
 
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Question bank fetch timeout')), 3500)
-      );
+      let results: PromiseSettledResult<any>[];
+      if (hasLocalCache) {
+        // In background sync when local data is already rendered, guard with 10s timeout
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Background fetch timeout')), 10000)
+        );
+        results = (await Promise.race([fetchPromise, timeoutPromise])) as PromiseSettledResult<any>[];
+      } else {
+        // When device has no local cache (like phone or new browser), allow full fetch with 25s timeout
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Initial fetch timeout')), 25000)
+        );
+        results = (await Promise.race([fetchPromise, timeoutPromise])) as PromiseSettledResult<any>[];
+      }
 
       const [
         qbResult,
@@ -257,7 +268,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
         blankResult,
         oooResult,
         waResult
-      ] = (await Promise.race([fetchPromise, timeoutPromise])) as PromiseSettledResult<any>[];
+      ] = results;
 
       // Primary Question Bank collection
       if (qbResult && qbResult.status === 'fulfilled' && qbResult.value) {
@@ -408,7 +419,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
         });
       }
     } catch (err: any) {
-      console.warn('Question bank background sync notice:', err);
+      console.warn('Question bank sync notice:', err);
     }
 
     const finalList = Array.from(itemMap.values());
@@ -417,7 +428,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     setLoading(false);
   };
 
-  // Sync All Questions to Cloud (Push local items to Firestore so all devices can see them)
+  // Sync All Questions & Scheduled Exams to Cloud
   const handleSyncAllToCloud = async () => {
     if (questions.length === 0) {
       setSyncCloudMessage({ text: 'ক্লাউডে আপলোড করার মতো কোনো প্রশ্ন পাওয়া যায়নি।', type: 'info' });
@@ -426,15 +437,36 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     }
 
     setIsSyncingCloud(true);
-    setSyncCloudMessage({ text: `ফায়ারবেস ক্লাউডে ${questions.length}টি প্রশ্ন আপলোড করা হচ্ছে...`, type: 'info' });
+    setSyncCloudMessage({ text: `ফায়ারবেস ক্লাউডে ${questions.length}টি প্রশ্ন আপলোড হচ্ছে...`, type: 'info' });
 
     try {
-      await saveBulkDocs('question_bank', questions);
+      // 1. Sync Question Bank with progress callback
+      await saveBulkDocs('question_bank', questions, (current, total) => {
+        setSyncCloudMessage({
+          text: `ফায়ারবেস ক্লাউডে প্রশ্ন সেভ হচ্ছে (${current}/${total})...`,
+          type: 'info'
+        });
+      });
+
+      // 2. Sync all local scheduled exams to cloud as well
+      try {
+        const localExams = await getLargeStorage<Exam[]>('local_exams', []);
+        if (Array.isArray(localExams) && localExams.length > 0) {
+          for (const ex of localExams) {
+            if (ex && ex.id) {
+              await setDoc(doc(db, 'exams', ex.id), ex, { merge: true });
+            }
+          }
+        }
+      } catch (exErr) {
+        console.warn('Scheduled exams cloud sync notice:', exErr);
+      }
+
       setSyncCloudMessage({ 
-        text: `✅ সফলভাবে ${questions.length}টি প্রশ্ন ফায়ারবেস ক্লাউডে আপলোড হয়েছে! এখন যেকোনো ডিভাইস থেকেই দেখা যাবে।`, 
+        text: `✅ সফলভাবে ${questions.length}টি প্রশ্ন এবং সিডিউল এক্সাম ফায়ারবেস ক্লাউডে সিঙ্ক হয়েছে! এখন মোবাইলসহ যেকোনো ডিভাইস থেকেই একযোগে দেখা যাবে।`, 
         type: 'success' 
       });
-      setTimeout(() => setSyncCloudMessage(null), 6000);
+      setTimeout(() => setSyncCloudMessage(null), 7000);
     } catch (err: any) {
       console.error('Cloud bulk upload error:', err);
       setSyncCloudMessage({ 
@@ -467,11 +499,11 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       setLoadingExams(true);
     }
 
-    // 2. Background Firestore Sync with 3.5s timeout guard
+    // 2. Background Firestore Sync
     try {
       const cloudPromise = getDocs(collection(db, 'exams'));
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Exams fetch timeout')), 3500)
+        setTimeout(() => reject(new Error('Exams fetch timeout')), hasLocalExams ? 6000 : 20000)
       );
 
       const snap = (await Promise.race([cloudPromise, timeoutPromise])) as any;
@@ -1018,15 +1050,11 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       setSelectedIds(new Set());
       if (onExamPublished) onExamPublished();
 
-      // 2. Cloud save to Firestore with 2s timeout race guard
+      // 2. Cloud save to Firestore
       try {
-        const cloudSavePromise = setDoc(doc(db, 'exams', finalExamObj.id), finalExamObj, { merge: true });
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Cloud exam save timeout')), 2000)
-        );
-        await Promise.race([cloudSavePromise, timeoutPromise]);
+        await setDoc(doc(db, 'exams', finalExamObj.id), finalExamObj, { merge: true });
       } catch (fsErr) {
-        console.warn('Cloud exam save notice (saved locally/IndexedDB):', fsErr);
+        console.warn('Cloud exam save notice:', fsErr);
       }
 
       setTimeout(() => setPublishSuccess(false), 4000);
