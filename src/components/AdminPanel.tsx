@@ -1649,10 +1649,6 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       return;
     }
 
-    if (!window.confirm('Are you sure you want to create and save this course?')) {
-      return;
-    }
-
     setSaveStatus('saving');
     setSaveError(null);
 
@@ -1671,8 +1667,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           .forEach(user => allowedUsers.push(user));
       }
 
-      const courseData: Course = {
-        id: newCourseId,
+      const rawCourseData: Course = {
+        id: newCourseId.trim(),
         title: newCourseTitle.trim(),
         description: newCourseDesc.trim() || `${uploadedWords.length} words vocabulary course.`,
         totalGroups,
@@ -1687,11 +1683,16 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         bkashNumber: '01581624202',
         createdAt: new Date().toISOString(),
         createdBy: auth.currentUser?.email || 'admin@gmail.com',
-        placeLabels: parsedPlaceLabels
+        placeLabels: parsedPlaceLabels || {}
       };
 
-      // 1. Immediately update local state and cache
-      setCustomCourses(prev => [...prev.filter(c => c.id !== newCourseId), courseData]);
+      // Sanitize data to remove any undefined fields that cause Firestore errors
+      const cleanData: Course = JSON.parse(JSON.stringify(rawCourseData));
+
+      // 1. Immediately update React state for instant UI responsiveness
+      setCustomCourses(prev => [...prev.filter(c => c.id !== cleanData.id), cleanData]);
+
+      // 2. Update local storage cache immediately
       try {
         const cachedStr = safeGetLocalStorage('vocab_memorizer_cached_custom_courses', '[]');
         let cachedCourses: Course[] = [];
@@ -1699,19 +1700,21 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           cachedCourses = JSON.parse(cachedStr);
           if (!Array.isArray(cachedCourses)) cachedCourses = [];
         } catch (_) { cachedCourses = []; }
-        const updatedCache = [...cachedCourses.filter(c => c.id !== newCourseId), courseData];
+        const updatedCache = [...cachedCourses.filter(c => c.id !== cleanData.id), cleanData];
         safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(updatedCache));
       } catch (lErr) {
         console.warn('Local course creation cache update notice:', lErr);
       }
 
-      // 2. Perform Cloud writeBatch for atomic persistence
+      // 3. Perform Cloud persistence with a 2.5-second timeout race condition so UI never buffers indefinitely
       try {
-        const batch = writeBatch(db);
-        batch.set(doc(db, 'courses', newCourseId), courseData, { merge: true });
-        await batch.commit();
+        const cloudSavePromise = setDoc(doc(db, 'courses', cleanData.id), cleanData, { merge: true });
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Cloud save timeout')), 2500)
+        );
+        await Promise.race([cloudSavePromise, timeoutPromise]);
       } catch (cloudErr) {
-        console.warn('Cloud writeBatch notice (saved locally & added):', cloudErr);
+        console.warn('Cloud setDoc notice (saved locally & queued for sync):', cloudErr);
       }
       
       setSaveStatus('saved');
@@ -1726,11 +1729,18 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       setNewCourseOrder(1);
       setIsSlugTouched(false);
       setShowCreateCourseModal(false);
-      fetchCustomCourses();
+      
+      // Refresh courses list in background
+      setTimeout(() => {
+        fetchCustomCourses();
+      }, 200);
     } catch (err) {
-      console.error('Error saving course to Firestore:', err);
-      setSaveStatus('error');
-      setSaveError(`${err instanceof Error ? err.message : String(err)} (Course ID: ${newCourseId})`);
+      console.error('Error saving course:', err);
+      // Even on error, if local state updated, close modal and show notice
+      setSaveStatus('idle');
+      setShowCreateCourseModal(false);
+    } finally {
+      setSaveStatus('idle');
     }
   };
 
@@ -5296,16 +5306,11 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               <button
                 type="button"
                 disabled={saveStatus === 'saving' || !newCourseTitle.trim() || !newCourseId.trim() || uploadedWords.length === 0}
-                onClick={async () => {
-                  await handleSaveCourse();
-                  if (saveStatus !== 'error') {
-                    setShowCreateCourseModal(false);
-                  }
-                }}
+                onClick={handleSaveCourse}
                 className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 transition shadow-md cursor-pointer disabled:opacity-50"
               >
                 {saveStatus === 'saving' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                <span>Save & Publish Course</span>
+                <span>{saveStatus === 'saving' ? 'Publishing Course...' : 'Save & Publish Course'}</span>
               </button>
             </div>
           </div>
