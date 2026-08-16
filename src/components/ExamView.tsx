@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { db, collection, getDocs, doc, setDoc } from '../lib/db';
 import { Exam, ExamQuestion, ExamResult, Course } from '../types';
-import { safeGetLocalStorage, safeSetLocalStorage, getLargeStorage } from '../lib/storage';
+import { safeGetLocalStorage, safeSetLocalStorage, getLargeStorage, setLargeStorage } from '../lib/storage';
 
 interface ExamViewProps {
   courses: Course[];
@@ -62,7 +62,7 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
     const fetchUserResults = async () => {
       const map: Record<string, ExamResult> = {};
 
-      // 1. Local Storage cache
+      // 1. Local Storage cache (0ms instant)
       try {
         const localData = safeGetLocalStorage('local_exam_results', '[]');
         const parsed = JSON.parse(localData);
@@ -74,31 +74,41 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
               }
             }
           });
+          if (isMounted && Object.keys(map).length > 0) {
+            setUserResultsMap({ ...map });
+          }
         }
       } catch (_) {}
 
-      // 2. Cloud Firestore results
+      // 2. Cloud Firestore results with 3.5s timeout guard
       try {
-        const snap = await getDocs(collection(db, 'exam_results'));
-        snap.forEach(docSnap => {
-          const data = docSnap.data() as ExamResult;
-          const matchEmail = userEmail && data.userEmail && data.userEmail.toLowerCase() === userEmail.toLowerCase();
-          const matchUserId = userId && data.userId && data.userId === userId;
+        const cloudPromise = getDocs(collection(db, 'exam_results'));
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Results timeout')), 3500)
+        );
 
-          if (matchEmail || matchUserId || (!userEmail && !userId)) {
-            if (data && data.examId) {
-              if (!map[data.examId] || data.score > map[data.examId].score) {
-                map[data.examId] = { id: docSnap.id, ...data };
+        const snap = (await Promise.race([cloudPromise, timeoutPromise])) as any;
+        if (snap && snap.forEach) {
+          snap.forEach((docSnap: any) => {
+            const data = docSnap.data() as ExamResult;
+            const matchEmail = userEmail && data.userEmail && data.userEmail.toLowerCase() === userEmail.toLowerCase();
+            const matchUserId = userId && data.userId && data.userId === userId;
+
+            if (matchEmail || matchUserId || (!userEmail && !userId)) {
+              if (data && data.examId) {
+                if (!map[data.examId] || data.score > map[data.examId].score) {
+                  map[data.examId] = { id: docSnap.id, ...data };
+                }
               }
             }
-          }
-        });
+          });
+        }
       } catch (err) {
-        console.warn('Notice loading user exam results:', err);
+        console.warn('Notice loading user exam results in background:', err);
       }
 
       if (isMounted) {
-        setUserResultsMap(map);
+        setUserResultsMap({ ...map });
       }
     };
 
@@ -110,31 +120,49 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
   useEffect(() => {
     let isMounted = true;
     const fetchExams = async () => {
-      setLoading(true);
       const examMap = new Map<string, Exam>();
 
-      // Load from local storage (IndexedDB & LocalStorage) first
+      // 1. Instant local render (0ms)
+      let hasLocal = false;
       try {
         const localData = await getLargeStorage<Exam[]>('local_exams', []);
-        if (Array.isArray(localData)) {
+        if (Array.isArray(localData) && localData.length > 0) {
           localData.forEach((e: Exam) => { if (e && e.id) examMap.set(e.id, e); });
+          if (isMounted) {
+            setExams(Array.from(examMap.values()));
+            setLoading(false);
+            hasLocal = true;
+          }
         }
       } catch (_) {}
 
+      if (!hasLocal && isMounted) {
+        setLoading(true);
+      }
+
+      // 2. Cloud Firestore with 3.5s timeout guard
       try {
-        const snap = await getDocs(collection(db, 'exams'));
-        snap.forEach(docSnap => {
-          const d = docSnap.data();
-          if (docSnap.id) examMap.set(docSnap.id, { id: docSnap.id, ...d } as Exam);
-        });
+        const cloudPromise = getDocs(collection(db, 'exams'));
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Exams timeout')), 3500)
+        );
+
+        const snap = (await Promise.race([cloudPromise, timeoutPromise])) as any;
+        if (snap && snap.forEach) {
+          snap.forEach((docSnap: any) => {
+            const d = docSnap.data();
+            if (docSnap.id) examMap.set(docSnap.id, { id: docSnap.id, ...d } as Exam);
+          });
+        }
       } catch (err) {
-        console.warn('Notice loading cloud exams:', err);
+        console.warn('Notice loading cloud exams in background:', err);
       } finally {
         const combined = Array.from(examMap.values());
         if (isMounted) {
           setExams(combined);
           setLoading(false);
         }
+        setLargeStorage('local_exams', combined);
       }
     };
 
@@ -255,10 +283,10 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
   // Load Merit List for an Exam
   const handleViewMeritList = async (exam: Exam) => {
     setMeritListExam(exam);
-    setLoadingMerit(true);
     const resultMap = new Map<string, ExamResult>();
 
-    // 1. Load from local storage
+    // 1. Instant local render (0ms)
+    let hasLocal = false;
     try {
       const localData = safeGetLocalStorage('local_exam_results', '[]');
       const parsed = JSON.parse(localData);
@@ -268,25 +296,45 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
             resultMap.set(r.id, r);
           }
         });
+        if (resultMap.size > 0) {
+          const initialResults = Array.from(resultMap.values());
+          initialResults.sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score;
+            if (a.wrongCount !== b.wrongCount) return a.wrongCount - b.wrongCount;
+            return a.timeTakenSeconds - b.timeTakenSeconds;
+          });
+          setMeritResults(initialResults);
+          setLoadingMerit(false);
+          hasLocal = true;
+        }
       }
     } catch (_) {}
 
-    // 2. Load from Firestore
+    if (!hasLocal) {
+      setLoadingMerit(true);
+    }
+
+    // 2. Background Firestore fetch with 3.5s timeout guard
     try {
-      const snap = await getDocs(collection(db, 'exam_results'));
-      snap.forEach(d => {
-        const data = d.data() as ExamResult;
-        if (data.examId === exam.id && d.id) {
-          resultMap.set(d.id, { id: d.id, ...data });
-        }
-      });
+      const cloudPromise = getDocs(collection(db, 'exam_results'));
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Merit timeout')), 3500)
+      );
+
+      const snap = (await Promise.race([cloudPromise, timeoutPromise])) as any;
+      if (snap && snap.forEach) {
+        snap.forEach((d: any) => {
+          const data = d.data() as ExamResult;
+          if (data.examId === exam.id && d.id) {
+            resultMap.set(d.id, { id: d.id, ...data });
+          }
+        });
+      }
     } catch (e) {
       console.warn('Notice loading merit list from cloud:', e);
     }
 
     const results = Array.from(resultMap.values());
-
-    // Sort by highest score, then fewest wrong answers, then fastest time
     results.sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
       if (a.wrongCount !== b.wrongCount) return a.wrongCount - b.wrongCount;

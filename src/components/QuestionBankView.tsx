@@ -199,7 +199,6 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
   // Fetch Question Bank from Firestore with LocalStorage Fallback & Multi-collection aggregation
   const fetchQuestions = async (forceCloud = false) => {
-    setLoading(true);
     setPermissionNotice(null);
     const itemMap = new Map<string, QuestionBankItem>();
 
@@ -216,192 +215,205 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       safeSetLocalStorage('deleted_question_ids', '[]');
     }
 
-    // 1. Local Storage & IndexedDB cache (fast initial render if not forcing cloud)
+    // 1. Local Storage & IndexedDB cache: Instant First Render (0ms latency)
+    let hasLocalCache = false;
     if (!forceCloud) {
       try {
         const cachedList = await getLargeStorage<QuestionBankItem[]>('local_question_bank', null);
-        if (Array.isArray(cachedList)) {
+        if (Array.isArray(cachedList) && cachedList.length > 0) {
           cachedList.forEach((q: QuestionBankItem) => {
             if (q && q.id && !deletedSet.has(q.id)) {
               itemMap.set(q.id, q);
             }
           });
+          setQuestions(Array.from(itemMap.values()));
+          setLoading(false);
+          hasLocalCache = true;
         }
       } catch (_) {}
     }
 
-    // 2. Primary Question Bank collection from Firestore
-    try {
-      const snap = await getDocs(collection(db, 'question_bank'));
-      snap.forEach(docSnap => {
-        if (!deletedSet.has(docSnap.id)) {
-          const dData = docSnap.data();
-          itemMap.set(docSnap.id, {
-            id: docSnap.id,
-            question: dData.question || '',
-            optionA: dData.optionA || '',
-            optionB: dData.optionB || '',
-            optionC: dData.optionC || '',
-            optionD: dData.optionD || '',
-            correctAnswer: dData.correctAnswer || 'A',
-            explanation: dData.explanation || '',
-            group1: dData.group1 || 'General',
-            group2: dData.group2 || 'General',
-            group3: dData.group3 || 'General',
-            createdAt: dData.createdAt || new Date().toISOString(),
-            ...dData
-          } as QuestionBankItem);
-        }
-      });
-    } catch (err: any) {
-      console.warn('Question bank Firestore fetch notice:', err);
-      if (err?.code === 'permission-denied' || err?.message?.includes('permission')) {
-        setPermissionNotice('Firestore Security Rules-এর কারণে ফায়ারবেস থেকে ডেটা লোড হতে বাধা পাচ্ছে। দয়া করে ফায়ারবেস কনসোলে Rules ট্যাবে পারমিশন পাবলিশ করুন।');
-      } else {
-        setPermissionNotice(`ক্লাউড থেকে ডেটা লোড করার সময় সমস্যা: ${err?.message || 'ইন্টারনেট বা ফায়ারবেস কানেকশন চেক করুন'}`);
-      }
+    if (!hasLocalCache) {
+      setLoading(true);
     }
 
-    // 3. Load MCQ questions collection from Firestore
+    // 2. Fetch all collections in PARALLEL with a resilient timeout guard
     try {
-      const mcqSnap = await getDocs(collection(db, 'mcq_questions'));
-      mcqSnap.forEach(docSnap => {
-        const d = docSnap.data();
-        const qId = `mcq_${docSnap.id}`;
-        if (!deletedSet.has(qId) && !itemMap.has(qId) && !itemMap.has(docSnap.id)) {
-          const opts = Array.isArray(d.options) ? d.options : [d.optionA || '', d.optionB || '', d.optionC || '', d.optionD || ''];
-          itemMap.set(qId, {
-            id: qId,
-            question: d.question || '',
-            optionA: opts[0] || '',
-            optionB: opts[1] || '',
-            optionC: opts[2] || '',
-            optionD: opts[3] || '',
-            correctAnswer: d.answer || opts[0] || 'A',
-            explanation: d.explanation || 'MCQ Practice Question',
-            group1: d.courseId || 'MCQ',
-            group2: 'MCQ Question',
-            group3: 'Existing Database',
-            courseId: d.courseId,
-            createdAt: d.createdAt || new Date().toISOString()
-          });
-        }
-      });
-    } catch (mErr) {
-      console.warn('Notice reading mcq_questions:', mErr);
-    }
+      const fetchPromise = Promise.allSettled([
+        getDocs(collection(db, 'question_bank')),
+        getDocs(collection(db, 'mcq_questions')),
+        getDocs(collection(db, 'blank_questions')),
+        getDocs(collection(db, 'odd_one_out_questions')),
+        getDocs(collection(db, 'word_analogy_questions'))
+      ]);
 
-    // 4. Load blank_questions from Firestore
-    try {
-      const bSnap = await getDocs(collection(db, 'blank_questions'));
-      bSnap.forEach(docSnap => {
-        const data = docSnap.data();
-        const questionStr = data.sentence || data.question || '';
-        if (!questionStr) return;
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Question bank fetch timeout')), 3500)
+      );
 
-        const bqId = `bq_${docSnap.id}`;
-        if (deletedSet.has(bqId)) return;
+      const [
+        qbResult,
+        mcqResult,
+        blankResult,
+        oooResult,
+        waResult
+      ] = (await Promise.race([fetchPromise, timeoutPromise])) as PromiseSettledResult<any>[];
 
-        const opts: string[] = Array.isArray(data.options)
-          ? data.options
-          : [data.optionA || '', data.optionB || '', data.optionC || '', data.optionD || ''];
-
-        const optA = opts[0] || data.optionA || '';
-        const optB = opts[1] || data.optionB || '';
-        const optC = opts[2] || data.optionC || '';
-        const optD = opts[3] || data.optionD || '';
-
-        let corr = (data.answer || data.correctAnswer || 'A').toString().trim();
-        if (corr.length > 1) {
-          const idx = opts.findIndex((o: string) => o.trim() === corr);
-          if (idx >= 0 && idx < 4) {
-            corr = ['A', 'B', 'C', 'D'][idx];
-          } else {
-            corr = 'A';
+      // Primary Question Bank collection
+      if (qbResult && qbResult.status === 'fulfilled' && qbResult.value) {
+        qbResult.value.forEach((docSnap: any) => {
+          if (!deletedSet.has(docSnap.id)) {
+            const dData = docSnap.data();
+            itemMap.set(docSnap.id, {
+              id: docSnap.id,
+              question: dData.question || '',
+              optionA: dData.optionA || '',
+              optionB: dData.optionB || '',
+              optionC: dData.optionC || '',
+              optionD: dData.optionD || '',
+              correctAnswer: dData.correctAnswer || 'A',
+              explanation: dData.explanation || '',
+              group1: dData.group1 || 'General',
+              group2: dData.group2 || 'General',
+              group3: dData.group3 || 'General',
+              createdAt: dData.createdAt || new Date().toISOString(),
+              ...dData
+            } as QuestionBankItem);
           }
-        }
+        });
+      }
 
-        if (!itemMap.has(bqId)) {
-          itemMap.set(bqId, {
-            id: bqId,
-            question: questionStr,
-            optionA: optA,
-            optionB: optB,
-            optionC: optC,
-            optionD: optD,
-            correctAnswer: corr,
-            explanation: data.explanation || 'Blank Filling Question',
-            group1: 'Blank Filling',
-            group2: data.courseId || 'General',
-            group3: 'Existing Database',
-            courseId: data.courseId,
-            createdAt: data.createdAt || new Date().toISOString()
-          });
-        }
-      });
-    } catch (bErr) {
-      console.warn('Notice reading blank_questions:', bErr);
-    }
+      // MCQ questions collection
+      if (mcqResult && mcqResult.status === 'fulfilled' && mcqResult.value) {
+        mcqResult.value.forEach((docSnap: any) => {
+          const d = docSnap.data();
+          const qId = `mcq_${docSnap.id}`;
+          if (!deletedSet.has(qId) && !itemMap.has(qId) && !itemMap.has(docSnap.id)) {
+            const opts = Array.isArray(d.options) ? d.options : [d.optionA || '', d.optionB || '', d.optionC || '', d.optionD || ''];
+            itemMap.set(qId, {
+              id: qId,
+              question: d.question || '',
+              optionA: opts[0] || '',
+              optionB: opts[1] || '',
+              optionC: opts[2] || '',
+              optionD: opts[3] || '',
+              correctAnswer: d.answer || opts[0] || 'A',
+              explanation: d.explanation || 'MCQ Practice Question',
+              group1: d.courseId || 'MCQ',
+              group2: 'MCQ Question',
+              group3: 'Existing Database',
+              courseId: d.courseId,
+              createdAt: d.createdAt || new Date().toISOString()
+            });
+          }
+        });
+      }
 
-    // 5. Load odd_one_out_questions from Firestore
-    try {
-      const oooSnap = await getDocs(collection(db, 'odd_one_out_questions'));
-      oooSnap.forEach(docSnap => {
-        const d = docSnap.data();
-        const qId = `ooo_${docSnap.id}`;
-        if (!deletedSet.has(qId) && !itemMap.has(qId) && Array.isArray(d.words) && d.words.length >= 2) {
-          itemMap.set(qId, {
-            id: qId,
-            question: `Odd One Out: Find the word that does not fit with the others (${d.words.join(', ')})`,
-            optionA: d.words[0] || '',
-            optionB: d.words[1] || '',
-            optionC: d.words[2] || 'N/A',
-            optionD: d.words[3] || 'N/A',
-            correctAnswer: d.answer || d.words[0] || 'A',
-            explanation: d.reason || d.explanation || 'Odd One Out Question',
-            group1: d.courseId || 'Odd One Out',
-            group2: 'Odd One Out',
-            group3: 'Existing Database',
-            courseId: d.courseId,
-            createdAt: d.createdAt || new Date().toISOString()
-          });
-        }
-      });
-    } catch (oErr) {
-      console.warn('Notice reading odd_one_out_questions:', oErr);
-    }
+      // Blank questions collection
+      if (blankResult && blankResult.status === 'fulfilled' && blankResult.value) {
+        blankResult.value.forEach((docSnap: any) => {
+          const data = docSnap.data();
+          const questionStr = data.sentence || data.question || '';
+          if (!questionStr) return;
 
-    // 6. Load word_analogy_questions from Firestore
-    try {
-      const waSnap = await getDocs(collection(db, 'word_analogy_questions'));
-      waSnap.forEach(docSnap => {
-        const d = docSnap.data();
-        const qId = `wa_${docSnap.id}`;
-        if (!deletedSet.has(qId) && !itemMap.has(qId) && Array.isArray(d.options)) {
-          itemMap.set(qId, {
-            id: qId,
-            question: `Word Analogy: ${d.analogy || ''}`,
-            optionA: d.options[0] || '',
-            optionB: d.options[1] || '',
-            optionC: d.options[2] || '',
-            optionD: d.options[3] || '',
-            correctAnswer: d.answer || d.options[0] || 'A',
-            explanation: d.explanation || 'Analogy Question',
-            group1: d.courseId || 'Word Analogy',
-            group2: 'Word Analogy',
-            group3: 'Existing Database',
-            courseId: d.courseId,
-            createdAt: d.createdAt || new Date().toISOString()
-          });
-        }
-      });
-    } catch (waErr) {
-      console.warn('Notice reading word_analogy_questions:', waErr);
+          const bqId = `bq_${docSnap.id}`;
+          if (deletedSet.has(bqId)) return;
+
+          const opts: string[] = Array.isArray(data.options)
+            ? data.options
+            : [data.optionA || '', data.optionB || '', data.optionC || '', data.optionD || ''];
+
+          const optA = opts[0] || data.optionA || '';
+          const optB = opts[1] || data.optionB || '';
+          const optC = opts[2] || data.optionC || '';
+          const optD = opts[3] || data.optionD || '';
+
+          let corr = (data.answer || data.correctAnswer || 'A').toString().trim();
+          if (corr.length > 1) {
+            const idx = opts.findIndex((o: string) => o.trim() === corr);
+            if (idx >= 0 && idx < 4) {
+              corr = ['A', 'B', 'C', 'D'][idx];
+            } else {
+              corr = 'A';
+            }
+          }
+
+          if (!itemMap.has(bqId)) {
+            itemMap.set(bqId, {
+              id: bqId,
+              question: questionStr,
+              optionA: optA,
+              optionB: optB,
+              optionC: optC,
+              optionD: optD,
+              correctAnswer: corr,
+              explanation: data.explanation || 'Blank Filling Question',
+              group1: 'Blank Filling',
+              group2: data.courseId || 'General',
+              group3: 'Existing Database',
+              courseId: data.courseId,
+              createdAt: data.createdAt || new Date().toISOString()
+            });
+          }
+        });
+      }
+
+      // Odd one out questions collection
+      if (oooResult && oooResult.status === 'fulfilled' && oooResult.value) {
+        oooResult.value.forEach((docSnap: any) => {
+          const d = docSnap.data();
+          const qId = `ooo_${docSnap.id}`;
+          if (!deletedSet.has(qId) && !itemMap.has(qId) && Array.isArray(d.words) && d.words.length >= 2) {
+            itemMap.set(qId, {
+              id: qId,
+              question: `Odd One Out: Find the word that does not fit with the others (${d.words.join(', ')})`,
+              optionA: d.words[0] || '',
+              optionB: d.words[1] || '',
+              optionC: d.words[2] || 'N/A',
+              optionD: d.words[3] || 'N/A',
+              correctAnswer: d.answer || d.words[0] || 'A',
+              explanation: d.reason || d.explanation || 'Odd One Out Question',
+              group1: d.courseId || 'Odd One Out',
+              group2: 'Odd One Out',
+              group3: 'Existing Database',
+              courseId: d.courseId,
+              createdAt: d.createdAt || new Date().toISOString()
+            });
+          }
+        });
+      }
+
+      // Word analogy questions collection
+      if (waResult && waResult.status === 'fulfilled' && waResult.value) {
+        waResult.value.forEach((docSnap: any) => {
+          const d = docSnap.data();
+          const qId = `wa_${docSnap.id}`;
+          if (!deletedSet.has(qId) && !itemMap.has(qId) && Array.isArray(d.options)) {
+            itemMap.set(qId, {
+              id: qId,
+              question: `Word Analogy: ${d.analogy || ''}`,
+              optionA: d.options[0] || '',
+              optionB: d.options[1] || '',
+              optionC: d.options[2] || '',
+              optionD: d.options[3] || '',
+              correctAnswer: d.answer || d.options[0] || 'A',
+              explanation: d.explanation || 'Analogy Question',
+              group1: d.courseId || 'Word Analogy',
+              group2: 'Word Analogy',
+              group3: 'Existing Database',
+              courseId: d.courseId,
+              createdAt: d.createdAt || new Date().toISOString()
+            });
+          }
+        });
+      }
+    } catch (err: any) {
+      console.warn('Question bank background sync notice:', err);
     }
 
     const finalList = Array.from(itemMap.values());
     setQuestions(finalList);
-    await setLargeStorage('local_question_bank', finalList);
+    setLargeStorage('local_question_bank', finalList);
     setLoading(false);
   };
 
@@ -437,30 +449,45 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
   // Fetch Scheduled Exams
   const fetchScheduledExams = async () => {
-    setLoadingExams(true);
     const examMap = new Map<string, Exam>();
 
-    // 1. Local Cache (IndexedDB & LocalStorage)
+    // 1. Instant Local Cache Render (0ms latency)
+    let hasLocalExams = false;
     try {
       const localData = await getLargeStorage<Exam[]>('local_exams', []);
-      if (Array.isArray(localData)) {
+      if (Array.isArray(localData) && localData.length > 0) {
         localData.forEach((e: Exam) => { if (e && e.id) examMap.set(e.id, e); });
+        setAllExams(Array.from(examMap.values()));
+        setLoadingExams(false);
+        hasLocalExams = true;
       }
     } catch (_) {}
 
-    // 2. Firestore
+    if (!hasLocalExams) {
+      setLoadingExams(true);
+    }
+
+    // 2. Background Firestore Sync with 3.5s timeout guard
     try {
-      const snap = await getDocs(collection(db, 'exams'));
-      snap.forEach(docSnap => {
-        const d = docSnap.data();
-        if (docSnap.id) examMap.set(docSnap.id, { id: docSnap.id, ...d } as Exam);
-      });
+      const cloudPromise = getDocs(collection(db, 'exams'));
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Exams fetch timeout')), 3500)
+      );
+
+      const snap = (await Promise.race([cloudPromise, timeoutPromise])) as any;
+      if (snap && snap.forEach) {
+        snap.forEach((docSnap: any) => {
+          const d = docSnap.data();
+          if (docSnap.id) examMap.set(docSnap.id, { id: docSnap.id, ...d } as Exam);
+        });
+      }
     } catch (err) {
       console.warn('Notice loading cloud exams in QuestionBankView:', err);
     }
 
     const combined = Array.from(examMap.values());
     setAllExams(combined);
+    setLargeStorage('local_exams', combined);
     setLoadingExams(false);
   };
 
@@ -470,7 +497,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
     const updatedExams = allExams.filter(e => e.id !== examId);
     setAllExams(updatedExams);
-    await setLargeStorage('local_exams', updatedExams);
+    setLargeStorage('local_exams', updatedExams);
 
     try {
       await deleteDoc(doc(db, 'exams', examId));
@@ -983,22 +1010,25 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       } catch (_) {}
 
       const updatedLocalExams = [finalExamObj, ...localExams.filter(e => e.id !== finalExamObj.id)];
-      await setLargeStorage('local_exams', updatedLocalExams);
+      setLargeStorage('local_exams', updatedLocalExams);
 
-      // Update state immediately
+      // Update state immediately for 0ms response
       setAllExams(prev => [finalExamObj, ...prev.filter(e => e.id !== finalExamObj.id)]);
+      setPublishSuccess(true);
+      setSelectedIds(new Set());
+      if (onExamPublished) onExamPublished();
 
-      // 2. Cloud save to Firestore
+      // 2. Cloud save to Firestore with 2s timeout race guard
       try {
-        await setDoc(doc(db, 'exams', finalExamObj.id), finalExamObj, { merge: true });
+        const cloudSavePromise = setDoc(doc(db, 'exams', finalExamObj.id), finalExamObj, { merge: true });
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Cloud exam save timeout')), 2000)
+        );
+        await Promise.race([cloudSavePromise, timeoutPromise]);
       } catch (fsErr) {
         console.warn('Cloud exam save notice (saved locally/IndexedDB):', fsErr);
       }
 
-      setPublishSuccess(true);
-      setSelectedIds(new Set());
-      fetchScheduledExams();
-      if (onExamPublished) onExamPublished();
       setTimeout(() => setPublishSuccess(false), 4000);
     } catch (err) {
       console.error('Error publishing exam:', err);
