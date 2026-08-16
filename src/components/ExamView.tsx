@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileSpreadsheet, 
@@ -19,11 +19,19 @@ import {
   ArrowRight,
   ShieldCheck,
   Zap,
-  Users
+  Users,
+  Lock,
+  Search,
+  Check,
+  ShoppingCart,
+  Eye,
+  Layers,
+  X
 } from 'lucide-react';
 import { db, collection, getDocs, doc, setDoc } from '../lib/db';
 import { Exam, ExamQuestion, ExamResult, Course } from '../types';
 import { safeGetLocalStorage, safeSetLocalStorage, getLargeStorage, setLargeStorage } from '../lib/storage';
+import { isCourseAccessible, isCourseEnrolled } from '../lib/courseAccess';
 
 interface ExamViewProps {
   courses: Course[];
@@ -31,12 +39,73 @@ interface ExamViewProps {
   userEmail?: string;
   userDisplayName?: string;
   userId?: string;
+  enrolledCourseIds?: string[];
+  onSelectTab?: (tab: string) => void;
 }
 
-export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, userId }: ExamViewProps) {
+export function ExamView({ 
+  courses, 
+  activeCourseId, 
+  userEmail, 
+  userDisplayName, 
+  userId,
+  enrolledCourseIds = [],
+  onSelectTab
+}: ExamViewProps) {
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedCourseFilter, setSelectedCourseFilter] = useState<string>(activeCourseId || 'all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [accessFilterTab, setAccessFilterTab] = useState<'all' | 'accessible' | 'participated' | 'locked'>('all');
+  const [lockedExamModal, setLockedExamModal] = useState<{ exam: Exam; course?: Course } | null>(null);
+
+  // Track local enrolled course IDs for offline/cached responsiveness
+  const [localEnrolledIds, setLocalEnrolledIds] = useState<string[]>(() => {
+    try {
+      const saved = safeGetLocalStorage('user_enrolled_courses', '[]');
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  });
+
+  const effectiveEnrolledIds = useMemo(() => {
+    return Array.from(new Set([
+      ...(enrolledCourseIds || []),
+      ...localEnrolledIds
+    ]));
+  }, [enrolledCourseIds, localEnrolledIds]);
+
+  // Helper to check if an exam is accessible to the current user
+  const checkIsExamAccessible = (exam: Exam): boolean => {
+    const cleanEmail = userEmail?.trim().toLowerCase() || '';
+    // Admin email always has full access
+    if (cleanEmail === 'mohammad.001ekram@gmail.com') return true;
+
+    // If unassigned or general exam, accessible to all
+    if (!exam.courseId || exam.courseId.trim().toLowerCase() === 'all' || exam.courseId.trim().toLowerCase() === 'general') {
+      return true;
+    }
+
+    const matchedCourse = courses.find(
+      c => c.id.trim().toLowerCase() === exam.courseId?.trim().toLowerCase()
+    );
+
+    if (!matchedCourse) {
+      return isCourseEnrolled(exam.courseId, effectiveEnrolledIds);
+    }
+
+    return isCourseAccessible(matchedCourse, effectiveEnrolledIds, userEmail);
+  };
+
+  // Helper to get course of exam
+  const getExamCourse = (exam: Exam): Course | undefined => {
+    if (!exam.courseId || exam.courseId === 'all' || exam.courseId === 'general') {
+      return undefined;
+    }
+    return courses.find(c => c.id.trim().toLowerCase() === exam.courseId?.trim().toLowerCase());
+  };
 
   // Track user results map (key: examId -> ExamResult)
   const [userResultsMap, setUserResultsMap] = useState<Record<string, ExamResult>>({});
@@ -188,8 +257,15 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
     return () => clearInterval(timer);
   }, [activeExam, isExamCompleted, timeLeft]);
 
-  // Start an Exam
+  // Start an Exam (with strict access control check)
   const handleStartExam = (exam: Exam) => {
+    // 1. Strict access check
+    if (!checkIsExamAccessible(exam)) {
+      const course = getExamCourse(exam);
+      setLockedExamModal({ exam, course });
+      return;
+    }
+
     setActiveExam(exam);
     setCurrentQIndex(0);
     setUserAnswers({});
@@ -345,10 +421,66 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
     setLoadingMerit(false);
   };
 
-  const filteredExams = exams.filter(e => {
-    if (selectedCourseFilter === 'all') return true;
-    return e.courseId === selectedCourseFilter;
-  });
+  const searchFilteredExams = useMemo(() => {
+    return exams.filter(e => {
+      // 1. Course Filter
+      if (selectedCourseFilter !== 'all' && e.courseId !== selectedCourseFilter) {
+        return false;
+      }
+      // 2. Search Query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const courseTitle = courses.find(c => c.id === e.courseId)?.title?.toLowerCase() || '';
+        const titleMatch = e.title.toLowerCase().includes(q);
+        const descMatch = (e.description || '').toLowerCase().includes(q);
+        const courseMatch = courseTitle.includes(q);
+        if (!titleMatch && !descMatch && !courseMatch) return false;
+      }
+      return true;
+    });
+  }, [exams, selectedCourseFilter, searchQuery, courses]);
+
+  // Compute sub-categorized list for tabs
+  const { allList, accessibleList, participatedList, lockedList } = useMemo(() => {
+    const accessible: Exam[] = [];
+    const participated: Exam[] = [];
+    const locked: Exam[] = [];
+
+    searchFilteredExams.forEach(e => {
+      const isAllowed = checkIsExamAccessible(e);
+      const isPart = !!userResultsMap[e.id];
+
+      if (isPart) {
+        participated.push(e);
+      }
+      if (isAllowed) {
+        accessible.push(e);
+      } else {
+        locked.push(e);
+      }
+    });
+
+    return {
+      allList: searchFilteredExams,
+      accessibleList: accessible,
+      participatedList: participated,
+      lockedList: locked
+    };
+  }, [searchFilteredExams, effectiveEnrolledIds, userEmail, userResultsMap]);
+
+  const displayedExams = useMemo(() => {
+    switch (accessFilterTab) {
+      case 'accessible':
+        return accessibleList;
+      case 'participated':
+        return participatedList;
+      case 'locked':
+        return lockedList;
+      case 'all':
+      default:
+        return allList;
+    }
+  }, [accessFilterTab, accessibleList, participatedList, lockedList, allList]);
 
   // Helper to check if an option is the correct answer
   const checkIsRightOption = (opt: string, optIndex: number, questionAnswer: string, allOptions: string[] = []): boolean => {
@@ -984,151 +1116,411 @@ export function ExamView({ courses, activeCourseId, userEmail, userDisplayName, 
   // ==========================================
   // RENDER: MAIN EXAM CATALOG LIST
   // ==========================================
-  return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* Top Title Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-        <div>
-          <div className="flex items-center gap-2 text-indigo-600 font-bold text-xs uppercase tracking-wider mb-1">
-            <Sparkles className="w-4 h-4 text-amber-500" />
-            <span>Live Model Tests & Exam Hall</span>
-          </div>
-          <h1 className="text-3xl font-extrabold text-slate-900">Online Exam Section</h1>
-          <p className="text-slate-600 text-sm mt-1">
-            Prepare yourself with timers, negative marking, and instant merit lists
-          </p>
+  const renderExamCard = (exam: Exam) => {
+    const qCount = exam.questions?.length || 0;
+    const marksPerQ = exam.marksPerQuestion || 1;
+    const totalMarks = qCount * marksPerQ;
+    const userResult = userResultsMap[exam.id];
+    const isParticipated = !!userResult;
+    const isAccessible = checkIsExamAccessible(exam);
+    const examCourse = getExamCourse(exam);
+    const courseTitle = examCourse?.title || 'General Exam';
+
+    return (
+      <motion.div
+        key={exam.id}
+        layout
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        onClick={() => {
+          if (!isAccessible) {
+            setLockedExamModal({ exam, course: examCourse });
+          } else {
+            handleStartExam(exam);
+          }
+        }}
+        className={`group relative transition-all duration-200 flex flex-row items-center justify-between p-2 sm:p-3 px-3 sm:px-4 rounded-xl sm:rounded-2xl gap-2.5 sm:gap-3.5 overflow-hidden cursor-pointer ${
+          isParticipated
+            ? 'bg-white hover:bg-emerald-50/30 border border-emerald-200/90 shadow-2xs hover:shadow-xs'
+            : isAccessible
+            ? 'bg-white hover:bg-indigo-50/20 border border-slate-200/90 shadow-2xs hover:shadow-xs hover:border-indigo-300'
+            : 'bg-white hover:bg-amber-50/30 border border-amber-200/80 shadow-2xs hover:shadow-xs hover:border-amber-300'
+        }`}
+        style={{ fontFamily: "'Poppins', sans-serif" }}
+      >
+        {/* Left Side: Minimal Icon & Badge Box */}
+        <div className={`w-10 sm:w-12 h-10 sm:h-12 rounded-xl flex flex-col items-center justify-center shrink-0 text-center font-poppins px-0.5 ${
+          isParticipated
+            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/70'
+            : isAccessible
+            ? 'bg-indigo-50 text-indigo-700 border border-indigo-100/80'
+            : 'bg-amber-50 text-amber-700 border border-amber-200/70'
+        }`}>
+          {isParticipated ? (
+            <div className="flex flex-col items-center leading-none">
+              <span className="text-xs sm:text-sm font-black tracking-tight leading-none text-emerald-800">
+                {userResult.score}
+              </span>
+              <span className="text-[8px] sm:text-[9px] font-bold uppercase opacity-75 leading-none mt-0.5 text-emerald-700">
+                /{userResult.totalMarks}
+              </span>
+            </div>
+          ) : isAccessible ? (
+            <div className="flex flex-col items-center leading-none">
+              <span className="text-xs sm:text-sm font-black tracking-tight leading-none text-indigo-800">
+                {exam.durationMinutes}
+              </span>
+              <span className="text-[8px] sm:text-[9px] font-bold uppercase opacity-75 leading-none mt-0.5 text-indigo-600">
+                MIN
+              </span>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center leading-none text-amber-700">
+              <Lock className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+              <span className="text-[7.5px] font-extrabold uppercase leading-none mt-0.5">
+                LOCK
+              </span>
+            </div>
+          )}
         </div>
 
-        {/* Filter by Course */}
-        <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
-          <span className="text-xs font-medium text-slate-500 pl-2">Select Course:</span>
-          <select
-            value={selectedCourseFilter}
-            onChange={(e) => setSelectedCourseFilter(e.target.value)}
-            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+        {/* Middle Side: Prominent Title & Iconized Extra Info */}
+        <div className="flex-1 min-w-0 space-y-1 font-poppins">
+          {/* Main Title */}
+          <h3 
+            className="text-xs sm:text-sm font-extrabold text-slate-900 leading-snug group-hover:text-indigo-600 transition truncate max-w-[190px] sm:max-w-md"
+            title={exam.title}
           >
-            <option value="all">All Courses</option>
-            {courses.map(c => (
-              <option key={c.id} value={c.id}>{c.title}</option>
-            ))}
-          </select>
+            {exam.title}
+          </h3>
+
+          {/* Minimal Iconized Meta Info Row */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-slate-500 font-medium">
+            {/* Course Tag */}
+            <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60 truncate max-w-[110px] sm:max-w-[160px]">
+              <BookOpen className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+              <span className="truncate">{courseTitle}</span>
+            </span>
+
+            {/* Question Count */}
+            <span className="inline-flex items-center gap-0.5 text-[10px] sm:text-[11px] text-slate-600" title="Total Questions">
+              <HelpCircle className="w-3 h-3 text-slate-400 shrink-0" />
+              <span>{qCount}Q</span>
+            </span>
+
+            {/* Marks */}
+            <span className="inline-flex items-center gap-0.5 text-[10px] sm:text-[11px] text-slate-600" title="Total Marks">
+              <Award className="w-3 h-3 text-slate-400 shrink-0" />
+              <span>{totalMarks}m</span>
+            </span>
+
+            {/* Negative Marking */}
+            {exam.negativeMarking ? (
+              <span className="inline-flex items-center gap-0.5 text-[10px] sm:text-[11px] text-rose-600 font-semibold" title={`Negative margin: -${exam.negativeMarking}`}>
+                <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0" />
+                <span>-{exam.negativeMarking}</span>
+              </span>
+            ) : null}
+
+            {/* Status / Score Tag */}
+            {isParticipated ? (
+              <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/70">
+                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                <span>{Math.round((userResult.score / userResult.totalMarks) * 100)}%</span>
+              </span>
+            ) : !isAccessible ? (
+              <span className="inline-flex items-center gap-0.5 text-[8.5px] sm:text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60">
+                <Lock className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+                <span>লকড</span>
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Right Side: Divider & Action Buttons */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 self-center">
+          <div className="h-6 sm:h-8 w-[1px] bg-slate-200 shrink-0" />
+
+          {isAccessible ? (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleStartExam(exam);
+                }}
+                className={`font-bold text-[11px] sm:text-xs px-2.5 sm:px-3 py-1.5 sm:py-1.5 rounded-xl transition cursor-pointer shadow-2xs active:scale-95 flex items-center gap-1 text-white ${
+                  isParticipated
+                    ? 'bg-emerald-600 hover:bg-emerald-500'
+                    : 'bg-indigo-600 hover:bg-indigo-500'
+                }`}
+              >
+                <span>{isParticipated ? 'Retake' : 'Start'}</span>
+                <ArrowRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+              </button>
+
+              {isParticipated && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveExam(exam);
+                    setExamResult(userResult);
+                    setIsExamCompleted(true);
+                  }}
+                  title="View Marksheet & Answers"
+                  className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 p-1.5 sm:p-2 rounded-xl transition cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleViewMeritList(exam);
+                }}
+                title="View Merit List / Leaderboard"
+                className="bg-slate-50 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-700 text-slate-600 border border-slate-200 p-1.5 sm:p-2 rounded-xl transition cursor-pointer"
+              >
+                <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500" />
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setLockedExamModal({ exam, course: examCourse });
+              }}
+              className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] sm:text-xs px-2.5 sm:px-3 py-1.5 sm:py-1.5 rounded-xl transition cursor-pointer shadow-2xs active:scale-95 flex items-center gap-1"
+            >
+              <Lock className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+              <span>Unlock</span>
+            </button>
+          )}
+        </div>
+      </motion.div>
+    );
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto px-2 sm:px-4 py-4 sm:py-6 font-poppins">
+      {/* Top Title & Search Bar */}
+      <div className="mb-4 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div>
+            <div className="flex items-center gap-1.5 text-indigo-600 font-bold text-xs uppercase tracking-wider mb-0.5">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <span>Live Model Tests & Exam Hall</span>
+            </div>
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 leading-tight">
+              Online Exam Section
+            </h1>
+            <p className="text-slate-500 text-xs mt-0.5">
+              স্মার্ট টাইমার, নেগেটিভ মার্কিং এবং ইনস্ট্যান্ট মেরিট লিস্ট
+            </p>
+          </div>
+
+          {/* Filter by Course Dropdown */}
+          <div className="bg-white p-1.5 sm:p-2 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-2 shrink-0">
+            <span className="text-xs font-medium text-slate-500 pl-1.5 shrink-0">Course:</span>
+            <select
+              value={selectedCourseFilter}
+              onChange={(e) => setSelectedCourseFilter(e.target.value)}
+              className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+            >
+              <option value="all">All Courses ({exams.length})</option>
+              {courses.map(c => (
+                <option key={c.id} value={c.id}>{c.title}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Search Bar & Category Filter Pills */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1">
+          {/* Search Box */}
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search exam by title or course..."
+              className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs"
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold p-0.5"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Access Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none shrink-0">
+            <button
+              onClick={() => setAccessFilterTab('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+                accessFilterTab === 'all'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              All ({allList.length})
+            </button>
+
+            <button
+              onClick={() => setAccessFilterTab('accessible')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+                accessFilterTab === 'accessible'
+                  ? 'bg-[#704261] text-white shadow-xs'
+                  : 'bg-purple-50 text-[#704261] hover:bg-purple-100 border border-purple-200'
+              }`}
+            >
+              Available ({accessibleList.length})
+            </button>
+
+            <button
+              onClick={() => setAccessFilterTab('participated')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+                accessFilterTab === 'participated'
+                  ? 'bg-[#3C7B58] text-white shadow-xs'
+                  : 'bg-emerald-50 text-[#3C7B58] hover:bg-emerald-100 border border-emerald-200'
+              }`}
+            >
+              Done ({participatedList.length})
+            </button>
+
+            <button
+              onClick={() => setAccessFilterTab('locked')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+                accessFilterTab === 'locked'
+                  ? 'bg-[#EF5426] text-white shadow-xs'
+                  : 'bg-orange-50 text-[#EF5426] hover:bg-orange-100 border border-orange-200'
+              }`}
+            >
+              Locked ({lockedList.length})
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Exam Cards Grid */}
+      {/* Main List Section: Mobile-First High Density Stack */}
       {loading ? (
         <div className="py-16 text-center text-slate-400 text-sm font-medium">
           Loading exam list...
         </div>
-      ) : filteredExams.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center max-w-lg mx-auto shadow-sm">
-          <FileSpreadsheet className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-lg font-bold text-slate-800">No Exams Found</h3>
-          <p className="text-slate-500 text-xs mt-1">
-            New exams uploaded from the admin panel will appear here.
-          </p>
+      ) : displayedExams.length === 0 ? (
+        <div className="bg-white rounded-3xl border border-slate-200 p-8 sm:p-12 text-center max-w-md mx-auto shadow-xs space-y-3">
+          <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
+            <FileSpreadsheet className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-base font-extrabold text-slate-800">No Exams Found</h3>
+            <p className="text-slate-500 text-xs mt-1">
+              Try adjusting your search keywords, course filter, or access category.
+            </p>
+          </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredExams.map((exam) => {
-            const qCount = exam.questions?.length || 0;
-            const marksPerQ = exam.marksPerQuestion || 1;
-            const totalMarks = qCount * marksPerQ;
-            const userResult = userResultsMap[exam.id];
-            const isParticipated = !!userResult;
-
-            return (
-              <div
-                key={exam.id}
-                className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition flex flex-col justify-between relative overflow-hidden group"
-              >
-                <div>
-                  {/* Top Badges */}
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-bold px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-100">
-                      {courses.find(c => c.id === exam.courseId)?.title || 'General Exam'}
-                    </span>
-
-                    <span className="text-xs font-mono font-bold text-slate-500 flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-amber-500" />
-                      <span>{exam.durationMinutes} mins</span>
-                    </span>
-                  </div>
-
-                  {/* Participation Tag Badge */}
-                  {isParticipated && (
-                    <div className="mb-3 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-full text-[11px] font-extrabold shadow-2xs">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span>Participated (Score: {userResult.score}/{userResult.totalMarks})</span>
-                    </div>
-                  )}
-
-                  <h3 className="text-xl font-bold text-slate-900 mb-2 group-hover:text-indigo-600 transition">
-                    {exam.title}
-                  </h3>
-
-                  {exam.description && (
-                    <p className="text-slate-600 text-xs mb-4 line-clamp-2">{exam.description}</p>
-                  )}
-
-                  {/* Exam Specs */}
-                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 grid grid-cols-2 gap-2 text-xs text-slate-600 mb-6">
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">Total Questions</span>
-                      <strong className="text-slate-800 font-bold">{qCount}</strong>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">Total Marks</span>
-                      <strong className="text-slate-800 font-bold">{totalMarks}</strong>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">Marks Per Question</span>
-                      <strong className="text-slate-800 font-bold">+{marksPerQ}</strong>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">Negative Margin</span>
-                      <strong className="text-rose-600 font-bold">-{exam.negativeMarking || 0}</strong>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row items-center gap-2">
-                  <button
-                    onClick={() => handleStartExam(exam)}
-                    className="flex-1 w-full py-3 px-4 rounded-2xl font-bold text-xs text-white bg-indigo-600 hover:bg-indigo-500 shadow-md flex items-center justify-center gap-2 transition cursor-pointer"
-                  >
-                    <span>{isParticipated ? 'Retake Exam' : 'Start Exam'}</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-
-                  {isParticipated && (
-                    <button
-                      onClick={() => {
-                        setActiveExam(exam);
-                        setExamResult(userResult);
-                        setIsExamCompleted(true);
-                      }}
-                      title="View Marksheet"
-                      className="w-full sm:w-auto px-3.5 py-3 rounded-2xl border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shrink-0"
-                    >
-                      <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                      <span>Marksheet</span>
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => handleViewMeritList(exam)}
-                    title="View Merit List / Leaderboard"
-                    className="w-full sm:w-auto p-3 rounded-2xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition cursor-pointer flex items-center justify-center gap-1 shrink-0"
-                  >
-                    <Trophy className="w-4 h-4 text-amber-500" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+        <div className="space-y-2.5 sm:space-y-3">
+          {displayedExams.map((exam) => renderExamCard(exam))}
         </div>
       )}
+
+      {/* Locked Exam Access Required Modal */}
+      <AnimatePresence>
+        {lockedExamModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-100 overflow-hidden relative font-poppins"
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => setLockedExamModal(null)}
+                className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Icon & Warning Header */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-[#EF5426] shrink-0">
+                  <Lock className="w-6 h-6" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                    Course Access Required
+                  </span>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 mt-0.5 leading-tight">
+                    কোর্স আনলক প্রয়োজন
+                  </h3>
+                </div>
+              </div>
+
+              {/* Exam & Course Details Card */}
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 mb-4 space-y-2">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Selected Exam:</span>
+                  <span className="text-xs font-black text-slate-800 block">{lockedExamModal.exam.title}</span>
+                </div>
+
+                <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Course:</span>
+                    <span className="text-xs font-black text-indigo-900 block">
+                      {lockedExamModal.course?.title || 'Restricted Course'}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Price:</span>
+                    <span className="text-sm font-black text-[#EF5426]">
+                      {lockedExamModal.course?.price !== undefined ? `${lockedExamModal.course.price} TK` : '30 TK'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-600 mb-5 leading-relaxed">
+                এই পরীক্ষাটিতে অংশগ্রহণ করতে আপনাকে প্রথমে <strong>{lockedExamModal.course?.title || 'এই কোর্সটি'}</strong> আনলক বা এনরোল করতে হবে। কোর্সটিতে এনরোল করলে আপনি সকল ফ্ল্যাশকার্ড, শব্দভাণ্ডার এবং মডেল টেস্টে সম্পূর্ণ এক্সেস পাবেন।
+              </p>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setLockedExamModal(null)}
+                  className="flex-1 py-2.5 rounded-2xl border border-slate-200 text-slate-600 font-extrabold text-xs hover:bg-slate-50 transition cursor-pointer"
+                >
+                  ফিরে যান
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLockedExamModal(null);
+                    if (onSelectTab) {
+                      onSelectTab('my_courses');
+                    }
+                  }}
+                  className="flex-1 py-2.5 rounded-2xl bg-gradient-to-r from-[#EF5426] to-[#ce3508] text-white font-extrabold text-xs shadow-md hover:brightness-105 transition cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <ShoppingCart className="w-3.5 h-3.5" />
+                  <span>কোর্স কিনুন / আনলক</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

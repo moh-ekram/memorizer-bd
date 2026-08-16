@@ -125,6 +125,8 @@ interface PracticeCenterProps {
   userEmail?: string;
   userDisplayName?: string;
   userId?: string;
+  enrolledCourseIds?: string[];
+  onSelectTab?: (tab: string) => void;
 }
 
 export default function PracticeCenter({
@@ -154,7 +156,9 @@ export default function PracticeCenter({
   googleSearchQuery,
   userEmail,
   userDisplayName,
-  userId
+  userId,
+  enrolledCourseIds,
+  onSelectTab
 }: PracticeCenterProps) {
   const [subTab, setSubTab] = useState<'hub' | 'quiz' | 'match' | 'exam' | 'blank' | 'odd_one_out' | 'analogy' | 'analytics'>('hub');
   const [isQuickShuffleOpen, setIsQuickShuffleOpen] = useState<boolean>(false);
@@ -672,6 +676,8 @@ export default function PracticeCenter({
           userEmail={userEmail}
           userDisplayName={userDisplayName}
           userId={userId}
+          enrolledCourseIds={enrolledCourseIds || []}
+          onSelectTab={onSelectTab}
         />
       )}
 

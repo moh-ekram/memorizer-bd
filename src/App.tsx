@@ -2518,6 +2518,8 @@ const getActiveCourse = (
               userEmail={user?.email || undefined}
               userDisplayName={user?.displayName || (user?.email ? user.email.split('@')[0] : undefined)}
               userId={user?.uid || undefined}
+              enrolledCourseIds={enrolledCourseIds}
+              onSelectTab={setActiveTab}
             />
           )}
 
