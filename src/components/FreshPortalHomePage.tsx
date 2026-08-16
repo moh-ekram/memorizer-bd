@@ -16,6 +16,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { LibraryType } from '../types/library';
+import { StudyRoomLandingSection } from './StudyRoomLandingSection';
 
 interface FreshPortalHomePageProps {
   user: any;
@@ -62,9 +63,9 @@ export const FreshPortalHomePage: React.FC<FreshPortalHomePageProps> = ({
         )}
       </header>
 
-      {/* Main Centered Flow based on the layout diagram */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 py-6 sm:py-10 max-w-md w-full mx-auto">
-        <div className="w-full flex flex-col items-center gap-3.5 sm:gap-4">
+      {/* Main Centered Flow based on the layout diagram & Landing Sections */}
+      <main className="flex-1 flex flex-col items-center justify-start px-3.5 sm:px-6 py-6 sm:py-10 max-w-xl w-full mx-auto">
+        <div className="w-full max-w-md flex flex-col items-center gap-3.5 sm:gap-4">
 
           {/* 1. TOP ELEMENT: LOG IN BUTTON / USER STATUS PILL */}
           {user ? (
@@ -151,6 +152,10 @@ export const FreshPortalHomePage: React.FC<FreshPortalHomePageProps> = ({
           </button>
 
         </div>
+
+        {/* 🌟 SEQUENTIAL LANDING SECTIONS (Downwards Landing Page Layout) */}
+        <StudyRoomLandingSection onOpenStudyRoom={onOpenStudyRoom} />
+
       </main>
 
       {/* Subtle Footer */}
