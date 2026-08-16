@@ -1148,75 +1148,55 @@ export function ExamView({
         }`}
         style={{ fontFamily: "'Poppins', sans-serif" }}
       >
-        {/* Left Side: Minimal Icon & Badge Box */}
-        <div className={`w-10 sm:w-12 h-10 sm:h-12 rounded-xl flex flex-col items-center justify-center shrink-0 text-center font-poppins px-0.5 ${
+        {/* Left Side: Total Questions Badge Box */}
+        <div className={`w-10 sm:w-12 h-10 sm:h-12 rounded-xl flex flex-col items-center justify-center shrink-0 text-center px-0.5 font-poppins ${
           isParticipated
-            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/70'
+            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80'
             : isAccessible
-            ? 'bg-indigo-50 text-indigo-700 border border-indigo-100/80'
-            : 'bg-amber-50 text-amber-700 border border-amber-200/70'
+            ? 'bg-indigo-50 text-indigo-800 border border-indigo-100/90'
+            : 'bg-amber-50 text-amber-800 border border-amber-200/80'
         }`}>
-          {isParticipated ? (
-            <div className="flex flex-col items-center leading-none">
-              <span className="text-xs sm:text-sm font-black tracking-tight leading-none text-emerald-800">
-                {userResult.score}
-              </span>
-              <span className="text-[8px] sm:text-[9px] font-bold uppercase opacity-75 leading-none mt-0.5 text-emerald-700">
-                /{userResult.totalMarks}
-              </span>
-            </div>
-          ) : isAccessible ? (
-            <div className="flex flex-col items-center leading-none">
-              <span className="text-xs sm:text-sm font-black tracking-tight leading-none text-indigo-800">
-                {exam.durationMinutes}
-              </span>
-              <span className="text-[8px] sm:text-[9px] font-bold uppercase opacity-75 leading-none mt-0.5 text-indigo-600">
-                MIN
-              </span>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center leading-none text-amber-700">
-              <Lock className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
-              <span className="text-[7.5px] font-extrabold uppercase leading-none mt-0.5">
-                LOCK
-              </span>
-            </div>
-          )}
+          <span className="text-xs sm:text-sm font-black tracking-tight leading-none font-poppins">
+            {qCount}
+          </span>
+          <span className="text-[7.5px] sm:text-[8.5px] font-bold uppercase opacity-75 leading-none mt-0.5 font-poppins">
+            QUES
+          </span>
         </div>
 
         {/* Middle Side: Prominent Title & Iconized Extra Info */}
         <div className="flex-1 min-w-0 space-y-1 font-poppins">
           {/* Main Title */}
           <h3 
-            className="text-xs sm:text-sm font-extrabold text-slate-900 leading-snug group-hover:text-indigo-600 transition truncate max-w-[190px] sm:max-w-md"
+            className="text-xs sm:text-sm font-extrabold text-slate-900 leading-snug group-hover:text-indigo-600 transition truncate max-w-[190px] sm:max-w-md font-poppins"
             title={exam.title}
           >
             {exam.title}
           </h3>
 
-          {/* Minimal Iconized Meta Info Row */}
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-slate-500 font-medium">
+          {/* Minimal Iconized Meta Info Row with Duration under Title */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-slate-500 font-medium font-poppins">
             {/* Course Tag */}
-            <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60 truncate max-w-[110px] sm:max-w-[160px]">
+            <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60 truncate max-w-[110px] sm:max-w-[160px] font-poppins">
               <BookOpen className="w-2.5 h-2.5 text-slate-400 shrink-0" />
               <span className="truncate">{courseTitle}</span>
             </span>
 
-            {/* Question Count */}
-            <span className="inline-flex items-center gap-0.5 text-[10px] sm:text-[11px] text-slate-600" title="Total Questions">
-              <HelpCircle className="w-3 h-3 text-slate-400 shrink-0" />
-              <span>{qCount}Q</span>
+            {/* Exam Duration / Time */}
+            <span className="inline-flex items-center gap-0.5 text-[10px] sm:text-[11px] text-indigo-700 font-semibold font-poppins" title="Exam Duration">
+              <Clock className="w-3 h-3 text-indigo-500 shrink-0" />
+              <span>{exam.durationMinutes}m</span>
             </span>
 
             {/* Marks */}
-            <span className="inline-flex items-center gap-0.5 text-[10px] sm:text-[11px] text-slate-600" title="Total Marks">
+            <span className="inline-flex items-center gap-0.5 text-[10px] sm:text-[11px] text-slate-600 font-poppins" title="Total Marks">
               <Award className="w-3 h-3 text-slate-400 shrink-0" />
               <span>{totalMarks}m</span>
             </span>
 
             {/* Negative Marking */}
             {exam.negativeMarking ? (
-              <span className="inline-flex items-center gap-0.5 text-[10px] sm:text-[11px] text-rose-600 font-semibold" title={`Negative margin: -${exam.negativeMarking}`}>
+              <span className="inline-flex items-center gap-0.5 text-[10px] sm:text-[11px] text-rose-600 font-semibold font-poppins" title={`Negative margin: -${exam.negativeMarking}`}>
                 <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0" />
                 <span>-{exam.negativeMarking}</span>
               </span>
@@ -1224,12 +1204,12 @@ export function ExamView({
 
             {/* Status / Score Tag */}
             {isParticipated ? (
-              <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/70">
+              <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/70 font-poppins">
                 <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
-                <span>{Math.round((userResult.score / userResult.totalMarks) * 100)}%</span>
+                <span>Score: {userResult.score}/{userResult.totalMarks} ({Math.round((userResult.score / userResult.totalMarks) * 100)}%)</span>
               </span>
             ) : !isAccessible ? (
-              <span className="inline-flex items-center gap-0.5 text-[8.5px] sm:text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60">
+              <span className="inline-flex items-center gap-0.5 text-[8.5px] sm:text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60 font-poppins">
                 <Lock className="w-2.5 h-2.5 text-amber-600 shrink-0" />
                 <span>লকড</span>
               </span>
