@@ -138,6 +138,7 @@ export interface StudyGoal {
   dailyTarget: number; // e.g. 20 words
   streak: number;
   lastActiveDate?: string;
+  lastStudyDate?: string;
   history: Record<string, number>; // date YYYY-MM-DD -> words studied count
 }
 

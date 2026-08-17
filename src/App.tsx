@@ -17,6 +17,7 @@ import RevisionCenter from './components/RevisionCenter';
 import { LibraryType } from './types/library';
 import { SyncConflictModal, SyncConflictData } from './components/SyncConflictModal';
 import { safeSetLocalStorage, clearNonEssentialLocalStorageCache } from './lib/storage';
+import { mergeProgressRecords, mergeGameProgressRecords, mergeStudyGoal } from './utils/syncUtils';
 
 import {
   LayoutDashboard,
@@ -840,10 +841,12 @@ export default function App() {
     }
   }, [filteredCustomCourses]);
 
+  // Ref to prevent local saves from colliding with incoming snapshots
+  const isSyncingToCloud = useRef(false);
+
   // Background cloud data synchronization helper function
   const fetchUserDataFromCloud = async (currentUser: DbUser) => {
     setSyncStatus('syncing');
-    setHasLoadedFromCloud(false);
     isSyncingFromCloud.current = true;
     try {
       const cleanUserEmail = (currentUser.email || '').trim().toLowerCase();
@@ -883,104 +886,96 @@ export default function App() {
         }
       }
 
-      let data: any = null;
-      if (docsToMerge.length > 0) {
-        data = {};
+      let mergedCloudProgress: Record<string, UserProgress> = {};
+      let mergedSynonym: Record<string, any> = {};
+      let mergedBlank: Record<string, any> = {};
+      let mergedOoo: Record<string, any> = {};
+      let mergedAnalogy: Record<string, any> = {};
+      let mergedGoalObj: StudyGoal = {
+        dailyTarget: 15,
+        streak: 1,
+        lastStudyDate: new Date().toISOString().split('T')[0],
+        history: {}
+      };
+      let mergedFoldersList: CustomFolder[] = [];
+      let mergedSettingsObj: AppSettings | null = null;
+      let mergedEnrolledList: string[] = [];
+      let maxScore = 0;
+      let maxTaken = 0;
+      let resolvedActiveCourse = '';
+      const hasFoundAnyDoc = docsToMerge.length > 0;
+
+      if (hasFoundAnyDoc) {
         docsToMerge.forEach(docData => {
           if (docData.progress && typeof docData.progress === 'object') {
-            data.progress = { ...(data.progress || {}), ...docData.progress };
+            mergedCloudProgress = mergeProgressRecords(mergedCloudProgress, docData.progress);
           }
           if (docData.synonymProgress && typeof docData.synonymProgress === 'object') {
-            data.synonymProgress = { ...(data.synonymProgress || {}), ...docData.synonymProgress };
+            mergedSynonym = mergeGameProgressRecords(mergedSynonym, docData.synonymProgress);
           }
           if (docData.blankProgress && typeof docData.blankProgress === 'object') {
-            data.blankProgress = { ...(data.blankProgress || {}), ...docData.blankProgress };
+            mergedBlank = mergeGameProgressRecords(mergedBlank, docData.blankProgress);
           }
           if (docData.oooProgress && typeof docData.oooProgress === 'object') {
-            data.oooProgress = { ...(data.oooProgress || {}), ...docData.oooProgress };
+            mergedOoo = mergeGameProgressRecords(mergedOoo, docData.oooProgress);
           }
           if (docData.analogyProgress && typeof docData.analogyProgress === 'object') {
-            data.analogyProgress = { ...(data.analogyProgress || {}), ...docData.analogyProgress };
+            mergedAnalogy = mergeGameProgressRecords(mergedAnalogy, docData.analogyProgress);
+          }
+          if (docData.goal && typeof docData.goal === 'object') {
+            mergedGoalObj = mergeStudyGoal(mergedGoalObj, docData.goal);
+          }
+          if (Array.isArray(docData.folders) && docData.folders.length > 0 && mergedFoldersList.length === 0) {
+            mergedFoldersList = docData.folders;
+          }
+          if (docData.settings && typeof docData.settings === 'object') {
+            mergedSettingsObj = { ...(mergedSettingsObj || {}), ...docData.settings };
+          }
+          if (typeof docData.quizScore === 'number') maxScore = Math.max(maxScore, docData.quizScore);
+          if (typeof docData.quizTaken === 'number') maxTaken = Math.max(maxTaken, docData.quizTaken);
+          if (docData.activeCourseId && docData.activeCourseId !== 'gre') {
+            resolvedActiveCourse = docData.activeCourseId;
           }
           const enrolledList = Array.isArray(docData.enrolledCourseIds) 
             ? docData.enrolledCourseIds 
             : (Array.isArray(docData.enrolledCourses) ? docData.enrolledCourses : []);
           if (enrolledList.length > 0) {
-            data.enrolledCourseIds = Array.from(new Set([
-              ...(Array.isArray(data.enrolledCourseIds) ? data.enrolledCourseIds : []),
+            mergedEnrolledList = Array.from(new Set([
+              ...mergedEnrolledList,
               ...enrolledList.map((id: any) => (typeof id === 'string' ? id.trim().toLowerCase() : ''))
             ])).filter(Boolean);
           }
-          if (docData.activeCourseId && docData.activeCourseId !== 'gre') {
-            data.activeCourseId = docData.activeCourseId;
-          }
-          if (Array.isArray(docData.folders) && docData.folders.length > 0) {
-            data.folders = docData.folders;
-          }
-          if (docData.goal && typeof docData.goal === 'object') {
-            data.goal = { ...(data.goal || {}), ...docData.goal };
-          }
-          if (docData.settings && typeof docData.settings === 'object') {
-            data.settings = { ...(data.settings || {}), ...docData.settings };
-          }
-          if (typeof docData.quizScore === 'number') data.quizScore = Math.max(data.quizScore || 0, docData.quizScore);
-          if (typeof docData.quizTaken === 'number') data.quizTaken = Math.max(data.quizTaken || 0, docData.quizTaken);
         });
       }
 
-      if (data) {
-        // Merge state from cloud data with existing local progress to prevent overwriting locally rated words
+      if (hasFoundAnyDoc) {
+        // Merge cloud progress with local progress safely using timestamps
+        let unifiedProgress: Record<string, UserProgress> = {};
         setProgress(prev => {
-          const cloudProg = (data.progress && typeof data.progress === 'object') ? data.progress : {};
-          const merged = { ...cloudProg };
-          Object.keys(prev).forEach(wordId => {
-            if (!merged[wordId]) {
-              merged[wordId] = prev[wordId];
-            } else {
-              const localTime = new Date(prev[wordId].updatedAt || 0).getTime();
-              const cloudTime = new Date(merged[wordId].updatedAt || 0).getTime();
-              if (localTime > cloudTime) {
-                merged[wordId] = prev[wordId];
-              }
-            }
-          });
-          return merged;
-        });
-        setFolders(Array.isArray(data.folders) && data.folders.length > 0 ? data.folders : [
-          { id: '1', name: 'Important Words (High Priority)', color: '#ef4444' },
-          { id: '2', name: 'Hard Synonyms', color: '#f59e0b' }
-        ]);
-
-        const rawGoal = data.goal && typeof data.goal === 'object' ? data.goal : {};
-        setGoal({
-          dailyTarget: typeof rawGoal.dailyTarget === 'number' ? rawGoal.dailyTarget : 15,
-          streak: typeof rawGoal.streak === 'number' ? rawGoal.streak : 1,
-          lastStudyDate: typeof rawGoal.lastStudyDate === 'string' ? rawGoal.lastStudyDate : new Date().toISOString().split('T')[0],
-          history: rawGoal.history && typeof rawGoal.history === 'object' ? rawGoal.history : {}
+          unifiedProgress = mergeProgressRecords(mergedCloudProgress, prev);
+          safeSetLocalStorage(LOCAL_STORAGE_PROGRESS_KEY, JSON.stringify(unifiedProgress));
+          saveProgressToIndexedDB(unifiedProgress);
+          return unifiedProgress;
         });
 
-        setBlankProgress(prev => {
-          const cloudBlank = (data.blankProgress && typeof data.blankProgress === 'object') ? data.blankProgress : {};
-          return { ...prev, ...cloudBlank };
-        });
-        setOooProgress(prev => {
-          const cloudOoo = (data.oooProgress && typeof data.oooProgress === 'object') ? data.oooProgress : {};
-          return { ...prev, ...cloudOoo };
-        });
-        setAnalogyProgress(prev => {
-          const cloudAnalogy = (data.analogyProgress && typeof data.analogyProgress === 'object') ? data.analogyProgress : {};
-          return { ...prev, ...cloudAnalogy };
-        });
-        if (data.settings && typeof data.settings === 'object') {
+        if (mergedFoldersList.length > 0) {
+          setFolders(mergedFoldersList);
+        }
+        setGoal(prev => mergeStudyGoal(prev, mergedGoalObj));
+        setSynonymProgress(prev => mergeGameProgressRecords(prev, mergedSynonym));
+        setBlankProgress(prev => mergeGameProgressRecords(prev, mergedBlank));
+        setOooProgress(prev => mergeGameProgressRecords(prev, mergedOoo));
+        setAnalogyProgress(prev => mergeGameProgressRecords(prev, mergedAnalogy));
+
+        if (mergedSettingsObj) {
           setSettings(prev => ({
             ...prev,
-            ...data.settings,
-            practiceItemsOrder: Array.isArray(data.settings?.practiceItemsOrder) ? data.settings.practiceItemsOrder : prev.practiceItemsOrder,
-            studyToolsItemsOrder: Array.isArray(data.settings?.studyToolsItemsOrder) ? data.settings.studyToolsItemsOrder : prev.studyToolsItemsOrder,
-            landingDisplayCourses: Array.isArray(data.settings?.landingDisplayCourses) ? data.settings.landingDisplayCourses : prev.landingDisplayCourses
+            ...mergedSettingsObj,
+            practiceItemsOrder: Array.isArray(mergedSettingsObj?.practiceItemsOrder) ? mergedSettingsObj.practiceItemsOrder : prev.practiceItemsOrder,
+            studyToolsItemsOrder: Array.isArray(mergedSettingsObj?.studyToolsItemsOrder) ? mergedSettingsObj.studyToolsItemsOrder : prev.studyToolsItemsOrder,
+            landingDisplayCourses: Array.isArray(mergedSettingsObj?.landingDisplayCourses) ? mergedSettingsObj.landingDisplayCourses : prev.landingDisplayCourses
           }));
         }
-        const userEnrolled = Array.isArray(data.enrolledCourseIds) ? data.enrolledCourseIds : [];
 
         // Auto-sync any course access requests or allowedUsers entries matching currentUser.email
         let autoSyncedPurchased: string[] = [];
@@ -1027,42 +1022,26 @@ export default function App() {
 
         const mergedEnrolled = Array.from(new Set([
           'gre',
-          ...userEnrolled.map((id: any) => (typeof id === 'string' ? id.trim().toLowerCase() : '')),
+          ...mergedEnrolledList,
           ...autoSyncedPurchased.map((id: any) => (typeof id === 'string' ? id.trim().toLowerCase() : '')),
           ...enrolledCourseIds.map((id: any) => (typeof id === 'string' ? id.trim().toLowerCase() : ''))
         ])).filter(Boolean);
         setEnrolledCourseIds(mergedEnrolled);
 
-        // Sync active course from cloud: restore cloud activeCourseId if available, or keep explicit local selection
-        setActiveCourseId(prev => {
-          const cloudActive = typeof data.activeCourseId === 'string' ? data.activeCourseId.trim() : '';
-          const normCloud = cloudActive.toLowerCase();
-          const normPrev = prev ? prev.trim().toLowerCase() : '';
+        if (resolvedActiveCourse) {
+          setActiveCourseId(prev => {
+            const normPrev = prev ? prev.trim().toLowerCase() : '';
+            if (normPrev && normPrev !== 'gre') return prev;
+            return resolvedActiveCourse;
+          });
+        }
+        setQuizScore(maxScore);
+        setQuizTaken(maxTaken);
 
-          // If cloud has a valid non-default active course ID, restore it!
-          if (normCloud && normCloud !== 'gre') {
-            // If local state was 'gre' or empty (default fallback), restore cloud's active course
-            if (!normPrev || normPrev === 'gre') {
-              return cloudActive;
-            }
-            // If local state is also set to a non-default course, preserve local active course
-            return prev;
-          }
-
-          // If cloud active is 'gre' or empty, but local state has a specific non-default course, keep local active course
-          if (normPrev && normPrev !== 'gre') {
-            return prev;
-          }
-
-          // Fallback to cloud activeCourseId, or first enrolled course, or 'gre'
-          return cloudActive || mergedEnrolled[0] || 'gre';
-        });
-        setQuizScore(typeof data.quizScore === 'number' ? data.quizScore : 0);
-        setQuizTaken(typeof data.quizTaken === 'number' ? data.quizTaken : 0);
-        
-        // Write unified state back to cloud for both UID and Email docs
+        // Reconcile and push unified progress back to cloud
         try {
           const syncPayload = {
+            progress: unifiedProgress,
             enrolledCourseIds: mergedEnrolled,
             email: currentUser.email,
             updatedAt: new Date().toISOString()
@@ -1072,13 +1051,13 @@ export default function App() {
             await setDoc(doc(db, 'users', cleanUserEmail), syncPayload, { merge: true });
           }
         } catch (setErr) {
-          console.warn("Failed to sync unified user enrolledCourseIds in cloud:", setErr);
+          console.warn("Failed to sync unified user progress to cloud:", setErr);
         }
 
         setSyncStatus('synced');
         setHasLoadedFromCloud(true);
-        const loadedCount = Object.keys(data.progress || {}).length;
-        addSyncLog('cloud_fetch', `Restored ${loadedCount} progress item${loadedCount === 1 ? '' : 's'} from Cloud snapshot`, 'success', loadedCount);
+        const loadedCount = Object.keys(mergedCloudProgress || {}).length;
+        addSyncLog('cloud_fetch', `Synced ${loadedCount} progress item${loadedCount === 1 ? '' : 's'} from Cloud`, 'success', loadedCount);
       } else {
         // New user signup: create clean user record with auto-synced purchases if any
         const cleanProgress = {};
@@ -1095,7 +1074,6 @@ export default function App() {
 
         let autoSyncedNew: string[] = [];
         try {
-          const cleanUserEmail = (currentUser.email || '').trim().toLowerCase();
           if (cleanUserEmail) {
             const foundIds = new Set<string>();
             const reqsQuery = query(
@@ -1184,7 +1162,7 @@ export default function App() {
     } finally {
       setTimeout(() => {
         isSyncingFromCloud.current = false;
-      }, 500);
+      }, 300);
     }
   };
 
@@ -1217,7 +1195,7 @@ export default function App() {
           console.warn('Error saving uid to IDB:', e);
         }
 
-        // Run cloud sync in background silently
+        // Run cloud sync in background
         fetchUserDataFromCloud(currentUser);
       } else {
         try {
@@ -1236,7 +1214,52 @@ export default function App() {
     };
   }, []);
 
-  // Sync to Cloud whenever state changes and user is logged in (debounced)
+  // Real-time Firestore snapshot listener for instant multi-device sync
+  useEffect(() => {
+    if (!user) return;
+
+    const userDocRef = doc(db, 'users', user.uid);
+    const unsubscribeSnapshot = onSnapshot(userDocRef, (docSnap) => {
+      if (docSnap.exists() && !isSyncingToCloud.current && !isSyncingFromCloud.current) {
+        const cloudData = docSnap.data();
+        if (cloudData.progress && typeof cloudData.progress === 'object') {
+          setProgress(prev => {
+            const merged = mergeProgressRecords(prev, cloudData.progress);
+            safeSetLocalStorage(LOCAL_STORAGE_PROGRESS_KEY, JSON.stringify(merged));
+            saveProgressToIndexedDB(merged);
+            return merged;
+          });
+        }
+        if (cloudData.goal && typeof cloudData.goal === 'object') {
+          setGoal(prev => mergeStudyGoal(prev, cloudData.goal));
+        }
+        if (cloudData.synonymProgress && typeof cloudData.synonymProgress === 'object') {
+          setSynonymProgress(prev => mergeGameProgressRecords(prev, cloudData.synonymProgress));
+        }
+        if (cloudData.blankProgress && typeof cloudData.blankProgress === 'object') {
+          setBlankProgress(prev => mergeGameProgressRecords(prev, cloudData.blankProgress));
+        }
+        if (cloudData.oooProgress && typeof cloudData.oooProgress === 'object') {
+          setOooProgress(prev => mergeGameProgressRecords(prev, cloudData.oooProgress));
+        }
+        if (cloudData.analogyProgress && typeof cloudData.analogyProgress === 'object') {
+          setAnalogyProgress(prev => mergeGameProgressRecords(prev, cloudData.analogyProgress));
+        }
+        if (Array.isArray(cloudData.enrolledCourseIds) && cloudData.enrolledCourseIds.length > 0) {
+          setEnrolledCourseIds(prev => Array.from(new Set([...prev, ...cloudData.enrolledCourseIds])));
+        }
+        setSyncStatus('synced');
+      }
+    }, (snapErr) => {
+      console.warn("Realtime user snapshot listener notice:", snapErr);
+    });
+
+    return () => {
+      unsubscribeSnapshot();
+    };
+  }, [user]);
+
+  // Sync to Cloud whenever state changes and user is logged in (rapid 350ms debounce)
   useEffect(() => {
     if (!user || !hasLoadedFromCloud) {
       setSyncStatus('idle');
@@ -1249,6 +1272,7 @@ export default function App() {
 
     const performSync = async () => {
       setSyncStatus('syncing');
+      isSyncingToCloud.current = true;
       try {
         const payload = {
           progress,
@@ -1284,20 +1308,92 @@ export default function App() {
         console.error('Error saving to Cloud:', err);
         setSyncStatus('error');
         addSyncLog('auto', 'Automatic cloud sync failed', 'error', 0);
+      } finally {
+        setTimeout(() => {
+          isSyncingToCloud.current = false;
+        }, 300);
       }
     };
 
     const timer = setTimeout(() => {
       performSync();
-    }, 1000);
+    }, 350);
 
     return () => clearTimeout(timer);
   }, [progress, folders, goal, synonymProgress, blankProgress, oooProgress, analogyProgress, settings, enrolledCourseIds, activeCourseId, quizScore, quizTaken, user, hasLoadedFromCloud]);
+
+  // Flush sync on tab hide / lock / before unload to guarantee no lost updates
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && user && !isSyncingToCloud.current) {
+        // Tab brought back into focus: re-check cloud for any updates made on another device!
+        fetchUserDataFromCloud(user);
+      } else if (document.visibilityState === 'hidden' && user && hasLoadedFromCloud) {
+        // Tab backgrounded or phone locked: immediately flush to Firestore!
+        const payload = {
+          progress,
+          folders,
+          goal,
+          synonymProgress,
+          blankProgress,
+          oooProgress,
+          analogyProgress,
+          settings,
+          enrolledCourseIds,
+          activeCourseId,
+          quizScore,
+          quizTaken,
+          email: user.email,
+          updatedAt: new Date().toISOString()
+        };
+        setDoc(doc(db, 'users', user.uid), payload, { merge: true }).catch(console.error);
+        if (user.email) {
+          const cleanEmail = user.email.trim().toLowerCase();
+          if (cleanEmail && cleanEmail !== user.uid.toLowerCase()) {
+            setDoc(doc(db, 'users', cleanEmail), payload, { merge: true }).catch(console.error);
+          }
+        }
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      if (user && hasLoadedFromCloud) {
+        const payload = {
+          progress,
+          folders,
+          goal,
+          synonymProgress,
+          blankProgress,
+          oooProgress,
+          analogyProgress,
+          settings,
+          enrolledCourseIds,
+          activeCourseId,
+          quizScore,
+          quizTaken,
+          email: user.email,
+          updatedAt: new Date().toISOString()
+        };
+        setDoc(doc(db, 'users', user.uid), payload, { merge: true }).catch(console.error);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [user, progress, folders, goal, synonymProgress, blankProgress, oooProgress, analogyProgress, settings, enrolledCourseIds, activeCourseId, quizScore, quizTaken, hasLoadedFromCloud]);
 
   const forceSyncToCloud = async () => {
     if (!user) return;
     setSyncStatus('syncing');
     try {
+      // 1. Fetch & reconcile cloud data with local data
+      await fetchUserDataFromCloud(user);
+
+      // 2. Write unified merged data to cloud
       const payload = {
         progress,
         folders,
@@ -1314,6 +1410,7 @@ export default function App() {
         email: user.email,
         updatedAt: new Date().toISOString()
       };
+      isSyncingToCloud.current = true;
       await setDoc(doc(db, 'users', user.uid), payload, { merge: true });
       if (user.email) {
         const cleanEmail = user.email.trim().toLowerCase();
@@ -1327,13 +1424,16 @@ export default function App() {
       }
 
       setSyncStatus('synced');
-      setHasLoadedFromCloud(true);
       const itemsProcessed = Object.keys(progress || {}).length;
-      addSyncLog('manual', `Manual cloud backup & recovery completed (${itemsProcessed} item${itemsProcessed === 1 ? '' : 's'} verified)`, 'success', itemsProcessed);
+      addSyncLog('manual', `Manual cloud backup & 2-way sync completed (${itemsProcessed} item${itemsProcessed === 1 ? '' : 's'} verified)`, 'success', itemsProcessed);
     } catch (err) {
       console.error('Manual sync failed:', err);
       setSyncStatus('error');
       addSyncLog('manual', 'Manual cloud backup failed', 'error', 0);
+    } finally {
+      setTimeout(() => {
+        isSyncingToCloud.current = false;
+      }, 300);
     }
   };
 
