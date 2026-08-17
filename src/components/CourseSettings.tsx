@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Course, VocabularyWord, BlankQuestion, OddOneOutQuestion, WordAnalogyQuestion, CustomMcqQuestion, StoryItem, ArticleItem, Exam, ExamQuestion } from '../types';
-import { extractTextFromWordFile, parseStoriesFromRawText } from '../utils/storyParser';
+import { extractTextFromWordFile, parseStoriesFromRawText, parseStoriesFromFile, parseArticlesFromFile, parseArticlesFromRawText } from '../utils/storyParser';
 import { 
   X, 
   CheckCircle, 
@@ -1158,18 +1158,27 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   const [articleUploadLoading, setArticleUploadLoading] = useState<boolean>(false);
   const [articleUploadError, setArticleUploadError] = useState<string | null>(null);
   const [articleSaveStatus, setArticleSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [pastedArticleText, setPastedArticleText] = useState<string>('');
 
   // Direct Cloud Save for Stories
-  const handleSaveStoriesToCloud = async () => {
+  const saveStoriesListDirectly = async (storiesToSave: StoryItem[]) => {
     setStorySaveStatus('saving');
     setStoryUploadError(null);
     try {
-      const sanitizedStories = JSON.parse(JSON.stringify(localStories || []));
+      const sanitizedStories = JSON.parse(JSON.stringify(storiesToSave || [])).map((s: any, idx: number) => ({
+        id: String(s.id || `story-${course.id}-${Date.now()}-${idx + 1}`),
+        title: String(s.title || `Story ${idx + 1}`),
+        content: String(s.content || ''),
+        createdAt: s.createdAt || new Date().toISOString()
+      }));
       
       // 1. Direct Firestore save with merge
       await setDoc(doc(db, 'courses', course.id), { stories: sanitizedStories }, { merge: true });
 
-      // 2. Update local storage cache
+      // 2. Update local state
+      setLocalStories(sanitizedStories);
+
+      // 3. Update local storage cache
       try {
         const cachedStr = safeGetLocalStorage('vocab_memorizer_cached_custom_courses', '[]');
         let cachedCourses: Course[] = [];
@@ -1188,31 +1197,64 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
         console.warn('Local course cache notice:', lErr);
       }
 
-      // 3. Notify parent state without closing modal
+      // 4. Notify parent state without closing modal
       if (onSaveSuccess) {
         onSaveSuccess({ ...course, stories: sanitizedStories });
       }
 
       setStorySaveStatus('saved');
       setTimeout(() => setStorySaveStatus('idle'), 3500);
+      return true;
     } catch (err: any) {
       console.error('Error saving stories to cloud:', err);
       setStorySaveStatus('error');
       setStoryUploadError(`Failed to save stories to cloud: ${err?.message || 'Connection error'}`);
+      return false;
     }
   };
 
+  const handleSaveStoriesToCloud = async () => {
+    await saveStoriesListDirectly(localStories);
+  };
+
   // Direct Cloud Save for Articles
-  const handleSaveArticlesToCloud = async () => {
+  const saveArticlesListDirectly = async (articlesToSave: ArticleItem[]) => {
     setArticleSaveStatus('saving');
     setArticleUploadError(null);
     try {
-      const sanitizedArticles = JSON.parse(JSON.stringify(localArticles || []));
+      const gradients = [
+        'from-indigo-600 via-purple-600 to-pink-600',
+        'from-blue-600 via-cyan-600 to-teal-600',
+        'from-emerald-600 via-teal-600 to-cyan-600',
+        'from-violet-600 via-fuchsia-600 to-rose-600',
+        'from-amber-600 via-orange-600 to-rose-600'
+      ];
+
+      const sanitizedArticles = JSON.parse(JSON.stringify(articlesToSave || [])).map((art: any, idx: number) => {
+        const bodyContent = String(art.content || art.article || art.text || '');
+        const wordsCount = bodyContent.split(/\s+/).length;
+        return {
+          id: String(art.id || `art-${course.id}-${Date.now()}-${idx + 1}`),
+          title: String(art.title || `Article ${idx + 1}`),
+          excerpt: String(art.excerpt || (bodyContent.length > 140 ? bodyContent.slice(0, 140) + '...' : bodyContent)),
+          content: bodyContent,
+          author: String(art.author || 'Course Educator'),
+          category: String(art.category || 'Vocabulary Reading'),
+          readTime: String(art.readTime || `${Math.max(1, Math.ceil(wordsCount / 180))} min read`),
+          publishedAt: String(art.publishedAt || new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })),
+          coverGradient: String(art.coverGradient || gradients[idx % gradients.length]),
+          tags: Array.isArray(art.tags) && art.tags.length > 0 ? art.tags : ['Vocabulary', 'Article'],
+          createdAt: art.createdAt || new Date().toISOString()
+        };
+      });
 
       // 1. Direct Firestore save with merge
       await setDoc(doc(db, 'courses', course.id), { articles: sanitizedArticles }, { merge: true });
 
-      // 2. Update local storage cache
+      // 2. Update local state
+      setLocalArticles(sanitizedArticles);
+
+      // 3. Update local storage cache
       try {
         const cachedStr = safeGetLocalStorage('vocab_memorizer_cached_custom_courses', '[]');
         let cachedCourses: Course[] = [];
@@ -1231,18 +1273,24 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
         console.warn('Local course cache notice:', lErr);
       }
 
-      // 3. Notify parent state without closing modal
+      // 4. Notify parent state without closing modal
       if (onSaveSuccess) {
         onSaveSuccess({ ...course, articles: sanitizedArticles });
       }
 
       setArticleSaveStatus('saved');
       setTimeout(() => setArticleSaveStatus('idle'), 3500);
+      return true;
     } catch (err: any) {
       console.error('Error saving articles to cloud:', err);
       setArticleSaveStatus('error');
       setArticleUploadError(`Failed to save articles to cloud: ${err?.message || 'Connection error'}`);
+      return false;
     }
+  };
+
+  const handleSaveArticlesToCloud = async () => {
+    await saveArticlesListDirectly(localArticles);
   };
 
   // --- WORDS LIST STATES ---
@@ -5412,11 +5460,11 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                 {/* Upload Card */}
                 <div className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Document Upload */}
+                    {/* Document / File Upload */}
                     <label className="cursor-pointer bg-white border-2 border-dashed border-indigo-200 hover:border-indigo-400 p-5 rounded-xl text-center transition group flex flex-col items-center justify-center">
                       <input
                         type="file"
-                        accept=".docx,.doc,.txt"
+                        accept=".docx,.doc,.txt,.xlsx,.xls,.csv,.json"
                         className="hidden"
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
@@ -5424,27 +5472,31 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                           setStoryUploadLoading(true);
                           setStoryUploadError(null);
                           try {
-                            const rawText = await extractTextFromWordFile(file);
-                            const parsed = parseStoriesFromRawText(rawText, course.id);
+                            const parsed = await parseStoriesFromFile(file, course.id);
                             if (parsed.length === 0) {
                               setStoryUploadError('No valid story titles or paragraphs were detected in the file.');
                             } else {
-                              setLocalStories(prev => [...prev, ...parsed]);
+                              const updated = [...localStories, ...parsed];
+                              setLocalStories(updated);
+                              // Automatically synchronize directly to Cloud Firestore!
+                              await saveStoriesListDirectly(updated);
                             }
-                          } catch (err) {
+                          } catch (err: any) {
                             console.error(err);
-                            setStoryUploadError('Could not process document file. Please ensure it is a valid .docx or .txt file.');
+                            setStoryUploadError(err?.message || 'Could not process document file. Please ensure it is a valid .docx, .xlsx, .csv, .json, or .txt file.');
                           } finally {
                             setStoryUploadLoading(false);
+                            // reset file input
+                            e.target.value = '';
                           }
                         }}
                       />
                       <UploadCloud className="w-7 h-7 text-indigo-500 mb-1 group-hover:scale-110 transition-transform" />
                       <span className="text-xs font-bold text-slate-800 block">
-                        {storyUploadLoading ? 'Extracting stories from document...' : 'Upload Word Document (.docx / .doc / .txt)'}
+                        {storyUploadLoading ? 'Extracting & Saving stories to Cloud...' : 'Upload Stories File (.docx / .xlsx / .csv / .json / .txt)'}
                       </span>
                       <span className="text-[10px] text-slate-400 block mt-0.5">
-                        Select or drag and drop your document file here
+                        Word doc, Excel sheet, JSON or text file (Auto-saves to Cloud)
                       </span>
                     </label>
 
@@ -5462,29 +5514,33 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                       />
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                           if (!pastedStoryText.trim()) return;
                           const parsed = parseStoriesFromRawText(pastedStoryText, course.id);
                           if (parsed.length > 0) {
-                            setLocalStories(prev => [...prev, ...parsed]);
+                            const updated = [...localStories, ...parsed];
+                            setLocalStories(updated);
                             setPastedStoryText('');
                             setStoryUploadError(null);
+                            // Automatically save to cloud
+                            await saveStoriesListDirectly(updated);
                           } else {
                             setStoryUploadError('No valid story detected in pasted text.');
                           }
                         }}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition cursor-pointer self-end"
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition cursor-pointer self-end flex items-center gap-1"
                       >
-                        Parse & Add Stories
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Parse & Save to Cloud</span>
                       </button>
                     </div>
                   </div>
 
                   {/* Format Guide */}
                   <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 text-xs text-slate-600 space-y-1.5">
-                    <span className="font-extrabold text-slate-800 block">💡 Document / Text Format Guide:</span>
+                    <span className="font-extrabold text-slate-800 block">💡 Supported Formats & Guide:</span>
                     <p className="text-[11px] text-slate-500 leading-relaxed">
-                      Your document or pasted text can contain multiple stories. Each title will be automatically extracted and matched with its story content:
+                      Upload Word document (.docx/.doc), Excel/CSV (.xlsx/.csv with columns for Title & Content), JSON, or plain text:
                     </p>
                     <pre className="text-[11px] font-mono text-indigo-900 bg-indigo-50/80 p-2.5 rounded-lg border border-indigo-100 leading-relaxed whitespace-pre font-medium">
 {`Story Title 1
@@ -5670,6 +5726,100 @@ First paragraph of story 2...`}
                     <span>{articleUploadError || 'Failed to save articles to cloud.'}</span>
                   </div>
                 )}
+
+                {/* Article Upload Card */}
+                <div className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Document / File Upload */}
+                    <label className="cursor-pointer bg-white border-2 border-dashed border-indigo-200 hover:border-indigo-400 p-5 rounded-xl text-center transition group flex flex-col items-center justify-center">
+                      <input
+                        type="file"
+                        accept=".docx,.doc,.txt,.xlsx,.xls,.csv,.json"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setArticleUploadLoading(true);
+                          setArticleUploadError(null);
+                          try {
+                            const parsed = await parseArticlesFromFile(file, course.id);
+                            if (parsed.length === 0) {
+                              setArticleUploadError('No valid article titles or paragraphs were detected in the file.');
+                            } else {
+                              const updated = [...localArticles, ...parsed];
+                              setLocalArticles(updated);
+                              // Automatically synchronize directly to Cloud Firestore!
+                              await saveArticlesListDirectly(updated);
+                            }
+                          } catch (err: any) {
+                            console.error(err);
+                            setArticleUploadError(err?.message || 'Could not process article file. Please ensure it is a valid .docx, .xlsx, .csv, .json, or .txt file.');
+                          } finally {
+                            setArticleUploadLoading(false);
+                            e.target.value = '';
+                          }
+                        }}
+                      />
+                      <UploadCloud className="w-7 h-7 text-indigo-500 mb-1 group-hover:scale-110 transition-transform" />
+                      <span className="text-xs font-bold text-slate-800 block">
+                        {articleUploadLoading ? 'Extracting & Saving articles to Cloud...' : 'Upload Articles File (.docx / .xlsx / .csv / .json / .txt)'}
+                      </span>
+                      <span className="text-[10px] text-slate-400 block mt-0.5">
+                        Word doc, Excel sheet, JSON or text file (Auto-saves to Cloud)
+                      </span>
+                    </label>
+
+                    {/* Paste Text / Direct Input */}
+                    <div className="bg-white p-4 rounded-xl border border-indigo-150 space-y-2 flex flex-col">
+                      <label className="text-xs font-extrabold text-slate-800 block">
+                        Paste Article Text Directly:
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={pastedArticleText}
+                        onChange={(e) => setPastedArticleText(e.target.value)}
+                        placeholder="Article Title&#10;First paragraph of article..."
+                        className="w-full text-xs text-slate-700 border border-slate-200 rounded-lg p-2 focus:border-indigo-500 outline-none flex-1 font-mono resize-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!pastedArticleText.trim()) return;
+                          const parsed = parseArticlesFromRawText(pastedArticleText, course.id);
+                          if (parsed.length > 0) {
+                            const updated = [...localArticles, ...parsed];
+                            setLocalArticles(updated);
+                            setPastedArticleText('');
+                            setArticleUploadError(null);
+                            // Automatically save to cloud
+                            await saveArticlesListDirectly(updated);
+                          } else {
+                            setArticleUploadError('No valid article detected in pasted text.');
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition cursor-pointer self-end flex items-center gap-1"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Parse & Save to Cloud</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Format Guide */}
+                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 text-xs text-slate-600 space-y-1.5">
+                    <span className="font-extrabold text-slate-800 block">💡 Supported Formats & Guide:</span>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Upload Word document (.docx/.doc), Excel/CSV (.xlsx/.csv with columns for Title, Content, Author, Category), JSON, or plain text:
+                    </p>
+                    <pre className="text-[11px] font-mono text-indigo-900 bg-indigo-50/80 p-2.5 rounded-lg border border-indigo-100 leading-relaxed whitespace-pre font-medium">
+{`Article Title 1
+First paragraph of article 1...
+
+Article Title 2
+First paragraph of article 2...`}
+                    </pre>
+                  </div>
+                </div>
 
                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 space-y-4">
                   <div className="flex items-center justify-between flex-wrap gap-2">

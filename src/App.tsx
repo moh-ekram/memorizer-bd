@@ -2657,10 +2657,14 @@ const getActiveCourse = (
               onUpdateSettings={setSettings}
               onClearAllProgress={handleClearAllProgress}
               userEmail={user?.email}
+              userId={user?.uid}
               syncStatus={syncStatus}
               onForceSync={forceSyncToCloud}
               syncLogs={syncLogs}
               allCourses={customCourses}
+              progress={progress}
+              onUpdateProgress={setProgress}
+              words={activeWords}
             />
           )}
 

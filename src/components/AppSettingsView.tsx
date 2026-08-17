@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { AppSettings, WordStatus, SyncLogEntry, Course, DEFAULT_KEYBOARD_SHORTCUTS } from '../types';
+import { AppSettings, WordStatus, SyncLogEntry, Course, DEFAULT_KEYBOARD_SHORTCUTS, VocabularyWord, UserProgress } from '../types';
+import SyncDebugTable from './SyncDebugTable';
 import { 
   Settings, 
   Layers, 
@@ -58,7 +59,8 @@ import {
   Activity,
   Filter,
   Database,
-  Zap
+  Zap,
+  Radio
 } from 'lucide-react';
 
 interface AppSettingsViewProps {
@@ -66,10 +68,14 @@ interface AppSettingsViewProps {
   onUpdateSettings: (settings: AppSettings) => void;
   onClearAllProgress: () => void;
   userEmail?: string | null;
+  userId?: string | null;
   syncStatus: string;
   onForceSync?: () => void;
   syncLogs?: SyncLogEntry[];
   allCourses?: Course[];
+  progress?: Record<string, UserProgress>;
+  onUpdateProgress?: (newProgress: Record<string, UserProgress>) => void;
+  words?: VocabularyWord[];
 }
 
 export default function AppSettingsView({
@@ -77,13 +83,17 @@ export default function AppSettingsView({
   onUpdateSettings,
   onClearAllProgress,
   userEmail,
+  userId,
   syncStatus,
   onForceSync,
   syncLogs = [],
-  allCourses = []
+  allCourses = [],
+  progress = {},
+  onUpdateProgress,
+  words = []
 }: AppSettingsViewProps) {
 
-  const [activeTab, setActiveTab] = useState<'account' | 'shortcuts' | 'contact'>('account');
+  const [activeTab, setActiveTab] = useState<'account' | 'sync_debug' | 'shortcuts' | 'contact'>('account');
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [syncLogFilter, setSyncLogFilter] = useState<'all' | 'auto' | 'manual' | 'offline_queue' | 'cloud_fetch'>('all');
 
@@ -322,6 +332,7 @@ export default function AppSettingsView({
       <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-none gap-4 sm:gap-6 pb-px">
         {[
           { key: 'account' as const, label: 'Account & Sync', icon: Settings },
+          { key: 'sync_debug' as const, label: 'Sync Debug', icon: Activity, badge: 'Realtime' },
           { key: 'shortcuts' as const, label: 'Shortcuts', icon: Keyboard },
           { key: 'contact' as const, label: 'Contact Us', icon: Headphones }
         ].map(tab => {
@@ -340,6 +351,11 @@ export default function AppSettingsView({
             >
               <Icon className="w-3.5 h-3.5 flex-shrink-0" />
               <span>{tab.label}</span>
+              {tab.badge && (
+                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 bg-violet-100 text-violet-700 rounded-md">
+                  {tab.badge}
+                </span>
+              )}
             </button>
           );
         })}
@@ -347,6 +363,18 @@ export default function AppSettingsView({
 
       {/* Tab Content Panels */}
       <div className="mt-2 transition-all duration-200">
+        
+        {/* Sync Debug Mode Tab */}
+        {activeTab === 'sync_debug' && (
+          <SyncDebugTable
+            localProgress={progress}
+            onUpdateLocalProgress={onUpdateProgress}
+            words={words}
+            userEmail={userEmail}
+            userId={userId}
+            onTriggerSync={onForceSync}
+          />
+        )}
         
 
 
@@ -527,6 +555,35 @@ export default function AppSettingsView({
                     {displayActivityLogs[0]?.itemCount !== undefined ? `${displayActivityLogs[0].itemCount} Items` : 'Synced'}
                   </span>
                 </div>
+              </div>
+
+              {/* Sync Debugger Quick Launch Banner */}
+              <div className="pt-2 border-t border-slate-150 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-violet-50/70 border border-violet-200/70 p-3 rounded-xl">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-violet-600/10 text-violet-700 flex items-center justify-center shrink-0">
+                    <Activity className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-violet-900">Sync Debug Mode</span>
+                      <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 bg-violet-200 text-violet-800 rounded">
+                        Live Compare
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-violet-700/90 font-medium">
+                      View real-time item-by-item table of Local vs Cloud timestamps & status.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('sync_debug')}
+                  className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs whitespace-nowrap"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Open Sync Debugger</span>
+                </button>
               </div>
             </div>
 

@@ -1069,6 +1069,16 @@ export default function FlashcardViewer({
                   <div className="grid grid-cols-3 gap-1">
                     <button
                       type="button"
+                      onClick={() => setStudyOrder('alphabetical')}
+                      title="Alphabetical Order (A-Z)"
+                      className={`py-1.5 text-[11px] font-bold rounded-xl border transition cursor-pointer flex items-center justify-center gap-1 ${
+                        studyOrder === 'alphabetical' ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span>A-Z</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setStudyOrder('serial')}
                       title="Serial Order"
                       className={`py-1.5 text-[11px] font-bold rounded-xl border transition cursor-pointer flex items-center justify-center gap-1 ${
@@ -1077,16 +1087,6 @@ export default function FlashcardViewer({
                     >
                       <ArrowUpDown className="w-3 h-3" />
                       <span>Serial</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setStudyOrder('alphabetical')}
-                      title="Alphabetical Order"
-                      className={`py-1.5 text-[11px] font-bold rounded-xl border transition cursor-pointer flex items-center justify-center gap-1 ${
-                        studyOrder === 'alphabetical' ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      <span>A-Z</span>
                     </button>
                     <button
                       type="button"
@@ -1532,9 +1532,9 @@ export default function FlashcardViewer({
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { id: 'random', label: 'Shuffle' },
                     { id: 'alphabetical', label: 'A - Z' },
-                    { id: 'serial', label: 'Serial' }
+                    { id: 'serial', label: 'Serial' },
+                    { id: 'random', label: 'Shuffle' }
                   ].map(ord => (
                     <button
                       key={ord.id}
