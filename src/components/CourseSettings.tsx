@@ -1172,13 +1172,10 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
         createdAt: s.createdAt || new Date().toISOString()
       }));
       
-      // 1. Direct Firestore save with merge
-      await setDoc(doc(db, 'courses', course.id), { stories: sanitizedStories }, { merge: true });
-
-      // 2. Update local state
+      // 1. Immediately update local state
       setLocalStories(sanitizedStories);
 
-      // 3. Update local storage cache
+      // 2. Immediately update local storage cache for instant offline & reload persistence
       try {
         const cachedStr = safeGetLocalStorage('vocab_memorizer_cached_custom_courses', '[]');
         let cachedCourses: Course[] = [];
@@ -1197,18 +1194,28 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
         console.warn('Local course cache notice:', lErr);
       }
 
-      // 4. Notify parent state without closing modal
+      // 3. Immediately notify parent state
       if (onSaveSuccess) {
         onSaveSuccess({ ...course, stories: sanitizedStories });
+      }
+
+      // 4. Cloud Firestore save with safety timeout race (never hang)
+      try {
+        const cloudPromise = setDoc(doc(db, 'courses', course.id), { stories: sanitizedStories }, { merge: true });
+        const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 3000));
+        await Promise.race([cloudPromise, timeoutPromise]);
+      } catch (cloudErr: any) {
+        console.warn('Cloud setDoc notice for stories (saved locally):', cloudErr);
       }
 
       setStorySaveStatus('saved');
       setTimeout(() => setStorySaveStatus('idle'), 3500);
       return true;
     } catch (err: any) {
-      console.error('Error saving stories to cloud:', err);
+      console.error('Error saving stories:', err);
       setStorySaveStatus('error');
-      setStoryUploadError(`Failed to save stories to cloud: ${err?.message || 'Connection error'}`);
+      setStoryUploadError(`Failed to save stories: ${err?.message || 'Connection notice'}`);
+      setTimeout(() => setStorySaveStatus('idle'), 4000);
       return false;
     }
   };
@@ -1248,13 +1255,10 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
         };
       });
 
-      // 1. Direct Firestore save with merge
-      await setDoc(doc(db, 'courses', course.id), { articles: sanitizedArticles }, { merge: true });
-
-      // 2. Update local state
+      // 1. Immediately update local state
       setLocalArticles(sanitizedArticles);
 
-      // 3. Update local storage cache
+      // 2. Immediately update local storage cache
       try {
         const cachedStr = safeGetLocalStorage('vocab_memorizer_cached_custom_courses', '[]');
         let cachedCourses: Course[] = [];
@@ -1273,18 +1277,28 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
         console.warn('Local course cache notice:', lErr);
       }
 
-      // 4. Notify parent state without closing modal
+      // 3. Immediately notify parent state
       if (onSaveSuccess) {
         onSaveSuccess({ ...course, articles: sanitizedArticles });
+      }
+
+      // 4. Cloud Firestore save with safety timeout race (never hang)
+      try {
+        const cloudPromise = setDoc(doc(db, 'courses', course.id), { articles: sanitizedArticles }, { merge: true });
+        const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 3000));
+        await Promise.race([cloudPromise, timeoutPromise]);
+      } catch (cloudErr: any) {
+        console.warn('Cloud setDoc notice for articles (saved locally):', cloudErr);
       }
 
       setArticleSaveStatus('saved');
       setTimeout(() => setArticleSaveStatus('idle'), 3500);
       return true;
     } catch (err: any) {
-      console.error('Error saving articles to cloud:', err);
+      console.error('Error saving articles:', err);
       setArticleSaveStatus('error');
-      setArticleUploadError(`Failed to save articles to cloud: ${err?.message || 'Connection error'}`);
+      setArticleUploadError(`Failed to save articles: ${err?.message || 'Connection notice'}`);
+      setTimeout(() => setArticleSaveStatus('idle'), 4000);
       return false;
     }
   };
@@ -2529,11 +2543,13 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
           console.warn('Local course cache update notice:', lErr);
         }
 
-        // 2. Perform Cloud setDoc
+        // 2. Perform Cloud setDoc with safety timeout race (never hang UI)
         try {
-          await setDoc(doc(db, 'courses', course.id), cleanData, { merge: true });
+          const cloudPromise = setDoc(doc(db, 'courses', course.id), cleanData, { merge: true });
+          const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 3500));
+          await Promise.race([cloudPromise, timeoutPromise]);
         } catch (cloudErr) {
-          console.warn('Cloud setDoc error, saved locally:', cloudErr);
+          console.warn('Cloud setDoc notice, saved locally:', cloudErr);
         }
 
         setSuccess(true);
@@ -5608,9 +5624,8 @@ First paragraph of story 2...`}
                                 type="text"
                                 value={story.title}
                                 onChange={(e) => {
-                                  const updated = [...localStories];
-                                  updated[sIdx].title = e.target.value;
-                                  setLocalStories(updated);
+                                  const val = e.target.value;
+                                  setLocalStories(prev => prev.map((item, i) => i === sIdx ? { ...item, title: val } : item));
                                 }}
                                 placeholder="Story Title..."
                                 className="text-xs font-extrabold text-slate-900 border border-slate-200 rounded-xl px-3 py-1.5 w-full focus:border-indigo-500 outline-none"
@@ -5637,9 +5652,8 @@ First paragraph of story 2...`}
                               rows={4}
                               value={story.content}
                               onChange={(e) => {
-                                const updated = [...localStories];
-                                updated[sIdx].content = e.target.value;
-                                setLocalStories(updated);
+                                const val = e.target.value;
+                                setLocalStories(prev => prev.map((item, i) => i === sIdx ? { ...item, content: val } : item));
                               }}
                               className="w-full text-xs text-slate-700 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none resize-y font-normal leading-relaxed"
                               placeholder="Enter or edit story content..."
@@ -5904,9 +5918,8 @@ First paragraph of article 2...`}
                                 type="text"
                                 value={art.title}
                                 onChange={(e) => {
-                                  const updated = [...localArticles];
-                                  updated[aIdx].title = e.target.value;
-                                  setLocalArticles(updated);
+                                  const val = e.target.value;
+                                  setLocalArticles(prev => prev.map((item, i) => i === aIdx ? { ...item, title: val } : item));
                                 }}
                                 placeholder="Article Title..."
                                 className="text-xs font-extrabold text-slate-900 border border-slate-200 rounded-xl px-3 py-1.5 w-full focus:border-indigo-500 outline-none"
@@ -5934,9 +5947,8 @@ First paragraph of article 2...`}
                                 type="text"
                                 value={art.category || 'Vocabulary Reading'}
                                 onChange={(e) => {
-                                  const updated = [...localArticles];
-                                  updated[aIdx].category = e.target.value;
-                                  setLocalArticles(updated);
+                                  const val = e.target.value;
+                                  setLocalArticles(prev => prev.map((item, i) => i === aIdx ? { ...item, category: val } : item));
                                 }}
                                 className="w-full text-xs text-slate-800 font-semibold border border-slate-200 rounded-xl p-2.5 focus:border-indigo-500 outline-none"
                               />
@@ -5950,9 +5962,8 @@ First paragraph of article 2...`}
                                 type="text"
                                 value={art.author || 'Course Educator'}
                                 onChange={(e) => {
-                                  const updated = [...localArticles];
-                                  updated[aIdx].author = e.target.value;
-                                  setLocalArticles(updated);
+                                  const val = e.target.value;
+                                  setLocalArticles(prev => prev.map((item, i) => i === aIdx ? { ...item, author: val } : item));
                                 }}
                                 className="w-full text-xs text-slate-800 font-semibold border border-slate-200 rounded-xl p-2.5 focus:border-indigo-500 outline-none"
                               />
@@ -5966,9 +5977,8 @@ First paragraph of article 2...`}
                                 type="text"
                                 value={art.readTime || '4 min read'}
                                 onChange={(e) => {
-                                  const updated = [...localArticles];
-                                  updated[aIdx].readTime = e.target.value;
-                                  setLocalArticles(updated);
+                                  const val = e.target.value;
+                                  setLocalArticles(prev => prev.map((item, i) => i === aIdx ? { ...item, readTime: val } : item));
                                 }}
                                 className="w-full text-xs text-slate-800 font-semibold border border-slate-200 rounded-xl p-2.5 focus:border-indigo-500 outline-none"
                               />
@@ -5983,9 +5993,8 @@ First paragraph of article 2...`}
                               type="text"
                               value={art.excerpt || ''}
                               onChange={(e) => {
-                                const updated = [...localArticles];
-                                updated[aIdx].excerpt = e.target.value;
-                                setLocalArticles(updated);
+                                const val = e.target.value;
+                                setLocalArticles(prev => prev.map((item, i) => i === aIdx ? { ...item, excerpt: val } : item));
                               }}
                               className="w-full text-xs text-slate-700 font-medium border border-slate-200 rounded-xl p-2.5 focus:border-indigo-500 outline-none"
                               placeholder="Brief summary displayed on article card..."
@@ -6000,9 +6009,8 @@ First paragraph of article 2...`}
                               rows={6}
                               value={art.content}
                               onChange={(e) => {
-                                const updated = [...localArticles];
-                                updated[aIdx].content = e.target.value;
-                                setLocalArticles(updated);
+                                const val = e.target.value;
+                                setLocalArticles(prev => prev.map((item, i) => i === aIdx ? { ...item, content: val } : item));
                               }}
                               className="w-full text-xs text-slate-700 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none resize-y font-normal leading-relaxed"
                               placeholder="Enter full article text..."
