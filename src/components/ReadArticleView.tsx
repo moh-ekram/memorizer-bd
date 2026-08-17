@@ -228,20 +228,53 @@ export default function ReadArticleView({
   // Active Reading Article
   const activeArticle = activeArticleIndex !== null ? filteredArticles[activeArticleIndex] || null : null;
 
-  // Word extraction helper
-  const extractCleanTerms = (text: string | undefined): string[] => {
+  // Helper function to extract clean terms from place2 text (meanings, sub-meanings, and phrase parts)
+  const extractPlace2Terms = (text: string | undefined): string[] => {
     if (!text || !text.trim()) return [];
-    const cleaned = text.replace(/\(.*?\)/g, ' ').replace(/\[.*?\]/g, ' ');
-    const parts = cleaned.split(/[,;/|\n]+/);
-    const results: string[] = [];
-    for (const part of parts) {
-      const trimmed = part.trim();
-      if (trimmed.length >= 2) results.push(trimmed);
+    const terms: string[] = [];
+
+    // 1. Remove parenthetical annotations like (বিশেষণ), (noun), (বিঃ), [adj], etc.
+    const cleanedFull = text
+      .replace(/\(.*?\)/g, ' ')
+      .replace(/\[.*?\]/g, ' ')
+      .replace(/\{.*?\}/g, ' ')
+      .trim();
+
+    if (cleanedFull.length >= 2 && cleanedFull.length <= 80) {
+      const normFull = cleanedFull.replace(/\s+/g, ' ').trim();
+      if (normFull.length >= 2) {
+        terms.push(normFull);
+      }
     }
-    return results;
+
+    // 2. Split by common delimiters: comma, semicolon, slash, pipe, danda, newlines, colons, bullet points
+    const splitChunks = cleanedFull.split(/[,;/|।\n\r:•\-\—\~]+/);
+    for (const chunk of splitChunks) {
+      const trimmedChunk = chunk.replace(/\s+/g, ' ').trim();
+      if (trimmedChunk.length >= 2) {
+        terms.push(trimmedChunk);
+
+        // Also split by Bengali conjunctions: " বা " or " অথবা "
+        const orParts = trimmedChunk.split(/\s+(?:বা|অথবা)\s+/);
+        if (orParts.length > 1) {
+          for (const orPart of orParts) {
+            const tOr = orPart.replace(/\s+/g, ' ').trim();
+            if (tOr.length >= 2) {
+              terms.push(tOr);
+            }
+          }
+        }
+      }
+    }
+
+    return Array.from(new Set(
+      terms
+        .map(t => t.replace(/^[.,:;'"“”‘’`~\-_/\\()\[\]{}|]+\s*|\s*[.,:;'"“”‘’`~\-_/\\()\[\]{}|]+$/g, '').trim())
+        .filter(t => t.length >= 2)
+    ));
   };
 
-  // Build lookup map for vocabulary matching inside article text (place1 target words only)
+  // Build lookup map for vocabulary matching inside article text (both place1 target words & place2 meanings/sub-parts)
   const { wordLookupMap, allSearchTerms } = useMemo(() => {
     const map = new Map<string, VocabularyWord>();
     const termsSet = new Set<string>();
@@ -258,6 +291,24 @@ export default function ReadArticleView({
         const cleanExtra = w.extraWord.trim().toLowerCase();
         if (!map.has(cleanExtra)) map.set(cleanExtra, w);
         termsSet.add(cleanExtra);
+      }
+      // 3. Meaning & Sub-parts (place2)
+      if (w.meaning && w.meaning.trim()) {
+        const p2Terms = extractPlace2Terms(w.meaning);
+        p2Terms.forEach(term => {
+          const lowerTerm = term.toLowerCase();
+          if (!map.has(lowerTerm)) map.set(lowerTerm, w);
+          termsSet.add(lowerTerm);
+        });
+      }
+      // 4. Extra Meaning & Sub-parts if present (place2)
+      if (w.extraMeaning && w.extraMeaning.trim()) {
+        const p2ExtraTerms = extractPlace2Terms(w.extraMeaning);
+        p2ExtraTerms.forEach(term => {
+          const lowerTerm = term.toLowerCase();
+          if (!map.has(lowerTerm)) map.set(lowerTerm, w);
+          termsSet.add(lowerTerm);
+        });
       }
     });
 
