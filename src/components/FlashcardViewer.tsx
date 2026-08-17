@@ -278,7 +278,7 @@ export default function FlashcardViewer({
   
   // Study Order Mode: 'serial', 'alphabetical' (A-Z), 'random'
   const [studyOrder, setStudyOrder] = useState<'serial' | 'alphabetical' | 'random'>(() => {
-    return settings?.defaultFlashcardOrder || 'random';
+    return settings?.defaultFlashcardOrder || 'alphabetical';
   });
   const [shuffleKey, setShuffleKey] = useState(0);
 
@@ -907,7 +907,7 @@ export default function FlashcardViewer({
                   onClick={() => {
                     setSelectedGroups(uniqueGroups);
                     setSelectedFolder('all');
-                    setStudyOrder('random');
+                    setStudyOrder(settings?.defaultFlashcardOrder || 'alphabetical');
                     setUserHasManuallyChangedStatuses(false);
                   }}
                   className="text-[11px] font-bold text-pink-600 hover:text-pink-700 cursor-pointer hover:underline flex items-center gap-1"
@@ -1561,7 +1561,7 @@ export default function FlashcardViewer({
                   setSelectedGroups(uniqueGroups);
                   setSelectedStatuses(['know', 'dont_know', 'confusion', 'unrated']);
                   setSelectedFolder('all');
-                  setStudyOrder('random');
+                  setStudyOrder(settings?.defaultFlashcardOrder || 'alphabetical');
                 }}
                 className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 transition cursor-pointer"
               >

@@ -1150,24 +1150,100 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   const [localStories, setLocalStories] = useState<StoryItem[]>(course.stories || []);
   const [storyUploadLoading, setStoryUploadLoading] = useState<boolean>(false);
   const [storyUploadError, setStoryUploadError] = useState<string | null>(null);
+  const [storySaveStatus, setStorySaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [pastedStoryText, setPastedStoryText] = useState<string>('');
-
-  useEffect(() => {
-    if (course?.stories) {
-      setLocalStories(course.stories);
-    }
-  }, [course?.stories]);
 
   // --- ARTICLE MANAGEMENT STATES ---
   const [localArticles, setLocalArticles] = useState<ArticleItem[]>(course.articles || []);
   const [articleUploadLoading, setArticleUploadLoading] = useState<boolean>(false);
   const [articleUploadError, setArticleUploadError] = useState<string | null>(null);
+  const [articleSaveStatus, setArticleSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
-  useEffect(() => {
-    if (course?.articles) {
-      setLocalArticles(course.articles);
+  // Direct Cloud Save for Stories
+  const handleSaveStoriesToCloud = async () => {
+    setStorySaveStatus('saving');
+    setStoryUploadError(null);
+    try {
+      const sanitizedStories = JSON.parse(JSON.stringify(localStories || []));
+      
+      // 1. Direct Firestore save with merge
+      await setDoc(doc(db, 'courses', course.id), { stories: sanitizedStories }, { merge: true });
+
+      // 2. Update local storage cache
+      try {
+        const cachedStr = safeGetLocalStorage('vocab_memorizer_cached_custom_courses', '[]');
+        let cachedCourses: Course[] = [];
+        try {
+          cachedCourses = JSON.parse(cachedStr);
+          if (!Array.isArray(cachedCourses)) cachedCourses = [];
+        } catch (_) { cachedCourses = []; }
+        const cIdx = cachedCourses.findIndex(c => c.id === course.id);
+        if (cIdx >= 0) {
+          cachedCourses[cIdx] = { ...cachedCourses[cIdx], stories: sanitizedStories };
+        } else {
+          cachedCourses.push({ ...course, stories: sanitizedStories });
+        }
+        safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(cachedCourses));
+      } catch (lErr) {
+        console.warn('Local course cache notice:', lErr);
+      }
+
+      // 3. Notify parent state without closing modal
+      if (onSaveSuccess) {
+        onSaveSuccess({ ...course, stories: sanitizedStories });
+      }
+
+      setStorySaveStatus('saved');
+      setTimeout(() => setStorySaveStatus('idle'), 3500);
+    } catch (err: any) {
+      console.error('Error saving stories to cloud:', err);
+      setStorySaveStatus('error');
+      setStoryUploadError(`Failed to save stories to cloud: ${err?.message || 'Connection error'}`);
     }
-  }, [course?.articles]);
+  };
+
+  // Direct Cloud Save for Articles
+  const handleSaveArticlesToCloud = async () => {
+    setArticleSaveStatus('saving');
+    setArticleUploadError(null);
+    try {
+      const sanitizedArticles = JSON.parse(JSON.stringify(localArticles || []));
+
+      // 1. Direct Firestore save with merge
+      await setDoc(doc(db, 'courses', course.id), { articles: sanitizedArticles }, { merge: true });
+
+      // 2. Update local storage cache
+      try {
+        const cachedStr = safeGetLocalStorage('vocab_memorizer_cached_custom_courses', '[]');
+        let cachedCourses: Course[] = [];
+        try {
+          cachedCourses = JSON.parse(cachedStr);
+          if (!Array.isArray(cachedCourses)) cachedCourses = [];
+        } catch (_) { cachedCourses = []; }
+        const cIdx = cachedCourses.findIndex(c => c.id === course.id);
+        if (cIdx >= 0) {
+          cachedCourses[cIdx] = { ...cachedCourses[cIdx], articles: sanitizedArticles };
+        } else {
+          cachedCourses.push({ ...course, articles: sanitizedArticles });
+        }
+        safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(cachedCourses));
+      } catch (lErr) {
+        console.warn('Local course cache notice:', lErr);
+      }
+
+      // 3. Notify parent state without closing modal
+      if (onSaveSuccess) {
+        onSaveSuccess({ ...course, articles: sanitizedArticles });
+      }
+
+      setArticleSaveStatus('saved');
+      setTimeout(() => setArticleSaveStatus('idle'), 3500);
+    } catch (err: any) {
+      console.error('Error saving articles to cloud:', err);
+      setArticleSaveStatus('error');
+      setArticleUploadError(`Failed to save articles to cloud: ${err?.message || 'Connection error'}`);
+    }
+  };
 
   // --- WORDS LIST STATES ---
   const sanitizeWordsList = (wordsList: VocabularyWord[]) => {
@@ -2405,15 +2481,11 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
           console.warn('Local course cache update notice:', lErr);
         }
 
-        // 2. Perform Cloud setDoc with a 2-second timeout race condition so UI never buffers indefinitely
+        // 2. Perform Cloud setDoc
         try {
-          const cloudSavePromise = setDoc(doc(db, 'courses', course.id), cleanData, { merge: true });
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Cloud save timeout')), 2000)
-          );
-          await Promise.race([cloudSavePromise, timeoutPromise]);
+          await setDoc(doc(db, 'courses', course.id), cleanData, { merge: true });
         } catch (cloudErr) {
-          console.warn('Cloud setDoc notice (saved locally & state updated):', cloudErr);
+          console.warn('Cloud setDoc error, saved locally:', cloudErr);
         }
 
         setSuccess(true);
@@ -5306,14 +5378,36 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
 
                   <button
                     type="button"
-                    disabled={isSaving}
-                    onClick={handleSave}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm cursor-pointer shrink-0 disabled:opacity-50"
+                    disabled={storySaveStatus === 'saving'}
+                    onClick={handleSaveStoriesToCloud}
+                    className={`px-4 py-2 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm cursor-pointer shrink-0 disabled:opacity-50 ${
+                      storySaveStatus === 'saved' ? 'bg-emerald-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                    }`}
                   >
-                    {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    <span>Save Stories to Cloud</span>
+                    {storySaveStatus === 'saving' ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : storySaveStatus === 'saved' ? (
+                      <CheckCircle className="w-4 h-4 text-emerald-200" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    <span>
+                      {storySaveStatus === 'saving'
+                        ? 'Saving Stories...'
+                        : storySaveStatus === 'saved'
+                        ? 'Stories Saved to Cloud!'
+                        : 'Save Stories to Cloud'}
+                    </span>
                   </button>
                 </div>
+
+                {/* Status Banners */}
+                {storySaveStatus === 'saved' && (
+                  <div className="p-3 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center gap-2 animate-fadeIn">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>All {localStories.length} stories have been successfully synchronized to the cloud!</span>
+                  </div>
+                )}
 
                 {/* Upload Card */}
                 <div className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-4">
@@ -5499,15 +5593,39 @@ First paragraph of story 2...`}
                       ))}
 
                       {/* Save to Cloud Button at bottom of story list */}
-                      <div className="pt-2 flex justify-end">
+                      <div className="pt-2 flex items-center justify-between">
+                        {storySaveStatus === 'saved' ? (
+                          <div className="text-xs font-bold text-emerald-600 flex items-center gap-1.5">
+                            <CheckCircle className="w-4 h-4" />
+                            <span>Stories successfully synced to cloud!</span>
+                          </div>
+                        ) : storySaveStatus === 'error' ? (
+                          <div className="text-xs font-bold text-rose-600">
+                            {storyUploadError || 'Failed to save to cloud'}
+                          </div>
+                        ) : <div />}
                         <button
                           type="button"
-                          disabled={isSaving}
-                          onClick={handleSave}
-                          className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 transition shadow-md cursor-pointer disabled:opacity-50"
+                          disabled={storySaveStatus === 'saving'}
+                          onClick={handleSaveStoriesToCloud}
+                          className={`px-5 py-2.5 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 transition shadow-md cursor-pointer disabled:opacity-50 ${
+                            storySaveStatus === 'saved' ? 'bg-emerald-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                          }`}
                         >
-                          {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                          <span>Save Stories to Cloud</span>
+                          {storySaveStatus === 'saving' ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : storySaveStatus === 'saved' ? (
+                            <CheckCircle className="w-4 h-4 text-emerald-200" />
+                          ) : (
+                            <Save className="w-4 h-4" />
+                          )}
+                          <span>
+                            {storySaveStatus === 'saving'
+                              ? 'Saving Stories...'
+                              : storySaveStatus === 'saved'
+                              ? 'Stories Saved to Cloud!'
+                              : 'Save Stories to Cloud'}
+                          </span>
                         </button>
                       </div>
                     </div>
@@ -5539,8 +5657,22 @@ First paragraph of story 2...`}
                   </p>
                 </div>
 
+                {/* Status Banners */}
+                {articleSaveStatus === 'saved' && (
+                  <div className="p-3 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center gap-2 animate-fadeIn">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>All {localArticles.length} articles have been successfully synchronized to the cloud!</span>
+                  </div>
+                )}
+                {articleSaveStatus === 'error' && (
+                  <div className="p-3 bg-rose-50 text-rose-800 border border-rose-200 rounded-xl text-xs font-bold flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{articleUploadError || 'Failed to save articles to cloud.'}</span>
+                  </div>
+                )}
+
                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 space-y-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <h5 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-2">
                       <span>Course Articles ({localArticles.length})</span>
                     </h5>
@@ -5569,6 +5701,29 @@ First paragraph of story 2...`}
                       >
                         <Plus className="w-4 h-4" />
                         <span>Add New Article</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={articleSaveStatus === 'saving'}
+                        onClick={handleSaveArticlesToCloud}
+                        className={`px-4 py-2 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm cursor-pointer disabled:opacity-50 ${
+                          articleSaveStatus === 'saved' ? 'bg-emerald-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                        }`}
+                      >
+                        {articleSaveStatus === 'saving' ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : articleSaveStatus === 'saved' ? (
+                          <CheckCircle className="w-4 h-4 text-emerald-200" />
+                        ) : (
+                          <Save className="w-4 h-4" />
+                        )}
+                        <span>
+                          {articleSaveStatus === 'saving'
+                            ? 'Saving Articles...'
+                            : articleSaveStatus === 'saved'
+                            ? 'Articles Saved!'
+                            : 'Save Articles to Cloud'}
+                        </span>
                       </button>
                       {localArticles.length > 0 && (
                         <button
@@ -5707,15 +5862,39 @@ First paragraph of story 2...`}
                       ))}
 
                       {/* Save to Cloud Button at bottom of article list */}
-                      <div className="pt-2 flex justify-end">
+                      <div className="pt-2 flex items-center justify-between">
+                        {articleSaveStatus === 'saved' ? (
+                          <div className="text-xs font-bold text-emerald-600 flex items-center gap-1.5">
+                            <CheckCircle className="w-4 h-4" />
+                            <span>Articles successfully synced to cloud!</span>
+                          </div>
+                        ) : articleSaveStatus === 'error' ? (
+                          <div className="text-xs font-bold text-rose-600">
+                            {articleUploadError || 'Failed to save to cloud'}
+                          </div>
+                        ) : <div />}
                         <button
                           type="button"
-                          disabled={isSaving}
-                          onClick={handleSave}
-                          className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 transition shadow-md cursor-pointer disabled:opacity-50"
+                          disabled={articleSaveStatus === 'saving'}
+                          onClick={handleSaveArticlesToCloud}
+                          className={`px-5 py-2.5 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 transition shadow-md cursor-pointer disabled:opacity-50 ${
+                            articleSaveStatus === 'saved' ? 'bg-emerald-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                          }`}
                         >
-                          {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                          <span>Save Articles to Cloud</span>
+                          {articleSaveStatus === 'saving' ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : articleSaveStatus === 'saved' ? (
+                            <CheckCircle className="w-4 h-4 text-emerald-200" />
+                          ) : (
+                            <Save className="w-4 h-4" />
+                          )}
+                          <span>
+                            {articleSaveStatus === 'saving'
+                              ? 'Saving Articles...'
+                              : articleSaveStatus === 'saved'
+                              ? 'Articles Saved to Cloud!'
+                              : 'Save Articles to Cloud'}
+                          </span>
                         </button>
                       </div>
                     </div>

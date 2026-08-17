@@ -336,7 +336,7 @@ export default function App() {
     const parsed = saved ? JSON.parse(saved) : {};
     return {
       defaultFlashcardTags: parsed.defaultFlashcardTags || ['know', 'confusion', 'dont_know', 'unrated'],
-      defaultFlashcardOrder: parsed.defaultFlashcardOrder || 'random',
+      defaultFlashcardOrder: parsed.defaultFlashcardOrder || 'alphabetical',
       autoPlayAudio: !!parsed.autoPlayAudio,
       quizLength: parsed.quizLength || 10,
       
@@ -1377,7 +1377,7 @@ export default function App() {
         setAnalogyProgress({});
         setSettings({
           defaultFlashcardTags: ['dont_know'],
-          defaultFlashcardOrder: 'random',
+          defaultFlashcardOrder: 'alphabetical',
           autoPlayAudio: false,
           quizLength: 10
         });
@@ -1440,7 +1440,8 @@ export default function App() {
     totalGroups: dbGreCourse?.totalGroups || (dbGreCourse?.words && dbGreCourse.words.length > 0 ? new Set(dbGreCourse.words.map(w => w.group)).size : 37),
     words: (dbGreCourse?.words && dbGreCourse.words.length > 0) ? dbGreCourse.words : vocabulary,
     stories: dbGreCourse?.stories || [],
-    enabledGames: dbGreCourse?.enabledGames || { quiz: true, match: true, synonym: true, blank: true, story: true },
+    articles: dbGreCourse?.articles || [],
+    enabledGames: dbGreCourse?.enabledGames || { quiz: true, match: true, synonym: true, blank: true, story: true, article: true },
     isDefault: true,
     isRestricted: false,
     allowedUsers: dbGreCourse?.allowedUsers || [],

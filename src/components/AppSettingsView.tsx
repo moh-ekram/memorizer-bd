@@ -289,7 +289,7 @@ export default function AppSettingsView({
     if (confirm('Are you sure you want to reset all settings to defaults?')) {
       onUpdateSettings({
         defaultFlashcardTags: ['know', 'confusion', 'dont_know', 'unrated'],
-        defaultFlashcardOrder: 'random',
+        defaultFlashcardOrder: 'alphabetical',
         autoPlayAudio: false,
         quizLength: 10,
         defaultSynonymOrder: 'random',
