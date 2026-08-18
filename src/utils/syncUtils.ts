@@ -24,34 +24,42 @@ export function mergeProgressRecords(
     const existingTime = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
     const incomingTime = incItem.updatedAt ? new Date(incItem.updatedAt).getTime() : 0;
 
+    const existStatus = existing.status || 'unrated';
+    const incStatus = incItem.status || 'unrated';
+
+    // Priority 1: If one is rated ('known', 'confused', 'dont_know') and the other is 'unrated', always preserve rated status
+    if (existStatus === 'unrated' && incStatus !== 'unrated') {
+      result[wordId] = {
+        ...existing,
+        ...incItem,
+        notes: incItem.notes !== undefined ? incItem.notes : (existing.notes || ''),
+        bookmarks: Array.from(new Set([...(existing.bookmarks || []), ...(incItem.bookmarks || [])]))
+      };
+      return;
+    }
+    if (existStatus !== 'unrated' && incStatus === 'unrated') {
+      result[wordId] = {
+        ...existing,
+        notes: incItem.notes || existing.notes || '',
+        bookmarks: Array.from(new Set([...(existing.bookmarks || []), ...(incItem.bookmarks || [])]))
+      };
+      return;
+    }
+
+    // Priority 2: Both are rated (or both unrated) - compare timestamps
     if (incomingTime > existingTime) {
       result[wordId] = {
         ...existing,
         ...incItem,
         notes: incItem.notes !== undefined ? incItem.notes : (existing.notes || ''),
-        bookmarks: Array.isArray(incItem.bookmarks) ? incItem.bookmarks : (existing.bookmarks || [])
+        bookmarks: Array.from(new Set([...(existing.bookmarks || []), ...(incItem.bookmarks || [])]))
       };
-    } else if (incomingTime === existingTime) {
-      // If timestamps are equal or both 0, prefer rated status over 'unrated'
-      const incStatus = incItem.status || 'unrated';
-      const existStatus = existing.status || 'unrated';
-      if (existStatus === 'unrated' && incStatus !== 'unrated') {
-        result[wordId] = {
-          ...existing,
-          ...incItem
-        };
-      } else {
-        // Merge bookmarks & notes
-        const mergedBookmarks = Array.from(new Set([
-          ...(existing.bookmarks || []),
-          ...(incItem.bookmarks || [])
-        ]));
-        result[wordId] = {
-          ...existing,
-          notes: existing.notes || incItem.notes || '',
-          bookmarks: mergedBookmarks
-        };
-      }
+    } else {
+      result[wordId] = {
+        ...existing,
+        notes: existing.notes || incItem.notes || '',
+        bookmarks: Array.from(new Set([...(existing.bookmarks || []), ...(incItem.bookmarks || [])]))
+      };
     }
   });
 

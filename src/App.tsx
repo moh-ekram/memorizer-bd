@@ -1038,11 +1038,21 @@ export default function App() {
         setQuizScore(maxScore);
         setQuizTaken(maxTaken);
 
-        // Reconcile and push unified progress back to cloud
+        // Reconcile and push unified progress back to cloud (both UID doc and Email doc)
         try {
           const syncPayload = {
             progress: unifiedProgress,
+            folders: mergedFoldersList.length > 0 ? mergedFoldersList : folders,
+            goal: mergedGoalObj,
+            synonymProgress: mergedSynonym,
+            blankProgress: mergedBlank,
+            oooProgress: mergedOoo,
+            analogyProgress: mergedAnalogy,
+            settings: mergedSettingsObj || settings,
             enrolledCourseIds: mergedEnrolled,
+            activeCourseId: resolvedActiveCourse || activeCourseId || 'bank-bcs-gre',
+            quizScore: maxScore,
+            quizTaken: maxTaken,
             email: currentUser.email,
             updatedAt: new Date().toISOString()
           };
@@ -1218,8 +1228,7 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
-    const userDocRef = doc(db, 'users', user.uid);
-    const unsubscribeSnapshot = onSnapshot(userDocRef, (docSnap) => {
+    const handleCloudSnapshot = (docSnap: any) => {
       if (docSnap.exists() && !isSyncingToCloud.current && !isSyncingFromCloud.current) {
         const cloudData = docSnap.data();
         if (cloudData.progress && typeof cloudData.progress === 'object') {
@@ -1250,12 +1259,24 @@ export default function App() {
         }
         setSyncStatus('synced');
       }
-    }, (snapErr) => {
-      console.warn("Realtime user snapshot listener notice:", snapErr);
+    };
+
+    const userDocRef = doc(db, 'users', user.uid);
+    const unsubscribeSnapshot = onSnapshot(userDocRef, handleCloudSnapshot, (snapErr) => {
+      console.warn("Realtime user UID snapshot notice:", snapErr);
     });
+
+    let unsubscribeEmailSnapshot: (() => void) | null = null;
+    const cleanEmail = (user.email || '').trim().toLowerCase();
+    if (cleanEmail && cleanEmail !== user.uid.toLowerCase()) {
+      unsubscribeEmailSnapshot = onSnapshot(doc(db, 'users', cleanEmail), handleCloudSnapshot, (eErr) => {
+        console.warn("Realtime user Email snapshot notice:", eErr);
+      });
+    }
 
     return () => {
       unsubscribeSnapshot();
+      if (unsubscribeEmailSnapshot) unsubscribeEmailSnapshot();
     };
   }, [user]);
 
