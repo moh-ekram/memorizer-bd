@@ -38,9 +38,15 @@ import {
 
 interface StudyRoomLandingSectionProps {
   onOpenStudyRoom: () => void;
+  facebookUrl?: string;
 }
 
-export const StudyRoomLandingSection: React.FC<StudyRoomLandingSectionProps> = ({ onOpenStudyRoom }) => {
+export const StudyRoomLandingSection: React.FC<StudyRoomLandingSectionProps> = ({ 
+  onOpenStudyRoom,
+  facebookUrl 
+}) => {
+  const effectiveFacebookUrl = facebookUrl || localStorage.getItem('library_portal_facebook_url') || 'https://facebook.com';
+
   // Interactive mini-states for live demo widgets
   const [activeStoryTab, setActiveStoryTab] = useState<'english' | 'bengali' | 'vocab'>('english');
   const [activeEditorialLang, setActiveEditorialLang] = useState<'bengali' | 'english'>('bengali');
@@ -233,6 +239,22 @@ export const StudyRoomLandingSection: React.FC<StudyRoomLandingSectionProps> = (
         <p className="text-xs sm:text-sm text-slate-600 max-w-lg mx-auto leading-relaxed">
           গল্প, আন্তর্জাতিক সম্পাদকীয়, ফ্ল্যাশকার্ড ও ৬+ গেম প্র্যাকটিসের মাধ্যমে ভোকাবুলারি মনে রাখার আধুনিক সমাধান।
         </p>
+
+        {/* 🌟 2. Follow Facebook Button directly below <p> component */}
+        <div className="pt-1.5 flex items-center justify-center">
+          <a
+            href={effectiveFacebookUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1877F2] hover:bg-[#166fe5] text-white text-xs sm:text-sm font-bold shadow-md shadow-blue-500/20 transition cursor-pointer active:scale-95"
+          >
+            <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
+              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+            </svg>
+            <span>Follow Facebook</span>
+            <ExternalLink className="w-3.5 h-3.5 opacity-80 shrink-0" />
+          </a>
+        </div>
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────
@@ -465,69 +487,52 @@ export const StudyRoomLandingSection: React.FC<StudyRoomLandingSectionProps> = (
         {/* Editorial Article Newspaper Style Container */}
         <div className="border border-slate-200/90 rounded-2xl overflow-hidden bg-white shadow-xs">
           
-          {/* Authentic Minimal Newspaper Header / Kicker & Headline */}
-          <div className="px-5 pt-5 pb-3.5 border-b border-slate-100 bg-white">
-            {/* Top Newspaper Kicker & Meta Tag */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 text-[11px]">
-              <div className="flex items-center gap-2 font-mono uppercase tracking-wider text-slate-500 font-semibold">
-                <span className="text-amber-700 font-black tracking-widest">EDITORIAL</span>
-                <span className="text-slate-300">•</span>
-                <span className="text-slate-600">Macroeconomics & Policy</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
-                <Clock className="w-3 h-3 text-slate-400" />
-                <span>5 Min Read</span>
-                <span className="text-slate-300">•</span>
-                <span className="text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded">১০+ Vocab</span>
-              </div>
-            </div>
-
+          {/* Minimal Clean Newspaper Header: Only Headline, Author & Prothom Alo */}
+          <div className="px-5 pt-5 pb-3.5 border-b border-slate-100 bg-white space-y-2">
             {/* Main Editorial Headline */}
-            <h4 className="text-base sm:text-lg font-black text-slate-900 leading-snug tracking-tight font-serif pt-1">
+            <h4 className="text-base sm:text-lg font-black text-slate-900 leading-snug tracking-tight font-serif">
               {activeEditorialLang === 'bengali' ? (
                 <span>অর্থনীতির সাম্প্রতিক ঝুঁকি মোকাবিলার পথ কী?</span>
               ) : (
-                <span>Navigating Macroeconomic Vulnerabilities & Systemic Risks</span>
+                <span>Navigating Macroeconomic Vulnerabilities</span>
               )}
             </h4>
             
-            {/* Sub-headline / English or Bengali subtitle */}
-            <p className="text-xs text-slate-500 font-serif italic mt-1">
-              {activeEditorialLang === 'bengali' 
-                ? 'Navigating Macroeconomic Vulnerabilities — Prothom Alo & The Daily Star Style'
-                : 'Policy insights on managing currency reserves, inflation, and growth bottlenecks'}
-            </p>
+            {/* Author & Prothom Alo Name */}
+            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100/80 text-xs text-slate-600 font-serif">
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-slate-800">
+                  {activeEditorialLang === 'bengali' ? 'লেখক: সম্পাদকীয় বিভাগ' : 'Author: Editorial Department'}
+                </span>
+                <span className="text-slate-300">•</span>
+                <span className="font-bold text-rose-600">প্রথম আলো</span>
+              </div>
 
-            {/* Minimalist Toolbar / Language Switcher */}
-            <div className="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-slate-100">
-              <div className="flex items-center gap-1">
+              {/* Minimal Language Switcher */}
+              <div className="flex items-center gap-1 font-sans">
                 <button
                   type="button"
                   onClick={() => setActiveEditorialLang('bengali')}
-                  className={`px-3 py-1 rounded-full text-[11px] font-bold transition cursor-pointer ${
+                  className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition cursor-pointer ${
                     activeEditorialLang === 'bengali' 
                       ? 'bg-slate-900 text-white shadow-2xs' 
                       : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
                   }`}
                 >
-                  বাংলা সম্পাদকীয়
+                  বাংলা
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveEditorialLang('english')}
-                  className={`px-3 py-1 rounded-full text-[11px] font-bold transition cursor-pointer ${
+                  className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition cursor-pointer ${
                     activeEditorialLang === 'english' 
                       ? 'bg-slate-900 text-white shadow-2xs' 
                       : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
                   }`}
                 >
-                  English Editorial
+                  English
                 </button>
               </div>
-
-              <span className="text-[10px] font-mono text-slate-400 hidden sm:inline-block">
-                Columnist: Daily Editorial Board
-              </span>
             </div>
           </div>
 

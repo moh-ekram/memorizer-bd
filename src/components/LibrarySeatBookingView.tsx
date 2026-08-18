@@ -32,7 +32,11 @@ import {
   Hash,
   Layers,
   LayoutGrid,
-  Columns2
+  Columns2,
+  FileText,
+  HelpCircle,
+  ExternalLink,
+  Globe
 } from 'lucide-react';
 
 interface LibrarySeatBookingViewProps {
@@ -91,6 +95,7 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
   const [showAwayModal, setShowAwayModal] = useState<boolean>(false);
   const [showSecondaryBookingModal, setShowSecondaryBookingModal] = useState<boolean>(false);
   const [showAdminPanel, setShowAdminPanel] = useState<boolean>(false);
+  const [showGuidelinesModal, setShowGuidelinesModal] = useState<boolean>(false);
 
   // Away Form States (Manual Input + Quick Presets)
   const [awayMinutes, setAwayMinutes] = useState<number>(30);
@@ -104,6 +109,8 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
 
   // Admin Panel Editing State
   const [adminRooms, setAdminRooms] = useState<LibraryRoomConfig[]>(DEFAULT_LIBRARY_CONFIG.rooms);
+  const [adminGuidelines, setAdminGuidelines] = useState<string>(DEFAULT_LIBRARY_CONFIG.guidelines || '');
+  const [adminFacebookUrl, setAdminFacebookUrl] = useState<string>(DEFAULT_LIBRARY_CONFIG.facebookPageUrl || 'https://facebook.com');
 
   const isAdmin = useMemo(() => {
     return user?.email?.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
@@ -126,7 +133,7 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
     return hour >= 8 && hour < 22; // 8:00 to 21:59:59
   }, [currentTime]);
 
-  // Load Library Config (Rooms & Capacities & Serial Layouts)
+  // Load Library Config (Rooms & Capacities & Serial Layouts & Guidelines & Facebook)
   useEffect(() => {
     try {
       const cachedConfig = localStorage.getItem(localConfigCacheKey);
@@ -134,6 +141,8 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
         const parsed = JSON.parse(cachedConfig);
         setConfig(parsed);
         setAdminRooms(parsed.rooms || DEFAULT_LIBRARY_CONFIG.rooms);
+        if (parsed.guidelines) setAdminGuidelines(parsed.guidelines);
+        if (parsed.facebookPageUrl) setAdminFacebookUrl(parsed.facebookPageUrl);
       }
     } catch (_) {}
 
@@ -145,8 +154,12 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
           if (data && Array.isArray(data.rooms) && data.rooms.length > 0) {
             setConfig(data);
             setAdminRooms(data.rooms);
+            if (data.guidelines) setAdminGuidelines(data.guidelines);
+            if (data.facebookPageUrl) setAdminFacebookUrl(data.facebookPageUrl);
             try {
               localStorage.setItem(localConfigCacheKey, JSON.stringify(data));
+              localStorage.setItem('library_portal_guidelines', data.guidelines || '');
+              localStorage.setItem('library_portal_facebook_url', data.facebookPageUrl || '');
             } catch (_) {}
           }
         }
@@ -495,22 +508,37 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
     }
   };
 
-  // 🌟 ADMIN CONTROLS: Save Room & Seat Serial Config (No seat clearing powers)
+  // 🌟 ADMIN CONTROLS: Save Room, Guidelines & Facebook Config
   const handleSaveAdminConfig = async () => {
     if (!isAdmin) return;
     const updatedConfig: LibraryConfig = {
       rooms: adminRooms,
       bookingStartHour: 8,
       bookingEndHour: 22,
+      guidelines: adminGuidelines,
+      facebookPageUrl: adminFacebookUrl,
       updatedAt: new Date().toISOString()
     };
 
     try {
       const configRef = doc(db, 'library_settings', configDocName);
       await setDoc(configRef, updatedConfig, { merge: true });
+      
+      // Also save to global_library_config for cross-portal synchronization
+      try {
+        const globalRef = doc(db, 'library_settings', 'global_library_config');
+        await setDoc(globalRef, {
+          guidelines: adminGuidelines,
+          facebookPageUrl: adminFacebookUrl,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (_) {}
+
       setConfig(updatedConfig);
       localStorage.setItem(localConfigCacheKey, JSON.stringify(updatedConfig));
-      alert('লাইব্রেরির রুম, সিটের সংখ্যা এবং সিরিয়াল বিন্যাস সফলভাবে সেভ হয়েছে!');
+      localStorage.setItem('library_portal_guidelines', adminGuidelines);
+      localStorage.setItem('library_portal_facebook_url', adminFacebookUrl);
+      alert('লাইব্রেরির রুম, নির্দেশনাবলী এবং ফেসবুক লিংক সফলভাবে সেভ হয়েছে!');
       setShowAdminPanel(false);
     } catch (e: any) {
       console.error('Save config error:', e);
@@ -550,18 +578,30 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
 
         {/* Right Header Actions */}
         <div className="flex items-center gap-2">
+          {/* Guidelines Button */}
+          <button
+            onClick={() => setShowGuidelinesModal(true)}
+            className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/80 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs"
+            title="লাইব্রেরি ও সিট ব্যবহারের নির্দেশনাবলী"
+          >
+            <FileText className="w-3.5 h-3.5 text-amber-700" />
+            <span>নির্দেশনা</span>
+          </button>
+
           {/* Admin Control Panel Button */}
           {isAdmin && (
             <button
               onClick={() => {
                 setAdminRooms(config.rooms);
+                setAdminGuidelines(config.guidelines || DEFAULT_LIBRARY_CONFIG.guidelines || '');
+                setAdminFacebookUrl(config.facebookPageUrl || DEFAULT_LIBRARY_CONFIG.facebookPageUrl || 'https://facebook.com');
                 setShowAdminPanel(true);
               }}
               className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium transition flex items-center gap-1.5 cursor-pointer active:scale-95"
               title="সিট কন্ট্রোল প্যানেল"
             >
               <Settings2 className="w-3.5 h-3.5 text-slate-600" />
-              <span className="hidden sm:inline">সিট কন্ট্রোল</span>
+              <span className="hidden sm:inline">এডমিন কন্ট্রোল</span>
             </button>
           )}
 
@@ -1445,6 +1485,54 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
               </div>
             </div>
 
+            {/* 🌟 ADMIN EXTRA CONFIG: Guidelines & Facebook Link */}
+            <div className="space-y-4 pt-4 border-t border-slate-200">
+              <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-amber-600" />
+                <span>লাইব্রেরি ও পোর্টাল ব্যবহারের নির্দেশনাবলী</span>
+              </h4>
+              <p className="text-xs text-slate-500">
+                শিক্ষার্থীদের জন্য যেসকল নির্দেশনা প্রদর্শন করতে চান তা এখানে লিখুন (প্রতি লাইনে একটি নিয়ম লিখুন):
+              </p>
+              <textarea
+                rows={5}
+                value={adminGuidelines}
+                onChange={(e) => setAdminGuidelines(e.target.value)}
+                placeholder="১. সিট বরাদ্দ প্রতিদিন সকাল ৮:০০ টা থেকে রাত ১০:০০ টা পর্যন্ত কার্যকর থাকবে..."
+                className="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-2xl text-xs text-slate-900 leading-relaxed font-sans focus:outline-none focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20"
+              />
+            </div>
+
+            <div className="space-y-3 pt-4 border-t border-slate-200">
+              <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                <Globe className="w-4 h-4 text-blue-600" />
+                <span>ফেসবুক পেজ / গ্রুপ লিংক (Follow Facebook)</span>
+              </h4>
+              <p className="text-xs text-slate-500">
+                হোমপেজ ও ল্যান্ডিং সেকশনের 'Follow Facebook' বাটনে ক্লিক করলে যে ফেসবুক লিংকে নিয়ে যাবে:
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="url"
+                  value={adminFacebookUrl}
+                  onChange={(e) => setAdminFacebookUrl(e.target.value)}
+                  placeholder="https://facebook.com/your-page-or-group"
+                  className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                />
+                {adminFacebookUrl && (
+                  <a
+                    href={adminFacebookUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3.5 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 flex items-center gap-1.5 transition shrink-0"
+                  >
+                    <span>টেস্ট লিংক</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
+              </div>
+            </div>
+
             {/* Footer Buttons */}
             <div className="flex gap-3 pt-4 border-t border-slate-200">
               <button
@@ -1460,6 +1548,101 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
                 className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-xl transition shadow-md shadow-amber-500/20 cursor-pointer active:scale-95"
               >
                 কনফিগারেশন সেভ করুন
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* 🌟 MODAL 5: GUIDELINES MODAL (শিক্ষার্থীদের জন্য নির্দেশনা) */}
+      {showGuidelinesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-7 max-w-lg w-full space-y-5 shadow-2xl text-slate-900 max-h-[85vh] flex flex-col">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-center font-bold shadow-2xs">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900">
+                    লাইব্রেরি ও সিট ব্যবহারের নির্দেশনাবলী
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    সুশৃঙ্খল ও শান্তিপূর্ণ পড়ার পরিবেশ রক্ষার্থে নিয়মাবলী
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowGuidelinesModal(false)}
+                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Content / Guidelines text */}
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1 text-xs sm:text-[13px] leading-relaxed text-slate-700">
+              <div className="p-4 bg-amber-50/60 border border-amber-200/80 rounded-2xl space-y-2.5">
+                {(config.guidelines || DEFAULT_LIBRARY_CONFIG.guidelines || '')
+                  .split('\n')
+                  .filter(line => line.trim().length > 0)
+                  .map((line, idx) => (
+                    <div key={idx} className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-amber-200/70 text-amber-900 font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                        {idx + 1}
+                      </span>
+                      <p className="flex-1 text-slate-800 font-medium">{line.replace(/^[০-৯0-9]+[.\-)]\s*/, '')}</p>
+                    </div>
+                  ))}
+              </div>
+
+              {/* Operating Hours Note */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] text-slate-600 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                  <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>কার্যক্রমের সময়সূচী:</span>
+                </div>
+                <p>প্রতিদিন সকাল ৮:০০ টা হতে রাত ১০:০০ টা পর্যন্ত লাইব্রেরি খোলা থাকে। রাত ১০:০০ টায় সকল সিট স্বয়ংক্রিয়ভাবে উন্মুক্ত হয়।</p>
+              </div>
+
+              {/* Follow Facebook link inside modal if available */}
+              {(config.facebookPageUrl || DEFAULT_LIBRARY_CONFIG.facebookPageUrl) && (
+                <div className="pt-2 flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-2xl">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-[#1877F2] text-white flex items-center justify-center">
+                      <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-blue-900">আমাদের ফেসবুক কমিউনিটি</p>
+                      <p className="text-[10px] text-blue-700">নিয়মিত আপডেট ও স্টাডি মেটেরিয়ালের জন্য ফলো করুন</p>
+                    </div>
+                  </div>
+                  <a
+                    href={config.facebookPageUrl || DEFAULT_LIBRARY_CONFIG.facebookPageUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-[#1877F2] hover:bg-[#166fe5] text-white text-xs font-bold rounded-xl transition flex items-center gap-1 shadow-xs shrink-0"
+                  >
+                    <span>Follow</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowGuidelinesModal(false)}
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                ঠিক আছে, বুঝেছি
               </button>
             </div>
 
