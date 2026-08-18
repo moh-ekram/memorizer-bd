@@ -164,7 +164,9 @@ export const StudyRoomLandingSection: React.FC<StudyRoomLandingSectionProps> = (
       completed: 144,
       total: 1108,
       percent: 13,
-      icon: <GraduationCap className="w-4 h-4" />
+      iconBg: 'bg-indigo-50 text-indigo-600 border border-indigo-100/80',
+      barColorClass: 'bg-gradient-to-r from-indigo-500 to-indigo-600',
+      icon: <GraduationCap className="w-5 h-5 text-indigo-600" />
     },
     {
       key: 'match',
@@ -174,7 +176,9 @@ export const StudyRoomLandingSection: React.FC<StudyRoomLandingSectionProps> = (
       completed: 88,
       total: 1108,
       percent: 8,
-      icon: <Gamepad2 className="w-4 h-4" />
+      iconBg: 'bg-teal-50 text-teal-600 border border-teal-100/80',
+      barColorClass: 'bg-gradient-to-r from-teal-500 to-emerald-500',
+      icon: <Gamepad2 className="w-5 h-5 text-teal-600" />
     },
     {
       key: 'word_search',
@@ -184,7 +188,9 @@ export const StudyRoomLandingSection: React.FC<StudyRoomLandingSectionProps> = (
       completed: 72,
       total: 1108,
       percent: 7,
-      icon: <Search className="w-4 h-4" />
+      iconBg: 'bg-sky-50 text-sky-600 border border-sky-100/80',
+      barColorClass: 'bg-gradient-to-r from-sky-500 to-blue-500',
+      icon: <Search className="w-5 h-5 text-sky-600" />
     },
     {
       key: 'blank',
@@ -194,7 +200,9 @@ export const StudyRoomLandingSection: React.FC<StudyRoomLandingSectionProps> = (
       completed: 42,
       total: 1108,
       percent: 4,
-      icon: <BookOpen className="w-4 h-4" />
+      iconBg: 'bg-amber-50 text-amber-700 border border-amber-100/80',
+      barColorClass: 'bg-gradient-to-r from-amber-500 to-orange-500',
+      icon: <BookOpen className="w-5 h-5 text-amber-700" />
     },
     {
       key: 'odd_one_out',
@@ -204,7 +212,9 @@ export const StudyRoomLandingSection: React.FC<StudyRoomLandingSectionProps> = (
       completed: 65,
       total: 1108,
       percent: 6,
-      icon: <HelpCircle className="w-4 h-4" />
+      iconBg: 'bg-rose-50 text-rose-600 border border-rose-100/80',
+      barColorClass: 'bg-gradient-to-r from-rose-500 to-pink-500',
+      icon: <HelpCircle className="w-5 h-5 text-rose-600" />
     },
     {
       key: 'analogy',
@@ -214,7 +224,9 @@ export const StudyRoomLandingSection: React.FC<StudyRoomLandingSectionProps> = (
       completed: 30,
       total: 1108,
       percent: 3,
-      icon: <Shuffle className="w-4 h-4" />
+      iconBg: 'bg-purple-50 text-purple-600 border border-purple-100/80',
+      barColorClass: 'bg-gradient-to-r from-purple-500 to-violet-600',
+      icon: <Shuffle className="w-5 h-5 text-purple-600" />
     }
   ];
 
@@ -1409,34 +1421,35 @@ export const StudyRoomLandingSection: React.FC<StudyRoomLandingSectionProps> = (
         {/* 2. Exact PINNED FEATURED EXAM SECTION from PracticeCenter.tsx */}
         <div 
           onClick={onOpenStudyRoom}
-          className="relative overflow-hidden rounded-2xl sm:rounded-3xl p-5 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border-2 border-amber-400/80 shadow-xl shadow-indigo-950/20 cursor-pointer group transition-all duration-300"
+          className="relative overflow-hidden rounded-2xl sm:rounded-3xl p-5 sm:p-5.5 bg-slate-900 border border-slate-800 hover:border-slate-700/80 shadow-xl shadow-slate-950/20 cursor-pointer group transition-all duration-300"
         >
-          {/* Background ambient light effects */}
-          <div className="absolute -top-12 -right-12 w-44 h-44 bg-amber-400/15 rounded-full blur-2xl pointer-events-none" />
-          <div className="absolute -bottom-12 -left-12 w-44 h-44 bg-indigo-500/25 rounded-full blur-2xl pointer-events-none" />
+          {/* Subtle top edge shimmer & ambient glow */}
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-400/40 to-transparent" />
+          <div className="absolute -top-16 -right-16 w-48 h-48 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
 
           {/* Top Bar: Pinned Badge & Tag */}
-          <div className="flex items-center justify-between gap-2 mb-3 relative z-10">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400/20 text-amber-300 border border-amber-400/40 rounded-full text-[10px] font-black uppercase tracking-wider shadow-2xs backdrop-blur-md">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-              <span>📌 PINNED FEATURED SECTION</span>
+          <div className="flex items-center justify-between gap-2 mb-3.5 relative z-10">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-amber-400/10 text-amber-300 border border-amber-400/25 rounded-full text-[10px] sm:text-[11px] font-bold tracking-wide">
+              <Sparkles className="w-3 h-3 text-amber-400 animate-pulse" />
+              <span>PINNED FEATURED SECTION</span>
             </div>
-            <span className="text-[10px] font-extrabold px-2.5 py-0.5 bg-indigo-500/30 text-indigo-200 rounded-md border border-indigo-400/30 font-mono uppercase">
+            <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-800 text-slate-300 rounded-md border border-slate-750 font-mono uppercase">
               Model Test & Exam
             </span>
           </div>
 
           {/* Main Content */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10">
-            <div className="flex items-start gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/30 group-hover:scale-105 transition-transform duration-300">
-                <GraduationCap className="w-6 h-6" />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 relative z-10">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-slate-950 font-black flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform duration-300">
+                <GraduationCap className="w-6 h-6 sm:w-7 sm:h-7" />
               </div>
               <div>
-                <h4 className="text-base font-extrabold text-white group-hover:text-amber-300 transition-colors flex items-center gap-2">
-                  <span>Online Model Test & Live Exams</span>
+                <h4 className="text-base sm:text-lg font-extrabold text-white tracking-tight group-hover:text-amber-300 transition-colors">
+                  Online Model Test & Live Exams
                 </h4>
-                <p className="text-xs text-slate-300 font-medium mt-0.5 leading-relaxed">
+                <p className="text-xs sm:text-[13px] text-slate-300/90 font-normal mt-0.5 leading-relaxed">
                   Course-based timed exams, negative marking, detailed results, and global merit lists.
                 </p>
               </div>
@@ -1449,7 +1462,7 @@ export const StudyRoomLandingSection: React.FC<StudyRoomLandingSectionProps> = (
                   e.stopPropagation();
                   onOpenStudyRoom();
                 }}
-                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 flex items-center justify-center gap-1.5 transition cursor-pointer border border-amber-300"
+                className="w-full sm:w-auto px-4 py-2 sm:py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-[13px] shadow-sm hover:shadow transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 border border-amber-300/50"
               >
                 <span>Enter Exam Hall</span>
                 <ChevronRight className="w-4 h-4 text-slate-950" />
@@ -1459,7 +1472,7 @@ export const StudyRoomLandingSection: React.FC<StudyRoomLandingSectionProps> = (
         </div>
 
         {/* 3. Section Divider for Regular Interactive Games */}
-        <div className="flex items-center gap-3 pt-1 pb-0.5">
+        <div className="flex items-center gap-3 pt-2 pb-0.5">
           <div className="h-px bg-slate-200 flex-1" />
           <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
             <Gamepad2 className="w-3.5 h-3.5 text-indigo-500" />
@@ -1468,49 +1481,51 @@ export const StudyRoomLandingSection: React.FC<StudyRoomLandingSectionProps> = (
           <div className="h-px bg-slate-200 flex-1" />
         </div>
 
-        {/* 4. Real Games Cards matching exact green gradient from PracticeCenter.tsx */}
-        <div className="space-y-2">
+        {/* 4. Real Games Cards matching modern PracticeCenter.tsx */}
+        <div className="space-y-2.5">
           {realPracticeGames.map((item) => (
             <div
               key={item.key}
               onClick={onOpenStudyRoom}
-              className="group relative transition-all duration-300 flex flex-row items-center justify-between p-2 sm:p-2.5 px-3 sm:px-4 rounded-xl sm:rounded-2xl gap-2.5 overflow-hidden cursor-pointer bg-gradient-to-r from-[#477B4D] to-[#5A9E60] text-white shadow-md shadow-[#477B4D]/20 hover:brightness-105 border border-white/20"
+              className="group relative transition-all duration-200 flex flex-row items-center justify-between p-2.5 sm:p-3 px-3.5 sm:px-4 rounded-xl sm:rounded-2xl gap-3 sm:gap-4 overflow-hidden cursor-pointer bg-white hover:bg-slate-50/80 border border-slate-200/90 hover:border-slate-300 shadow-2xs hover:shadow-xs"
             >
               {/* Left Side: Icon Container */}
-              <div className="w-8 h-8 rounded-lg sm:rounded-xl bg-white/15 border border-white/20 text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:bg-white/25 transition-all [&>svg]:w-4 [&>svg]:h-4 [&>svg]:text-white">
+              <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${item.iconBg} flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform`}>
                 {item.icon}
               </div>
 
               {/* Middle Side: Game Title & Progress */}
-              <div className="flex-1 min-w-0 space-y-0.5">
-                <h4 className="text-xs sm:text-sm font-extrabold text-white leading-snug">
-                  {item.title}
-                </h4>
-                <div className="text-[10px] sm:text-[11px] font-normal text-emerald-100/90 font-mono tracking-tight">
-                  {item.completed}/{item.total} Qs ({item.percent}%)
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-slate-950 transition-colors leading-tight">
+                    {item.title}
+                  </h4>
+                  <span className="text-[10px] sm:text-[11px] font-mono font-medium text-slate-500 shrink-0">
+                    {item.completed}/{item.total} Qs ({item.percent}%)
+                  </span>
                 </div>
 
                 {/* Progress Bar Track */}
-                <div className="w-full h-1 bg-black/20 rounded-full overflow-hidden">
+                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-amber-300 rounded-full transition-all duration-500 ease-out"
+                    className={`h-full ${item.barColorClass || 'bg-indigo-600'} rounded-full transition-all duration-500 ease-out`}
                     style={{ width: `${item.percent}%` }}
                   />
                 </div>
               </div>
 
               {/* Right Side: Action Button */}
-              <div className="shrink-0 ml-1">
+              <div className="shrink-0 ml-0.5 sm:ml-1">
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     onOpenStudyRoom();
                   }}
-                  className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl bg-white/20 hover:bg-white text-white hover:text-[#38663D] font-extrabold text-[10px] sm:text-xs transition flex items-center gap-0.5 cursor-pointer border border-white/30 shadow-2xs"
+                  className="px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-slate-100 group-hover:bg-slate-900 text-slate-700 group-hover:text-white font-bold text-[11px] sm:text-xs transition-all duration-150 flex items-center gap-1 cursor-pointer border border-slate-200/70 group-hover:border-slate-900 shadow-2xs"
                 >
                   <span>{item.btnText}</span>
-                  <ChevronRight className="w-3 h-3" />
+                  <ChevronRight className="w-3 h-3 text-slate-400 group-hover:text-white transition-colors" />
                 </button>
               </div>
             </div>
