@@ -48,6 +48,8 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
   const [filterGroup2, setFilterGroup2] = useState<string>('all');
   const [filterGroup3, setFilterGroup3] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [repoPage, setRepoPage] = useState<number>(1);
+  const [repoPerPage, setRepoPerPage] = useState<number>(25);
 
   // Scheduled Exams State
   const [allExams, setAllExams] = useState<Exam[]>([]);
@@ -585,6 +587,18 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       return true;
     });
   }, [questions, filterGroup1, filterGroup2, filterGroup3, searchQuery]);
+
+  // Reset page to 1 when filters or search change
+  useEffect(() => {
+    setRepoPage(1);
+  }, [filterGroup1, filterGroup2, filterGroup3, searchQuery]);
+
+  // Paginated Questions for Lean Memory & Fast DOM
+  const totalRepoPages = Math.max(1, Math.ceil(filteredQuestions.length / repoPerPage));
+  const paginatedRepoQuestions = useMemo(() => {
+    const startIndex = (repoPage - 1) * repoPerPage;
+    return filteredQuestions.slice(startIndex, startIndex + repoPerPage);
+  }, [filteredQuestions, repoPage, repoPerPage]);
 
   // Handle Excel Upload -> Parse and Open Preview Modal
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1421,15 +1435,24 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                     <th className="p-3 w-10 text-center">
                       <input
                         type="checkbox"
-                        checked={selectedIds.size > 0 && selectedIds.size === filteredQuestions.length}
+                        checked={paginatedRepoQuestions.length > 0 && paginatedRepoQuestions.every(q => selectedIds.has(q.id))}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setSelectedIds(new Set(filteredQuestions.map(q => q.id)));
+                            setSelectedIds(prev => {
+                              const next = new Set(prev);
+                              paginatedRepoQuestions.forEach(q => next.add(q.id));
+                              return next;
+                            });
                           } else {
-                            setSelectedIds(new Set());
+                            setSelectedIds(prev => {
+                              const next = new Set(prev);
+                              paginatedRepoQuestions.forEach(q => next.delete(q.id));
+                              return next;
+                            });
                           }
                         }}
                         className="rounded border-slate-300 text-indigo-600"
+                        title="Select/Deselect current page"
                       />
                     </th>
                     <th className="p-3 min-w-[240px]">Question Text</th>
@@ -1465,7 +1488,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                       </td>
                     </tr>
                   ) : (
-                    filteredQuestions.map(q => (
+                    paginatedRepoQuestions.map(q => (
                       <tr key={q.id} className="hover:bg-slate-50/80 transition">
                         <td className="p-3 text-center">
                           <input
@@ -1543,6 +1566,56 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination Controls Bar */}
+            {filteredQuestions.length > 0 && (
+              <div className="px-4 py-3 bg-slate-50 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 text-slate-600 font-medium">
+                  <span>
+                    Showing <strong>{((repoPage - 1) * repoPerPage) + 1}</strong> to <strong>{Math.min(repoPage * repoPerPage, filteredQuestions.length)}</strong> of <strong>{filteredQuestions.length}</strong> questions
+                  </span>
+                  <span className="text-slate-300">|</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] text-slate-500">Per page:</span>
+                    <select
+                      value={repoPerPage}
+                      onChange={(e) => {
+                        setRepoPerPage(Number(e.target.value));
+                        setRepoPage(1);
+                      }}
+                      className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-hidden"
+                    >
+                      <option value={15}>15</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setRepoPage(prev => Math.max(1, prev - 1))}
+                    disabled={repoPage <= 1}
+                    className="px-3 py-1.5 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white text-slate-700 font-bold border border-slate-200 rounded-lg transition cursor-pointer disabled:cursor-not-allowed text-xs"
+                  >
+                    Previous
+                  </button>
+
+                  <span className="px-3 py-1.5 bg-indigo-50 text-indigo-700 font-extrabold border border-indigo-100 rounded-lg text-xs">
+                    Page {repoPage} of {totalRepoPages}
+                  </span>
+
+                  <button
+                    onClick={() => setRepoPage(prev => Math.min(totalRepoPages, prev + 1))}
+                    disabled={repoPage >= totalRepoPages}
+                    className="px-3 py-1.5 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white text-slate-700 font-bold border border-slate-200 rounded-lg transition cursor-pointer disabled:cursor-not-allowed text-xs"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -40,7 +40,8 @@ let firestoreDb;
 try {
   firestoreDb = initializeFirestore(app, {
     localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager()
+      tabManager: persistentMultipleTabManager(),
+      cacheSizeBytes: 40 * 1024 * 1024 // Cap cache size at 40MB for lean RAM footprint
     })
   });
 } catch (e) {

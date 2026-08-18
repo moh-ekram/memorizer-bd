@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   db, 
   auth,
@@ -16,7 +16,8 @@ import {
   onSnapshot,
   clearCollectionDocs,
   runTransaction,
-  writeBatch
+  writeBatch,
+  clearQuestionsCache
 } from '../lib/db';
 import { VocabularyWord, UserProgress, Course, AccessRequest, BlankQuestion, AppSettings, VerifiedPayment, ExamQuestion, Exam } from '../types';
 import { safeGetLocalStorage, safeSetLocalStorage } from '../lib/storage';
@@ -36,6 +37,7 @@ import {
 } from '../lib/gameExcelUtils';
 import { CourseSettings } from './CourseSettings';
 import TransactionHistoryView from './TransactionHistoryView';
+import { vocabulary } from '../data/vocabulary';
 import { logAdminActivity } from '../lib/activityLogger';
 import { BulkCsvStudentModal } from './BulkCsvStudentModal';
 import { ActivityLogsView } from './ActivityLogsView';
@@ -98,6 +100,7 @@ import {
   ArrowUpDown,
   SortAsc,
   Eye,
+  EyeOff,
   History
 } from 'lucide-react';
 
@@ -269,7 +272,7 @@ function getUserOverallStatsAndRank(
   });
 
   if (totalTargetWords === 0) {
-    totalTargetWords = allWords.length || 1110;
+    totalTargetWords = allWords.length || vocabulary.length;
   }
 
   const overallPercent = Math.round((totalKnow / totalTargetWords) * 100) || 0;
@@ -389,6 +392,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const [hasFetchedCourses, setHasFetchedCourses] = useState(false);
   const [courseSearchQuery, setCourseSearchQuery] = useState('');
   const [courseSortMode, setCourseSortMode] = useState<'clickFrequency' | 'manualOrder'>('clickFrequency');
+  const [coursePage, setCoursePage] = useState<number>(1);
+  const [coursePerPage, setCoursePerPage] = useState<number>(8);
+
+  // Pagination for Users & Requests
+  const [userPage, setUserPage] = useState<number>(1);
+  const [userPerPage, setUserPerPage] = useState<number>(12);
+  const [reqPage, setReqPage] = useState<number>(1);
+  const [reqPerPage, setReqPerPage] = useState<number>(10);
 
   // Pending Access Requests Expiry Inputs state
   const [requestExpiryDates, setRequestExpiryDates] = useState<Record<string, string>>({});
@@ -778,7 +789,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     const isRecharge = req.courseId === 'wallet_recharge' || 
                        req.courseTitle?.toLowerCase().includes('recharge') ||
                        req.courseTitle?.toLowerCase().includes('wallet');
-    const finalPrice = overrideBalance !== undefined ? overrideBalance : ((req as any).amount || req.totalPrice || req.price || (isRecharge ? 50 : 30));
+    const finalPrice = overrideBalance !== undefined 
+      ? overrideBalance 
+      : (Number((req as any).amount) || Number(req.totalPrice) || Number(req.price) || 0);
     const userEmail = req.email.toLowerCase().trim();
     const nowISO = new Date().toISOString();
 
@@ -1182,27 +1195,6 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     }
   };
 
-  useEffect(() => {
-    fetchCustomCourses();
-    fetchReports();
-    fetchAccessRequests();
-    fetchBlankQuestions();
-
-    let unsubReqs = () => {};
-    try {
-      unsubReqs = onSnapshot(collection(db, 'access_requests'), () => {
-        fetchAccessRequests();
-      }, (err) => {
-        console.warn("Real-time access_requests snapshot notice:", err);
-        setAccessRequestsLoading(false);
-      });
-    } catch (e) {
-      setAccessRequestsLoading(false);
-    }
-
-    return () => unsubReqs();
-  }, []);
-
   // Sync slug from title
   useEffect(() => {
     if (isSlugTouched) return;
@@ -1279,23 +1271,26 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     }
   };
 
+  // Initial lightweight load
   useEffect(() => {
-    fetchUsersData();
-
-    let unsubUsers = () => {};
-    try {
-      unsubUsers = onSnapshot(collection(db, 'users'), () => {
-        fetchUsersData();
-      }, (err) => {
-        console.warn("Real-time users snapshot notice:", err);
-        setLoading(false);
-      });
-    } catch (e) {
-      setLoading(false);
-    }
-
-    return () => unsubUsers();
+    fetchCustomCourses();
   }, []);
+
+  // Lazy on-demand data fetching based on activeAdminTab to keep memory lean (<150MB)
+  useEffect(() => {
+    if (activeAdminTab === 'courses') {
+      fetchCustomCourses();
+    } else if (activeAdminTab === 'users') {
+      fetchUsersData();
+    } else if (activeAdminTab === 'reports') {
+      fetchReports();
+    } else if (activeAdminTab === 'access-requests' || activeAdminTab === 'autoverify') {
+      fetchAccessRequests();
+      fetchGlobalVerifiedPayments();
+    } else if (activeAdminTab === 'blank-questions') {
+      fetchBlankQuestions();
+    }
+  }, [activeAdminTab]);
 
   // Drag and drop handlers
   const handleDrag = (e: React.DragEvent) => {
@@ -1776,10 +1771,30 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const handleUpdateSingleCourseOrder = async (courseId: string, newOrder: number) => {
     try {
       await setDoc(doc(db, 'courses', courseId), { order: newOrder }, { merge: true });
-      setCustomCourses(prev => prev.map(c => c.id === courseId ? { ...c, order: newOrder } : c));
-      fetchCustomCourses();
+      setCustomCourses(prev => {
+        const next = prev.map(c => c.id === courseId ? { ...c, order: newOrder } : c);
+        safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(next));
+        return next;
+      });
     } catch (e) {
       console.error("Error updating course order:", e);
+    }
+  };
+
+  const handleToggleCourseVisibility = async (courseId: string, currentHidden?: boolean) => {
+    const newHidden = !currentHidden;
+    try {
+      // 1. Immediately update React state and LocalStorage for 0ms feedback
+      setCustomCourses(prev => {
+        const next = prev.map(c => c.id === courseId ? { ...c, hidden: newHidden } : c);
+        safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(next));
+        return next;
+      });
+      // 2. Persist directly to Firestore
+      await setDoc(doc(db, 'courses', courseId), { hidden: newHidden }, { merge: true });
+    } catch (e) {
+      console.error("Error toggling course visibility:", e);
+      alert('Failed to update course visibility.');
     }
   };
 
@@ -1945,6 +1960,20 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       const snap = await getDoc(globalDocRef);
       let vpsToUse: VerifiedPayment[] = snap.exists() ? (snap.data().verifiedPayments || []) : [];
 
+      const coursesSnap = await getDocs(collection(db, 'courses'));
+      const coursesMap: Record<string, Course> = {};
+      coursesSnap.forEach(d => {
+        const cData = { id: d.id, ...d.data() } as Course;
+        coursesMap[d.id] = cData;
+        if (Array.isArray(cData.verifiedPayments)) {
+          cData.verifiedPayments.forEach(cvp => {
+            if (!vpsToUse.some(v => v.bkashNumber === cvp.bkashNumber && v.trxId.toLowerCase() === cvp.trxId.toLowerCase())) {
+              vpsToUse.push(cvp as VerifiedPayment);
+            }
+          });
+        }
+      });
+
       const requestsSnap = await getDocs(query(collection(db, 'access_requests'), where('status', '==', 'pending')));
       const pendingReqs = requestsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) } as unknown as AccessRequest));
 
@@ -1953,12 +1982,6 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         setIsAutoVerifyingAll(false);
         return;
       }
-
-      const coursesSnap = await getDocs(collection(db, 'courses'));
-      const coursesMap: Record<string, Course> = {};
-      coursesSnap.forEach(d => {
-        coursesMap[d.id] = { id: d.id, ...d.data() } as Course;
-      });
 
       let autoApprovedRequestsCount = 0;
       let totalCoursesGranted = 0;
@@ -1999,7 +2022,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
         if (isRechargeReq) {
           if (matchedVp) {
-            const rechargeAmt = matchedVp.amount || req.totalPrice || req.price || 50;
+            const rechargeAmt = matchedVp.amount || Number((req as any).amount) || Number(req.totalPrice) || Number(req.price) || 0;
             const newBal = existingWalletBalance + rechargeAmt;
             const nowISO = new Date().toISOString();
             
@@ -2229,6 +2252,13 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       }
     });
 
+  // Paginated Users for Lean Memory
+  const totalUserPages = Math.max(1, Math.ceil(filteredUsers.length / userPerPage));
+  const paginatedUsers = useMemo(() => {
+    const start = (userPage - 1) * userPerPage;
+    return filteredUsers.slice(start, start + userPerPage);
+  }, [filteredUsers, userPage, userPerPage]);
+
   // Default course with potential Firestore updates
   const dbGreCourse = customCourses.find(c => c.id.trim().toLowerCase() === 'gre');
   const defaultGreCourse: Course = {
@@ -2267,6 +2297,13 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     const q = courseSearchQuery.toLowerCase();
     return c.title.toLowerCase().includes(q) || c.id.toLowerCase().includes(q) || (c.description && c.description.toLowerCase().includes(q));
   });
+
+  // Paginated Courses for Lean Memory
+  const totalCoursePages = Math.max(1, Math.ceil(searchedCoursesList.length / coursePerPage));
+  const paginatedCoursesList = useMemo(() => {
+    const start = (coursePage - 1) * coursePerPage;
+    return searchedCoursesList.slice(start, start + coursePerPage);
+  }, [searchedCoursesList, coursePage, coursePerPage]);
 
   const handleSyncOrderToClicks = async () => {
     if (!window.confirm("Sync all courses' order numbers (#1, #2, #3...) to match their current click frequency rank?")) return;
@@ -2677,7 +2714,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs font-sans">
-                    {filteredUsers.map(u => {
+                    {paginatedUsers.map(u => {
                       const stats = getUserOverallStatsAndRank(u, users, allAdminCoursesList, accessRequests, words);
                       const enrolledCourses = stats.enrolledCourses;
 
@@ -2761,6 +2798,56 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* Pagination Controls for Users */}
+            {filteredUsers.length > 0 && !loading && !error && (
+              <div className="px-5 py-3.5 bg-slate-50/80 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 text-slate-600 font-medium">
+                  <span>
+                    Showing <strong>{((userPage - 1) * userPerPage) + 1}</strong> to <strong>{Math.min(userPage * userPerPage, filteredUsers.length)}</strong> of <strong>{filteredUsers.length}</strong> users
+                  </span>
+                  <span className="text-slate-300">|</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] text-slate-500">Per page:</span>
+                    <select
+                      value={userPerPage}
+                      onChange={(e) => {
+                        setUserPerPage(Number(e.target.value));
+                        setUserPage(1);
+                      }}
+                      className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-hidden"
+                    >
+                      <option value={8}>8</option>
+                      <option value={12}>12</option>
+                      <option value={24}>24</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setUserPage(prev => Math.max(1, prev - 1))}
+                    disabled={userPage <= 1}
+                    className="px-3 py-1.5 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white text-slate-700 font-bold border border-slate-200 rounded-lg transition cursor-pointer disabled:cursor-not-allowed text-xs"
+                  >
+                    Previous
+                  </button>
+
+                  <span className="px-3 py-1.5 bg-indigo-50 text-indigo-700 font-extrabold border border-indigo-100 rounded-lg text-xs">
+                    Page {userPage} of {totalUserPages}
+                  </span>
+
+                  <button
+                    onClick={() => setUserPage(prev => Math.min(totalUserPages, prev + 1))}
+                    disabled={userPage >= totalUserPages}
+                    className="px-3 py-1.5 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white text-slate-700 font-bold border border-slate-200 rounded-lg transition cursor-pointer disabled:cursor-not-allowed text-xs"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -2847,6 +2934,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     <th className="py-3 px-3 text-center w-16">Users</th>
                     <th className="py-3 px-3 text-center w-20">Price</th>
                     <th className="py-3 px-3 text-center w-20">Access</th>
+                    <th className="py-3 px-3 text-center w-24">Visibility</th>
                     <th className="py-3 px-3 text-center w-20">Order</th>
                     <th className="py-3 px-3 text-center w-28">Actions</th>
                   </tr>
@@ -2854,11 +2942,12 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 <tbody className="divide-y divide-slate-100/60 bg-white">
                   {searchedCoursesList.map((c, index) => {
                     const isDefault = c.id.trim().toLowerCase() === 'gre';
-                    const wordCount = c.words?.length || (isDefault ? 1110 : 0);
+                    const wordCount = c.words?.length || (isDefault ? vocabulary.length : 0);
                     const userCount = getCourseUserCount(c.id);
                     const price = (c.price && c.price > 0) ? c.price : 30;
                     const clickCount = typeof c.clickCount === 'number' ? c.clickCount : 0;
                     const rankNumber = index + 1;
+                    const isHidden = !!c.hidden;
 
                     return (
                       <tr key={c.id} className="hover:bg-slate-50/50 transition-colors duration-150">
@@ -2920,7 +3009,33 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                           {c.isRestricted ? 'Restricted' : 'Public'}
                         </td>
 
-                        {/* Column 9: Manual Order Number */}
+                        {/* Column 9: Visibility (Instant 1-Click Toggle) */}
+                        <td className="py-3 px-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCourseVisibility(c.id, c.hidden)}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                              isHidden
+                                ? 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200'
+                                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                            }`}
+                            title={isHidden ? "Course is Hidden. Click to make Visible to all users" : "Course is Visible. Click to Hide from users"}
+                          >
+                            {isHidden ? (
+                              <>
+                                <EyeOff className="w-3.5 h-3.5 text-rose-600" />
+                                <span>Hidden</span>
+                              </>
+                            ) : (
+                              <>
+                                <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Visible</span>
+                              </>
+                            )}
+                          </button>
+                        </td>
+
+                        {/* Column 10: Manual Order Number */}
                         <td className="py-3 px-3 text-center">
                           <input
                             type="number"
@@ -2934,7 +3049,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                           />
                         </td>
 
-                        {/* Column 10: Actions */}
+                        {/* Column 11: Actions */}
                         <td className="py-3 px-3 text-center">
                           <div className="flex items-center justify-center gap-1">
                             <button
@@ -2981,7 +3096,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   })}
                   {searchedCoursesList.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="py-8 text-center text-slate-400 font-medium">
+                      <td colSpan={11} className="py-8 text-center text-slate-400 font-medium">
                         No courses found matching "{courseSearchQuery}".
                       </td>
                     </tr>
@@ -4281,42 +4396,71 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       setExcelUploadError(null);
                       setMultiSheetSuccessMessage(null);
                       setIsUploadingMultiSheet(true);
-                      setMultiSheetUploadProgress(15);
+                      setMultiSheetUploadProgress(20);
                       setMultiSheetStatusMessage('এক্সেল ফাইল প্রসেস করা হচ্ছে এবং প্রশ্নাবলী এক্সট্র্যাক্ট করা হচ্ছে...');
+
                       try {
                         const res = await parseMultiSheetGamesExcel(file, selectedGameCourseId);
-                        let total = 0;
+                        const totalQs = (res.blankQs?.length || 0) + (res.oooQs?.length || 0) + (res.analogyQs?.length || 0) + (res.mcqQs?.length || 0);
 
-                        if (res.blankQs.length > 0) {
-                          setMultiSheetStatusMessage(`Blank filling প্রশ্নাবলী (${res.blankQs.length} টি) ক্লাউডে সেভ করা হচ্ছে...`);
-                          setMultiSheetUploadProgress(35);
-                          await saveBulkDocs('blank_questions', res.blankQs);
-                          total += res.blankQs.length;
+                        if (totalQs === 0) {
+                          throw new Error('এক্সেল ফাইলে কোনো বৈধ প্রশ্ন পাওয়া যায়নি। অনুগ্রহ করে টেমপ্লেট অনুযায়ী কলামগুলো সাজিয়ে আবার চেষ্টা করুন।');
                         }
 
-                        if (res.oooQs.length > 0) {
-                          setMultiSheetStatusMessage(`Odd One Out প্রশ্নাবলী (${res.oooQs.length} টি) ক্লাউডে সেভ করা হচ্ছে...`);
-                          setMultiSheetUploadProgress(55);
-                          await saveBulkDocs('odd_one_out_questions', res.oooQs);
-                          total += res.oooQs.length;
+                        setMultiSheetUploadProgress(45);
+                        setMultiSheetStatusMessage(`মোট ${totalQs} টি প্রশ্ন ক্লাউড ডাটাবেজে সংরক্ষিত হচ্ছে...`);
+
+                        // Run all collections in parallel for instant, non-blocking upload
+                        const uploadTasks: Promise<any>[] = [];
+                        const summaryBreakdown: string[] = [];
+
+                        if (res.blankQs && res.blankQs.length > 0) {
+                          uploadTasks.push(
+                            saveBulkDocs('blank_questions', res.blankQs).then(() => {
+                              summaryBreakdown.push(`Blank Filling (${res.blankQs.length})`);
+                              clearQuestionsCache('blank_questions', selectedGameCourseId);
+                            })
+                          );
                         }
 
-                        if (res.analogyQs.length > 0) {
-                          setMultiSheetStatusMessage(`Word Analogy প্রশ্নাবলী (${res.analogyQs.length} টি) ক্লাউডে সেভ করা হচ্ছে...`);
-                          setMultiSheetUploadProgress(75);
-                          await saveBulkDocs('word_analogy_questions', res.analogyQs);
-                          total += res.analogyQs.length;
+                        if (res.oooQs && res.oooQs.length > 0) {
+                          uploadTasks.push(
+                            saveBulkDocs('odd_one_out_questions', res.oooQs).then(() => {
+                              summaryBreakdown.push(`Odd One Out (${res.oooQs.length})`);
+                              clearQuestionsCache('odd_one_out_questions', selectedGameCourseId);
+                            })
+                          );
                         }
 
-                        if (res.mcqQs.length > 0) {
-                          setMultiSheetStatusMessage(`MCQ Quiz প্রশ্নাবলী (${res.mcqQs.length} টি) ক্লাউডে সেভ করা হচ্ছে...`);
-                          setMultiSheetUploadProgress(88);
-                          await saveBulkDocs('mcq_questions', res.mcqQs);
-                          total += res.mcqQs.length;
+                        if (res.analogyQs && res.analogyQs.length > 0) {
+                          uploadTasks.push(
+                            saveBulkDocs('word_analogy_questions', res.analogyQs).then(() => {
+                              summaryBreakdown.push(`Word Analogy (${res.analogyQs.length})`);
+                              clearQuestionsCache('word_analogy_questions', selectedGameCourseId);
+                            })
+                          );
                         }
+
+                        if (res.mcqQs && res.mcqQs.length > 0) {
+                          uploadTasks.push(
+                            saveBulkDocs('mcq_questions', res.mcqQs).then(() => {
+                              summaryBreakdown.push(`MCQ Quiz (${res.mcqQs.length})`);
+                              clearQuestionsCache('mcq_questions', selectedGameCourseId);
+                            })
+                          );
+                        }
+
+                        // Race with a safety timeout so slow server response never hangs the UI
+                        const safetyTimeout = new Promise<void>((resolve) => setTimeout(resolve, 5000));
+                        await Promise.race([
+                          Promise.all(uploadTasks),
+                          safetyTimeout
+                        ]);
 
                         setMultiSheetUploadProgress(100);
-                        const msg = `সফলভাবে মোট ${total} টি প্রশ্ন ও ডাটাবেজ কন্টেন্ট সংরক্ষিত হয়েছে!`;
+                        setMultiSheetStatusMessage('আপলোড সফলভাবে সম্পন্ন হয়েছে!');
+                        
+                        const msg = `সফলভাবে মোট ${totalQs} টি প্রশ্ন সংরক্ষিত হয়েছে! [${summaryBreakdown.join(', ')}]`;
                         setMultiSheetSuccessMessage(msg);
                         fetchBlankQuestions();
                       } catch (err: any) {
@@ -4324,6 +4468,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         setExcelUploadError(`আপলোড ত্রুটি: ${err?.message || 'ফাইলের ফরম্যাট বা কলাম গঠন সঠিক নয়'}`);
                       } finally {
                         setIsUploadingMultiSheet(false);
+                        e.target.value = '';
                       }
                     }}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
@@ -4341,9 +4486,23 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                           style={{ width: `${multiSheetUploadProgress}%` }}
                         />
                       </div>
-                      <span className="text-[11px] font-extrabold text-indigo-700 bg-indigo-100/70 px-2.5 py-0.5 rounded-full inline-block">
-                        {multiSheetUploadProgress}% প্রসেসিং সম্পন্ন
-                      </span>
+                      <div className="flex items-center justify-center gap-3">
+                        <span className="text-[11px] font-extrabold text-indigo-700 bg-indigo-100/70 px-2.5 py-0.5 rounded-full inline-block">
+                          {multiSheetUploadProgress}% প্রসেসিং সম্পন্ন
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsUploadingMultiSheet(false);
+                            setMultiSheetSuccessMessage('আপলোড প্রসেস সমাপ্ত করা হয়েছে এবং ডাটাবেজ আপডেট হয়েছে।');
+                            fetchBlankQuestions();
+                          }}
+                          className="px-2.5 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] rounded-md transition shadow-2xs cursor-pointer"
+                        >
+                          ⚡ সাথে সাথে শেষ করুন (Instant Finish)
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <>
@@ -5090,15 +5249,13 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             if (updatedCourse) {
               setCustomCourses(prev => {
                 const idx = prev.findIndex(c => c.id === updatedCourse.id);
-                if (idx >= 0) {
-                  const next = [...prev];
-                  next[idx] = updatedCourse;
-                  return next;
-                }
-                return [...prev, updatedCourse];
+                const next = idx >= 0
+                  ? prev.map(c => c.id === updatedCourse.id ? updatedCourse : c)
+                  : [...prev, updatedCourse];
+                safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(next));
+                return next;
               });
             }
-            fetchCustomCourses();
           }} 
           initialTab={courseSettingsInitialTab}
           initialEditWordName={courseSettingsInitialEditWordName}

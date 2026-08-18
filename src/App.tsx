@@ -1566,6 +1566,7 @@ export default function App() {
     enabledGames: dbGreCourse?.enabledGames || { quiz: true, match: true, synonym: true, blank: true, story: true, article: true },
     isDefault: true,
     isRestricted: false,
+    hidden: !!dbGreCourse?.hidden,
     allowedUsers: dbGreCourse?.allowedUsers || [],
     price: 0,
     bkashNumber: (dbGreCourse?.bkashNumber && dbGreCourse.bkashNumber !== '01700000000' && dbGreCourse.bkashNumber.trim() !== '') ? dbGreCourse.bkashNumber : '01581624202',
@@ -2407,7 +2408,7 @@ const getActiveCourse = (
           {['profile', 'dashboard', 'my_courses', 'flashcard'].includes(activeTab) && (
             <div className="space-y-6">
               {/* My Profile Sub-Navigation Pills */}
-              <div className="bg-slate-50/90 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-center gap-2 max-w-md mx-auto">
+              <div className="bg-slate-50/90 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-center gap-2 max-w-md mx-auto" style={{ fontFamily: "'Poppins', sans-serif" }}>
                 <button
                   type="button"
                   onClick={() => {
@@ -2421,14 +2422,14 @@ const getActiveCourse = (
                     }
                   }}
                   title="Flashcard"
-                  className={`flex-1 flex items-center justify-center gap-2 py-3 px-3 sm:px-4 rounded-xl font-extrabold text-sm transition cursor-pointer ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 px-2 sm:px-4 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm transition cursor-pointer whitespace-nowrap ${
                     profileSubTab === 'flashcard'
                       ? 'bg-[#5241f3] text-white shadow-md shadow-indigo-500/25'
                       : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200/60'
                   }`}
                 >
-                  <CreditCard className="w-4 h-4 shrink-0" />
-                  <span className="hidden sm:inline">Flashcard</span>
+                  <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                  <span className="whitespace-nowrap">Flashcard</span>
                 </button>
 
                 <button
@@ -2437,15 +2438,16 @@ const getActiveCourse = (
                     setActiveTab('profile');
                     setProfileSubTab('my_courses');
                   }}
-                  title="My Courses"
-                  className={`flex-1 flex items-center justify-center gap-2 py-3 px-3 sm:px-4 rounded-xl font-extrabold text-sm transition cursor-pointer ${
+                  title="Select Course"
+                  className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 px-2 sm:px-4 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm transition cursor-pointer whitespace-nowrap ${
                     profileSubTab === 'my_courses'
                       ? 'bg-[#5241f3] text-white shadow-md shadow-indigo-500/25'
                       : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200/60'
                   }`}
                 >
-                  <BookOpen className="w-4 h-4 shrink-0" />
-                  <span className="hidden sm:inline">My Courses</span>
+                  <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                  <span className="sm:hidden whitespace-nowrap">Select Course</span>
+                  <span className="hidden sm:inline whitespace-nowrap">My Courses</span>
                 </button>
               </div>
 

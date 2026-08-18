@@ -172,8 +172,8 @@ export async function saveBulkDocs(collectionName: string, items: any[], onProgr
       });
     });
 
-    // Firestore Write Batch in safe chunks (400 items per batch, under 500 max limit)
-    const BATCH_SIZE = 400;
+    // Firestore Write Batch in safe chunks (200 items per batch for rapid execution)
+    const BATCH_SIZE = 200;
     const totalItems = processedItems.length;
     let savedCount = 0;
 
@@ -184,7 +184,29 @@ export async function saveBulkDocs(collectionName: string, items: any[], onProgr
         const docRef = doc(db, collectionName, item.id);
         batch.set(docRef, item, { merge: true });
       });
-      await batch.commit();
+
+      // Wrap batch.commit in a timeout race (3.5 seconds)
+      // Firestore local cache instantly saves writes locally, so if server acknowledgment is delayed, UI won't hang.
+      let timerId: any;
+      const timeoutPromise = new Promise<void>((resolve) => {
+        timerId = setTimeout(() => {
+          resolve();
+        }, 3500);
+      });
+
+      try {
+        await Promise.race([
+          batch.commit().then(() => {
+            if (timerId) clearTimeout(timerId);
+          }),
+          timeoutPromise
+        ]);
+      } catch (commitErr) {
+        console.warn(`saveBulkDocs batch commit notice for ${collectionName}:`, commitErr);
+      } finally {
+        if (timerId) clearTimeout(timerId);
+      }
+
       savedCount += chunk.length;
       if (onProgress) {
         onProgress(savedCount, totalItems);

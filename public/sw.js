@@ -5,12 +5,125 @@ importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-comp
 const DB_NAME = 'VocabOfflineCache';
 const DB_VERSION = 1;
 
+const CACHE_NAME = 'vocab-app-static-v2';
+const STATIC_ASSETS_TO_PRECACHE = [
+  '/',
+  '/index.html'
+];
+
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(async (cache) => {
+      // Pre-cache core app shell assets
+      await Promise.all(
+        STATIC_ASSETS_TO_PRECACHE.map((url) => {
+          return fetch(url)
+            .then((response) => {
+              if (response.ok) {
+                return cache.put(url, response);
+              }
+            })
+            .catch((err) => {
+              console.warn('[SW] Pre-caching asset skipped:', url, err);
+            });
+        })
+      );
+    }).then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('[SW] Deleting legacy cache:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
+});
+
+// Cache-First fetch event listener to serve static assets and enable offline functionality
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+
+  // Only handle GET requests
+  if (request.method !== 'GET') {
+    return;
+  }
+
+  const url = new URL(request.url);
+
+  // Only handle http / https schemes
+  if (!url.protocol.startsWith('http')) {
+    return;
+  }
+
+  // Bypass Firebase / Firestore realtime APIs and server API endpoints from SW cache
+  if (
+    url.hostname.includes('firestore.googleapis.com') ||
+    url.hostname.includes('identitytoolkit.googleapis.com') ||
+    url.hostname.includes('securetoken.googleapis.com') ||
+    url.hostname.includes('firebaseinstallations.googleapis.com') ||
+    url.pathname.startsWith('/api/')
+  ) {
+    return;
+  }
+
+  // Cache-First strategy for static assets, scripts, stylesheets, fonts, images, and HTML navigations
+  event.respondWith(
+    caches.open(CACHE_NAME).then(async (cache) => {
+      // 1. Check cache first
+      const cachedResponse = await cache.match(request);
+      if (cachedResponse) {
+        // Asynchronously update cache in the background when online (stale-while-revalidate for fresh updates)
+        if (navigator.onLine) {
+          fetch(request)
+            .then((networkResponse) => {
+              if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
+                cache.put(request, networkResponse.clone());
+              }
+            })
+            .catch(() => {
+              // Ignore background fetch failure in offline / flaky conditions
+            });
+        }
+        return cachedResponse;
+      }
+
+      // 2. Asset not in cache -> Fetch from network
+      try {
+        const networkResponse = await fetch(request);
+        if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
+          cache.put(request, networkResponse.clone());
+        }
+        return networkResponse;
+      } catch (networkError) {
+        console.warn('[SW] Fetch failed offline for:', request.url, networkError);
+
+        // 3. Completely offline fallback for navigation requests -> return cached SPA root / index.html
+        if (request.mode === 'navigate' || (request.headers.get('accept') && request.headers.get('accept').includes('text/html'))) {
+          const fallback = (await cache.match('/index.html')) || (await cache.match('/'));
+          if (fallback) {
+            return fallback;
+          }
+        }
+
+        // Try matching URL ignoring query parameters
+        const cleanUrl = url.origin + url.pathname;
+        const cleanMatch = await cache.match(cleanUrl);
+        if (cleanMatch) {
+          return cleanMatch;
+        }
+
+        throw networkError;
+      }
+    })
+  );
 });
 
 // Function to open IndexedDB
