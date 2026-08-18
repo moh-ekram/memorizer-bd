@@ -369,6 +369,7 @@ export default function App() {
       enableOddOneOutGame: parsed.enableOddOneOutGame !== undefined ? !!parsed.enableOddOneOutGame : true,
       enableSynonymCheck: parsed.enableSynonymCheck !== undefined ? !!parsed.enableSynonymCheck : true,
       enableWordMatchGame: parsed.enableWordMatchGame !== undefined ? !!parsed.enableWordMatchGame : true,
+      enableWordSearchGame: parsed.enableWordSearchGame !== undefined ? !!parsed.enableWordSearchGame : true,
 
       // System & Access Controls
       enableGlobalLeaderboard: parsed.enableGlobalLeaderboard !== undefined ? !!parsed.enableGlobalLeaderboard : true,
@@ -377,7 +378,7 @@ export default function App() {
       dailyGoalWordCount: parsed.dailyGoalWordCount || 20,
 
       // Item Position & Order Defaults
-      practiceItemsOrder: parsed.practiceItemsOrder || ['quiz', 'match', 'synonym', 'blank', 'odd_one_out', 'analogy'],
+      practiceItemsOrder: parsed.practiceItemsOrder || ['quiz', 'match', 'word_search', 'synonym', 'blank', 'odd_one_out', 'analogy'],
       studyToolsItemsOrder: parsed.studyToolsItemsOrder || ['lists', 'dictionary', 'planner', 'story'],
 
       // Starting Page Customization & Course Displayer

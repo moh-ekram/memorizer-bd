@@ -3830,6 +3830,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   const practiceDict: Record<string, { label: string; desc: string; icon: string }> = {
                     quiz: { label: 'MCQ Quiz', desc: 'Mock test & 4-option quiz game', icon: '🎯' },
                     match: { label: 'Word Match', desc: 'Fast-paced word & meaning matching game', icon: '🧩' },
+                    word_search: { label: 'Word Search', desc: 'Find hidden vocabulary in a letter matrix', icon: '🔎' },
                     synonym: { label: 'Synonym Check', desc: 'Synonym preparation and practice', icon: '🔤' },
                     blank: { label: 'Blank Filling', desc: 'Fill in missing words in sentences', icon: '✍️' },
                     odd_one_out: { label: 'Odd One Out', desc: 'Identify the odd word out', icon: '🔍' },
@@ -3837,7 +3838,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   };
                   const currentOrder = settings?.practiceItemsOrder && settings.practiceItemsOrder.length > 0
                     ? settings.practiceItemsOrder
-                    : ['quiz', 'match', 'synonym', 'blank', 'odd_one_out', 'analogy'];
+                    : ['quiz', 'match', 'word_search', 'synonym', 'blank', 'odd_one_out', 'analogy'];
 
                   const moveItem = (index: number, direction: 'up' | 'down') => {
                     const newOrder = [...currentOrder];

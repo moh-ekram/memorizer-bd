@@ -204,6 +204,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
       setEnabledGames({
         quiz: true,
         match: true,
+        word_search: true,
         synonym: true,
         blank: true,
         odd_one_out: true,
@@ -1134,6 +1135,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
   const [enabledGames, setEnabledGames] = useState<Record<string, boolean>>({
     quiz: true,
     match: true,
+    word_search: true,
     synonym: true,
     blank: true,
     odd_one_out: true,
@@ -2953,6 +2955,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                   {[
                     { key: 'quiz', label: 'MCQ Quiz (এমসিকিউ কুইজ)', desc: 'Multiple choice questions and spelling practice games.', icon: GraduationCap },
                     { key: 'match', label: 'Word Match Game (শব্দ মেলানো গেম)', desc: 'Card matching memory training game.', icon: Gamepad2 },
+                    { key: 'word_search', label: 'Word Search Puzzle (শব্দ খোঁজা পাজল গেম)', desc: 'Find hidden vocabulary in a letter matrix.', icon: Search },
                     { key: 'synonym', label: 'Synonym Check (সমার্থক শব্দ টেস্ট)', desc: 'Synonym matching and verification game.', icon: Sparkles },
                     { key: 'blank', label: 'Blank Filling Practice (শূন্যস্থান পূরণ)', desc: 'Sentence fill-in-the-blanks practice.', icon: BookOpen },
                     { key: 'odd_one_out', label: 'Odd One Out (ব্যতিক্রমী শব্দ নির্বাচন)', desc: 'Synonyms word selection challenge.', icon: HelpCircle },

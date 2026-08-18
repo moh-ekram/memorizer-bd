@@ -63,6 +63,7 @@ export interface AppSettings {
   enableOddOneOutGame?: boolean;
   enableSynonymCheck?: boolean;
   enableWordMatchGame?: boolean;
+  enableWordSearchGame?: boolean;
 
   // Global Announcement / Notice / Ad Banner settings
   announcementEnabled?: boolean;

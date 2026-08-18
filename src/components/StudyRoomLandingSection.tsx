@@ -171,6 +171,16 @@ export const StudyRoomLandingSection: React.FC<StudyRoomLandingSectionProps> = (
       icon: <Gamepad2 className="w-4 h-4" />
     },
     {
+      key: 'word_search',
+      title: 'Word Search',
+      tag: 'Letter Grid',
+      btnText: 'Play Search',
+      completed: 72,
+      total: 1108,
+      percent: 7,
+      icon: <Search className="w-4 h-4" />
+    },
+    {
       key: 'blank',
       title: 'Blank Filling',
       tag: 'Sentence Quiz',

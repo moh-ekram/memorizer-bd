@@ -15,12 +15,14 @@ import {
   Zap,
   CheckCircle2,
   CheckCircle,
-  BarChart3
+  BarChart3,
+  Search
 } from 'lucide-react';
 import { db, collection, getDocs } from '../lib/db';
 import { ExamView } from './ExamView';
 import PracticeQuiz from './PracticeQuiz';
 import WordMatchGame from './WordMatchGame';
+import WordSearchGame from './WordSearchGame';
 import BlankFillingPractice from './BlankFillingPractice';
 import OddOneOutGame from './OddOneOutGame';
 import WordAnalogyGame from './WordAnalogyGame';
@@ -160,7 +162,7 @@ export default function PracticeCenter({
   enrolledCourseIds,
   onSelectTab
 }: PracticeCenterProps) {
-  const [subTab, setSubTab] = useState<'hub' | 'quiz' | 'match' | 'exam' | 'blank' | 'odd_one_out' | 'analogy' | 'analytics'>('hub');
+  const [subTab, setSubTab] = useState<'hub' | 'quiz' | 'match' | 'word_search' | 'exam' | 'blank' | 'odd_one_out' | 'analogy' | 'analytics'>('hub');
   const [isQuickShuffleOpen, setIsQuickShuffleOpen] = useState<boolean>(false);
 
   const [mobileCollapsedState, setMobileCollapsedState] = useState<Record<string, boolean>>({});
@@ -170,6 +172,7 @@ export default function PracticeCenter({
 
   const isQuizEnabled = !enabledGames || enabledGames.quiz !== false;
   const isMatchEnabled = !enabledGames || enabledGames.match !== false;
+  const isWordSearchEnabled = !enabledGames || enabledGames.word_search !== false;
   const isSynonymEnabled = !enabledGames || enabledGames.synonym !== false;
   const isBlankEnabled = !enabledGames || enabledGames.blank !== false;
   const isOddOneOutEnabled = !enabledGames || enabledGames.odd_one_out !== false;
@@ -296,14 +299,23 @@ export default function PracticeCenter({
     const analogyCompleted = analogyTotal > 0 ? analogyQs.filter(q => analogyProgress[q.id] !== undefined).length : 0;
     const analogyPercent = analogyTotal > 0 ? Math.min(100, Math.round((analogyCompleted / analogyTotal) * 100)) : 0;
 
+    // 7. Word Search Stats
+    const searchTotal = words.length;
+    const searchCompleted = words.filter(w => {
+      const p = progress[w.id];
+      return p && (p.status === 'know' || p.status === 'dont_know' || p.status === 'confusion');
+    }).length;
+    const searchPercent = searchTotal > 0 ? Math.min(100, Math.round((searchCompleted / searchTotal) * 100)) : 0;
+
     // Overall across all games
-    const totalQsAcrossGames = quizTotal + matchTotal + synonymTotal + blankTotal + oooTotal + analogyTotal;
-    const completedQsAcrossGames = quizCompleted + matchCompleted + synonymCompleted + blankCompleted + oooCompleted + analogyCompleted;
+    const totalQsAcrossGames = quizTotal + matchTotal + synonymTotal + blankTotal + oooTotal + analogyTotal + searchTotal;
+    const completedQsAcrossGames = quizCompleted + matchCompleted + synonymCompleted + blankCompleted + oooCompleted + analogyCompleted + searchCompleted;
     const overallPercent = totalQsAcrossGames > 0 ? Math.round((completedQsAcrossGames / totalQsAcrossGames) * 100) : 0;
 
     return {
       quiz: { completed: quizCompleted, total: quizTotal, percent: quizPercent },
       match: { completed: matchCompleted, total: matchTotal, percent: matchPercent },
+      word_search: { completed: searchCompleted, total: searchTotal, percent: searchPercent },
       synonym: { completed: synonymCompleted, total: synonymTotal, percent: synonymPercent },
       blank: { completed: blankCompleted, total: blankTotal, percent: blankPercent, isUploaded: blankQs.length > 0 },
       odd_one_out: { completed: oooCompleted, total: oooTotal, percent: oooPercent, isUploaded: oooQs.length > 0 },
@@ -343,6 +355,21 @@ export default function PracticeCenter({
       enabled: isMatchEnabled,
       icon: <Gamepad2 className="w-6 h-6 text-pink-650" />,
       action: () => setSubTab('match')
+    },
+    {
+      key: 'word_search',
+      title: 'Word Search',
+      tag: 'Puzzle Matrix',
+      btnText: 'Play Search',
+      iconBg: 'bg-purple-50 text-purple-600 border-purple-100',
+      ringColorClass: 'text-purple-600',
+      barColorClass: 'bg-purple-600',
+      borderHover: 'hover:border-purple-200',
+      tagColor: 'text-purple-600',
+      hoverText: 'hover:text-purple-600',
+      enabled: isWordSearchEnabled,
+      icon: <Search className="w-6 h-6 text-purple-600" />,
+      action: () => setSubTab('word_search')
     },
     {
       key: 'exam',
@@ -409,7 +436,7 @@ export default function PracticeCenter({
   // Sort items according to settings.practiceItemsOrder
   const practiceOrder = Array.isArray(settings?.practiceItemsOrder) && settings.practiceItemsOrder.length > 0
     ? settings.practiceItemsOrder
-    : ['quiz', 'match', 'synonym', 'blank', 'odd_one_out', 'analogy'];
+    : ['quiz', 'match', 'word_search', 'synonym', 'blank', 'odd_one_out', 'analogy'];
 
   const orderedItems = [...practiceItemsConfig].sort((a, b) => {
     const idxA = practiceOrder.indexOf(a.key);
@@ -663,6 +690,16 @@ export default function PracticeCenter({
         <WordMatchGame
           words={words}
           activeGroup={typeof activeGroup === 'number' ? activeGroup : (typeof activeGroup === 'string' ? parseInt(activeGroup, 10) || null : null)}
+          settings={settings}
+          onBack={() => setSubTab('hub')}
+          placeLabels={placeLabels}
+        />
+      )}
+
+      {subTab === 'word_search' && (
+        <WordSearchGame
+          words={words}
+          activeGroup={activeGroup}
           settings={settings}
           onBack={() => setSubTab('hub')}
           placeLabels={placeLabels}

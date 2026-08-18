@@ -997,6 +997,7 @@ export default function MyCoursesView({
     const enabledPracticeList = [
       { key: 'quiz', label: 'MCQ Quiz', enabled: course.enabledGames?.quiz !== false },
       { key: 'match', label: 'Word Match', enabled: course.enabledGames?.match !== false },
+      { key: 'word_search', label: 'Word Search', enabled: course.enabledGames?.word_search !== false },
       { key: 'synonym', label: 'Synonym Check', enabled: course.enabledGames?.synonym !== false },
       { key: 'blank', label: 'Blank Filling', enabled: course.enabledGames?.blank !== false },
       { key: 'odd_one_out', label: 'Odd One Out', enabled: course.enabledGames?.odd_one_out !== false },
