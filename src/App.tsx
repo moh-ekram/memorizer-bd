@@ -669,8 +669,49 @@ export default function App() {
     safeSetLocalStorage('vocab_memorizer_quiz_taken', String(quizTaken));
   }, [quizTaken]);
 
-  // Load custom courses with real-time snapshot updates and offline caching
+  // Load custom courses with immediate cloud fetch, real-time snapshot updates and offline caching
   useEffect(() => {
+    // 1. Immediate fetch from Cloud
+    const fetchCoursesImmediately = async () => {
+      try {
+        const qSnap = await getDocs(collection(db, 'courses'));
+        const loaded: Course[] = [];
+        qSnap.forEach(docSnap => {
+          loaded.push({ ...docSnap.data(), id: docSnap.id } as Course);
+        });
+        setCustomCourses(loaded);
+        safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(loaded));
+
+        const loadedIds = new Set(loaded.map(c => c.id.trim().toLowerCase()));
+
+        setImportedCourses(prev => {
+          const validImported = prev.filter(imp => {
+            const impId = imp.id.trim().toLowerCase();
+            return impId === 'gre' || loadedIds.has(impId);
+          });
+          const next = validImported.map(imp => {
+            const match = loaded.find(c => c.id.trim().toLowerCase() === imp.id.trim().toLowerCase());
+            return match ? { ...imp, ...match } : imp;
+          });
+          safeSetLocalStorage('vocab_memorizer_imported_courses', JSON.stringify(next));
+          return next;
+        });
+
+        setEnrolledCourseIds(prev => {
+          const next = prev.filter(id => {
+            const idLower = id.trim().toLowerCase();
+            return idLower === 'gre' || loadedIds.has(idLower);
+          });
+          safeSetLocalStorage(LOCAL_STORAGE_ENROLLED_COURSES_KEY, JSON.stringify(next));
+          return next;
+        });
+      } catch (err) {
+        console.warn('Immediate courses fetch notice:', err);
+      }
+    };
+    fetchCoursesImmediately();
+
+    // 2. Real-time snapshot listener
     let unsubscribe = () => {};
     try {
       const coursesRef = collection(db, 'courses');
@@ -2722,6 +2763,17 @@ const getActiveCourse = (
               onCoursesUpdated={(updatedCourses) => {
                 setCustomCourses(updatedCourses);
                 safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(updatedCourses));
+                const loadedIds = new Set(updatedCourses.map(c => c.id.trim().toLowerCase()));
+                setImportedCourses(prev => {
+                  const valid = prev.filter(imp => imp.id.trim().toLowerCase() === 'gre' || loadedIds.has(imp.id.trim().toLowerCase()));
+                  safeSetLocalStorage('vocab_memorizer_imported_courses', JSON.stringify(valid));
+                  return valid;
+                });
+                setEnrolledCourseIds(prev => {
+                  const valid = prev.filter(id => id.trim().toLowerCase() === 'gre' || loadedIds.has(id.trim().toLowerCase()));
+                  safeSetLocalStorage(LOCAL_STORAGE_ENROLLED_COURSES_KEY, JSON.stringify(valid));
+                  return valid;
+                });
               }}
             />
           )}

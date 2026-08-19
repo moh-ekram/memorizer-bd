@@ -1410,15 +1410,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           };
 
           const idKey = findKey(['id', 'unique id', 'word id', 'uid', 'sl', 'serial']);
-          if (!idKey) {
-            setUploadError('The spreadsheet is missing the mandatory "id" column. Please make sure your spreadsheet has an "id" column.');
-            return;
-          }
-          const rawId = row[idKey] ? String(row[idKey]).trim() : '';
-          if (!rawId) {
-            setUploadError('Error parsing: A row is missing a unique ID in the mandatory "id" column.');
-            return;
-          }
+          const rawId = (idKey && row[idKey]) ? String(row[idKey]).trim() : String(index);
 
           const wordKey = findKey(['word', 'main word', 'english word'], 'place1');
           const meaningKey = findKey(['meaning', 'bangla meaning', 'bengali meaning'], 'place2');
@@ -1468,7 +1460,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           const mnemonic = mnemonicKey ? String(row[mnemonicKey]).trim() : '';
 
           wordsList.push({
-            id: rawId,
+            id: rawId || String(index),
             group,
             word: baseWord,
             meaning: banglaMeaning,
@@ -1499,11 +1491,6 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const processPastedText = (text: string) => {
     setUploadError(null);
     setUploadedWords([]);
-    
-    if (!newCourseId) {
-      setUploadError('Please provide a course title first to generate course ID.');
-      return;
-    }
 
     if (!text.trim()) {
       return;
@@ -1517,16 +1504,16 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       // Check if first line has headers like 'word', 'meaning'
       let startIdx = 0;
       let colIdxs = {
-        id: 0,
-        word: 1,
-        meaning: 2,
-        group: 3,
+        id: -1,
+        word: 0,
+        meaning: 1,
+        group: 2,
         synonym1: -1,
         synonym2: -1,
-        synonyms: 4,
-        extraWord: 5,
-        extraMeaning: 6,
-        example: 7,
+        synonyms: 3,
+        extraWord: 4,
+        extraMeaning: 5,
+        example: 6,
         mnemonic: -1
       };
 
@@ -1569,7 +1556,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             });
           };
 
-          const idPos = findPos(['id', 'unique id', 'word id', 'uid']);
+          const idPos = findPos(['id', 'unique id', 'word id', 'uid', 'sl', 'serial']);
           const wordPos = findPos(['word', 'main word'], 'place1');
           const meaningPos = findPos(['meaning', 'bangla meaning'], 'place2');
           const groupPos = findPos(['group']);
@@ -1604,14 +1591,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           }
         }
 
-        const rawId = colIdxs.id !== -1 && cells[colIdxs.id] ? cells[colIdxs.id].trim() : '';
+        const rawId = colIdxs.id !== -1 && cells[colIdxs.id] ? cells[colIdxs.id].trim() : String(index);
         const baseWord = cells[colIdxs.word]?.trim() || '';
         const banglaMeaning = cells[colIdxs.meaning]?.trim() || '';
-
-        if (!rawId) {
-          setUploadError(`Error at line ${i + 1}: Unique ID is missing or empty in the mandatory "id" column.`);
-          return;
-        }
 
         if (!baseWord || !banglaMeaning) {
           continue; // Skip invalid rows
@@ -1647,7 +1629,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         const mnemonic = colIdxs.mnemonic && colIdxs.mnemonic !== -1 ? cells[colIdxs.mnemonic]?.trim() || '' : '';
 
         parsedWords.push({
-          id: rawId,
+          id: rawId || String(index),
           group,
           word: baseWord,
           meaning: banglaMeaning,
@@ -1674,10 +1656,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   };
 
   const handleSaveCourse = async () => {
-    const rawId = newCourseId.trim().toLowerCase();
-    if (!newCourseTitle.trim() || !rawId || uploadedWords.length === 0) {
-      setSaveError('Please complete all required fields and provide valid data.');
+    if (!newCourseTitle.trim() || uploadedWords.length === 0) {
+      setSaveError('Please enter a Course Title and provide vocabulary words.');
       return;
+    }
+
+    let cleanId = (newCourseId || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/^-+|-+$/g, '');
+    if (!cleanId) {
+      cleanId = `course-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
     }
 
     setSaveStatus('saving');
@@ -1686,24 +1672,37 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     try {
       // Find total number of unique groups in uploaded word list
       const groups = new Set(uploadedWords.map(w => w.group));
-      const totalGroups = groups.size;
+      const totalGroups = groups.size || 1;
 
       // Parse allowed users list from text area (one user per line)
       const allowedUsers: string[] = [];
       if (newCourseIsRestricted && newCourseAllowedUsersText.trim()) {
         newCourseAllowedUsersText
           .split('\n')
-          .map(line => line.trim())
+          .map(line => line.trim().toLowerCase())
           .filter(line => line.length > 0)
           .forEach(user => allowedUsers.push(user));
       }
 
+      // Sanitize words list
+      const sanitizedWords: VocabularyWord[] = uploadedWords.map((w, idx) => ({
+        id: (w.id && String(w.id).trim()) || String(idx + 1),
+        group: w.group !== undefined && w.group !== null ? w.group : 1,
+        word: (w.word || '').trim(),
+        meaning: (w.meaning || '').trim(),
+        synonyms: (w.synonyms || '').trim(),
+        extraWord: (w.extraWord || '').trim(),
+        extraMeaning: (w.extraMeaning || '').trim(),
+        example: (w.example || '').trim(),
+        mnemonic: (w.mnemonic || '').trim()
+      })).filter(w => w.word && w.meaning);
+
       const rawCourseData: Course = {
-        id: rawId,
+        id: cleanId,
         title: newCourseTitle.trim(),
-        description: newCourseDesc.trim() || `${uploadedWords.length} words vocabulary course.`,
+        description: newCourseDesc.trim() || `${sanitizedWords.length} words vocabulary course.`,
         totalGroups,
-        words: uploadedWords,
+        words: sanitizedWords,
         stories: [],
         articles: [],
         enabledGames: { quiz: true, match: true, synonym: true, blank: true, story: true, article: true },
@@ -1721,8 +1720,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       // Sanitize data to remove any undefined fields that cause Firestore errors
       const cleanData: Course = JSON.parse(JSON.stringify(rawCourseData));
 
-      // 1. Save directly to Firestore Cloud Database first
-      await setDoc(doc(db, 'courses', cleanData.id), cleanData, { merge: true });
+      // 1. Save directly to Firestore Cloud Database
+      await setDoc(doc(db, 'courses', cleanData.id), cleanData);
 
       // 2. Update React state and local cache immediately
       const updatedList = [...customCourses.filter(c => c.id !== cleanData.id), cleanData];
@@ -1745,7 +1744,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       setNewCourseOrder(1);
       setIsSlugTouched(false);
       setShowCreateCourseModal(false);
-      alert(`Course "${cleanData.title}" created and published to all users successfully!`);
+      alert(`✅ কোর্স "${cleanData.title}" সফলভাবে ক্লাউডে সেভ ও পাবলিশ হয়েছে!`);
     } catch (err: any) {
       console.error('Error saving course:', err);
       setSaveError(err?.message || 'Failed to save course to cloud.');
@@ -1756,15 +1755,22 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   };
 
   const handleDeleteCourse = async (courseId: string) => {
-    if (!window.confirm('Are you absolutely sure you want to delete this course? All cloud records will be permanently erased!')) {
+    if (!window.confirm(`আপনি কি নিশ্চিতভাবে এই কোর্সটি (${courseId}) চিরতরে ডিলিট করতে চান? সব ক্লাউড ডাটা মুছে যাবে!`)) {
       return;
     }
     try {
+      const cleanCourseId = courseId.trim();
+
       // 1. Delete from Firestore cloud
-      await deleteDoc(doc(db, 'courses', courseId));
+      await deleteDoc(doc(db, 'courses', cleanCourseId));
+      if (cleanCourseId.toLowerCase() !== cleanCourseId) {
+        try {
+          await deleteDoc(doc(db, 'courses', cleanCourseId.toLowerCase()));
+        } catch (_) {}
+      }
 
       // 2. Immediately update AdminPanel state
-      const nextCourses = customCourses.filter(c => c.id !== courseId);
+      const nextCourses = customCourses.filter(c => c.id !== courseId && c.id.trim().toLowerCase() !== cleanCourseId.toLowerCase());
       setCustomCourses(nextCourses);
       safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(nextCourses));
 
@@ -1773,7 +1779,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         const impStr = safeGetLocalStorage('vocab_memorizer_imported_courses', '[]');
         const impList = JSON.parse(impStr);
         if (Array.isArray(impList)) {
-          const updatedImp = impList.filter((c: any) => c.id !== courseId);
+          const updatedImp = impList.filter((c: any) => c.id !== courseId && c.id?.trim()?.toLowerCase() !== cleanCourseId.toLowerCase());
           safeSetLocalStorage('vocab_memorizer_imported_courses', JSON.stringify(updatedImp));
         }
       } catch (_) {}
@@ -1782,20 +1788,20 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         const enrStr = safeGetLocalStorage('vocab_memorizer_enrolled_courses_v2', '[]');
         const enrList = JSON.parse(enrStr);
         if (Array.isArray(enrList)) {
-          const updatedEnr = enrList.filter((id: string) => id !== courseId);
+          const updatedEnr = enrList.filter((id: string) => id !== courseId && id?.trim()?.toLowerCase() !== cleanCourseId.toLowerCase());
           safeSetLocalStorage('vocab_memorizer_enrolled_courses_v2', JSON.stringify(updatedEnr));
         }
       } catch (_) {}
 
-      // 4. Notify parent without re-saving deleted records
+      // 4. Notify parent to sync globally across the app
       if (onCoursesUpdated) {
         onCoursesUpdated(nextCourses);
       }
 
-      alert('Course deleted permanently from cloud and all instances!');
-    } catch (err) {
+      alert('✅ কোর্সটি ক্লাউড এবং অ্যাপ থেকে সফলভাবে মুছে ফেলা হয়েছে!');
+    } catch (err: any) {
       console.error('Error deleting course:', err);
-      alert('Failed to delete course from cloud.');
+      alert('Failed to delete course from cloud: ' + (err?.message || 'Unknown error'));
     }
   };
 
