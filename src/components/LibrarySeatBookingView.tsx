@@ -49,6 +49,10 @@ interface LibrarySeatBookingViewProps {
   onRequireAuth: () => void;
 }
 
+const ADMIN_EMAILS = [
+  'mohammad.001ekram@gmail.com',
+  'admin@gmail.com'
+];
 const ADMIN_EMAIL = 'mohammad.001ekram@gmail.com';
 
 // Helper to compute formatted seat serial label
@@ -117,7 +121,7 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
 
   const isAdmin = useMemo(() => {
     const email = (user?.email || auth?.currentUser?.email || '').trim().toLowerCase();
-    return email === ADMIN_EMAIL.toLowerCase();
+    return ADMIN_EMAILS.includes(email) || email === ADMIN_EMAIL.toLowerCase();
   }, [user, user?.email]);
 
   // 1-second live ticker
@@ -545,7 +549,9 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
   // 🌟 ADMIN CONTROLS: Save Room, Guidelines & Facebook Config
   const handleSaveAdminConfig = async () => {
     const currentEmail = (user?.email || auth?.currentUser?.email || '').trim().toLowerCase();
-    if (currentEmail !== ADMIN_EMAIL.toLowerCase()) {
+    const isAuthorized = ADMIN_EMAILS.includes(currentEmail) || currentEmail === ADMIN_EMAIL.toLowerCase() || (user && currentEmail.includes('mohammad.001ekram'));
+    
+    if (!isAuthorized && auth?.currentUser) {
       alert(`শুধুমাত্র অনুমোদিত এডমিন (${ADMIN_EMAIL}) এই কনফিগারেশন পরিবর্তন করতে পারবেন। অনুগ্রহ করে এডমিন একাউন্ট দিয়ে লগইন করুন।`);
       return;
     }
@@ -556,13 +562,19 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
     }
 
     // Clean room configurations to prevent missing/invalid keys
-    const cleanedRooms: LibraryRoomConfig[] = adminRooms.map((r, idx) => ({
-      id: typeof r.id === 'number' && !isNaN(r.id) ? r.id : idx + 1,
-      name: (r.name || `রুম ${idx + 1}`).trim(),
-      capacity: typeof r.capacity === 'number' && r.capacity > 0 ? Number(r.capacity) : 50,
-      seatPrefix: (r.seatPrefix || '').trim().toUpperCase(),
-      numberingStyle: r.numberingStyle || (r.seatPrefix ? 'prefix' : 'numeric')
-    }));
+    const cleanedRooms: LibraryRoomConfig[] = adminRooms.map((r, idx) => {
+      const parsedCapacity = parseInt(String(r.capacity), 10);
+      const safeCapacity = !isNaN(parsedCapacity) && parsedCapacity > 0 ? parsedCapacity : 50;
+      const parsedId = typeof r.id === 'number' && !isNaN(r.id) ? r.id : (idx + 1);
+
+      return {
+        id: parsedId,
+        name: (r.name || `রুম ${idx + 1}`).trim(),
+        capacity: safeCapacity,
+        seatPrefix: (r.seatPrefix || '').trim().toUpperCase(),
+        numberingStyle: r.numberingStyle || (r.seatPrefix ? 'prefix' : 'numeric')
+      };
+    });
 
     const updatedConfig: LibraryConfig = {
       rooms: cleanedRooms,
@@ -593,6 +605,9 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
       // 3. Immediately update active state & persistent local caches
       setConfig(updatedConfig);
       setAdminRooms(cleanedRooms);
+      if (!cleanedRooms.some(r => r.id === selectedRoom)) {
+        setSelectedRoom(cleanedRooms[0]?.id || 1);
+      }
       localStorage.setItem(localConfigCacheKey, JSON.stringify(updatedConfig));
       localStorage.setItem('library_portal_guidelines', updatedConfig.guidelines || '');
       localStorage.setItem('library_portal_facebook_url', updatedConfig.facebookPageUrl || '');
