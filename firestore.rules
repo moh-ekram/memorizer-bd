@@ -108,6 +108,9 @@ service cloud.firestore {
     match /library_seats_central/{seatDocId} {
       allow read, write: if true;
     }
+    match /library_settings/{settingId} {
+      allow read, write: if true;
+    }
     match /{document=**} {
       allow read, write: if true;
     }

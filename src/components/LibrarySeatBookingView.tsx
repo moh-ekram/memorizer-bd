@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   db, 
+  auth,
   collection, 
   doc, 
+  getDoc,
   setDoc, 
   deleteDoc, 
   onSnapshot
@@ -111,10 +113,12 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
   const [adminRooms, setAdminRooms] = useState<LibraryRoomConfig[]>(DEFAULT_LIBRARY_CONFIG.rooms);
   const [adminGuidelines, setAdminGuidelines] = useState<string>(DEFAULT_LIBRARY_CONFIG.guidelines || '');
   const [adminFacebookUrl, setAdminFacebookUrl] = useState<string>(DEFAULT_LIBRARY_CONFIG.facebookPageUrl || 'https://facebook.com');
+  const [isSavingConfig, setIsSavingConfig] = useState<boolean>(false);
 
   const isAdmin = useMemo(() => {
-    return user?.email?.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
-  }, [user]);
+    const email = (user?.email || auth?.currentUser?.email || '').trim().toLowerCase();
+    return email === ADMIN_EMAIL.toLowerCase();
+  }, [user, user?.email]);
 
   // 1-second live ticker
   useEffect(() => {
@@ -139,17 +143,47 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
       const cachedConfig = localStorage.getItem(localConfigCacheKey);
       if (cachedConfig) {
         const parsed = JSON.parse(cachedConfig);
-        setConfig(parsed);
-        setAdminRooms(parsed.rooms || DEFAULT_LIBRARY_CONFIG.rooms);
-        if (parsed.guidelines) setAdminGuidelines(parsed.guidelines);
-        if (parsed.facebookPageUrl) setAdminFacebookUrl(parsed.facebookPageUrl);
+        if (parsed && Array.isArray(parsed.rooms) && parsed.rooms.length > 0) {
+          setConfig(parsed);
+          setAdminRooms(parsed.rooms);
+          if (parsed.guidelines) setAdminGuidelines(parsed.guidelines);
+          if (parsed.facebookPageUrl) setAdminFacebookUrl(parsed.facebookPageUrl);
+        }
       }
     } catch (_) {}
 
+    // 1. Immediate cloud fetch via getDoc
+    const fetchInitialConfig = async () => {
+      try {
+        const configRef = doc(db, 'library_settings', configDocName);
+        const docSnap = await getDoc(configRef);
+        const exists = typeof docSnap.exists === 'function' ? docSnap.exists() : !!docSnap.exists;
+        if (exists) {
+          const data = docSnap.data() as LibraryConfig;
+          if (data && Array.isArray(data.rooms) && data.rooms.length > 0) {
+            setConfig(data);
+            setAdminRooms(data.rooms);
+            if (data.guidelines) setAdminGuidelines(data.guidelines);
+            if (data.facebookPageUrl) setAdminFacebookUrl(data.facebookPageUrl);
+            try {
+              localStorage.setItem(localConfigCacheKey, JSON.stringify(data));
+              localStorage.setItem('library_portal_guidelines', data.guidelines || '');
+              localStorage.setItem('library_portal_facebook_url', data.facebookPageUrl || '');
+            } catch (_) {}
+          }
+        }
+      } catch (err) {
+        console.warn('Initial getDoc library config error:', err);
+      }
+    };
+    fetchInitialConfig();
+
+    // 2. Real-time snapshot listener
     try {
       const configRef = doc(db, 'library_settings', configDocName);
       const unsubscribe = onSnapshot(configRef, (docSnap) => {
-        if (docSnap.exists()) {
+        const exists = typeof docSnap.exists === 'function' ? docSnap.exists() : !!docSnap.exists;
+        if (exists) {
           const data = docSnap.data() as LibraryConfig;
           if (data && Array.isArray(data.rooms) && data.rooms.length > 0) {
             setConfig(data);
@@ -170,7 +204,7 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
     } catch (e) {
       console.warn('Config listener init error:', e);
     }
-  }, [libraryType]);
+  }, [libraryType, configDocName, localConfigCacheKey]);
 
   // Load Real-time Seat Bookings from Firestore with auto-reset for previous days
   useEffect(() => {
@@ -510,39 +544,66 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
 
   // 🌟 ADMIN CONTROLS: Save Room, Guidelines & Facebook Config
   const handleSaveAdminConfig = async () => {
-    if (!isAdmin) return;
+    const currentEmail = (user?.email || auth?.currentUser?.email || '').trim().toLowerCase();
+    if (currentEmail !== ADMIN_EMAIL.toLowerCase()) {
+      alert(`শুধুমাত্র অনুমোদিত এডমিন (${ADMIN_EMAIL}) এই কনফিগারেশন পরিবর্তন করতে পারবেন। অনুগ্রহ করে এডমিন একাউন্ট দিয়ে লগইন করুন।`);
+      return;
+    }
+
+    if (!adminRooms || adminRooms.length === 0) {
+      alert('কমপক্ষে ১টি রুম থাকা আবশ্যক!');
+      return;
+    }
+
+    // Clean room configurations to prevent missing/invalid keys
+    const cleanedRooms: LibraryRoomConfig[] = adminRooms.map((r, idx) => ({
+      id: typeof r.id === 'number' && !isNaN(r.id) ? r.id : idx + 1,
+      name: (r.name || `রুম ${idx + 1}`).trim(),
+      capacity: typeof r.capacity === 'number' && r.capacity > 0 ? Number(r.capacity) : 50,
+      seatPrefix: (r.seatPrefix || '').trim().toUpperCase(),
+      numberingStyle: r.numberingStyle || (r.seatPrefix ? 'prefix' : 'numeric')
+    }));
+
     const updatedConfig: LibraryConfig = {
-      rooms: adminRooms,
+      rooms: cleanedRooms,
       bookingStartHour: 8,
       bookingEndHour: 22,
-      guidelines: adminGuidelines,
-      facebookPageUrl: adminFacebookUrl,
+      guidelines: (adminGuidelines || '').trim(),
+      facebookPageUrl: (adminFacebookUrl || 'https://facebook.com').trim(),
       updatedAt: new Date().toISOString()
     };
 
+    setIsSavingConfig(true);
+
     try {
+      // 1. Save specific library room configuration to Firestore
       const configRef = doc(db, 'library_settings', configDocName);
-      await setDoc(configRef, updatedConfig, { merge: true });
+      await setDoc(configRef, updatedConfig);
       
-      // Also save to global_library_config for cross-portal synchronization
+      // 2. Also save to global_library_config for cross-portal synchronization
       try {
         const globalRef = doc(db, 'library_settings', 'global_library_config');
         await setDoc(globalRef, {
-          guidelines: adminGuidelines,
-          facebookPageUrl: adminFacebookUrl,
-          updatedAt: new Date().toISOString()
+          guidelines: updatedConfig.guidelines,
+          facebookPageUrl: updatedConfig.facebookPageUrl,
+          updatedAt: updatedConfig.updatedAt
         }, { merge: true });
       } catch (_) {}
 
+      // 3. Immediately update active state & persistent local caches
       setConfig(updatedConfig);
+      setAdminRooms(cleanedRooms);
       localStorage.setItem(localConfigCacheKey, JSON.stringify(updatedConfig));
-      localStorage.setItem('library_portal_guidelines', adminGuidelines);
-      localStorage.setItem('library_portal_facebook_url', adminFacebookUrl);
-      alert('লাইব্রেরির রুম, নির্দেশনাবলী এবং ফেসবুক লিংক সফলভাবে সেভ হয়েছে!');
+      localStorage.setItem('library_portal_guidelines', updatedConfig.guidelines || '');
+      localStorage.setItem('library_portal_facebook_url', updatedConfig.facebookPageUrl || '');
+      
+      alert('✅ লাইব্রেরির নতুন রুম ও কনফিগারেশন সফলভাবে ক্লাউডে সেভ হয়েছে!');
       setShowAdminPanel(false);
     } catch (e: any) {
       console.error('Save config error:', e);
-      alert('কনফিগারেশন সেভ করতে সমস্যা হয়েছে: ' + e?.message);
+      alert('কনফিগারেশন সেভ করতে সমস্যা হয়েছে: ' + (e?.message || 'Unknown error'));
+    } finally {
+      setIsSavingConfig(false);
     }
   };
 
@@ -1537,17 +1598,20 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
             <div className="flex gap-3 pt-4 border-t border-slate-200">
               <button
                 type="button"
+                disabled={isSavingConfig}
                 onClick={() => setShowAdminPanel(false)}
-                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer disabled:opacity-50"
               >
                 বাতিল
               </button>
               <button
                 type="button"
+                disabled={isSavingConfig}
                 onClick={handleSaveAdminConfig}
-                className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-xl transition shadow-md shadow-amber-500/20 cursor-pointer active:scale-95"
+                className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-xl transition shadow-md shadow-amber-500/20 cursor-pointer active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
               >
-                কনফিগারেশন সেভ করুন
+                {isSavingConfig && <Hourglass className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isSavingConfig ? 'ক্লাউডে সেভ হচ্ছে...' : 'কনফিগারেশন সেভ করুন'}</span>
               </button>
             </div>
 

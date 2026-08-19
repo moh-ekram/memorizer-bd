@@ -682,20 +682,42 @@ export default function App() {
         setCustomCourses(loaded);
         safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(loaded));
 
-        // Sync importedCourses if any match custom course IDs
+        const loadedIds = new Set(loaded.map(c => c.id.trim().toLowerCase()));
+
+        // Sync importedCourses: prune deleted courses and update existing matching ones
         setImportedCourses(prev => {
-          let hasChanges = false;
-          const next = prev.map(imp => {
-            const match = loaded.find(c => c.id.trim().toLowerCase() === imp.id.trim().toLowerCase());
-            if (match) {
-              hasChanges = true;
-              return { ...imp, ...match };
-            }
-            return imp;
+          const validImported = prev.filter(imp => {
+            const impId = imp.id.trim().toLowerCase();
+            return impId === 'gre' || loadedIds.has(impId);
           });
-          if (hasChanges) {
-            safeSetLocalStorage('vocab_memorizer_imported_courses', JSON.stringify(next));
+          const next = validImported.map(imp => {
+            const match = loaded.find(c => c.id.trim().toLowerCase() === imp.id.trim().toLowerCase());
+            return match ? { ...imp, ...match } : imp;
+          });
+          safeSetLocalStorage('vocab_memorizer_imported_courses', JSON.stringify(next));
+          return next;
+        });
+
+        // Prune deleted courses from enrolledCourseIds
+        setEnrolledCourseIds(prev => {
+          const next = prev.filter(id => {
+            const idLower = id.trim().toLowerCase();
+            return idLower === 'gre' || loadedIds.has(idLower);
+          });
+          if (next.length !== prev.length) {
+            safeSetLocalStorage(LOCAL_STORAGE_ENROLLED_COURSES_KEY, JSON.stringify(next));
             return next;
+          }
+          return prev;
+        });
+
+        // If the active course was deleted, automatically fallback to 'gre' or first available course
+        setActiveCourseId(prev => {
+          const prevLower = prev?.trim().toLowerCase();
+          if (prevLower && prevLower !== 'gre' && !loadedIds.has(prevLower)) {
+            const fallback = loaded.length > 0 ? loaded[0].id : 'gre';
+            safeSetLocalStorage(LOCAL_STORAGE_ACTIVE_COURSE_KEY, fallback);
+            return fallback;
           }
           return prev;
         });
@@ -2697,46 +2719,9 @@ const getActiveCourse = (
               words={activeWords} 
               settings={settings}
               onUpdateSettings={setSettings}
-              onCoursesUpdated={async (updatedCourses) => {
-                console.log('[App.tsx onCoursesUpdated] Invoked with updatedCourses count:', updatedCourses?.length);
+              onCoursesUpdated={(updatedCourses) => {
                 setCustomCourses(updatedCourses);
                 safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(updatedCourses));
-
-                // Verify user write access permission and persist courses data to Firestore DB via setDoc
-                const adminEmails = ['mohammad.001ekram@gmail.com'];
-                const userEmail = user?.email?.trim().toLowerCase();
-                const hasWriteAccess = !!userEmail && (
-                  adminEmails.includes(userEmail) || 
-                  (settings.adminEmails && settings.adminEmails.map(e => e.trim().toLowerCase()).includes(userEmail))
-                );
-
-                if (hasWriteAccess && Array.isArray(updatedCourses) && updatedCourses.length > 0) {
-                  try {
-                    const batch = writeBatch(db);
-                    let validCount = 0;
-                    for (const course of updatedCourses) {
-                      if (course && course.id) {
-                        const courseRef = doc(db, 'courses', course.id);
-                        batch.set(courseRef, course, { merge: true });
-                        validCount++;
-                      } else {
-                        console.warn('[App.tsx onCoursesUpdated] Skipping invalid course item missing id:', course);
-                      }
-                    }
-                    if (validCount > 0) {
-                      await batch.commit();
-                      console.log(`[App.tsx onCoursesUpdated] Atomically persisted ${validCount} course(s) to Firestore using writeBatch.`);
-                    }
-                  } catch (err) {
-                    console.error('[App.tsx onCoursesUpdated] Error persisting course data to Firestore:', err);
-                  }
-                } else {
-                  console.warn('[App.tsx onCoursesUpdated] Write access permission check failed or no updated courses provided.', {
-                    userEmail,
-                    hasWriteAccess,
-                    updatedCoursesCount: updatedCourses?.length
-                  });
-                }
               }}
             />
           )}

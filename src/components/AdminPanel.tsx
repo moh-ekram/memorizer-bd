@@ -1148,7 +1148,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     }
   };
 
-  // Fetch custom courses
+  // Fetch custom courses with real-time listener and offline cache
   const fetchCustomCourses = async () => {
     // 1. Instant Cache Render (0ms)
     let hasLocal = false;
@@ -1168,11 +1168,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     }
     setCoursesError(null);
 
-    // 2. Background Firestore fetch with 3.5s timeout guard
     try {
       const fetchPromise = getDocs(collection(db, 'courses'));
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Courses fetch timeout')), 3500)
+        setTimeout(() => reject(new Error('Courses fetch timeout')), 4500)
       );
 
       const qSnap = (await Promise.race([fetchPromise, timeoutPromise])) as any;
@@ -1194,6 +1193,28 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       setCoursesLoading(false);
     }
   };
+
+  // Real-time courses snapshot listener for Admin Panel
+  useEffect(() => {
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = onSnapshot(collection(db, 'courses'), (snap) => {
+        const list: Course[] = [];
+        snap.forEach(docSnap => {
+          list.push({ ...docSnap.data(), id: docSnap.id } as Course);
+        });
+        setCustomCourses(list);
+        setHasFetchedCourses(true);
+        setCoursesLoading(false);
+        safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(list));
+      }, (err) => {
+        console.warn("Notice in AdminPanel courses snapshot:", err);
+      });
+    } catch (err) {
+      console.error("Error setting up AdminPanel courses snapshot:", err);
+    }
+    return () => unsubscribe();
+  }, []);
 
   // Sync slug from title
   useEffect(() => {
@@ -1653,7 +1674,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   };
 
   const handleSaveCourse = async () => {
-    if (!newCourseTitle.trim() || !newCourseId.trim() || uploadedWords.length === 0) {
+    const rawId = newCourseId.trim().toLowerCase();
+    if (!newCourseTitle.trim() || !rawId || uploadedWords.length === 0) {
       setSaveError('Please complete all required fields and provide valid data.');
       return;
     }
@@ -1677,7 +1699,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       }
 
       const rawCourseData: Course = {
-        id: newCourseId.trim(),
+        id: rawId,
         title: newCourseTitle.trim(),
         description: newCourseDesc.trim() || `${uploadedWords.length} words vocabulary course.`,
         totalGroups,
@@ -1699,32 +1721,16 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       // Sanitize data to remove any undefined fields that cause Firestore errors
       const cleanData: Course = JSON.parse(JSON.stringify(rawCourseData));
 
-      // 1. Immediately update React state for instant UI responsiveness
-      setCustomCourses(prev => [...prev.filter(c => c.id !== cleanData.id), cleanData]);
+      // 1. Save directly to Firestore Cloud Database first
+      await setDoc(doc(db, 'courses', cleanData.id), cleanData, { merge: true });
 
-      // 2. Update local storage cache immediately
-      try {
-        const cachedStr = safeGetLocalStorage('vocab_memorizer_cached_custom_courses', '[]');
-        let cachedCourses: Course[] = [];
-        try {
-          cachedCourses = JSON.parse(cachedStr);
-          if (!Array.isArray(cachedCourses)) cachedCourses = [];
-        } catch (_) { cachedCourses = []; }
-        const updatedCache = [...cachedCourses.filter(c => c.id !== cleanData.id), cleanData];
-        safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(updatedCache));
-      } catch (lErr) {
-        console.warn('Local course creation cache update notice:', lErr);
-      }
+      // 2. Update React state and local cache immediately
+      const updatedList = [...customCourses.filter(c => c.id !== cleanData.id), cleanData];
+      setCustomCourses(updatedList);
+      safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(updatedList));
 
-      // 3. Perform Cloud persistence with a 2.5-second timeout race condition so UI never buffers indefinitely
-      try {
-        const cloudSavePromise = setDoc(doc(db, 'courses', cleanData.id), cleanData, { merge: true });
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Cloud save timeout')), 2500)
-        );
-        await Promise.race([cloudSavePromise, timeoutPromise]);
-      } catch (cloudErr) {
-        console.warn('Cloud setDoc notice (saved locally & queued for sync):', cloudErr);
+      if (onCoursesUpdated) {
+        onCoursesUpdated(updatedList);
       }
       
       setSaveStatus('saved');
@@ -1739,16 +1745,11 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       setNewCourseOrder(1);
       setIsSlugTouched(false);
       setShowCreateCourseModal(false);
-      
-      // Refresh courses list in background
-      setTimeout(() => {
-        fetchCustomCourses();
-      }, 200);
-    } catch (err) {
+      alert(`Course "${cleanData.title}" created and published to all users successfully!`);
+    } catch (err: any) {
       console.error('Error saving course:', err);
-      // Even on error, if local state updated, close modal and show notice
+      setSaveError(err?.message || 'Failed to save course to cloud.');
       setSaveStatus('idle');
-      setShowCreateCourseModal(false);
     } finally {
       setSaveStatus('idle');
     }
@@ -1759,12 +1760,42 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       return;
     }
     try {
+      // 1. Delete from Firestore cloud
       await deleteDoc(doc(db, 'courses', courseId));
-      fetchCustomCourses();
-      alert('Course deleted successfully!');
+
+      // 2. Immediately update AdminPanel state
+      const nextCourses = customCourses.filter(c => c.id !== courseId);
+      setCustomCourses(nextCourses);
+      safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(nextCourses));
+
+      // 3. Clean up imported and enrolled course local caches
+      try {
+        const impStr = safeGetLocalStorage('vocab_memorizer_imported_courses', '[]');
+        const impList = JSON.parse(impStr);
+        if (Array.isArray(impList)) {
+          const updatedImp = impList.filter((c: any) => c.id !== courseId);
+          safeSetLocalStorage('vocab_memorizer_imported_courses', JSON.stringify(updatedImp));
+        }
+      } catch (_) {}
+
+      try {
+        const enrStr = safeGetLocalStorage('vocab_memorizer_enrolled_courses_v2', '[]');
+        const enrList = JSON.parse(enrStr);
+        if (Array.isArray(enrList)) {
+          const updatedEnr = enrList.filter((id: string) => id !== courseId);
+          safeSetLocalStorage('vocab_memorizer_enrolled_courses_v2', JSON.stringify(updatedEnr));
+        }
+      } catch (_) {}
+
+      // 4. Notify parent without re-saving deleted records
+      if (onCoursesUpdated) {
+        onCoursesUpdated(nextCourses);
+      }
+
+      alert('Course deleted permanently from cloud and all instances!');
     } catch (err) {
       console.error('Error deleting course:', err);
-      alert('Failed to delete course.');
+      alert('Failed to delete course from cloud.');
     }
   };
 
