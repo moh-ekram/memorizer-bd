@@ -1675,6 +1675,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         setHasFetchedCourses(true);
         setCoursesLoading(false);
         safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(list));
+        if (onCoursesUpdated) {
+          onCoursesUpdated(list);
+        }
       }, (err) => {
         console.warn("Notice in AdminPanel courses snapshot:", err);
       });
@@ -1682,7 +1685,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       console.error("Error setting up AdminPanel courses snapshot:", err);
     }
     return () => unsubscribe();
-  }, []);
+  }, [onCoursesUpdated]);
 
   // Real-time access requests snapshot listener for Admin Panel
   useEffect(() => {
@@ -2317,6 +2320,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       setCustomCourses(prev => {
         const next = prev.map(c => c.id === courseId ? { ...c, order: newOrder } : c);
         safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(next));
+        if (onCoursesUpdated) onCoursesUpdated(next);
         return next;
       });
     } catch (e) {
@@ -2331,6 +2335,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       setCustomCourses(prev => {
         const next = prev.map(c => c.id === courseId ? { ...c, hidden: newHidden } : c);
         safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(next));
+        if (onCoursesUpdated) onCoursesUpdated(next);
         return next;
       });
       // 2. Persist directly to Firestore
@@ -6655,6 +6660,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   ? prev.map(c => c.id === updatedCourse.id ? updatedCourse : c)
                   : [...prev, updatedCourse];
                 safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(next));
+                if (onCoursesUpdated) {
+                  onCoursesUpdated(next);
+                }
                 return next;
               });
             }
