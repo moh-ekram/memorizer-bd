@@ -1083,26 +1083,51 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       setAccessRequestsLoading(true);
     }
 
-    // 2. Background Firestore fetch with 3.5s timeout guard
-    try {
-      const fetchPromise = getDocs(collection(db, 'access_requests'));
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Access requests fetch timeout')), 3500)
-      );
+    const reqMap = new Map<string, AccessRequest>();
 
-      const qSnap = (await Promise.race([fetchPromise, timeoutPromise])) as any;
-      const reqMap = new Map<string, AccessRequest>();
-      
-      if (qSnap && qSnap.forEach) {
-        qSnap.forEach((docSnap: any) => {
+    // 2. Query Firestore and Server API in parallel
+    try {
+      const [firestoreRes, apiRes] = await Promise.allSettled([
+        (async () => {
+          const fetchPromise = getDocs(collection(db, 'access_requests'));
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Access requests fetch timeout')), 4000)
+          );
+          return (await Promise.race([fetchPromise, timeoutPromise])) as any;
+        })(),
+        (async () => {
+          const res = await fetch('/api/db/access_requests');
+          if (res.ok) {
+            const json = await res.json();
+            return json.data || {};
+          }
+          return {};
+        })()
+      ]);
+
+      // Process Firestore docs
+      if (firestoreRes.status === 'fulfilled' && firestoreRes.value?.forEach) {
+        firestoreRes.value.forEach((docSnap: any) => {
           reqMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as AccessRequest);
         });
-
-        const list = Array.from(reqMap.values());
-        list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-        setAccessRequests(list);
-        safeSetLocalStorage('cached_admin_access_requests', JSON.stringify(list));
       }
+
+      // Process Server API docs
+      if (apiRes.status === 'fulfilled' && apiRes.value && typeof apiRes.value === 'object') {
+        Object.entries(apiRes.value).forEach(([docId, docData]: [string, any]) => {
+          if (!reqMap.has(docId)) {
+            reqMap.set(docId, { id: docId, ...docData } as AccessRequest);
+          } else {
+            // Merge fields
+            reqMap.set(docId, { ...docData, ...reqMap.get(docId), id: docId } as AccessRequest);
+          }
+        });
+      }
+
+      const list = Array.from(reqMap.values());
+      list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      setAccessRequests(list);
+      safeSetLocalStorage('cached_admin_access_requests', JSON.stringify(list));
     } catch (err) {
       console.warn('Notice fetching access requests in background:', err);
     } finally {
@@ -1217,13 +1242,23 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
       showToast(`Request rejected for ${userEmail}`, 'info');
 
-      // 2. Background Firestore sync
+      // 2. Background Firestore & API sync
       try {
         const reqRef = doc(db, 'access_requests', req.id);
         await updateDoc(reqRef, { status: 'rejected', updatedAt: nowISO });
       } catch (err: any) {
         console.warn('Background reject sync notice:', err);
       }
+      try {
+        await fetch('/api/db/access_requests/doc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: req.id,
+            data: { ...req, status: 'rejected', updatedAt: nowISO }
+          })
+        });
+      } catch (_) {}
       return true;
     }
 
@@ -1430,6 +1465,36 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               }
             }
           }
+
+          // Server API fallback sync
+          try {
+            await fetch('/api/db/access_requests/doc', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: req.id,
+                data: {
+                  ...req,
+                  status: 'approved',
+                  spent: true,
+                  spentAt: nowISO,
+                  price: finalPrice,
+                  totalPrice: finalPrice,
+                  updatedAt: nowISO
+                }
+              })
+            });
+            if (isRecharge) {
+              await fetch('/api/db/user_wallets/doc', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  id: userEmail,
+                  data: { email: userEmail, balance: finalPrice, updatedAt: nowISO }
+                })
+              });
+            }
+          } catch (_) {}
         })();
 
         const timeoutPromise = new Promise((_, reject) =>
@@ -1619,6 +1684,36 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     return () => unsubscribe();
   }, []);
 
+  // Real-time access requests snapshot listener for Admin Panel
+  useEffect(() => {
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = onSnapshot(collection(db, 'access_requests'), (snap) => {
+        const snapList: AccessRequest[] = [];
+        snap.forEach(docSnap => {
+          snapList.push({ id: docSnap.id, ...docSnap.data() } as AccessRequest);
+        });
+        
+        // Merge with existing state so we don't lose any server-side items
+        setAccessRequests(prev => {
+          const map = new Map<string, AccessRequest>();
+          prev.forEach(item => map.set(item.id, item));
+          snapList.forEach(item => map.set(item.id, item));
+          const merged = Array.from(map.values());
+          merged.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+          safeSetLocalStorage('cached_admin_access_requests', JSON.stringify(merged));
+          return merged;
+        });
+        setAccessRequestsLoading(false);
+      }, (err) => {
+        console.warn("Notice in AdminPanel access_requests snapshot:", err);
+      });
+    } catch (err) {
+      console.error("Error setting up AdminPanel access_requests snapshot:", err);
+    }
+    return () => unsubscribe();
+  }, []);
+
   // Sync slug from title
   useEffect(() => {
     if (isSlugTouched) return;
@@ -1702,6 +1797,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
   // Lazy on-demand data fetching based on activeAdminTab to keep memory lean (<150MB)
   useEffect(() => {
+    let intervalId: any = null;
     if (activeAdminTab === 'courses') {
       fetchCustomCourses();
     } else if (activeAdminTab === 'users') {
@@ -1711,9 +1807,16 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     } else if (activeAdminTab === 'access-requests' || activeAdminTab === 'autoverify') {
       fetchAccessRequests();
       fetchGlobalVerifiedPayments();
+      // Poll every 6 seconds to keep backend API sync instant
+      intervalId = setInterval(() => {
+        fetchAccessRequests();
+      }, 6000);
     } else if (activeAdminTab === 'blank-questions') {
       fetchBlankQuestions();
     }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [activeAdminTab]);
 
   // Drag and drop handlers

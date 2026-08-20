@@ -42,7 +42,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Lock,
-  ArrowLeft
+  ArrowLeft,
+  ShieldAlert,
+  LogIn
 } from 'lucide-react';
 
 import {
@@ -2645,27 +2647,76 @@ const getActiveCourse = (
             />
           )}
 
-          {activeTab === 'admin' && user && user.email && ['mohammad.001ekram@gmail.com'].includes(user.email.trim().toLowerCase()) && (
-            <AdminPanel 
-              words={activeWords} 
-              settings={settings}
-              onUpdateSettings={setSettings}
-              onCoursesUpdated={(updatedCourses) => {
-                setCustomCourses(updatedCourses);
-                safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(updatedCourses));
-                const loadedIds = new Set(updatedCourses.map(c => c.id.trim().toLowerCase()));
-                setImportedCourses(prev => {
-                  const valid = prev.filter(imp => imp.id.trim().toLowerCase() === 'gre' || loadedIds.has(imp.id.trim().toLowerCase()));
-                  safeSetLocalStorage('vocab_memorizer_imported_courses', JSON.stringify(valid));
-                  return valid;
-                });
-                setEnrolledCourseIds(prev => {
-                  const valid = prev.filter(id => id.trim().toLowerCase() === 'gre' || loadedIds.has(id.trim().toLowerCase()));
-                  safeSetLocalStorage(LOCAL_STORAGE_ENROLLED_COURSES_KEY, JSON.stringify(valid));
-                  return valid;
-                });
-              }}
-            />
+          {activeTab === 'admin' && (
+            (() => {
+              const currentAuthEmail = (user?.email || auth.currentUser?.email || '').trim().toLowerCase();
+              const allowedAdminEmails = [
+                'mohammad.001ekram@gmail.com',
+                ...(settings?.adminEmails || []).map((e: string) => e.trim().toLowerCase())
+              ];
+              const isAllowedAdmin = currentAuthEmail && allowedAdminEmails.includes(currentAuthEmail);
+
+              if (isAllowedAdmin) {
+                return (
+                  <AdminPanel 
+                    words={activeWords} 
+                    settings={settings}
+                    onUpdateSettings={setSettings}
+                    onCoursesUpdated={(updatedCourses) => {
+                      setCustomCourses(updatedCourses);
+                      safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(updatedCourses));
+                      const loadedIds = new Set(updatedCourses.map(c => c.id.trim().toLowerCase()));
+                      setImportedCourses(prev => {
+                        const valid = prev.filter(imp => imp.id.trim().toLowerCase() === 'gre' || loadedIds.has(imp.id.trim().toLowerCase()));
+                        safeSetLocalStorage('vocab_memorizer_imported_courses', JSON.stringify(valid));
+                        return valid;
+                      });
+                      setEnrolledCourseIds(prev => {
+                        const valid = prev.filter(id => id.trim().toLowerCase() === 'gre' || loadedIds.has(id.trim().toLowerCase()));
+                        safeSetLocalStorage(LOCAL_STORAGE_ENROLLED_COURSES_KEY, JSON.stringify(valid));
+                        return valid;
+                      });
+                    }}
+                  />
+                );
+              }
+
+              return (
+                <div className="max-w-md mx-auto my-12 bg-white rounded-3xl p-8 border border-slate-200 shadow-xl text-center space-y-5" style={{ fontFamily: "'Poppins', sans-serif" }}>
+                  <div className="w-16 h-16 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-center mx-auto text-rose-600 shadow-sm">
+                    <ShieldAlert className="w-8 h-8" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-black text-slate-800">এডমিন প্যানেল অ্যাক্সেস সংরক্ষিত</h3>
+                    <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                      এডমিন প্যানেলে প্রবেশের জন্য এডমিন ইমেইল (<span className="font-bold text-slate-800 font-mono">mohammad.001ekram@gmail.com</span>) দিয়ে লগইন করুন।
+                    </p>
+                    {currentAuthEmail && (
+                      <p className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl border border-amber-200 font-mono">
+                        বর্তমান লগইন: {currentAuthEmail}
+                      </p>
+                    )}
+                  </div>
+                  <div className="pt-2 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsAuthModalOpen(true)}
+                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl shadow-md transition cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <LogIn className="w-4 h-4" />
+                      <span>এডমিন একাউন্টে সাইন ইন করুন</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('flashcard')}
+                      className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+                    >
+                      ফ্ল্যাশকার্ডে ফিরে যান
+                    </button>
+                  </div>
+                </div>
+              );
+            })()
           )}
         </div>
       </main>

@@ -430,25 +430,33 @@ export default function MyCoursesView({
             serverHandled = true;
             if (data.autoVerified) {
               setUserWalletBalance(data.newBalance || 0);
-              const reqId = `req_recharge_auto_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+              const reqId = data.reqId || `req_recharge_auto_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
               const nowISO = new Date().toISOString();
+              const autoPayload = {
+                id: reqId,
+                courseId: 'wallet_recharge',
+                courseTitle: `Wallet Recharge (৳${data.amountAdded || 50} BDT)`,
+                bkashNumber: cleanSender,
+                email: cleanEmail,
+                trxId: cleanTrx,
+                status: 'approved',
+                verificationMethod: 'auto',
+                spent: true,
+                spentAt: nowISO,
+                price: data.amountAdded || 50,
+                totalPrice: data.amountAdded || 50,
+                createdAt: nowISO,
+                requestedBy: user?.email || cleanEmail
+              };
               try {
-                await setDoc(doc(db, 'access_requests', reqId), {
-                  id: reqId,
-                  courseId: 'wallet_recharge',
-                  courseTitle: `Wallet Recharge (৳${data.amountAdded || 50} BDT)`,
-                  bkashNumber: cleanSender,
-                  email: cleanEmail,
-                  trxId: cleanTrx,
-                  status: 'approved',
-                  verificationMethod: 'auto',
-                  spent: true,
-                  spentAt: nowISO,
-                  price: data.amountAdded || 50,
-                  totalPrice: data.amountAdded || 50,
-                  createdAt: nowISO,
-                  requestedBy: user?.email || cleanEmail
-                }, { merge: true });
+                await setDoc(doc(db, 'access_requests', reqId), autoPayload, { merge: true });
+              } catch (_) {}
+              try {
+                await fetch('/api/db/access_requests/doc', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ id: reqId, data: autoPayload })
+                });
               } catch (_) {}
 
               setRechargeMessage({
@@ -459,25 +467,33 @@ export default function MyCoursesView({
               return;
             } else {
               // Server registered manual pending request
-              const reqId = `req_recharge_manual_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+              const reqId = data.reqId || `req_recharge_manual_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
               const nowISO = new Date().toISOString();
+              const manualPayload = {
+                id: reqId,
+                courseId: 'wallet_recharge',
+                courseTitle: `Wallet Recharge Claim`,
+                bkashNumber: cleanSender,
+                email: cleanEmail,
+                trxId: cleanTrx,
+                status: 'pending',
+                verificationMethod: 'manual',
+                spent: false,
+                price: 50,
+                totalPrice: 50,
+                amount: 50,
+                createdAt: nowISO,
+                requestedBy: user?.email || cleanEmail
+              };
               try {
-                await setDoc(doc(db, 'access_requests', reqId), {
-                  id: reqId,
-                  courseId: 'wallet_recharge',
-                  courseTitle: `Wallet Recharge Claim`,
-                  bkashNumber: cleanSender,
-                  email: cleanEmail,
-                  trxId: cleanTrx,
-                  status: 'pending',
-                  verificationMethod: 'manual',
-                  spent: false,
-                  price: 50,
-                  totalPrice: 50,
-                  amount: 50,
-                  createdAt: nowISO,
-                  requestedBy: user?.email || cleanEmail
-                }, { merge: true });
+                await setDoc(doc(db, 'access_requests', reqId), manualPayload, { merge: true });
+              } catch (_) {}
+              try {
+                await fetch('/api/db/access_requests/doc', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ id: reqId, data: manualPayload })
+                });
               } catch (_) {}
 
               setRechargeMessage({
