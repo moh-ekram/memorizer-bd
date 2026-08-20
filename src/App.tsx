@@ -484,158 +484,35 @@ export default function App() {
     });
   };
 
-  // Clear local cache remnants on initial mount
+  // Clear local cache remnants and unregister legacy service workers to eliminate browser/device overhead
   useEffect(() => {
     clearNonEssentialLocalStorageCache();
-  }, []);
-
-  // Service Worker Registration and Background Sync Listener
-  useEffect(() => {
     if ('serviceWorker' in navigator) {
-      const registerSW = async () => {
-        try {
-          const registration = await navigator.serviceWorker.register('/sw.js');
-          console.log('Service Worker registered successfully:', registration);
-
-          // Listen for messages from SW (e.g. SYNC_COMPLETE)
-          const handleSWMessage = (event: MessageEvent) => {
-            if (event.data && event.data.type === 'SYNC_COMPLETE') {
-              console.log('[App] Received SYNC_COMPLETE message from SW:', event.data);
-              if (event.data.progress) {
-                setProgress(prev => {
-                  const merged = { ...prev };
-                  Object.keys(event.data.progress).forEach(key => {
-                    const prevItem = prev[key];
-                    const incomingItem = event.data.progress[key];
-                    if (!prevItem) {
-                      merged[key] = incomingItem;
-                    } else {
-                      const prevTime = new Date(prevItem.updatedAt || 0).getTime();
-                      const incomingTime = new Date(incomingItem.updatedAt || 0).getTime();
-                      if (incomingTime > prevTime) {
-                        merged[key] = incomingItem;
-                      }
-                    }
-                  });
-                  return merged;
-                });
-                setSyncStatus('synced');
-                setPendingSyncCount(0);
-              }
-            }
-          };
-
-          navigator.serviceWorker.addEventListener('message', handleSWMessage);
-
-          return () => {
-            navigator.serviceWorker.removeEventListener('message', handleSWMessage);
-          };
-        } catch (error) {
-          console.error('Service Worker registration failed:', error);
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        for (const registration of registrations) {
+          registration.unregister();
         }
-      };
-
-      registerSW();
+      }).catch(() => {});
     }
   }, []);
 
-  // Utility to register a background sync or fall back to manual postMessage triggering
-  const triggerBackgroundSync = async () => {
-    if ('serviceWorker' in navigator) {
-      try {
-        const registration = await navigator.serviceWorker.ready;
-        if ('sync' in registration) {
-          await (registration as any).sync.register('sync-progress');
-          console.log('[App] Registered sync-progress background sync');
-        } else {
-          // Fallback if background sync is not supported: post a message to trigger immediate sync in SW
-          if (registration.active) {
-            registration.active.postMessage({ type: 'TRIGGER_SYNC' });
-          }
-        }
-      } catch (err) {
-        console.warn('Background sync registration failed, falling back:', err);
-        try {
-          const reg = await navigator.serviceWorker.getRegistration();
-          if (reg && reg.active) {
-            reg.active.postMessage({ type: 'TRIGGER_SYNC' });
-          }
-        } catch (e) {}
-      }
-    }
-  };
-
-  // Sync offline updates once connection is restored
-  const syncOfflineQueueToFirestore = async (currentProgress: Record<string, UserProgress> = progress) => {
-    if (!user || !hasLoadedFromCloud || !navigator.onLine) return;
-    try {
-      const queuedItems = await getQueuedSyncItems();
-      if (queuedItems.length === 0) return;
-
-      setSyncStatus('syncing');
-      const userDocRef = doc(db, 'users', user.uid);
-      await setDoc(userDocRef, {
-        progress: currentProgress,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-
-      await clearSyncQueue();
-      setPendingSyncCount(0);
-      setSyncStatus('synced');
-      addSyncLog('offline_queue', 'Synced queued offline changes to Cloud', 'success', queuedItems.length);
-    } catch (err) {
-      console.error('Error syncing offline queue to database:', err);
-      setSyncStatus('error');
-      addSyncLog('offline_queue', 'Offline queue synchronization failed', 'error');
-    }
-  };
-
-  // Sync network status & trigger automatic queue synchronization
+  // Sync network status
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      syncOfflineQueueToFirestore();
-      triggerBackgroundSync();
-    };
-    const handleOffline = () => {
-      setIsOnline(false);
-    };
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
-    // Initial check
-    const checkQueue = async () => {
-      try {
-        const items = await getQueuedSyncItems();
-        setPendingSyncCount(items.length);
-        if (items.length > 0 && navigator.onLine) {
-          syncOfflineQueueToFirestore();
-          triggerBackgroundSync();
-        }
-      } catch (e) {}
-    };
-    checkQueue();
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [user, hasLoadedFromCloud]);
+  }, []);
 
-  // Local Storage & IndexedDB Cache Save
+  // Minimal Local Storage Save for basic active session
   useEffect(() => {
     safeSetLocalStorage(LOCAL_STORAGE_PROGRESS_KEY, JSON.stringify(progress));
-    saveProgressToIndexedDB(progress);
-    
-    // Also update pending count on progress change
-    const updateCount = async () => {
-      try {
-        const items = await getQueuedSyncItems();
-        setPendingSyncCount(items.length);
-      } catch (e) {}
-    };
-    updateCount();
   }, [progress]);
 
   useEffect(() => {
@@ -1816,25 +1693,6 @@ const getActiveCourse = (
     });
 
     // Handle offline queueing
-    if (!navigator.onLine) {
-      addUpdateToSyncQueue({
-        wordId,
-        status,
-        progressData: {
-          status,
-          updatedAt: timestamp,
-          notes: progress[wordId]?.notes || '',
-          bookmarks: progress[wordId]?.bookmarks || []
-        },
-        timestamp
-      }).then(() => {
-        getQueuedSyncItems().then(items => {
-          setPendingSyncCount(items.length);
-          triggerBackgroundSync();
-        });
-      });
-    }
-
     // Increment Today's Study counter if marked as "know" or completed
     if (status !== 'unrated' && oldStatus !== status) {
       const todayStr = getTodayString();
@@ -1900,26 +1758,6 @@ const getActiveCourse = (
         };
       });
     }
-
-    if (!navigator.onLine) {
-      wordIds.forEach(wordId => {
-        addUpdateToSyncQueue({
-          wordId,
-          status,
-          progressData: {
-            status,
-            updatedAt: timestamp,
-            notes: progress[wordId]?.notes || '',
-            bookmarks: progress[wordId]?.bookmarks || []
-          },
-          timestamp
-        });
-      });
-      getQueuedSyncItems().then(items => {
-        setPendingSyncCount(items.length);
-        triggerBackgroundSync();
-      });
-    }
   };
 
   // Update personal Notes
@@ -1936,25 +1774,6 @@ const getActiveCourse = (
         }
       };
     });
-
-    if (!navigator.onLine) {
-      addUpdateToSyncQueue({
-        wordId,
-        status: progress[wordId]?.status || 'unrated',
-        progressData: {
-          status: progress[wordId]?.status || 'unrated',
-          updatedAt: timestamp,
-          notes,
-          bookmarks: progress[wordId]?.bookmarks || []
-        },
-        timestamp
-      }).then(() => {
-        getQueuedSyncItems().then(items => {
-          setPendingSyncCount(items.length);
-          triggerBackgroundSync();
-        });
-      });
-    }
   };
 
   // Toggle Bookmark inside custom lists
@@ -1972,20 +1791,6 @@ const getActiveCourse = (
         bookmarks: updatedBookmarks,
         updatedAt: timestamp
       };
-
-      if (!navigator.onLine) {
-        addUpdateToSyncQueue({
-          wordId,
-          status: prevWord.status,
-          progressData: updatedProgressData,
-          timestamp
-        }).then(() => {
-          getQueuedSyncItems().then(items => {
-            setPendingSyncCount(items.length);
-            triggerBackgroundSync();
-          });
-        });
-      }
 
       return {
         ...prev,
