@@ -15,6 +15,7 @@ import RevisionCenter from './components/RevisionCenter';
 import { SyncConflictModal, SyncConflictData } from './components/SyncConflictModal';
 import { safeSetLocalStorage, clearNonEssentialLocalStorageCache } from './lib/storage';
 import { mergeProgressRecords, mergeGameProgressRecords, mergeStudyGoal } from './utils/syncUtils';
+import { parseRoute, syncRouteUrl } from './lib/router';
 
 import {
   LayoutDashboard,
@@ -88,11 +89,38 @@ const LOCAL_STORAGE_ENROLLED_COURSES_KEY = 'vocab_memorizer_enrolled_courses_v2'
 const LOCAL_STORAGE_ACTIVE_COURSE_KEY = 'vocab_memorizer_active_course_v2';
 
 export default function App() {
+  const initialRoute = useRef(parseRoute());
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>('profile');
-  const [profileSubTab, setProfileSubTab] = useState<'flashcard' | 'dashboard' | 'my_courses'>('flashcard');
+  const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
+    return initialRoute.current.tab;
+  });
+  const [profileSubTab, setProfileSubTab] = useState<'flashcard' | 'dashboard' | 'my_courses'>(() => {
+    return initialRoute.current.profileSubTab || 'flashcard';
+  });
   const [selectedGroupFromDash, setSelectedGroupFromDash] = useState<number | string | null>(null);
   const [noCourseToast, setNoCourseToast] = useState<string | null>(null);
+
+  // Synchronize browser history and URL pathname with active tab and sub-tab
+  useEffect(() => {
+    syncRouteUrl(activeTab, profileSubTab);
+  }, [activeTab, profileSubTab]);
+
+  // Handle Browser Back & Forward buttons (popstate events)
+  useEffect(() => {
+    const handlePopState = () => {
+      const parsed = parseRoute(window.location.pathname);
+      setActiveTab(parsed.tab);
+      if (parsed.profileSubTab) {
+        setProfileSubTab(parsed.profileSubTab);
+      }
+      if (parsed.openLoginModal) {
+        setIsAuthModalOpen(true);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const handleNavigateTab = (tab: string) => {
     if (enrolledCourseIds.length === 0 && !['my_courses', 'admin', 'settings'].includes(tab)) {
@@ -420,7 +448,7 @@ export default function App() {
     } catch (e) {}
     return true;
   });
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(() => !!initialRoute.current.openLoginModal);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
   const isSyncingFromCloud = useRef(false);
   const [hasLoadedFromCloud, setHasLoadedFromCloud] = useState(false);
