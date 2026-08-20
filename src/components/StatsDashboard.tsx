@@ -283,7 +283,18 @@ export default function StatsDashboard({
         requestedBy: user?.email || 'anonymous'
       };
 
-      await setDoc(doc(db, 'access_requests', requestId), requestPayload);
+      try {
+        await setDoc(doc(db, 'access_requests', requestId), requestPayload, { merge: true });
+      } catch (fErr) {
+        console.warn("Firestore write notice:", fErr);
+      }
+      try {
+        await fetch('/api/db/access_requests/doc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: requestId, data: requestPayload })
+        });
+      } catch (_) {}
 
       if (isAutoApproved) {
         // Automatically enroll the user immediately!

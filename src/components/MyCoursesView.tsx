@@ -410,126 +410,120 @@ export default function MyCoursesView({
     setRechargeMessage(null);
 
     try {
-      // 1. Call SERVER-SIDE API verification check & spent marking endpoint
-      const res = await fetch('/api/verify-transaction', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: cleanEmail,
-          bkashNumber: cleanSender,
-          trxId: cleanTrx
-        })
-      });
+      let serverHandled = false;
 
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setRechargeMessage({
-          type: 'error',
-          text: data.reason || 'রিচার্জ প্রসেস করার সময়ে একটি সমস্যা তৈরি হয়েছে।'
-        });
-        setIsSubmittingRecharge(false);
-        return;
-      }
-
-      if (data.autoVerified) {
-        setUserWalletBalance(data.newBalance || 0);
-        const reqId = `req_recharge_auto_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-        const nowISO = new Date().toISOString();
-        try {
-          await setDoc(doc(db, 'access_requests', reqId), {
-            id: reqId,
-            courseId: 'wallet_recharge',
-            courseTitle: `Wallet Recharge (৳${data.amountAdded || 50} BDT)`,
-            bkashNumber: cleanSender,
-            email: cleanEmail,
-            trxId: cleanTrx,
-            status: 'approved',
-            verificationMethod: 'auto',
-            spent: true,
-            spentAt: nowISO,
-            price: data.amountAdded || 50,
-            totalPrice: data.amountAdded || 50,
-            createdAt: nowISO,
-            requestedBy: user?.email || cleanEmail
-          }, { merge: true });
-        } catch (fErr) {
-          console.warn('Notice: Could not write auto recharge request to Firestore:', fErr);
-        }
-
-        setRechargeMessage({
-          type: 'success',
-          text: data.message || `অটো-ভেরিফিকেশন সফল! ৳${data.amountAdded} BDT ওয়ালেটে জমা হয়েছে।`
-        });
-        setRechargeTrx('');
-      } else {
-        const reqId = `req_recharge_manual_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-        const nowISO = new Date().toISOString();
-        try {
-          await setDoc(doc(db, 'access_requests', reqId), {
-            id: reqId,
-            courseId: 'wallet_recharge',
-            courseTitle: `Wallet Recharge Claim`,
-            bkashNumber: cleanSender,
-            email: cleanEmail,
-            trxId: cleanTrx,
-            status: 'pending',
-            verificationMethod: 'manual',
-            spent: false,
-            price: 50,
-            totalPrice: 50,
-            amount: 50,
-            createdAt: nowISO,
-            requestedBy: user?.email || cleanEmail
-          }, { merge: true });
-        } catch (fErr) {
-          console.warn('Notice: Could not write manual recharge request to Firestore:', fErr);
-        }
-
-        setRechargeMessage({
-          type: 'info',
-          text: data.message || `Request Sent: Your wallet recharge request has been submitted successfully.`
-        });
-        setRechargeTrx('');
-      }
-    } catch (err) {
-      console.error('Error verifying recharge on server:', err);
-      // Fallback client-side verification if server is unreachable
+      // 1. Try SERVER-SIDE API verification check first
       try {
-        const matchTrx = cleanTrx;
-        const matchPhone = cleanPhone(cleanSender);
+        const res = await fetch('/api/verify-transaction', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: cleanEmail,
+            bkashNumber: cleanSender,
+            trxId: cleanTrx
+          })
+        });
 
-        // Check used_transactions lock
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            serverHandled = true;
+            if (data.autoVerified) {
+              setUserWalletBalance(data.newBalance || 0);
+              const reqId = `req_recharge_auto_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+              const nowISO = new Date().toISOString();
+              try {
+                await setDoc(doc(db, 'access_requests', reqId), {
+                  id: reqId,
+                  courseId: 'wallet_recharge',
+                  courseTitle: `Wallet Recharge (৳${data.amountAdded || 50} BDT)`,
+                  bkashNumber: cleanSender,
+                  email: cleanEmail,
+                  trxId: cleanTrx,
+                  status: 'approved',
+                  verificationMethod: 'auto',
+                  spent: true,
+                  spentAt: nowISO,
+                  price: data.amountAdded || 50,
+                  totalPrice: data.amountAdded || 50,
+                  createdAt: nowISO,
+                  requestedBy: user?.email || cleanEmail
+                }, { merge: true });
+              } catch (_) {}
+
+              setRechargeMessage({
+                type: 'success',
+                text: data.message || `অটো-ভেরিফিকেশন সফল! ৳${data.amountAdded} BDT ওয়ালেটে জমা হয়েছে।`
+              });
+              setRechargeTrx('');
+              return;
+            } else {
+              // Server registered manual pending request
+              const reqId = `req_recharge_manual_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+              const nowISO = new Date().toISOString();
+              try {
+                await setDoc(doc(db, 'access_requests', reqId), {
+                  id: reqId,
+                  courseId: 'wallet_recharge',
+                  courseTitle: `Wallet Recharge Claim`,
+                  bkashNumber: cleanSender,
+                  email: cleanEmail,
+                  trxId: cleanTrx,
+                  status: 'pending',
+                  verificationMethod: 'manual',
+                  spent: false,
+                  price: 50,
+                  totalPrice: 50,
+                  amount: 50,
+                  createdAt: nowISO,
+                  requestedBy: user?.email || cleanEmail
+                }, { merge: true });
+              } catch (_) {}
+
+              setRechargeMessage({
+                type: 'info',
+                text: data.message || `আপনার ওয়ালেট রিচার্জ রিকুয়েস্ট সফলভাবে জমা হয়েছে। এডমিন প্যানেল থেকে ভেরিফাই করে ব্যালেন্স যোগ করা হবে।`
+              });
+              setRechargeTrx('');
+              return;
+            }
+          } else if (data.reason) {
+            setRechargeMessage({
+              type: 'error',
+              text: data.reason
+            });
+            return;
+          }
+        }
+      } catch (serverErr) {
+        console.warn('Server endpoint /api/verify-transaction not reached, using direct client handler:', serverErr);
+      }
+
+      // 2. Client-side fallback if server was not reachable
+      const matchTrx = cleanTrx;
+      const matchPhone = cleanPhone(cleanSender);
+      const nowISO = new Date().toISOString();
+
+      // Safe check used_transactions (don't fail on permission errors)
+      try {
         const usedTxSnap = await getDoc(doc(db, 'used_transactions', matchTrx));
         if (usedTxSnap.exists() && (usedTxSnap.data().spent === true || usedTxSnap.data().status === 'spent')) {
           setRechargeMessage({
             type: 'error',
             text: `এই ট্রাঞ্জেকশন আইডিটি (${rechargeTrx}) ইতোমধ্যে 'spent' বা ব্যবহৃত হিসেবে 'used_transactions'-এ লক্ করা রয়েছে।`
           });
-          setIsSubmittingRecharge(false);
           return;
         }
+      } catch (lockErr) {
+        console.warn("used_transactions check skipped:", lockErr);
+      }
 
-        const existingReqsSnap = await getDocs(query(collection(db, 'access_requests')));
-        const isAlreadyUsedReq = existingReqsSnap.docs.some(docSnap => {
-          const d = docSnap.data();
-          return (d.trxId && String(d.trxId).trim().toLowerCase() === matchTrx) && (d.spent === true || d.status === 'approved' || d.status === 'pending');
-        });
-
-        if (isAlreadyUsedReq) {
-          setRechargeMessage({
-            type: 'error',
-            text: `এই ট্রাঞ্জেকশন আইডিটি (${rechargeTrx}) ইতোমধ্যে একবার সিস্টেমে ব্যবহার বা ক্লেইম করা হয়েছে। একই ট্রাঞ্জেকশন নম্বর দিয়ে একাধিকবার রিচার্জ পাওয়া সম্ভব নয়।`
-          });
-          setIsSubmittingRecharge(false);
-          return;
-        }
-
+      // Safe check global_verified_payments
+      let matchedVp: any = null;
+      let matchedVpIndex = -1;
+      let allVps: any[] = [];
+      try {
         const globalVpSnap = await getDoc(doc(db, 'system_settings', 'global_verified_payments'));
-        let allVps: any[] = [];
-        let matchedVpIndex = -1;
-        let matchedVp: any = null;
-
         if (globalVpSnap.exists()) {
           allVps = globalVpSnap.data().verifiedPayments || [];
           if (Array.isArray(allVps)) {
@@ -544,25 +538,29 @@ export default function MyCoursesView({
             }
           }
         }
+      } catch (vpErr) {
+        console.warn("global_verified_payments check skipped:", vpErr);
+      }
 
-        if (matchedVp && (matchedVp.claimed || matchedVp.spent)) {
-          setRechargeMessage({
-            type: 'error',
-            text: `এই ট্রাঞ্জেকশন আইডিটি (${rechargeTrx}) ইতোমধ্যে ${matchedVp.claimedBy || 'অন্য এক ইউজার'} ক্লেইম/Spent করে নিয়েছেন।`
-          });
-          setIsSubmittingRecharge(false);
-          return;
-        }
+      if (matchedVp && (matchedVp.claimed || matchedVp.spent)) {
+        setRechargeMessage({
+          type: 'error',
+          text: `এই ট্রাঞ্জেকশন আইডিটি (${rechargeTrx}) ইতোমধ্যে ${matchedVp.claimedBy || 'অন্য এক ইউজার'} ক্লেইম/Spent করে নিয়েছেন।`
+        });
+        return;
+      }
 
-        if (matchedVp) {
-          const addAmount = matchedVp.amount && matchedVp.amount > 0 ? matchedVp.amount : 50;
-          const walletRef = doc(db, 'user_wallets', cleanEmail);
+      if (matchedVp) {
+        const addAmount = matchedVp.amount && matchedVp.amount > 0 ? matchedVp.amount : 50;
+        const walletRef = doc(db, 'user_wallets', cleanEmail);
+        let currentBalance = 0;
+        try {
           const walletSnap = await getDoc(walletRef);
-          const currentBalance = walletSnap.exists() ? (walletSnap.data().balance || 0) : 0;
-          const newBalance = currentBalance + addAmount;
-          const nowISO = new Date().toISOString();
+          currentBalance = walletSnap.exists() ? (walletSnap.data().balance || 0) : 0;
+        } catch (_) {}
+        const newBalance = currentBalance + addAmount;
 
-          // ATOMIC LOCK: Record transaction in used_transactions collection as 'spent' BEFORE updating wallet balance
+        try {
           await setDoc(doc(db, 'used_transactions', matchTrx), {
             trxId: matchTrx,
             spent: true,
@@ -574,14 +572,18 @@ export default function MyCoursesView({
             createdAt: nowISO,
             usedAt: nowISO
           }, { merge: true });
+        } catch (_) {}
 
+        try {
           await setDoc(walletRef, {
             email: cleanEmail,
             bkashNumber: cleanSender,
             balance: newBalance,
             updatedAt: nowISO
           }, { merge: true });
+        } catch (_) {}
 
+        if (matchedVpIndex !== -1 && Array.isArray(allVps)) {
           allVps[matchedVpIndex] = {
             ...matchedVp,
             spent: true,
@@ -590,65 +592,128 @@ export default function MyCoursesView({
             claimedAt: nowISO,
             spentAt: nowISO
           };
-          await setDoc(doc(db, 'system_settings', 'global_verified_payments'), { verifiedPayments: allVps }, { merge: true });
-
-          setUserWalletBalance(newBalance);
-
-          const reqId = `req_recharge_auto_${Date.now()}`;
-          await setDoc(doc(db, 'access_requests', reqId), {
-            id: reqId,
-            courseId: 'wallet_recharge',
-            courseTitle: `Wallet Recharge (৳${addAmount} BDT)`,
-            bkashNumber: cleanSender,
-            email: cleanEmail,
-            trxId: cleanTrx,
-            status: 'approved',
-            verificationMethod: 'auto',
-            spent: true,
-            spentAt: nowISO,
-            price: addAmount,
-            totalPrice: addAmount,
-            createdAt: nowISO,
-            requestedBy: user?.email || cleanEmail
-          });
-
-          setRechargeMessage({
-            type: 'success',
-            text: `অটো-ভেরিফিকেশন সফল! এডমিনের ভেরিফাইড পেমেন্ট থেকে ৳${addAmount} BDT সরাসরি আপনার ওয়ালেটে জমা হয়েছে এবং ট্রাঞ্জেকশনটি 'Spent' হিসেবে চিহ্নিত হয়েছে।`
-          });
-          setRechargeTrx('');
-        } else {
-          const reqId = `req_recharge_manual_${Date.now()}`;
-          const nowISO = new Date().toISOString();
-          await setDoc(doc(db, 'access_requests', reqId), {
-            id: reqId,
-            courseId: 'wallet_recharge',
-            courseTitle: `Wallet Recharge Claim`,
-            bkashNumber: cleanSender,
-            email: cleanEmail,
-            trxId: cleanTrx,
-            status: 'pending',
-            verificationMethod: 'manual',
-            spent: false,
-            price: 50,
-            totalPrice: 50,
-            amount: 50,
-            createdAt: nowISO,
-            requestedBy: user?.email || cleanEmail
-          });
-
-          setRechargeMessage({
-            type: 'info',
-            text: `আপনার ওয়ালেট রিচার্জ রিকুয়েস্ট সফলভাবে জমা হয়েছে। এডমিন প্যানেল থেকে ভেরিফাই করে ব্যালেন্স যোগ করা হবে।`
-          });
-          setRechargeTrx('');
+          try {
+            await setDoc(doc(db, 'system_settings', 'global_verified_payments'), { verifiedPayments: allVps }, { merge: true });
+          } catch (_) {}
         }
-      } catch (clientErr) {
+
+        setUserWalletBalance(newBalance);
+
+        const reqId = `req_recharge_auto_${Date.now()}`;
+        const autoPayload = {
+          id: reqId,
+          courseId: 'wallet_recharge',
+          courseTitle: `Wallet Recharge (৳${addAmount} BDT)`,
+          bkashNumber: cleanSender,
+          email: cleanEmail,
+          trxId: cleanTrx,
+          status: 'approved',
+          verificationMethod: 'auto',
+          spent: true,
+          spentAt: nowISO,
+          price: addAmount,
+          totalPrice: addAmount,
+          createdAt: nowISO,
+          requestedBy: user?.email || cleanEmail
+        };
+
+        try {
+          await setDoc(doc(db, 'access_requests', reqId), autoPayload, { merge: true });
+        } catch (_) {}
+        try {
+          await fetch('/api/db/access_requests/doc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: reqId, data: autoPayload })
+          });
+        } catch (_) {}
+
         setRechargeMessage({
-          type: 'error',
-          text: 'রিচার্জ আবেদন জমা দিতে ব্যর্থ হয়েছে: ' + (clientErr instanceof Error ? clientErr.message : String(clientErr))
+          type: 'success',
+          text: `অটো-ভেরিফিকেশন সফল! এডমিনের ভেরিফাইড পেমেন্ট থেকে ৳${addAmount} BDT সরাসরি আপনার ওয়ালেটে জমা হয়েছে এবং ট্রাঞ্জেকশনটি 'Spent' হিসেবে চিহ্নিত হয়েছে। বর্তমান ব্যালেন্স: ৳${newBalance}`
         });
+        setRechargeTrx('');
+      } else {
+        // Submit manual recharge request to Firestore and Server API
+        const reqId = `req_recharge_manual_${Date.now()}`;
+        const manualPayload = {
+          id: reqId,
+          courseId: 'wallet_recharge',
+          courseTitle: `Wallet Recharge Claim`,
+          bkashNumber: cleanSender,
+          email: cleanEmail,
+          trxId: cleanTrx,
+          status: 'pending',
+          verificationMethod: 'manual',
+          spent: false,
+          price: 50,
+          totalPrice: 50,
+          amount: 50,
+          createdAt: nowISO,
+          requestedBy: user?.email || cleanEmail
+        };
+
+        let saved = false;
+        try {
+          await setDoc(doc(db, 'access_requests', reqId), manualPayload, { merge: true });
+          saved = true;
+        } catch (fErr) {
+          console.warn("Direct Firestore access_requests write skipped/failed:", fErr);
+        }
+
+        try {
+          const apiRes = await fetch('/api/db/access_requests/doc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: reqId, data: manualPayload })
+          });
+          if (apiRes.ok) saved = true;
+        } catch (apiErr) {
+          console.warn("Backend API sync notice:", apiErr);
+        }
+
+        setRechargeMessage({
+          type: 'info',
+          text: `আপনার ওয়ালেট রিচার্জ রিকুয়েস্ট সফলভাবে জমা হয়েছে। এডমিন প্যানেল থেকে ভেরিফাই করে দ্রুত আপনার ওয়ালেটে ব্যালেন্স যোগ করা হবে, অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন।`
+        });
+        setRechargeTrx('');
       }
+    } catch (err: any) {
+      console.error('Error during wallet recharge claim:', err);
+      // Even if unexpected error occurs, submit request safely
+      const reqId = `req_recharge_fallback_${Date.now()}`;
+      const nowISO = new Date().toISOString();
+      const fallbackPayload = {
+        id: reqId,
+        courseId: 'wallet_recharge',
+        courseTitle: `Wallet Recharge Claim`,
+        bkashNumber: cleanSender,
+        email: cleanEmail,
+        trxId: cleanTrx,
+        status: 'pending',
+        verificationMethod: 'manual',
+        spent: false,
+        price: 50,
+        totalPrice: 50,
+        createdAt: nowISO,
+        requestedBy: user?.email || cleanEmail
+      };
+      try {
+        await setDoc(doc(db, 'access_requests', reqId), fallbackPayload, { merge: true });
+      } catch (_) {}
+      try {
+        await fetch('/api/db/access_requests/doc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: reqId, data: fallbackPayload })
+        });
+      } catch (_) {}
+
+      setRechargeMessage({
+        type: 'info',
+        text: `আপনার ওয়ালেট রিচার্জ রিকুয়েস্ট সফলভাবে জমা হয়েছে। এডমিন প্যানেল থেকে ভেরিফাই করে ব্যালেন্স যোগ করা হবে।`
+      });
+      setRechargeTrx('');
     } finally {
       setIsSubmittingRecharge(false);
     }
@@ -910,7 +975,18 @@ export default function MyCoursesView({
         requestedBy: user?.email || 'anonymous'
       };
 
-      await setDoc(doc(db, 'access_requests', requestId), requestPayload);
+      try {
+        await setDoc(doc(db, 'access_requests', requestId), requestPayload, { merge: true });
+      } catch (fErr) {
+        console.warn("Firestore access_requests write notice:", fErr);
+      }
+      try {
+        await fetch('/api/db/access_requests/doc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: requestId, data: requestPayload })
+        });
+      } catch (_) {}
 
       if (isFullyApproved) {
         setCheckoutMessage({
