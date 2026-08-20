@@ -143,19 +143,6 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
 
   // Load Library Config (Rooms & Capacities & Serial Layouts & Guidelines & Facebook)
   useEffect(() => {
-    try {
-      const cachedConfig = localStorage.getItem(localConfigCacheKey);
-      if (cachedConfig) {
-        const parsed = JSON.parse(cachedConfig);
-        if (parsed && Array.isArray(parsed.rooms) && parsed.rooms.length > 0) {
-          setConfig(parsed);
-          setAdminRooms(parsed.rooms);
-          if (parsed.guidelines) setAdminGuidelines(parsed.guidelines);
-          if (parsed.facebookPageUrl) setAdminFacebookUrl(parsed.facebookPageUrl);
-        }
-      }
-    } catch (_) {}
-
     // 1. Immediate cloud fetch via getDoc
     const fetchInitialConfig = async () => {
       try {
@@ -169,11 +156,6 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
             setAdminRooms(data.rooms);
             if (data.guidelines) setAdminGuidelines(data.guidelines);
             if (data.facebookPageUrl) setAdminFacebookUrl(data.facebookPageUrl);
-            try {
-              localStorage.setItem(localConfigCacheKey, JSON.stringify(data));
-              localStorage.setItem('library_portal_guidelines', data.guidelines || '');
-              localStorage.setItem('library_portal_facebook_url', data.facebookPageUrl || '');
-            } catch (_) {}
           }
         }
       } catch (err) {
@@ -194,11 +176,6 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
             setAdminRooms(data.rooms);
             if (data.guidelines) setAdminGuidelines(data.guidelines);
             if (data.facebookPageUrl) setAdminFacebookUrl(data.facebookPageUrl);
-            try {
-              localStorage.setItem(localConfigCacheKey, JSON.stringify(data));
-              localStorage.setItem('library_portal_guidelines', data.guidelines || '');
-              localStorage.setItem('library_portal_facebook_url', data.facebookPageUrl || '');
-            } catch (_) {}
           }
         }
       }, (err) => {
@@ -208,17 +185,11 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
     } catch (e) {
       console.warn('Config listener init error:', e);
     }
-  }, [libraryType, configDocName, localConfigCacheKey]);
+  }, [libraryType, configDocName]);
 
   // Load Real-time Seat Bookings from Firestore with auto-reset for previous days
   useEffect(() => {
     setLoading(true);
-    try {
-      const cached = localStorage.getItem(localCacheKey);
-      if (cached) {
-        setBookings(JSON.parse(cached));
-      }
-    } catch (_) {}
 
     try {
       const seatCol = collection(db, collectionName);
@@ -240,9 +211,6 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
         });
 
         setBookings(list);
-        try {
-          localStorage.setItem(localCacheKey, JSON.stringify(list));
-        } catch (_) {}
         setLoading(false);
       }, (err) => {
         console.warn('Firestore seats snapshot error:', err);
@@ -254,7 +222,7 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
       console.warn('Seat realtime listener error:', err);
       setLoading(false);
     }
-  }, [libraryType]);
+  }, [libraryType, collectionName]);
 
   // Current active room config for single view mode
   const currentRoomConfig = useMemo(() => {
@@ -406,7 +374,6 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
       await setDoc(doc(db, collectionName, docId), newBooking);
       const updated = [...bookings.filter(b => !(b.roomId === targetRoomId && b.seatNumber === seatNum)), newBooking];
       setBookings(updated);
-      localStorage.setItem(localCacheKey, JSON.stringify(updated));
       setShowBookingModal(false);
       setSelectedSeat(null);
     } catch (err: any) {
@@ -457,7 +424,6 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
       await setDoc(doc(db, collectionName, docId), updatedBooking);
       const updated = bookings.map(b => (b.roomId === targetRoomId && b.seatNumber === selectedSeat ? updatedBooking : b));
       setBookings(updated);
-      localStorage.setItem(localCacheKey, JSON.stringify(updated));
       setShowSecondaryBookingModal(false);
       setSelectedSeat(null);
     } catch (err: any) {
@@ -491,7 +457,6 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
       await setDoc(doc(db, collectionName, docId), updatedBooking);
       const updated = bookings.map(b => (b.roomId === myPrimaryBooking.roomId && b.seatNumber === myPrimaryBooking.seatNumber ? updatedBooking : b));
       setBookings(updated);
-      localStorage.setItem(localCacheKey, JSON.stringify(updated));
       setShowAwayModal(false);
     } catch (err: any) {
       console.error('Away timer error:', err);
@@ -520,7 +485,6 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
         await setDoc(doc(db, collectionName, docId), updatedBooking);
         const updated = bookings.map(b => (b.roomId === target.roomId && b.seatNumber === target.seatNumber ? updatedBooking : b));
         setBookings(updated);
-        localStorage.setItem(localCacheKey, JSON.stringify(updated));
       } catch (err: any) {
         console.error('Release secondary error:', err);
       }
@@ -537,7 +501,6 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
       await deleteDoc(doc(db, collectionName, docId));
       const updated = bookings.filter(b => !(b.roomId === target.roomId && b.seatNumber === target.seatNumber));
       setBookings(updated);
-      localStorage.setItem(localCacheKey, JSON.stringify(updated));
       setShowAwayModal(false);
       setSelectedSeat(null);
     } catch (err: any) {
@@ -602,15 +565,12 @@ export const LibrarySeatBookingView: React.FC<LibrarySeatBookingViewProps> = ({
         }, { merge: true });
       } catch (_) {}
 
-      // 3. Immediately update active state & persistent local caches
+      // 3. Immediately update active state in-memory
       setConfig(updatedConfig);
       setAdminRooms(cleanedRooms);
       if (!cleanedRooms.some(r => r.id === selectedRoom)) {
         setSelectedRoom(cleanedRooms[0]?.id || 1);
       }
-      localStorage.setItem(localConfigCacheKey, JSON.stringify(updatedConfig));
-      localStorage.setItem('library_portal_guidelines', updatedConfig.guidelines || '');
-      localStorage.setItem('library_portal_facebook_url', updatedConfig.facebookPageUrl || '');
       
       alert('✅ লাইব্রেরির নতুন রুম ও কনফিগারেশন সফলভাবে ক্লাউডে সেভ হয়েছে!');
       setShowAdminPanel(false);

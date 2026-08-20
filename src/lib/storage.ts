@@ -1,3 +1,7 @@
+/**
+ * Completely purges all heavy offline/local dataset caches from browser storage
+ * to keep memory and CPU usage minimal and eliminate browser lag.
+ */
 export function clearNonEssentialLocalStorageCache(): void {
   try {
     const keysToRemove: string[] = [];
@@ -8,8 +12,13 @@ export function clearNonEssentialLocalStorageCache(): void {
         k.startsWith('local_store_') ||
         k.startsWith('questions_cache_') ||
         k.startsWith('vocab_memorizer_cached_') ||
+        k.startsWith('cache_seats_') ||
+        k.startsWith('cache_config_') ||
+        k.startsWith('local_question_bank') ||
+        k.startsWith('local_exams') ||
         k.includes('activity_logs') ||
-        k.includes('sync_logs')
+        k.includes('sync_logs') ||
+        k.includes('deleted_question_ids')
       ) {
         keysToRemove.push(k);
       }
@@ -24,29 +33,69 @@ export function clearNonEssentialLocalStorageCache(): void {
   }
 }
 
+/**
+ * Purges IndexedDB completely to free up all browser disk space and RAM.
+ */
+export function purgeIndexedDBCache(): void {
+  try {
+    if (typeof window !== 'undefined' && window.indexedDB) {
+      window.indexedDB.deleteDatabase('MemorizerAppDB');
+    }
+  } catch (e) {
+    console.warn('Error purging IndexedDB database:', e);
+  }
+}
+
+// Immediately purge on module load
+if (typeof window !== 'undefined') {
+  clearNonEssentialLocalStorageCache();
+  purgeIndexedDBCache();
+}
+
+/**
+ * Safe local storage setter - ignores large heavy dataset keys
+ */
 export function safeSetLocalStorage(key: string, value: string): boolean {
+  // Disallow caching heavy dataset keys
+  if (
+    key.startsWith('local_store_') ||
+    key.startsWith('questions_cache_') ||
+    key.startsWith('vocab_memorizer_cached_') ||
+    key.startsWith('local_question_bank') ||
+    key.startsWith('local_exams') ||
+    key.startsWith('cache_seats_') ||
+    key.length > 50000 || // Prevent large string dumps
+    (value && value.length > 50000)
+  ) {
+    return false;
+  }
+
   try {
     localStorage.setItem(key, value);
     return true;
   } catch (err: any) {
-    console.warn(`localStorage.setItem error for key "${key}":`, err);
     clearNonEssentialLocalStorageCache();
-    try {
-      localStorage.setItem(key, value);
-      return true;
-    } catch (retryErr) {
-      console.warn(`Failed to set "${key}" in localStorage after cache purge:`, retryErr);
-      return false;
-    }
+    return false;
   }
 }
 
 export function safeGetLocalStorage(key: string, defaultValue: string | null = null): string | null {
+  // If requesting a large dataset cache key, return null so app uses fresh cloud state directly
+  if (
+    key.startsWith('local_store_') ||
+    key.startsWith('questions_cache_') ||
+    key.startsWith('vocab_memorizer_cached_') ||
+    key.startsWith('local_question_bank') ||
+    key.startsWith('local_exams') ||
+    key.startsWith('cache_seats_')
+  ) {
+    return defaultValue;
+  }
+
   try {
     const val = localStorage.getItem(key);
     return val !== null ? val : defaultValue;
   } catch (err) {
-    console.warn(`localStorage.getItem error for key "${key}":`, err);
     return defaultValue;
   }
 }
@@ -59,69 +108,30 @@ export function safeRemoveLocalStorage(key: string): void {
   }
 }
 
-// --- IndexedDB Async Storage for Large Data Collections ---
-const DB_NAME = 'MemorizerAppDB';
-const DB_VERSION = 1;
+/**
+ * In-memory temporary fallback store (zero browser disk writing)
+ */
+const inMemoryCache = new Map<string, any>();
 
-function openIDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    if (typeof window === 'undefined' || !window.indexedDB) {
-      return reject('IndexedDB not supported');
-    }
-    const req = window.indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains('keyvalue')) {
-        db.createObjectStore('keyvalue');
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
+/**
+ * setLargeStorage now operates as a lightweight in-memory reference only,
+ * completely bypassing IndexedDB and localStorage to eliminate browser load.
+ */
 export async function setLargeStorage(key: string, data: any): Promise<boolean> {
   try {
-    const db = await openIDB();
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction('keyvalue', 'readwrite');
-      const store = tx.objectStore('keyvalue');
-      const req = store.put(data, key);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
-    });
-    // Also mirror to localStorage if small enough
-    try {
-      safeSetLocalStorage(key, typeof data === 'string' ? data : JSON.stringify(data));
-    } catch (_) {}
+    inMemoryCache.set(key, data);
     return true;
-  } catch (err) {
-    console.warn(`IndexedDB save fallback for ${key}:`, err);
-    return safeSetLocalStorage(key, typeof data === 'string' ? data : JSON.stringify(data));
+  } catch (_) {
+    return false;
   }
 }
 
+/**
+ * getLargeStorage retrieves in-memory data if available or falls back to defaultValue.
+ */
 export async function getLargeStorage<T = any>(key: string, defaultValue: T | null = null): Promise<T | null> {
-  try {
-    const db = await openIDB();
-    const val = await new Promise<T | null>((resolve, reject) => {
-      const tx = db.transaction('keyvalue', 'readonly');
-      const store = tx.objectStore('keyvalue');
-      const req = store.get(key);
-      req.onsuccess = () => resolve(req.result !== undefined ? req.result : null);
-      req.onerror = () => reject(req.error);
-    });
-    if (val !== null && val !== undefined) {
-      return val as T;
-    }
-  } catch (_) {}
-
-  try {
-    const lsVal = safeGetLocalStorage(key, null);
-    if (lsVal) {
-      return typeof defaultValue === 'object' ? JSON.parse(lsVal) : (lsVal as any);
-    }
-  } catch (_) {}
-
+  if (inMemoryCache.has(key)) {
+    return inMemoryCache.get(key) as T;
+  }
   return defaultValue;
 }
