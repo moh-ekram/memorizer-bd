@@ -6,7 +6,7 @@ import {
   Layers, Star, Volume2, 
   BookMarked, Smartphone, AlertCircle,
   BarChart3, FileText, HelpCircle, Edit3, GitMerge, Clock,
-  ChevronRight, Compass, Library
+  ChevronRight, Compass, Library, Check, Play
 } from 'lucide-react';
 import { 
   auth, 
@@ -18,6 +18,7 @@ import {
 } from '../lib/db';
 import { Course, AppSettings } from '../types';
 import MyCoursesView from './MyCoursesView';
+import FlashcardExactPreview from './FlashcardExactPreview';
 
 interface LandingHomePageProps {
   onAuthSuccess: () => void;
@@ -50,6 +51,21 @@ export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse
   }, [displayerCoursesList]);
 
   const activeCourseName = displayerCoursesList[currentCourseIdx % displayerCoursesList.length] || 'GRE & BCS';
+
+  // Configured or fallback content
+  const badgeText = settings?.landingBadgeText || 'Tailored for Aspirants';
+  const headlineMain = settings?.landingHeadlineMain || 'Master High-Yield Vocabulary with Smart Flashcards & Practice.';
+  const courseSuffix = settings?.landingCourseSuffix || 'Candidates';
+  const description = settings?.landingDescription || 'An intelligent, multi-dimensional vocabulary memorizer engineered for GRE, BCS, IELTS, Bank Job, and competitive exam aspirants. Boost retention with 3D Flashcards, Native Audio Pronunciation, Contextual Stories, and Speed Quizzes.';
+  const startBtnText = settings?.landingStartBtnText || 'Get Started Free';
+  const feature1 = settings?.landingFeature1 || '3D Smart Flashcards & TTS Audio';
+  const feature2 = settings?.landingFeature2 || '6+ Interactive Practice Games';
+  const stat1Num = settings?.landingStat1Num || '5,000+';
+  const stat1Label = settings?.landingStat1Label || 'Curated Words';
+  const stat2Num = settings?.landingStat2Num || '6+';
+  const stat2Label = settings?.landingStat2Label || 'Learning Modes';
+  const stat3Num = settings?.landingStat3Num || '100%';
+  const stat3Label = settings?.landingStat3Label || 'Free to Start';
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,6 +163,13 @@ export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse
     }
   };
 
+  const scrollToPreview = () => {
+    const el = document.getElementById('landing-interactive-preview');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-500 selection:text-white">
       {/* Top Header */}
@@ -166,6 +189,13 @@ export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse
         </div>
 
         <div className="flex items-center gap-2.5">
+          <button
+            onClick={scrollToPreview}
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 text-xs font-extrabold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition cursor-pointer border border-indigo-100"
+          >
+            <Layers className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Interactive Demo</span>
+          </button>
           <button
             onClick={scrollToLibrary}
             className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-extrabold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/50 rounded-xl transition cursor-pointer"
@@ -189,7 +219,7 @@ export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse
             }}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-extrabold shadow-md shadow-indigo-600/20 transition cursor-pointer"
           >
-            Get Started
+            {startBtnText}
           </button>
         </div>
       </header>
@@ -206,21 +236,17 @@ export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse
             {/* Highlight Badge with animated rotating course name */}
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold shadow-xs">
               <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
-              <span>Tailored for <strong className="text-indigo-900 font-extrabold">{activeCourseName}</strong> Candidates</span>
+              <span>{badgeText} • <strong className="text-indigo-900 font-extrabold">{activeCourseName}</strong> {courseSuffix}</span>
             </div>
 
             {/* Display Headline */}
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-slate-900 tracking-tight leading-[1.15]">
-              Master High-Yield Vocabulary with{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600">
-                Smart Flashcards
-              </span>{' '}
-              & Practice.
+              {headlineMain}
             </h1>
 
             {/* Subtitle */}
             <p className="text-sm sm:text-base text-slate-600 leading-relaxed font-normal max-w-2xl mx-auto lg:mx-0">
-              An intelligent, multi-dimensional vocabulary memorizer engineered for GRE, BCS, IELTS, Bank Job, and competitive exam aspirants. Boost retention with 3D Flashcards, Native Audio Pronunciation, Contextual Stories, and Speed Quizzes.
+              {description}
             </p>
 
             {/* Feature Highlights List */}
@@ -229,13 +255,13 @@ export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse
                 <div className="p-1 rounded-lg bg-indigo-50 text-indigo-600">
                   <Layers className="w-4 h-4" />
                 </div>
-                <span>3D Smart Flashcards & TTS Audio</span>
+                <span>{feature1}</span>
               </div>
               <div className="flex items-center gap-2.5 text-xs font-bold text-slate-700 bg-white/70 backdrop-blur-xs p-2.5 rounded-xl border border-slate-200 shadow-xs">
                 <div className="p-1 rounded-lg bg-emerald-50 text-emerald-600">
                   <Trophy className="w-4 h-4" />
                 </div>
-                <span>6+ Interactive Practice Games</span>
+                <span>{feature2}</span>
               </div>
               <div className="flex items-center gap-2.5 text-xs font-bold text-slate-700 bg-white/70 backdrop-blur-xs p-2.5 rounded-xl border border-slate-200 shadow-xs">
                 <div className="p-1 rounded-lg bg-amber-50 text-amber-600">
@@ -260,33 +286,40 @@ export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse
                 }}
                 className="px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs font-extrabold shadow-lg shadow-indigo-600/25 transition-all transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex items-center gap-2"
               >
-                <span>Get Started Free</span>
+                <span>{startBtnText}</span>
                 <ArrowRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={scrollToPreview}
+                className="px-5 py-3 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-extrabold border border-slate-200 shadow-xs transition cursor-pointer flex items-center gap-2"
+              >
+                <Play className="w-4 h-4 text-indigo-600 fill-indigo-600" />
+                <span>Live Flashcard Demo</span>
               </button>
               <button
                 onClick={scrollToLibrary}
                 className="px-5 py-3 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-extrabold border border-slate-200 shadow-xs transition cursor-pointer flex items-center gap-2"
               >
                 <Library className="w-4 h-4 text-indigo-600" />
-                <span>Explore Course Library</span>
+                <span>Explore Courses</span>
               </button>
             </div>
 
             {/* Trust Metrics / Stats Row */}
             <div className="flex items-center justify-center lg:justify-start gap-6 pt-4 border-t border-slate-200/80 text-left">
               <div>
-                <span className="block text-xl font-black text-slate-900 font-mono">5,000+</span>
-                <span className="text-[11px] text-slate-500 font-bold uppercase">Curated Words</span>
+                <span className="block text-xl font-black text-slate-900 font-mono">{stat1Num}</span>
+                <span className="text-[11px] text-slate-500 font-bold uppercase">{stat1Label}</span>
               </div>
               <div className="w-px h-7 bg-slate-200" />
               <div>
-                <span className="block text-xl font-black text-indigo-600 font-mono">6+</span>
-                <span className="text-[11px] text-slate-500 font-bold uppercase">Learning Modes</span>
+                <span className="block text-xl font-black text-indigo-600 font-mono">{stat2Num}</span>
+                <span className="text-[11px] text-slate-500 font-bold uppercase">{stat2Label}</span>
               </div>
               <div className="w-px h-7 bg-slate-200" />
               <div>
-                <span className="block text-xl font-black text-emerald-600 font-mono">100%</span>
-                <span className="text-[11px] text-slate-500 font-bold uppercase">Free to Start</span>
+                <span className="block text-xl font-black text-emerald-600 font-mono">{stat3Num}</span>
+                <span className="text-[11px] text-slate-500 font-bold uppercase">{stat3Label}</span>
               </div>
             </div>
           </div>
@@ -450,6 +483,28 @@ export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse
                 By logging in, you agree to our Terms of Service & Privacy Policy.
               </p>
             </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* EXACT MAIN WEBSITE FLASHCARD & LEARNING SUITE INTERACTIVE PREVIEW */}
+      <section className="py-12 md:py-16 px-4 md:px-8 bg-gradient-to-b from-white via-indigo-50/30 to-slate-50 border-y border-slate-200" id="landing-interactive-preview">
+        <div className="max-w-7xl mx-auto space-y-8">
+          <div className="text-center max-w-2xl mx-auto space-y-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-extrabold shadow-2xs">
+              <Layers className="w-4 h-4 text-indigo-600" />
+              <span>Exact Website Live Experience</span>
+            </div>
+            <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+              Interactive 3D Flashcard & Retention System
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 font-medium">
+              Experience the exact learning engine: Flip cards to reveal Bengali definitions, contextual sentences with highlighted keywords, native audio pronunciation, and response buttons.
+            </p>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 shadow-xl max-w-2xl mx-auto">
+            <FlashcardExactPreview activeAnimation={settings?.flashcardAnimation || 'flip-h'} />
           </div>
         </div>
       </section>
