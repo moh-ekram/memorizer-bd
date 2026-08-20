@@ -1099,9 +1099,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           const res = await fetch('/api/db/access_requests');
           if (res.ok) {
             const json = await res.json();
-            return json.data || {};
+            return json.docs || json.data || [];
           }
-          return {};
+          return [];
         })()
       ]);
 
@@ -1113,13 +1113,19 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       }
 
       // Process Server API docs
-      if (apiRes.status === 'fulfilled' && apiRes.value && typeof apiRes.value === 'object') {
-        Object.entries(apiRes.value).forEach(([docId, docData]: [string, any]) => {
-          if (!reqMap.has(docId)) {
-            reqMap.set(docId, { id: docId, ...docData } as AccessRequest);
-          } else {
-            // Merge fields
-            reqMap.set(docId, { ...docData, ...reqMap.get(docId), id: docId } as AccessRequest);
+      if (apiRes.status === 'fulfilled' && apiRes.value) {
+        const apiDocs = Array.isArray(apiRes.value)
+          ? apiRes.value
+          : (typeof apiRes.value === 'object' ? Object.values(apiRes.value) : []);
+        apiDocs.forEach((docData: any) => {
+          const docId = docData?.id;
+          if (docId) {
+            if (!reqMap.has(docId)) {
+              reqMap.set(docId, { id: docId, ...docData } as AccessRequest);
+            } else {
+              // Merge fields
+              reqMap.set(docId, { ...docData, ...reqMap.get(docId), id: docId } as AccessRequest);
+            }
           }
         });
       }
@@ -1300,22 +1306,22 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               const walletSnap = await transaction.get(walletRef);
               const currentWalletBal = walletSnap.exists() ? (walletSnap.data().balance ?? walletSnap.data().walletBalance ?? 0) : 0;
 
-              if (isRecharge) {
-                const newBal = currentWalletBal + finalPrice;
-                transaction.set(walletRef, {
-                  email: userEmail,
-                  balance: newBal,
-                  walletBalance: newBal,
-                  updatedAt: nowISO
-                }, { merge: true });
+                if (isRecharge) {
+                  const newBal = currentWalletBal + finalPrice;
+                  transaction.set(walletRef, {
+                    email: userEmail,
+                    balance: newBal,
+                    walletBalance: newBal,
+                    updatedAt: nowISO
+                  }, { merge: true });
 
-                transaction.set(userRef, {
-                  email: userEmail,
-                  balance: newBal,
-                  walletBalance: newBal,
-                  updatedAt: nowISO
-                }, { merge: true });
-              } else {
+                  transaction.set(userRef, {
+                    email: userEmail,
+                    balance: newBal,
+                    walletBalance: newBal,
+                    updatedAt: nowISO
+                  }, { merge: true });
+                } else {
                 const targetCourseIds = (req.courseIds && req.courseIds.length > 0) ? req.courseIds : [req.courseId];
                 const userSnap = await transaction.get(userRef);
                 let existingEnrolled: string[] = [];
@@ -1386,6 +1392,20 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 walletBalance: newBal,
                 updatedAt: nowISO
               }, { merge: true });
+
+              try {
+                const uQuery = query(collection(db, 'users'), where('email', '==', userEmail));
+                const uSnap = await getDocs(uQuery);
+                if (!uSnap.empty) {
+                  for (const uDoc of uSnap.docs) {
+                    await setDoc(doc(db, 'users', uDoc.id), {
+                      walletBalance: newBal,
+                      balance: newBal,
+                      updatedAt: nowISO
+                    }, { merge: true });
+                  }
+                }
+              } catch (_) {}
 
               await setDoc(userRef, {
                 email: userEmail,
@@ -1485,12 +1505,26 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               })
             });
             if (isRecharge) {
+              let currentBal = 0;
+              try {
+                const wSnap = await getDoc(doc(db, 'user_wallets', userEmail));
+                if (wSnap.exists()) currentBal = wSnap.data().balance ?? wSnap.data().walletBalance ?? 0;
+              } catch (_) {}
+              const calculatedNewBal = currentBal > 0 ? currentBal : finalPrice;
               await fetch('/api/db/user_wallets/doc', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   id: userEmail,
-                  data: { email: userEmail, balance: finalPrice, updatedAt: nowISO }
+                  data: { email: userEmail, balance: calculatedNewBal, walletBalance: calculatedNewBal, updatedAt: nowISO }
+                })
+              });
+              await fetch('/api/db/users/doc', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  id: userEmail,
+                  data: { email: userEmail, balance: calculatedNewBal, walletBalance: calculatedNewBal, updatedAt: nowISO }
                 })
               });
             }
@@ -2502,11 +2536,13 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     setAutoVerifyResultMessage(null);
 
     try {
-      const cleanPhone = (p: string) => p.replace(/\D/g, '').slice(-10);
+      const cleanPhone = (p?: any) => typeof p === 'string' ? p.replace(/\D/g, '').slice(-10) : '';
 
       const globalDocRef = doc(db, 'system_settings', 'global_verified_payments');
       const snap = await getDoc(globalDocRef);
-      let vpsToUse: VerifiedPayment[] = snap.exists() ? (snap.data().verifiedPayments || []) : [];
+      let vpsToUse: VerifiedPayment[] = (currentVpsList && Array.isArray(currentVpsList) && currentVpsList.length > 0)
+        ? [...currentVpsList]
+        : (snap.exists() ? (snap.data().verifiedPayments || []) : []);
 
       const coursesSnap = await getDocs(collection(db, 'courses'));
       const coursesMap: Record<string, Course> = {};
@@ -2522,11 +2558,48 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         }
       });
 
-      const requestsSnap = await getDocs(query(collection(db, 'access_requests'), where('status', '==', 'pending')));
-      const pendingReqs = requestsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) } as unknown as AccessRequest));
+      // Gather all pending access & recharge requests from state, Firestore and Server API
+      const pendingReqMap = new Map<string, AccessRequest>();
+      
+      // 1. From local loaded state
+      accessRequests.forEach(r => {
+        if (r.status === 'pending' || !r.status || (r.status as string) === 'unverified') {
+          pendingReqMap.set(r.id, r);
+        }
+      });
+
+      // 2. From Firestore directly
+      try {
+        const requestsSnap = await getDocs(collection(db, 'access_requests'));
+        requestsSnap.forEach(d => {
+          const data = { id: d.id, ...d.data() } as AccessRequest;
+          if (data.status === 'pending' || !data.status || (data.status as string) === 'unverified') {
+            pendingReqMap.set(d.id, data);
+          }
+        });
+      } catch (e) {
+        console.warn("Firestore pending requests fetch notice:", e);
+      }
+
+      // 3. From Server API
+      try {
+        const apiRes = await fetch('/api/db/access_requests');
+        if (apiRes.ok) {
+          const json = await apiRes.json();
+          const docs = json.docs || json.data || [];
+          const list = Array.isArray(docs) ? docs : Object.values(docs);
+          list.forEach((data: any) => {
+            if (data?.id && (data.status === 'pending' || !data.status || data.status === 'unverified')) {
+              pendingReqMap.set(data.id, data);
+            }
+          });
+        }
+      } catch (_) {}
+
+      const pendingReqs = Array.from(pendingReqMap.values());
 
       if (pendingReqs.length === 0) {
-        setAutoVerifyResultMessage("No pending requests found.");
+        setAutoVerifyResultMessage("No pending requests found to verify.");
         setIsAutoVerifyingAll(false);
         return;
       }
@@ -2535,34 +2608,47 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       let totalCoursesGranted = 0;
       let updatedVpList = [...vpsToUse];
 
-        for (const req of pendingReqs) {
-          const reqPhone = cleanPhone(req.bkashNumber);
-          const reqTrx = req.trxId.toLowerCase().trim();
-          const reqEmail = req.email.toLowerCase().trim();
+      for (const req of pendingReqs) {
+        const reqPhone = cleanPhone(req.bkashNumber || (req as any).phone || (req as any).senderPhone);
+        const reqTrx = (req.trxId || '').toLowerCase().trim();
+        const reqEmail = (req.email || req.requestedBy || '').toLowerCase().trim();
 
-          // Check if reqTrx is already locked in used_transactions
-          try {
-            const usedTxSnap = await getDoc(doc(db, 'used_transactions', reqTrx));
-            if (usedTxSnap.exists() && (usedTxSnap.data().spent === true || usedTxSnap.data().status === 'spent')) {
-              continue;
+        if (!reqTrx || !reqEmail) continue;
+
+        // Check if reqTrx is already locked by someone else in used_transactions
+        try {
+          const usedTxSnap = await getDoc(doc(db, 'used_transactions', reqTrx));
+          if (usedTxSnap.exists() && (usedTxSnap.data().spent === true || usedTxSnap.data().status === 'spent')) {
+            const usedByEmail = (usedTxSnap.data().email || usedTxSnap.data().usedBy || '').toLowerCase().trim();
+            if (usedByEmail && usedByEmail !== reqEmail) {
+              continue; // Claimed by another user
             }
-          } catch (e) {
-            console.warn("used_transactions check notice:", e);
           }
+        } catch (e) {
+          console.warn("used_transactions check notice:", e);
+        }
 
-        // Match against unclaimed/unspent verified payment
+        // Match against unclaimed/unspent verified payment in the list
         const matchedVpIdx = updatedVpList.findIndex(vp => {
           if (vp.claimed || vp.spent) return false;
           const vpPhone = cleanPhone(vp.bkashNumber);
-          const vpTrx = vp.trxId.toLowerCase().trim();
-          return (vpPhone === reqPhone || vp.bkashNumber.trim() === req.bkashNumber.trim()) && vpTrx === reqTrx;
+          const vpTrx = (vp.trxId || '').toLowerCase().trim();
+          
+          if (vpTrx && reqTrx && vpTrx === reqTrx) return true;
+          if (vpPhone && reqPhone && vpPhone === reqPhone && vpTrx === reqTrx) return true;
+          return false;
         });
 
         const matchedVp = matchedVpIdx !== -1 ? updatedVpList[matchedVpIdx] : null;
 
         let walletRef = doc(db, 'user_wallets', reqEmail);
-        let walletSnap = await getDoc(walletRef);
-        let existingWalletBalance = walletSnap.exists() ? (walletSnap.data().balance || 0) : 0;
+        let existingWalletBalance = 0;
+        try {
+          const walletSnap = await getDoc(walletRef);
+          if (walletSnap.exists()) {
+            existingWalletBalance = walletSnap.data().balance ?? walletSnap.data().walletBalance ?? 0;
+          }
+        } catch (_) {}
 
         const isRechargeReq = req.courseId === 'wallet_recharge' || 
                               req.courseTitle?.toLowerCase().includes('recharge') ||
@@ -2574,20 +2660,22 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             const newBal = existingWalletBalance + rechargeAmt;
             const nowISO = new Date().toISOString();
             
-            // Lock in used_transactions
-            await setDoc(doc(db, 'used_transactions', reqTrx), {
-              trxId: reqTrx,
-              spent: true,
-              status: 'spent',
-              email: reqEmail,
-              usedBy: reqEmail,
-              bkashNumber: req.bkashNumber,
-              amount: rechargeAmt,
-              createdAt: nowISO,
-              usedAt: nowISO
-            }, { merge: true });
+            // 1. Lock in used_transactions
+            try {
+              await setDoc(doc(db, 'used_transactions', reqTrx), {
+                trxId: reqTrx,
+                spent: true,
+                status: 'spent',
+                email: reqEmail,
+                usedBy: reqEmail,
+                bkashNumber: req.bkashNumber || matchedVp.bkashNumber || '',
+                amount: rechargeAmt,
+                createdAt: nowISO,
+                usedAt: nowISO
+              }, { merge: true });
+            } catch (_) {}
 
-            // Mark payment as claimed and spent
+            // 2. Mark payment as claimed and spent in verified list
             updatedVpList[matchedVpIdx] = {
               ...matchedVp,
               spent: true,
@@ -2597,43 +2685,96 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               spentAt: nowISO
             };
 
-            await setDoc(walletRef, {
-              email: reqEmail,
-              bkashNumber: req.bkashNumber,
-              balance: newBal,
-              updatedAt: nowISO
-            }, { merge: true });
+            // 3. Update user_wallets collection in Firestore
+            try {
+              await setDoc(walletRef, {
+                email: reqEmail,
+                bkashNumber: req.bkashNumber || matchedVp.bkashNumber || '',
+                balance: newBal,
+                walletBalance: newBal,
+                updatedAt: nowISO
+              }, { merge: true });
+            } catch (_) {}
 
-            // Sync balance to users collection
-            const uQuery = query(collection(db, 'users'), where('email', '==', reqEmail));
-            const uSnap = await getDocs(uQuery);
-            if (!uSnap.empty) {
-              for (const uDoc of uSnap.docs) {
-                await setDoc(doc(db, 'users', uDoc.id), {
-                  walletBalance: newBal,
-                  balance: newBal,
-                  updatedAt: nowISO
-                }, { merge: true });
+            // 4. Sync balance to users collection (by query and by doc ID)
+            try {
+              const uQuery = query(collection(db, 'users'), where('email', '==', reqEmail));
+              const uSnap = await getDocs(uQuery);
+              if (!uSnap.empty) {
+                for (const uDoc of uSnap.docs) {
+                  await setDoc(doc(db, 'users', uDoc.id), {
+                    walletBalance: newBal,
+                    balance: newBal,
+                    updatedAt: nowISO
+                  }, { merge: true });
+                }
               }
-            } else {
+            } catch (_) {}
+
+            try {
               await setDoc(doc(db, 'users', reqEmail), {
                 email: reqEmail,
                 walletBalance: newBal,
                 balance: newBal,
                 updatedAt: nowISO
               }, { merge: true });
-            }
+            } catch (_) {}
 
-            await setDoc(doc(db, 'access_requests', req.id), {
-              status: 'approved',
-              verificationMethod: 'auto',
-              spent: true,
-              spentAt: nowISO,
-              price: rechargeAmt,
-              totalPrice: rechargeAmt,
-              remainingWalletBalance: newBal,
-              updatedAt: nowISO
-            }, { merge: true });
+            // 5. Update access request status
+            try {
+              await setDoc(doc(db, 'access_requests', req.id), {
+                status: 'approved',
+                verificationMethod: 'auto',
+                spent: true,
+                spentAt: nowISO,
+                price: rechargeAmt,
+                totalPrice: rechargeAmt,
+                remainingWalletBalance: newBal,
+                updatedAt: nowISO
+              }, { merge: true });
+            } catch (_) {}
+
+            // 6. Update Server API backup storage
+            try {
+              await fetch('/api/db/user_wallets/doc', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  id: reqEmail,
+                  data: { email: reqEmail, balance: newBal, walletBalance: newBal, updatedAt: nowISO }
+                })
+              });
+              await fetch('/api/db/users/doc', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  id: reqEmail,
+                  data: { email: reqEmail, balance: newBal, walletBalance: newBal, updatedAt: nowISO }
+                })
+              });
+              await fetch('/api/db/access_requests/doc', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  id: req.id,
+                  data: { status: 'approved', verificationMethod: 'auto', spent: true, price: rechargeAmt, totalPrice: rechargeAmt, remainingWalletBalance: newBal, updatedAt: nowISO }
+                })
+              });
+            } catch (_) {}
+
+            // 7. Update UI state optimistically
+            setAccessRequests(prev => prev.map(r => r.id === req.id ? { 
+              ...r, 
+              status: 'approved', 
+              verificationMethod: 'auto', 
+              spent: true, 
+              price: rechargeAmt, 
+              totalPrice: rechargeAmt, 
+              remainingWalletBalance: newBal 
+            } : r));
+
+            setUsers(prev => prev.map(u => u.email.toLowerCase() === reqEmail ? { ...u, walletBalance: newBal, balance: newBal } : u));
+
             autoApprovedRequestsCount++;
           }
           continue;
@@ -2665,7 +2806,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 if (!currentAllowed.includes(reqEmail)) {
                   const updatedAllowed = [...currentAllowed, reqEmail];
                   courseObj.allowedUsers = updatedAllowed;
-                  await setDoc(doc(db, 'courses', cid), { allowedUsers: updatedAllowed }, { merge: true });
+                  try {
+                    await setDoc(doc(db, 'courses', cid), { allowedUsers: updatedAllowed }, { merge: true });
+                  } catch (_) {}
                 }
               }
               totalCoursesGranted++;
@@ -2674,21 +2817,23 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
           if (approvedTargetIds.length > 0) {
             autoApprovedRequestsCount++;
+            const nowISO = new Date().toISOString();
 
             if (matchedVp) {
-              const nowISO = new Date().toISOString();
               // Lock in used_transactions
-              await setDoc(doc(db, 'used_transactions', reqTrx), {
-                trxId: reqTrx,
-                spent: true,
-                status: 'spent',
-                email: reqEmail,
-                usedBy: reqEmail,
-                bkashNumber: req.bkashNumber,
-                amount: req.totalPrice || req.price || 0,
-                createdAt: nowISO,
-                usedAt: nowISO
-              }, { merge: true });
+              try {
+                await setDoc(doc(db, 'used_transactions', reqTrx), {
+                  trxId: reqTrx,
+                  spent: true,
+                  status: 'spent',
+                  email: reqEmail,
+                  usedBy: reqEmail,
+                  bkashNumber: req.bkashNumber || matchedVp.bkashNumber || '',
+                  amount: req.totalPrice || req.price || 0,
+                  createdAt: nowISO,
+                  usedAt: nowISO
+                }, { merge: true });
+              } catch (_) {}
 
               updatedVpList[matchedVpIdx] = {
                 ...matchedVp,
@@ -2700,48 +2845,69 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               };
             }
 
-            await setDoc(walletRef, {
-              email: reqEmail,
-              bkashNumber: req.bkashNumber,
-              balance: remainingBalance,
-              updatedAt: new Date().toISOString()
-            }, { merge: true });
+            try {
+              await setDoc(walletRef, {
+                email: reqEmail,
+                bkashNumber: req.bkashNumber || '',
+                balance: remainingBalance,
+                walletBalance: remainingBalance,
+                updatedAt: nowISO
+              }, { merge: true });
+            } catch (_) {}
 
             // Sync remaining balance to users collection
-            const uQuery = query(collection(db, 'users'), where('email', '==', reqEmail));
-            const uSnap = await getDocs(uQuery);
-            if (!uSnap.empty) {
-              for (const uDoc of uSnap.docs) {
-                await setDoc(doc(db, 'users', uDoc.id), {
-                  walletBalance: remainingBalance,
-                  balance: remainingBalance,
-                  updatedAt: new Date().toISOString()
-                }, { merge: true });
+            try {
+              const uQuery = query(collection(db, 'users'), where('email', '==', reqEmail));
+              const uSnap = await getDocs(uQuery);
+              if (!uSnap.empty) {
+                for (const uDoc of uSnap.docs) {
+                  await setDoc(doc(db, 'users', uDoc.id), {
+                    walletBalance: remainingBalance,
+                    balance: remainingBalance,
+                    updatedAt: nowISO
+                  }, { merge: true });
+                }
               }
-            } else {
+            } catch (_) {}
+
+            try {
               await setDoc(doc(db, 'users', reqEmail), {
                 email: reqEmail,
                 walletBalance: remainingBalance,
                 balance: remainingBalance,
-                updatedAt: new Date().toISOString()
+                updatedAt: nowISO
               }, { merge: true });
-            }
+            } catch (_) {}
 
-            await setDoc(doc(db, 'access_requests', req.id), {
-              status: 'approved',
-              verificationMethod: matchedVp ? 'auto' : 'wallet_balance',
+            try {
+              await setDoc(doc(db, 'access_requests', req.id), {
+                status: 'approved',
+                verificationMethod: matchedVp ? 'auto' : 'wallet_balance',
+                spent: matchedVp ? true : false,
+                spentAt: matchedVp ? nowISO : undefined,
+                approvedCoursesCount: approvedTargetIds.length,
+                remainingWalletBalance: remainingBalance,
+                updatedAt: nowISO
+              }, { merge: true });
+            } catch (_) {}
+
+            setAccessRequests(prev => prev.map(r => r.id === req.id ? { 
+              ...r, 
+              status: 'approved', 
+              verificationMethod: matchedVp ? 'auto' : 'wallet_balance', 
               spent: matchedVp ? true : false,
-              spentAt: matchedVp ? new Date().toISOString() : undefined,
-              approvedCoursesCount: approvedTargetIds.length,
-              remainingWalletBalance: remainingBalance,
-              updatedAt: new Date().toISOString()
-            }, { merge: true });
+              remainingWalletBalance: remainingBalance 
+            } : r));
+
+            setUsers(prev => prev.map(u => u.email.toLowerCase() === reqEmail ? { ...u, walletBalance: remainingBalance, balance: remainingBalance } : u));
           }
         }
       }
 
       // Save updated VP claim status list back to Firestore
-      await setDoc(globalDocRef, { verifiedPayments: updatedVpList }, { merge: true });
+      try {
+        await setDoc(globalDocRef, { verifiedPayments: updatedVpList }, { merge: true });
+      } catch (_) {}
       setGlobalVerifiedPayments(updatedVpList);
 
       fetchAccessRequests();
@@ -4347,13 +4513,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
                         const matchingReq = accessRequests.find(req => {
                           const reqTrx = (req.trxId || '').toLowerCase().trim();
-                          const reqNum = cleanNum(req.bkashNumber);
+                          const reqNum = cleanNum(req.bkashNumber || (req as any).phone || (req as any).senderPhone);
                           if (vpTrx && reqTrx && vpTrx === reqTrx) return true;
                           if (vpNum && reqNum && vpNum === reqNum && vpTrx && reqTrx && vpTrx === reqTrx) return true;
                           return false;
                         });
 
-                        const isAdded = (vp as any).claimed || (vp as any).spent || !!matchingReq;
+                        const isAlreadyApproved = (vp as any).claimed || (vp as any).spent || matchingReq?.status === 'approved';
+                        const isPendingMatch = matchingReq && matchingReq.status === 'pending';
                         const claimedEmail = (vp as any).claimedBy || matchingReq?.email;
 
                         return (
@@ -4366,10 +4533,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                               </span>
                             </td>
                             <td className="px-4 py-2.5 font-sans">
-                              {isAdded ? (
+                              {isAlreadyApproved ? (
                                 <span
                                   className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 font-extrabold rounded-lg text-xs border border-emerald-200 shadow-2xs"
-                                  title={claimedEmail ? `Claimed by ${claimedEmail}` : 'Matched with user request'}
+                                  title={claimedEmail ? `Claimed & Approved for ${claimedEmail}` : 'Matched and approved in wallet'}
                                 >
                                   <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                                   <span>Added</span>
@@ -4379,13 +4546,30 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                                     </span>
                                   )}
                                 </span>
+                              ) : isPendingMatch ? (
+                                <div className="inline-flex items-center gap-2">
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-800 font-bold rounded-lg text-[11px] border border-amber-200"
+                                    title={`Matched pending request from ${claimedEmail}`}
+                                  >
+                                    <Clock className="w-3 h-3 text-amber-600" />
+                                    <span>Matched ({claimedEmail})</span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApproveAccessRequest(matchingReq!, vp.amount || 75)}
+                                    className="px-2.5 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-lg text-[10px] shadow-2xs transition cursor-pointer"
+                                  >
+                                    Credit Now
+                                  </button>
+                                </div>
                               ) : (
                                 <span
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 font-extrabold rounded-lg text-xs border border-amber-200 shadow-2xs"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 text-slate-500 font-bold rounded-lg text-xs border border-slate-200"
                                   title="Not claimed by any user request yet"
                                 >
-                                  <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                                  <span>Pending</span>
+                                  <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span>Unclaimed</span>
                                 </span>
                               )}
                             </td>
