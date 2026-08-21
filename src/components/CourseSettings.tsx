@@ -2646,8 +2646,8 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
     { id: 'access' as const, label: 'Student Access & Verification', icon: Users, badge: (allowedUsers.length + verifiedPayments.length) || undefined },
     { id: 'wordlist' as const, label: 'Word List & Upload', icon: BookOpen, badge: localWords.length },
     { id: 'exam-questions' as const, label: 'Online Exams (অনলাইন এক্সাম)', icon: Award, badge: courseExams.length },
-    { id: 'story-management' as const, label: 'Read Story Management', icon: BookOpen, badge: localStories.length },
-    { id: 'article-management' as const, label: 'Read Article Management', icon: Newspaper, badge: localArticles.length },
+    { id: 'story-management' as const, label: 'Published Stories (স্টোরি)', icon: BookOpen, badge: localStories.length },
+    { id: 'article-management' as const, label: 'Published Articles (আর্টিকেল)', icon: Newspaper, badge: localArticles.length },
   ];
 
   return (
@@ -4490,7 +4490,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
               </div>
             )}
 
-            {/* --- SECTION: ONLINE EXAMS MANAGEMENT --- */}
+            {/* --- SECTION: ONLINE EXAMS LIST --- */}
             {activeTab === 'exam-questions' && (
               <div className="space-y-6 overflow-y-auto max-h-[60vh] pr-2 animate-fadeIn">
                 {/* Header */}
@@ -4498,127 +4498,12 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                   <div>
                     <h4 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
                       <Award className="w-5 h-5 text-indigo-600" />
-                      <span>Online Exams Management (অনলাইন এক্সাম ম্যানেজমেন্ট)</span>
+                      <span>Online Exams (অনলাইন এক্সাম লিস্ট)</span>
                     </h4>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Upload exam questions via Excel, configure time limits, pass marks, and negative marking for <span className="font-bold text-indigo-600">{course.title}</span>.
+                      <span className="font-bold text-indigo-600">{course.title}</span> কোর্সের অন্তর্ভুক্ত প্রকাশিত অনলাইন পরীক্ষার তালিকা।
                     </p>
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={() => downloadExamExcelTemplate()}
-                    className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-xs rounded-xl border border-indigo-200 transition cursor-pointer flex items-center gap-1.5 shrink-0"
-                  >
-                    <FileSpreadsheet className="w-4 h-4 text-indigo-600" />
-                    <span>Download Exam Excel Template</span>
-                  </button>
-                </div>
-
-                {/* Create Exam Card */}
-                <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200/80 space-y-4">
-                  <h5 className="text-xs font-black text-slate-800 uppercase tracking-wider">Create New Exam via Excel Upload</h5>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-600 block mb-1">Exam Title (শিরোনাম)</label>
-                      <input
-                        type="text"
-                        value={examTitleInput}
-                        onChange={(e) => setExamTitleInput(e.target.value)}
-                        placeholder={`${course.title} Final Test`}
-                        className="w-full text-xs font-bold text-slate-800 border border-slate-200 rounded-xl px-3 py-2 bg-white focus:border-indigo-500 outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-600 block mb-1">Time Limit (Minutes)</label>
-                      <input
-                        type="number"
-                        value={examDurationInput}
-                        onChange={(e) => setExamDurationInput(Number(e.target.value) || 15)}
-                        className="w-full text-xs font-bold text-slate-800 border border-slate-200 rounded-xl px-3 py-2 bg-white focus:border-indigo-500 outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-600 block mb-1">Marks per Question</label>
-                      <input
-                        type="number"
-                        step="0.5"
-                        value={examMarksPerQInput}
-                        onChange={(e) => setExamMarksPerQInput(Number(e.target.value) || 1)}
-                        className="w-full text-xs font-bold text-slate-800 border border-slate-200 rounded-xl px-3 py-2 bg-white focus:border-indigo-500 outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-600 block mb-1">Negative Mark per Wrong Answer</label>
-                      <input
-                        type="number"
-                        step="0.05"
-                        value={examNegativeMarkInput}
-                        onChange={(e) => setExamNegativeMarkInput(Number(e.target.value) || 0.25)}
-                        className="w-full text-xs font-bold text-slate-800 border border-slate-200 rounded-xl px-3 py-2 bg-white focus:border-indigo-500 outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Upload Input */}
-                  <div className="pt-2">
-                    <label className="cursor-pointer bg-white border-2 border-dashed border-indigo-200 hover:border-indigo-400 p-4 rounded-xl text-center transition flex flex-col items-center justify-center">
-                      <input
-                        type="file"
-                        accept=".xlsx, .xls"
-                        className="hidden"
-                        onChange={handleUploadExamExcel}
-                      />
-                      <UploadCloud className="w-6 h-6 text-indigo-500 mb-1" />
-                      <span className="text-xs font-bold text-slate-700">Click or Drag & Drop Exam Excel File</span>
-                      <span className="text-[10px] text-slate-400 mt-0.5">Columns: Question, Option A, Option B, Option C, Option D, Correct Answer, Explanation</span>
-                    </label>
-                  </div>
-
-                  {excelExamUploadError && (
-                    <p className="text-xs font-bold text-rose-600 bg-rose-50 p-3 rounded-xl border border-rose-200">
-                      {excelExamUploadError}
-                    </p>
-                  )}
-
-                  {/* Excel Preview */}
-                  {excelExamPreview.length > 0 && (
-                    <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-xs font-extrabold text-emerald-900">
-                            Exam File Loaded Successfully: {excelExamPreview.length} Questions Ready
-                          </p>
-                          <p className="text-[11px] font-semibold text-emerald-700">
-                            Total Exam Marks: {excelExamPreview.length * (examMarksPerQInput || 1)}
-                          </p>
-                        </div>
-
-                        <button
-                          type="button"
-                          disabled={excelExamSaveStatus === 'saving'}
-                          onClick={handleSaveExamExcel}
-                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                        >
-                          {excelExamSaveStatus === 'saving' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                          <span>Save & Publish Exam</span>
-                        </button>
-                      </div>
-
-                      <div className="max-h-40 overflow-y-auto space-y-1.5 text-xs text-emerald-950 font-medium border-t border-emerald-200/60 pt-2">
-                        {excelExamPreview.map((q, idx) => (
-                          <div key={idx} className="bg-white/80 p-2 rounded-lg border border-emerald-100 flex items-center justify-between gap-2">
-                            <span className="truncate font-semibold">{idx + 1}. {q.question}</span>
-                            <span className="shrink-0 bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-md">Ans: {q.answer}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* Published Exams List */}
@@ -4636,8 +4521,10 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                   </h5>
 
                   {courseExams.length === 0 ? (
-                    <div className="text-center py-8 bg-slate-50 rounded-2xl border border-slate-100 text-slate-400 text-xs font-medium">
-                      No online exams published for this course yet. Upload an Excel file above to create one.
+                    <div className="text-center py-10 bg-slate-50 rounded-2xl border border-slate-100 text-slate-400 text-xs font-medium space-y-1">
+                      <Award className="w-8 h-8 text-slate-300 mx-auto" />
+                      <p>এই কোর্সের জন্য বর্তমানে কোনো অনলাইন এক্সাম তৈরি করা নেই।</p>
+                      <p className="text-[11px] text-slate-400">এক্সাম তৈরি বা ম্যানেজ করতে অ্যাডমিন প্যানেলের প্রধান <strong>Exam Question Bank / Summary</strong> ব্যবহার করুন।</p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -4658,7 +4545,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                             <div className="flex flex-wrap items-center gap-2 mt-2 text-[11px] text-slate-500 font-bold">
                               <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md">{ex.questions?.length || 0} Questions</span>
                               <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">{ex.durationMinutes} Mins</span>
-                              <span className="bg-amber-50 text-amber-800 px-2 py-0.5 rounded-md">Pass: {ex.totalMarks || (ex.questions?.length || 0)} Marks</span>
+                              <span className="bg-amber-50 text-amber-800 px-2 py-0.5 rounded-md">Total Marks: {ex.totalMarks || (ex.questions?.length || 0)}</span>
                               {ex.negativeMarking ? (
                                 <span className="bg-rose-50 text-rose-700 px-2 py-0.5 rounded-md">Negative: -{ex.negativeMarking}</span>
                               ) : null}
@@ -4672,17 +4559,17 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
               </div>
             )}
 
-            {/* --- SECTION: READ STORY MANAGEMENT --- */}
+            {/* --- SECTION: PUBLISHED STORIES LIST --- */}
             {activeTab === 'story-management' && (
               <div className="space-y-6 overflow-y-auto max-h-[60vh] pr-2 animate-fadeIn">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-3 mb-2">
                   <div>
                     <h4 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
                       <BookOpen className="w-4.5 h-4.5 text-indigo-600" />
-                      <span>Read Story Management</span>
+                      <span>Published Course Stories (প্রকাশিত স্টোরির তালিকা)</span>
                     </h4>
                     <p className="text-xs text-slate-400 mt-1 font-medium">
-                      Upload stories via Word document (.docx, .doc, .txt) or manage existing stories for this course.
+                      এই কোর্সের আওতাধীন প্রকাশিত রিডিং স্টোরিগুলোর তালিকা ({localStories.length}টি)। নতুন স্টোরি ফাইল আপলোড বা যুক্ত করতে মেইন অ্যাডমিন প্যানেলের <strong className="text-indigo-600">"Upload Games (গেম ও কন্টেন্ট আপলোড)"</strong> সেকশন ব্যবহার করুন।
                     </p>
                   </div>
 
@@ -4711,6 +4598,19 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                   </button>
                 </div>
 
+                {/* Notice Info Banner */}
+                <div className="p-4 bg-sky-50/80 border border-sky-200/80 rounded-2xl flex items-start gap-3 text-xs text-sky-900">
+                  <BookOpen className="w-5 h-5 text-sky-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-bold text-sky-950">
+                      💡 স্টোরি আপলোড বা ফাইল ইমপোর্ট নির্দেশনা
+                    </p>
+                    <p className="text-sky-800 text-[11px] leading-relaxed">
+                      নতুন স্টোরি Word Document (.docx, .doc), Excel, Text বা JSON ফাইল থেকে আপলোড করতে মেইন অ্যাডমিন প্যানেলের <strong>"Upload Games (গেম ও কন্টেন্ট আপলোড)" &gt; "Read Story"</strong> ট্যাব ব্যবহার করুন। এখান থেকে সরাসরি এই কোর্সের প্রকাশিত স্টোরিগুলো দেখতে বা এডিট/ডিলিট করতে পারবেন।
+                    </p>
+                  </div>
+                </div>
+
                 {/* Status Banners */}
                 {storySaveStatus === 'saved' && (
                   <div className="p-3 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center gap-2 animate-fadeIn">
@@ -4719,112 +4619,11 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                   </div>
                 )}
 
-                {/* Upload Card */}
-                <div className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Document / File Upload */}
-                    <label className="cursor-pointer bg-white border-2 border-dashed border-indigo-200 hover:border-indigo-400 p-5 rounded-xl text-center transition group flex flex-col items-center justify-center">
-                      <input
-                        type="file"
-                        accept=".docx,.doc,.txt,.xlsx,.xls,.csv,.json"
-                        className="hidden"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          setStoryUploadLoading(true);
-                          setStoryUploadError(null);
-                          try {
-                            const parsed = await parseStoriesFromFile(file, course.id);
-                            if (parsed.length === 0) {
-                              setStoryUploadError('No valid story titles or paragraphs were detected in the file.');
-                            } else {
-                              const updated = [...localStories, ...parsed];
-                              setLocalStories(updated);
-                              // Automatically synchronize directly to Cloud Firestore!
-                              await saveStoriesListDirectly(updated);
-                            }
-                          } catch (err: any) {
-                            console.error(err);
-                            setStoryUploadError(err?.message || 'Could not process document file. Please ensure it is a valid .docx, .xlsx, .csv, .json, or .txt file.');
-                          } finally {
-                            setStoryUploadLoading(false);
-                            // reset file input
-                            e.target.value = '';
-                          }
-                        }}
-                      />
-                      <UploadCloud className="w-7 h-7 text-indigo-500 mb-1 group-hover:scale-110 transition-transform" />
-                      <span className="text-xs font-bold text-slate-800 block">
-                        {storyUploadLoading ? 'Extracting & Saving stories to Cloud...' : 'Upload Stories File (.docx / .xlsx / .csv / .json / .txt)'}
-                      </span>
-                      <span className="text-[10px] text-slate-400 block mt-0.5">
-                        Word doc, Excel sheet, JSON or text file (Auto-saves to Cloud)
-                      </span>
-                    </label>
-
-                    {/* Paste Text / Direct Input */}
-                    <div className="bg-white p-4 rounded-xl border border-indigo-150 space-y-2 flex flex-col">
-                      <label className="text-xs font-extrabold text-slate-800 block">
-                        Paste Story Text Directly:
-                      </label>
-                      <textarea
-                        rows={3}
-                        value={pastedStoryText}
-                        onChange={(e) => setPastedStoryText(e.target.value)}
-                        placeholder="Story Title&#10;First paragraph of story..."
-                        className="w-full text-xs text-slate-700 border border-slate-200 rounded-lg p-2 focus:border-indigo-500 outline-none flex-1 font-mono resize-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!pastedStoryText.trim()) return;
-                          const parsed = parseStoriesFromRawText(pastedStoryText, course.id);
-                          if (parsed.length > 0) {
-                            const updated = [...localStories, ...parsed];
-                            setLocalStories(updated);
-                            setPastedStoryText('');
-                            setStoryUploadError(null);
-                            // Automatically save to cloud
-                            await saveStoriesListDirectly(updated);
-                          } else {
-                            setStoryUploadError('No valid story detected in pasted text.');
-                          }
-                        }}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition cursor-pointer self-end flex items-center gap-1"
-                      >
-                        <Save className="w-3.5 h-3.5" />
-                        <span>Parse & Save to Cloud</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Format Guide */}
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 text-xs text-slate-600 space-y-1.5">
-                    <span className="font-extrabold text-slate-800 block">💡 Supported Formats & Guide:</span>
-                    <p className="text-[11px] text-slate-500 leading-relaxed">
-                      Upload Word document (.docx/.doc), Excel/CSV (.xlsx/.csv with columns for Title & Content), JSON, or plain text:
-                    </p>
-                    <pre className="text-[11px] font-mono text-indigo-900 bg-indigo-50/80 p-2.5 rounded-lg border border-indigo-100 leading-relaxed whitespace-pre font-medium">
-{`Story Title 1
-First paragraph of story 1...
-
-Story Title 2
-First paragraph of story 2...`}
-                    </pre>
-                  </div>
-
-                  {storyUploadError && (
-                    <p className="text-xs font-bold text-rose-600 bg-rose-50 p-2.5 rounded-lg border border-rose-200">
-                      {storyUploadError}
-                    </p>
-                  )}
-                </div>
-
-                {/* Uploaded Stories List - Displayed one after another separately */}
+                {/* Published Stories List */}
                 <div className="space-y-4 pt-2">
                   <div className="flex items-center justify-between">
-                    <h5 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
-                      Uploaded Stories List ({localStories.length})
+                    <h5 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                      <span>Published Stories ({localStories.length})</span>
                     </h5>
                     <div className="flex items-center gap-2">
                       <button
@@ -4848,8 +4647,12 @@ First paragraph of story 2...`}
                       {localStories.length > 0 && (
                         <button
                           type="button"
-                          onClick={() => setLocalStories([])}
-                          className="text-xs font-bold text-rose-600 hover:text-rose-700 transition cursor-pointer"
+                          onClick={() => {
+                            if (window.confirm('Are you sure you want to remove all stories from this course?')) {
+                              setLocalStories([]);
+                            }
+                          }}
+                          className="text-xs font-bold text-rose-600 hover:text-rose-700 transition cursor-pointer px-2 py-1"
                         >
                           Remove All Stories
                         </button>
@@ -4946,8 +4749,12 @@ First paragraph of story 2...`}
                       </div>
                     </div>
                   ) : (
-                    <div className="p-8 text-center text-xs text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 font-medium">
-                      No stories uploaded yet. Use the document uploader above to add stories.
+                    <div className="p-8 text-center text-xs text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 font-medium space-y-2">
+                      <BookOpen className="w-8 h-8 text-slate-300 mx-auto" />
+                      <p className="font-bold text-slate-600">No published stories for this course yet.</p>
+                      <p className="text-[11px] text-slate-400">
+                        Use the main Admin Panel's <strong>"Upload Games &gt; Read Story"</strong> tab to upload stories for this course.
+                      </p>
                     </div>
                   )}
                 </div>
@@ -4961,7 +4768,7 @@ First paragraph of story 2...`}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Newspaper className="w-5 h-5 text-indigo-300" />
-                      <h4 className="font-extrabold text-sm sm:text-base">Course Article Management</h4>
+                      <h4 className="font-extrabold text-sm sm:text-base">Published Course Articles (প্রকাশিত আর্টিকেল)</h4>
                     </div>
                     <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-extrabold rounded-full flex items-center gap-1.5">
                       <CheckCircle className="w-3.5 h-3.5" />
@@ -4969,8 +4776,21 @@ First paragraph of story 2...`}
                     </span>
                   </div>
                   <p className="text-xs text-slate-300 font-medium leading-relaxed max-w-3xl">
-                    Add custom reading articles to this course. Added articles will be synchronized with the cloud database and available to all enrolled students in the Article Reading View.
+                    এই কোর্সের আওতাধীন প্রকাশিত আর্টিকেলের তালিকা ({localArticles.length}টি)। নতুন আর্টিকেল ফাইল আপলোড করতে মেইন অ্যাডমিন প্যানেলের <strong>"Upload Games (গেম ও কন্টেন্ট আপলোড)"</strong> সেকশন ব্যবহার করুন।
                   </p>
+                </div>
+
+                {/* Notice Info Banner */}
+                <div className="p-4 bg-indigo-50/80 border border-indigo-200/80 rounded-2xl flex items-start gap-3 text-xs text-indigo-900">
+                  <Newspaper className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-bold text-indigo-950">
+                      💡 আর্টিকেল আপলোড বা ফাইল ইমপোর্ট নির্দেশনা
+                    </p>
+                    <p className="text-indigo-800 text-[11px] leading-relaxed">
+                      নতুন আর্টিকেল Word Document (.docx, .doc), Excel, Text বা JSON ফাইল থেকে আপলোড করতে মেইন অ্যাডমিন প্যানেলের <strong>"Upload Games (গেম ও কন্টেন্ট আপলোড)" &gt; "Read Article"</strong> ট্যাব ব্যবহার করুন। এখান থেকে সরাসরি এই কোর্সের প্রকাশিত আর্টিকেলগুলো দেখতে বা এডিট/ডিলিট করতে পারবেন।
+                    </p>
+                  </div>
                 </div>
 
                 {/* Status Banners */}
@@ -4987,104 +4807,10 @@ First paragraph of story 2...`}
                   </div>
                 )}
 
-                {/* Article Upload Card */}
-                <div className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Document / File Upload */}
-                    <label className="cursor-pointer bg-white border-2 border-dashed border-indigo-200 hover:border-indigo-400 p-5 rounded-xl text-center transition group flex flex-col items-center justify-center">
-                      <input
-                        type="file"
-                        accept=".docx,.doc,.txt,.xlsx,.xls,.csv,.json"
-                        className="hidden"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          setArticleUploadLoading(true);
-                          setArticleUploadError(null);
-                          try {
-                            const parsed = await parseArticlesFromFile(file, course.id);
-                            if (parsed.length === 0) {
-                              setArticleUploadError('No valid article titles or paragraphs were detected in the file.');
-                            } else {
-                              const updated = [...localArticles, ...parsed];
-                              setLocalArticles(updated);
-                              // Automatically synchronize directly to Cloud Firestore!
-                              await saveArticlesListDirectly(updated);
-                            }
-                          } catch (err: any) {
-                            console.error(err);
-                            setArticleUploadError(err?.message || 'Could not process article file. Please ensure it is a valid .docx, .xlsx, .csv, .json, or .txt file.');
-                          } finally {
-                            setArticleUploadLoading(false);
-                            e.target.value = '';
-                          }
-                        }}
-                      />
-                      <UploadCloud className="w-7 h-7 text-indigo-500 mb-1 group-hover:scale-110 transition-transform" />
-                      <span className="text-xs font-bold text-slate-800 block">
-                        {articleUploadLoading ? 'Extracting & Saving articles to Cloud...' : 'Upload Articles File (.docx / .xlsx / .csv / .json / .txt)'}
-                      </span>
-                      <span className="text-[10px] text-slate-400 block mt-0.5">
-                        Word doc, Excel sheet, JSON or text file (Auto-saves to Cloud)
-                      </span>
-                    </label>
-
-                    {/* Paste Text / Direct Input */}
-                    <div className="bg-white p-4 rounded-xl border border-indigo-150 space-y-2 flex flex-col">
-                      <label className="text-xs font-extrabold text-slate-800 block">
-                        Paste Article Text Directly:
-                      </label>
-                      <textarea
-                        rows={3}
-                        value={pastedArticleText}
-                        onChange={(e) => setPastedArticleText(e.target.value)}
-                        placeholder="Article Title&#10;First paragraph of article..."
-                        className="w-full text-xs text-slate-700 border border-slate-200 rounded-lg p-2 focus:border-indigo-500 outline-none flex-1 font-mono resize-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!pastedArticleText.trim()) return;
-                          const parsed = parseArticlesFromRawText(pastedArticleText, course.id);
-                          if (parsed.length > 0) {
-                            const updated = [...localArticles, ...parsed];
-                            setLocalArticles(updated);
-                            setPastedArticleText('');
-                            setArticleUploadError(null);
-                            // Automatically save to cloud
-                            await saveArticlesListDirectly(updated);
-                          } else {
-                            setArticleUploadError('No valid article detected in pasted text.');
-                          }
-                        }}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition cursor-pointer self-end flex items-center gap-1"
-                      >
-                        <Save className="w-3.5 h-3.5" />
-                        <span>Parse & Save to Cloud</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Format Guide */}
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 text-xs text-slate-600 space-y-1.5">
-                    <span className="font-extrabold text-slate-800 block">💡 Supported Formats & Guide:</span>
-                    <p className="text-[11px] text-slate-500 leading-relaxed">
-                      Upload Word document (.docx/.doc), Excel/CSV (.xlsx/.csv with columns for Title, Content, Author, Category), JSON, or plain text:
-                    </p>
-                    <pre className="text-[11px] font-mono text-indigo-900 bg-indigo-50/80 p-2.5 rounded-lg border border-indigo-100 leading-relaxed whitespace-pre font-medium">
-{`Article Title 1
-First paragraph of article 1...
-
-Article Title 2
-First paragraph of article 2...`}
-                    </pre>
-                  </div>
-                </div>
-
                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 space-y-4">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <h5 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                      <span>Course Articles ({localArticles.length})</span>
+                      <span>Published Course Articles ({localArticles.length})</span>
                     </h5>
                     <div className="flex items-center gap-2">
                       <button
@@ -5110,7 +4836,7 @@ First paragraph of article 2...`}
                         className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm"
                       >
                         <Plus className="w-4 h-4" />
-                        <span>Add New Article</span>
+                        <span>Add Article Manually</span>
                       </button>
                       <button
                         type="button"
@@ -5305,29 +5031,10 @@ First paragraph of article 2...`}
                   ) : (
                     <div className="p-8 text-center text-xs text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200 space-y-3">
                       <Newspaper className="w-8 h-8 text-slate-300 mx-auto" />
-                      <p className="font-medium text-slate-600">No custom articles added to this course yet.</p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setLocalArticles([
-                            {
-                              id: `art-${course.id}-${Date.now()}-1`,
-                              title: 'Sample Course Article',
-                              excerpt: 'An engaging vocabulary article for students.',
-                              content: 'This is a sample article for this course. Add relevant vocabulary words here to help students learn in context.',
-                              author: 'Course Instructor',
-                              category: 'Reading Practice',
-                              readTime: '3 min read',
-                              publishedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-                              coverGradient: 'from-indigo-600 via-purple-600 to-pink-600',
-                              tags: ['Reading', 'Vocabulary']
-                            }
-                          ]);
-                        }}
-                        className="px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl text-xs font-bold border border-indigo-200 transition cursor-pointer"
-                      >
-                        Create First Course Article
-                      </button>
+                      <p className="font-bold text-slate-600">No published articles for this course yet.</p>
+                      <p className="text-[11px] text-slate-400">
+                        Use the main Admin Panel's <strong>"Upload Games &gt; Read Article"</strong> tab to upload articles for this course.
+                      </p>
                     </div>
                   )}
                 </div>

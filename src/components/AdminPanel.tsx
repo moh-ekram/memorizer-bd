@@ -20,7 +20,7 @@ import {
   clearQuestionsCache,
   deleteBulkDocs
 } from '../lib/db';
-import { VocabularyWord, UserProgress, Course, AccessRequest, BlankQuestion, OddOneOutQuestion, WordAnalogyQuestion, CustomMcqQuestion, AppSettings, VerifiedPayment, ExamQuestion, Exam } from '../types';
+import { VocabularyWord, UserProgress, Course, AccessRequest, BlankQuestion, OddOneOutQuestion, WordAnalogyQuestion, CustomMcqQuestion, AppSettings, VerifiedPayment, ExamQuestion, Exam, StoryItem, ArticleItem } from '../types';
 import { safeGetLocalStorage, safeSetLocalStorage } from '../lib/storage';
 import { read, utils } from 'xlsx';
 import { 
@@ -36,8 +36,15 @@ import {
   downloadExamExcelTemplate,
   downloadAllGamesMultiSheetTemplate 
 } from '../lib/gameExcelUtils';
+import { 
+  parseStoriesFromFile, 
+  parseStoriesFromRawText, 
+  parseArticlesFromFile, 
+  parseArticlesFromRawText 
+} from '../utils/storyParser';
 import { CourseSettings } from './CourseSettings';
 import TransactionHistoryView from './TransactionHistoryView';
+import LandingPageEditor from './LandingPageEditor';
 import { vocabulary } from '../data/vocabulary';
 import { logAdminActivity } from '../lib/activityLogger';
 import { BulkCsvStudentModal } from './BulkCsvStudentModal';
@@ -105,7 +112,9 @@ import {
   History,
   HelpCircle,
   Shuffle,
-  GraduationCap
+  GraduationCap,
+  LayoutTemplate,
+  Newspaper
 } from 'lucide-react';
 
 interface FirestoreUserDoc {
@@ -350,7 +359,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const [activeWordFilter, setActiveWordFilter] = useState<'all' | 'know' | 'confusion' | 'dont_know'>('all');
 
   // Course management and upload states
-  const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'courses' | 'reports' | 'access-requests' | 'autoverify' | 'system-settings' | 'blank-questions' | 'activity-logs' | 'transaction-debugger' | 'question-bank' | 'exam-summary'>('courses');
+  const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'courses' | 'reports' | 'access-requests' | 'autoverify' | 'system-settings' | 'landing-editor' | 'blank-questions' | 'activity-logs' | 'transaction-debugger' | 'question-bank' | 'exam-summary'>('courses');
   const [requestsSubTab, setRequestsSubTab] = useState<'pending' | 'autoverify' | 'history' | 'debugger'>('pending');
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [bulkCsvCourse, setBulkCsvCourse] = useState<Course | null>(null);
@@ -495,7 +504,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const [isProcessingAction, setIsProcessingAction] = useState<boolean>(false);
 
   // Blank questions states
-  const [gameUploadSubTab, setGameUploadSubTab] = useState<'multi' | 'blank' | 'ooo' | 'analogy' | 'mcq'>('multi');
+  const [gameUploadSubTab, setGameUploadSubTab] = useState<'multi' | 'blank' | 'ooo' | 'analogy' | 'mcq' | 'story' | 'article'>('multi');
   const [blankQuestions, setBlankQuestions] = useState<BlankQuestion[]>([]);
   const [blankQuestionsLoading, setBlankQuestionsLoading] = useState(false);
   const [blankQuestionsError, setBlankQuestionsError] = useState<string | null>(null);
@@ -543,6 +552,26 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const [excelMcqUploadError, setExcelMcqUploadError] = useState<string | null>(null);
   const [excelMcqNotice, setExcelMcqNotice] = useState<string[] | null>(null);
   const [excelMcqSaveStatus, setExcelMcqSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  // --- STORY UPLOAD STATES ---
+  const [storyUploadLoading, setStoryUploadLoading] = useState(false);
+  const [storyUploadError, setStoryUploadError] = useState<string | null>(null);
+  const [storySaveStatus, setStorySaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [pastedStoryText, setPastedStoryText] = useState('');
+  const [manualStoryTitle, setManualStoryTitle] = useState('');
+  const [manualStoryContent, setManualStoryContent] = useState('');
+
+  // --- ARTICLE UPLOAD STATES ---
+  const [articleUploadLoading, setArticleUploadLoading] = useState(false);
+  const [articleUploadError, setArticleUploadError] = useState<string | null>(null);
+  const [articleSaveStatus, setArticleSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [pastedArticleText, setPastedArticleText] = useState('');
+  const [manualArticleTitle, setManualArticleTitle] = useState('');
+  const [manualArticleContent, setManualArticleContent] = useState('');
+  const [manualArticleCategory, setManualArticleCategory] = useState('Vocabulary Reading');
+  const [manualArticleAuthor, setManualArticleAuthor] = useState('Course Educator');
+  const [manualArticleReadTime, setManualArticleReadTime] = useState('4 min read');
+  const [manualArticleExcerpt, setManualArticleExcerpt] = useState('');
 
   const fetchBlankQuestions = async (courseId?: string) => {
     setBlankQuestionsLoading(true);
@@ -1064,6 +1093,280 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       setMcqQuestionsLoading(false);
       fetchMcqQuestions();
     }
+  };
+
+  // --- STORY UPLOAD & MANAGEMENT HANDLERS ---
+  const handleSaveCourseStories = async (newStories: StoryItem[], mode: 'append' | 'replace' = 'append') => {
+    if (!selectedGameCourseId) {
+      setStoryUploadError('অনুগ্রহ করে প্রথমে ড্রপডাউন থেকে একটি কোর্স সিলেক্ট করুন।');
+      return false;
+    }
+    setStorySaveStatus('saving');
+    setStoryUploadError(null);
+    try {
+      const currentTargetCourse = customCourses.find(c => c.id === selectedGameCourseId);
+      const existingStories = mode === 'replace' ? [] : (currentTargetCourse?.stories || []);
+      const mergedStories = [...existingStories, ...newStories];
+
+      const courseRef = doc(db, 'courses', selectedGameCourseId);
+      await setDoc(courseRef, { stories: mergedStories }, { merge: true });
+
+      setCustomCourses(prev => prev.map(c => c.id === selectedGameCourseId ? { ...c, stories: mergedStories } : c));
+      
+      try {
+        const cachedStr = safeGetLocalStorage('vocab_memorizer_cached_custom_courses', '[]');
+        let cached = JSON.parse(cachedStr);
+        if (Array.isArray(cached)) {
+          const idx = cached.findIndex((c: any) => c.id === selectedGameCourseId);
+          if (idx >= 0) {
+            cached[idx] = { ...cached[idx], stories: mergedStories };
+          }
+          safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(cached));
+        }
+      } catch (_) {}
+
+      setStorySaveStatus('saved');
+      setTimeout(() => setStorySaveStatus('idle'), 3000);
+      return true;
+    } catch (err: any) {
+      console.error('Error saving stories in AdminPanel:', err);
+      setStorySaveStatus('error');
+      setStoryUploadError(`Failed to save stories: ${err?.message || 'Database error'}`);
+      return false;
+    }
+  };
+
+  const handleUploadStoryFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!selectedGameCourseId) {
+      alert('অনুগ্রহ করে প্রথমে ড্রপডাউন থেকে একটি কোর্স সিলেক্ট করুন।');
+      e.target.value = '';
+      return;
+    }
+    setStoryUploadLoading(true);
+    setStoryUploadError(null);
+    try {
+      const parsed = await parseStoriesFromFile(file);
+      if (parsed.length === 0) {
+        setStoryUploadError('কোনো সঠিক স্টোরি পাওয়া যায়নি। অনুগ্রহ করে ফাইলের ফরম্যাট চেক করুন।');
+      } else {
+        await handleSaveCourseStories(parsed, 'append');
+      }
+    } catch (err: any) {
+      setStoryUploadError(`Error parsing file: ${err.message || 'Unknown error'}`);
+    } finally {
+      setStoryUploadLoading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleUploadStoryText = async () => {
+    if (!pastedStoryText.trim()) return;
+    if (!selectedGameCourseId) {
+      alert('অনুগ্রহ করে প্রথমে ড্রপডাউন থেকে একটি কোর্স সিলেক্ট করুন।');
+      return;
+    }
+    setStoryUploadLoading(true);
+    setStoryUploadError(null);
+    try {
+      const parsed = parseStoriesFromRawText(pastedStoryText);
+      if (parsed.length === 0) {
+        setStoryUploadError('কোনো সঠিক স্টোরি পাওয়া যায়নি। ফরম্যাট: Title: [Title] ... Story: [Story Content]');
+      } else {
+        const ok = await handleSaveCourseStories(parsed, 'append');
+        if (ok) setPastedStoryText('');
+      }
+    } catch (err: any) {
+      setStoryUploadError(`Error: ${err.message || 'Unknown error'}`);
+    } finally {
+      setStoryUploadLoading(false);
+    }
+  };
+
+  const handleManualAddStory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualStoryTitle.trim() || !manualStoryContent.trim()) {
+      alert('Title এবং Story Content আবশ্যক।');
+      return;
+    }
+    if (!selectedGameCourseId) {
+      alert('অনুগ্রহ করে প্রথমে ড্রপডাউন থেকে একটি কোর্স সিলেক্ট করুন।');
+      return;
+    }
+    const newStory: StoryItem = {
+      id: `story-${selectedGameCourseId}-${Date.now()}`,
+      title: manualStoryTitle.trim(),
+      story: manualStoryContent.trim(),
+      createdAt: new Date().toISOString()
+    };
+    const ok = await handleSaveCourseStories([newStory], 'append');
+    if (ok) {
+      setManualStoryTitle('');
+      setManualStoryContent('');
+      alert('Story added successfully!');
+    }
+  };
+
+  const handleDeleteCourseStory = async (storyId: string) => {
+    if (!selectedGameCourseId) return;
+    if (!window.confirm('Are you sure you want to delete this story?')) return;
+    const targetCourse = customCourses.find(c => c.id === selectedGameCourseId);
+    if (!targetCourse) return;
+    const filtered = (targetCourse.stories || []).filter(s => s.id !== storyId);
+    await handleSaveCourseStories(filtered, 'replace');
+  };
+
+  const handleBulkDeleteCourseStories = async () => {
+    if (!selectedGameCourseId) return;
+    const targetCourse = customCourses.find(c => c.id === selectedGameCourseId);
+    if (!targetCourse || !targetCourse.stories || targetCourse.stories.length === 0) {
+      alert('No stories to delete.');
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to delete all ${targetCourse.stories.length} stories from this course?`)) return;
+    await handleSaveCourseStories([], 'replace');
+  };
+
+  // --- ARTICLE UPLOAD & MANAGEMENT HANDLERS ---
+  const handleSaveCourseArticles = async (newArticles: ArticleItem[], mode: 'append' | 'replace' = 'append') => {
+    if (!selectedGameCourseId) {
+      setArticleUploadError('অনুগ্রহ করে প্রথমে ড্রপডাউন থেকে একটি কোর্স সিলেক্ট করুন।');
+      return false;
+    }
+    setArticleSaveStatus('saving');
+    setArticleUploadError(null);
+    try {
+      const currentTargetCourse = customCourses.find(c => c.id === selectedGameCourseId);
+      const existingArticles = mode === 'replace' ? [] : (currentTargetCourse?.articles || []);
+      const mergedArticles = [...existingArticles, ...newArticles];
+
+      const courseRef = doc(db, 'courses', selectedGameCourseId);
+      await setDoc(courseRef, { articles: mergedArticles }, { merge: true });
+
+      setCustomCourses(prev => prev.map(c => c.id === selectedGameCourseId ? { ...c, articles: mergedArticles } : c));
+      
+      try {
+        const cachedStr = safeGetLocalStorage('vocab_memorizer_cached_custom_courses', '[]');
+        let cached = JSON.parse(cachedStr);
+        if (Array.isArray(cached)) {
+          const idx = cached.findIndex((c: any) => c.id === selectedGameCourseId);
+          if (idx >= 0) {
+            cached[idx] = { ...cached[idx], articles: mergedArticles };
+          }
+          safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(cached));
+        }
+      } catch (_) {}
+
+      setArticleSaveStatus('saved');
+      setTimeout(() => setArticleSaveStatus('idle'), 3000);
+      return true;
+    } catch (err: any) {
+      console.error('Error saving articles in AdminPanel:', err);
+      setArticleSaveStatus('error');
+      setArticleUploadError(`Failed to save articles: ${err?.message || 'Database error'}`);
+      return false;
+    }
+  };
+
+  const handleUploadArticleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!selectedGameCourseId) {
+      alert('অনুগ্রহ করে প্রথমে ড্রপডাউন থেকে একটি কোর্স সিলেক্ট করুন।');
+      e.target.value = '';
+      return;
+    }
+    setArticleUploadLoading(true);
+    setArticleUploadError(null);
+    try {
+      const parsed = await parseArticlesFromFile(file);
+      if (parsed.length === 0) {
+        setArticleUploadError('কোনো সঠিক আর্টিকেল পাওয়া যায়নি। অনুগ্রহ করে ফাইলের ফরম্যাট চেক করুন।');
+      } else {
+        await handleSaveCourseArticles(parsed, 'append');
+      }
+    } catch (err: any) {
+      setArticleUploadError(`Error parsing file: ${err.message || 'Unknown error'}`);
+    } finally {
+      setArticleUploadLoading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleUploadArticleText = async () => {
+    if (!pastedArticleText.trim()) return;
+    if (!selectedGameCourseId) {
+      alert('অনুগ্রহ করে প্রথমে ড্রপডাউন থেকে একটি কোর্স সিলেক্ট করুন।');
+      return;
+    }
+    setArticleUploadLoading(true);
+    setArticleUploadError(null);
+    try {
+      const parsed = parseArticlesFromRawText(pastedArticleText);
+      if (parsed.length === 0) {
+        setArticleUploadError('কোনো সঠিক আর্টিকেল পাওয়া যায়নি। ফরম্যাট: Title: [Title] ... Article: [Article Content]');
+      } else {
+        const ok = await handleSaveCourseArticles(parsed, 'append');
+        if (ok) setPastedArticleText('');
+      }
+    } catch (err: any) {
+      setArticleUploadError(`Error: ${err.message || 'Unknown error'}`);
+    } finally {
+      setArticleUploadLoading(false);
+    }
+  };
+
+  const handleManualAddArticle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualArticleTitle.trim() || !manualArticleContent.trim()) {
+      alert('Title এবং Article Content আবশ্যক।');
+      return;
+    }
+    if (!selectedGameCourseId) {
+      alert('অনুগ্রহ করে প্রথমে ড্রপডাউন থেকে একটি কোর্স সিলেক্ট করুন।');
+      return;
+    }
+    const newArt: ArticleItem = {
+      id: `art-${selectedGameCourseId}-${Date.now()}`,
+      title: manualArticleTitle.trim(),
+      excerpt: manualArticleExcerpt.trim() || manualArticleContent.trim().substring(0, 120) + '...',
+      content: manualArticleContent.trim(),
+      author: manualArticleAuthor.trim() || 'Course Educator',
+      category: manualArticleCategory.trim() || 'Vocabulary Reading',
+      readTime: manualArticleReadTime.trim() || '4 min read',
+      publishedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+      coverGradient: 'from-indigo-600 via-purple-600 to-pink-600',
+      tags: ['Vocabulary', 'Article'],
+      createdAt: new Date().toISOString()
+    };
+    const ok = await handleSaveCourseArticles([newArt], 'append');
+    if (ok) {
+      setManualArticleTitle('');
+      setManualArticleContent('');
+      setManualArticleExcerpt('');
+      alert('Article added successfully!');
+    }
+  };
+
+  const handleDeleteCourseArticle = async (articleId: string) => {
+    if (!selectedGameCourseId) return;
+    if (!window.confirm('Are you sure you want to delete this article?')) return;
+    const targetCourse = customCourses.find(c => c.id === selectedGameCourseId);
+    if (!targetCourse) return;
+    const filtered = (targetCourse.articles || []).filter(a => a.id !== articleId);
+    await handleSaveCourseArticles(filtered, 'replace');
+  };
+
+  const handleBulkDeleteCourseArticles = async () => {
+    if (!selectedGameCourseId) return;
+    const targetCourse = customCourses.find(c => c.id === selectedGameCourseId);
+    if (!targetCourse || !targetCourse.articles || targetCourse.articles.length === 0) {
+      alert('No articles to delete.');
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to delete all ${targetCourse.articles.length} articles from this course?`)) return;
+    await handleSaveCourseArticles([], 'replace');
   };
 
   const fetchAccessRequests = async () => {
@@ -3329,6 +3632,19 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         </button>
 
         <button
+          onClick={() => setActiveAdminTab('landing-editor')}
+          title="Landing Page Editor"
+          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
+            activeAdminTab === 'landing-editor'
+              ? 'bg-purple-600 text-white shadow-md font-black border border-purple-700'
+              : 'bg-purple-50/80 text-purple-900 hover:bg-purple-100 border border-purple-200/80'
+          }`}
+        >
+          <LayoutTemplate className="w-4 h-4 text-purple-400 shrink-0" />
+          <span className="hidden sm:inline whitespace-nowrap">Editor</span>
+        </button>
+
+        <button
           onClick={() => setActiveAdminTab('transaction-debugger')}
           title="Transaction Debugger"
           className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
@@ -5150,6 +5466,40 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 {mcqQuestions.length}
               </span>
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setGameUploadSubTab('story');
+              }}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer shrink-0 ${
+                gameUploadSubTab === 'story'
+                  ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/60'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+              }`}
+            >
+              <BookOpen className="w-4 h-4 text-pink-600" />
+              <span>Vocabulary Stories</span>
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-100 text-slate-600 font-mono">
+                {customCourses.find(c => c.id === selectedGameCourseId)?.stories?.length || 0}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setGameUploadSubTab('article');
+              }}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer shrink-0 ${
+                gameUploadSubTab === 'article'
+                  ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/60'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+              }`}
+            >
+              <Newspaper className="w-4 h-4 text-indigo-600" />
+              <span>Read Article</span>
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-100 text-slate-600 font-mono">
+                {customCourses.find(c => c.id === selectedGameCourseId)?.articles?.length || 0}
+              </span>
+            </button>
           </div>
 
           {/* SUB-TAB 1: Multi-Sheet All-in-One Upload */}
@@ -6341,11 +6691,476 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               </div>
             </div>
           )}
+
+          {/* SUB-TAB 6: Vocabulary Stories Upload & Management */}
+          {gameUploadSubTab === 'story' && (
+            <div className="space-y-8">
+              {!selectedGameCourseId && (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3 text-xs font-bold text-amber-900">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                  <span>কোর্স স্টোরি আপলোড বা ম্যানেজ করার জন্য অনুগ্রহ করে উপরে ড্রপডাউন থেকে একটি নির্দিষ্ট কোর্স সিলেক্ট করুন।</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Upload File & Paste Text Section */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-6">
+                  <div>
+                    <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-pink-500" />
+                      <span>Upload Course Stories (File / Text)</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-400 mt-1 font-medium">
+                      Upload stories from .txt, .docx, .pdf, .csv, or .json files, or paste raw text.
+                    </p>
+                  </div>
+
+                  {/* File Upload Box */}
+                  <div className="border-2 border-dashed border-slate-200 hover:border-pink-400 rounded-2xl p-6 text-center transition cursor-pointer relative bg-slate-50/50">
+                    <input 
+                      type="file" 
+                      accept=".txt, .docx, .pdf, .csv, .json, .md" 
+                      onChange={handleUploadStoryFile}
+                      disabled={storyUploadLoading || !selectedGameCourseId}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                    />
+                    <UploadCloud className="w-8 h-8 text-pink-500 mx-auto mb-2" />
+                    <p className="text-xs font-bold text-slate-700">Click or drag Story file here</p>
+                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Supports .txt, .docx, .pdf, .csv, .json, .md</p>
+                  </div>
+
+                  {/* Paste Raw Text Box */}
+                  <div className="space-y-2 pt-2 border-t border-slate-100">
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                      Or Paste Raw Story Text
+                    </label>
+                    <p className="text-[10px] text-slate-400">
+                      Format: <code className="bg-slate-100 px-1 py-0.5 rounded text-pink-600 font-mono">Title: My Story ... Story: Story text goes here...</code>
+                    </p>
+                    <textarea
+                      rows={5}
+                      value={pastedStoryText}
+                      onChange={(e) => setPastedStoryText(e.target.value)}
+                      placeholder="Paste your story text here..."
+                      className="w-full text-xs text-slate-700 border border-slate-200 rounded-xl p-3 focus:border-pink-500 outline-none resize-y"
+                    />
+                    <button
+                      type="button"
+                      disabled={storyUploadLoading || !pastedStoryText.trim() || !selectedGameCourseId}
+                      onClick={handleUploadStoryText}
+                      className="w-full py-2.5 bg-pink-600 hover:bg-pink-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+                    >
+                      {storyUploadLoading ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <UploadCloud className="w-4 h-4" />
+                      )}
+                      <span>Parse &amp; Upload Pasted Stories</span>
+                    </button>
+                  </div>
+
+                  {storyUploadError && (
+                    <div className="p-3.5 bg-rose-50 text-rose-700 rounded-xl flex items-start gap-2 border border-rose-100 text-xs font-semibold">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                      <span>{storyUploadError}</span>
+                    </div>
+                  )}
+
+                  {storySaveStatus === 'saved' && (
+                    <div className="p-3.5 bg-emerald-50 text-emerald-700 rounded-xl flex items-center gap-2 border border-emerald-100 text-xs font-semibold">
+                      <CheckCircle className="w-4 h-4" />
+                      <span>Stories saved to course successfully!</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Manual Add Story Form */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-6">
+                  <div>
+                    <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                      <PlusCircle className="w-4 h-4 text-pink-500" />
+                      <span>Add Single Story Manually</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-400 mt-1 font-medium">Create a single new vocabulary story for this course.</p>
+                  </div>
+
+                  <form onSubmit={handleManualAddStory} className="space-y-4">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Story Title</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. The Enchanted Library"
+                        value={manualStoryTitle}
+                        onChange={(e) => setManualStoryTitle(e.target.value)}
+                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-pink-500 focus:bg-white rounded-xl text-xs transition outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Story Content</label>
+                      <textarea
+                        rows={8}
+                        required
+                        placeholder="Type the full story narrative here..."
+                        value={manualStoryContent}
+                        onChange={(e) => setManualStoryContent(e.target.value)}
+                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-pink-500 focus:bg-white rounded-xl text-xs transition outline-none resize-y"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={storySaveStatus === 'saving' || !selectedGameCourseId}
+                      className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add Story to Course</span>
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              {/* Published Stories Table for Selected Course */}
+              <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div>
+                    <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-pink-600" />
+                      <span>
+                        Published Course Stories (
+                        {customCourses.find(c => c.id === selectedGameCourseId)?.stories?.length || 0}
+                        )
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                      {selectedGameCourseId 
+                        ? `Course: ${customCourses.find(c => c.id === selectedGameCourseId)?.title || selectedGameCourseId}`
+                        : 'Select a course to view its stories'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {(customCourses.find(c => c.id === selectedGameCourseId)?.stories?.length || 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleBulkDeleteCourseStories}
+                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 text-xs font-black rounded-xl transition cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete All Stories</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {(!customCourses.find(c => c.id === selectedGameCourseId)?.stories || 
+                  customCourses.find(c => c.id === selectedGameCourseId)?.stories?.length === 0) ? (
+                  <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-2xl">
+                    <BookOpen className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="text-xs font-bold text-slate-600">No stories found for this course</p>
+                    <p className="text-[10px] text-slate-400 font-semibold">Upload a story file or add a story manually using the forms above.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {customCourses.find(c => c.id === selectedGameCourseId)?.stories?.map((st, idx) => (
+                      <div key={st.id || idx} className="p-4 bg-slate-50/70 border border-slate-200 rounded-2xl space-y-2 hover:border-pink-200 transition">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black px-2 py-0.5 bg-pink-100 text-pink-700 rounded-md">
+                              #{idx + 1}
+                            </span>
+                            <h5 className="font-extrabold text-xs text-slate-850 truncate max-w-[200px]" title={st.title}>
+                              {st.title}
+                            </h5>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCourseStory(st.id)}
+                            className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg transition cursor-pointer shrink-0"
+                            title="Delete Story"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed">
+                          {st.story}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* SUB-TAB 7: Course Articles Upload & Management */}
+          {gameUploadSubTab === 'article' && (
+            <div className="space-y-8">
+              {!selectedGameCourseId && (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3 text-xs font-bold text-amber-900">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                  <span>কোর্স আর্টিকেল আপলোড বা ম্যানেজ করার জন্য অনুগ্রহ করে উপরে ড্রপডাউন থেকে একটি নির্দিষ্ট কোর্স সিলেক্ট করুন।</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Upload File & Paste Text Section */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-6">
+                  <div>
+                    <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                      <Newspaper className="w-4 h-4 text-indigo-500" />
+                      <span>Upload Course Articles (File / Text)</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-400 mt-1 font-medium">
+                      Upload articles from .txt, .docx, .pdf, .csv, or .json files, or paste raw text.
+                    </p>
+                  </div>
+
+                  {/* File Upload Box */}
+                  <div className="border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-2xl p-6 text-center transition cursor-pointer relative bg-slate-50/50">
+                    <input 
+                      type="file" 
+                      accept=".txt, .docx, .pdf, .csv, .json, .md" 
+                      onChange={handleUploadArticleFile}
+                      disabled={articleUploadLoading || !selectedGameCourseId}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                    />
+                    <UploadCloud className="w-8 h-8 text-indigo-500 mx-auto mb-2" />
+                    <p className="text-xs font-bold text-slate-700">Click or drag Article file here</p>
+                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Supports .txt, .docx, .pdf, .csv, .json, .md</p>
+                  </div>
+
+                  {/* Paste Raw Text Box */}
+                  <div className="space-y-2 pt-2 border-t border-slate-100">
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                      Or Paste Raw Article Text
+                    </label>
+                    <p className="text-[10px] text-slate-400">
+                      Format: <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600 font-mono">Title: My Article ... Article: Article text goes here...</code>
+                    </p>
+                    <textarea
+                      rows={5}
+                      value={pastedArticleText}
+                      onChange={(e) => setPastedArticleText(e.target.value)}
+                      placeholder="Paste your article text here..."
+                      className="w-full text-xs text-slate-700 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 outline-none resize-y"
+                    />
+                    <button
+                      type="button"
+                      disabled={articleUploadLoading || !pastedArticleText.trim() || !selectedGameCourseId}
+                      onClick={handleUploadArticleText}
+                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+                    >
+                      {articleUploadLoading ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <UploadCloud className="w-4 h-4" />
+                      )}
+                      <span>Parse &amp; Upload Pasted Articles</span>
+                    </button>
+                  </div>
+
+                  {articleUploadError && (
+                    <div className="p-3.5 bg-rose-50 text-rose-700 rounded-xl flex items-start gap-2 border border-rose-100 text-xs font-semibold">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                      <span>{articleUploadError}</span>
+                    </div>
+                  )}
+
+                  {articleSaveStatus === 'saved' && (
+                    <div className="p-3.5 bg-emerald-50 text-emerald-700 rounded-xl flex items-center gap-2 border border-emerald-100 text-xs font-semibold">
+                      <CheckCircle className="w-4 h-4" />
+                      <span>Articles saved to course successfully!</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Manual Add Article Form */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-4">
+                  <div>
+                    <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                      <PlusCircle className="w-4 h-4 text-indigo-500" />
+                      <span>Add Single Article Manually</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-400 mt-1 font-medium">Create a single new article for this course.</p>
+                  </div>
+
+                  <form onSubmit={handleManualAddArticle} className="space-y-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Article Title</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Deep Vocabulary Insights"
+                        value={manualArticleTitle}
+                        onChange={(e) => setManualArticleTitle(e.target.value)}
+                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-xl text-xs transition outline-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Category</label>
+                        <input
+                          type="text"
+                          value={manualArticleCategory}
+                          onChange={(e) => setManualArticleCategory(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-xl text-xs transition outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Author</label>
+                        <input
+                          type="text"
+                          value={manualArticleAuthor}
+                          onChange={(e) => setManualArticleAuthor(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-xl text-xs transition outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Read Time</label>
+                        <input
+                          type="text"
+                          value={manualArticleReadTime}
+                          onChange={(e) => setManualArticleReadTime(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-xl text-xs transition outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Excerpt / Brief Summary</label>
+                      <input
+                        type="text"
+                        placeholder="Brief summary shown on card..."
+                        value={manualArticleExcerpt}
+                        onChange={(e) => setManualArticleExcerpt(e.target.value)}
+                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-xl text-xs transition outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Full Article Content</label>
+                      <textarea
+                        rows={5}
+                        required
+                        placeholder="Type full article text here..."
+                        value={manualArticleContent}
+                        onChange={(e) => setManualArticleContent(e.target.value)}
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-xl text-xs transition outline-none resize-y font-normal"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={articleSaveStatus === 'saving' || !selectedGameCourseId}
+                      className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add Article to Course</span>
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              {/* Published Articles Table for Selected Course */}
+              <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div>
+                    <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                      <Newspaper className="w-4 h-4 text-indigo-600" />
+                      <span>
+                        Published Course Articles (
+                        {customCourses.find(c => c.id === selectedGameCourseId)?.articles?.length || 0}
+                        )
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                      {selectedGameCourseId 
+                        ? `Course: ${customCourses.find(c => c.id === selectedGameCourseId)?.title || selectedGameCourseId}`
+                        : 'Select a course to view its articles'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {(customCourses.find(c => c.id === selectedGameCourseId)?.articles?.length || 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleBulkDeleteCourseArticles}
+                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 text-xs font-black rounded-xl transition cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete All Articles</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {(!customCourses.find(c => c.id === selectedGameCourseId)?.articles || 
+                  customCourses.find(c => c.id === selectedGameCourseId)?.articles?.length === 0) ? (
+                  <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-2xl">
+                    <Newspaper className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="text-xs font-bold text-slate-600">No articles found for this course</p>
+                    <p className="text-[10px] text-slate-400 font-semibold">Upload an article file or add an article manually using the forms above.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {customCourses.find(c => c.id === selectedGameCourseId)?.articles?.map((art, idx) => (
+                      <div key={art.id || idx} className="p-4 bg-slate-50/70 border border-slate-200 rounded-2xl space-y-2 hover:border-indigo-200 transition">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-md">
+                              #{idx + 1}
+                            </span>
+                            <h5 className="font-extrabold text-xs text-slate-850 truncate max-w-[200px]" title={art.title}>
+                              {art.title}
+                            </h5>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCourseArticle(art.id)}
+                            className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg transition cursor-pointer shrink-0"
+                            title="Delete Article"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+                          <span className="bg-slate-200/60 px-1.5 py-0.5 rounded">{art.category || 'Reading'}</span>
+                          <span>•</span>
+                          <span>{art.author || 'Educator'}</span>
+                          <span>•</span>
+                          <span>{art.readTime || '4 min'}</span>
+                        </div>
+                        <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed">
+                          {art.excerpt || art.content}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {activeAdminTab === 'activity-logs' && (
         <ActivityLogsView currentAdminEmail={auth.currentUser?.email || 'mohammad.001ekram@gmail.com'} />
+      )}
+
+      {activeAdminTab === 'landing-editor' && (
+        <LandingPageEditor
+          settings={settings}
+          onSaveSettings={(updatedSettings) => {
+            if (onUpdateSettings) {
+              onUpdateSettings(updatedSettings);
+            }
+            showToast('Landing page content & badges saved globally to Firestore system settings!', 'success');
+          }}
+          courses={customCourses}
+        />
       )}
 
       {/* User Details Slideover / Modal */}

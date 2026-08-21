@@ -77,6 +77,10 @@ export default function LandingPageEditor({
   const handleSave = async () => {
     setIsSaving(true);
     const updatedSettings: AppSettings = {
+      defaultFlashcardTags: settings?.defaultFlashcardTags || ['unrated', 'dont_know', 'confusion', 'know'],
+      defaultFlashcardOrder: settings?.defaultFlashcardOrder || 'serial',
+      autoPlayAudio: settings?.autoPlayAudio ?? false,
+      quizLength: settings?.quizLength || 20,
       ...(settings || {}),
       landingBadgeText: badgeText.trim(),
       landingHeadlineMain: headlineMain.trim(),
