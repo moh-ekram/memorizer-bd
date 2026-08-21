@@ -72,6 +72,9 @@ interface FlashcardViewerProps {
   coursePrice?: number;
   courseTitle?: string;
   onUnlockCourse?: () => void;
+  courseId?: string;
+  savedFlashcardPosition?: { lastIndex: number; lastWordId?: string; updatedAt?: string };
+  onSaveFlashcardPosition?: (pos: { lastIndex: number; lastWordId: string }) => void;
 }
 
 export default function FlashcardViewer({
@@ -92,7 +95,10 @@ export default function FlashcardViewer({
   freeFlashcardsCount,
   coursePrice,
   courseTitle,
-  onUnlockCourse
+  onUnlockCourse,
+  courseId,
+  savedFlashcardPosition,
+  onSaveFlashcardPosition
 }: FlashcardViewerProps) {
   const effectiveFreeLimit = 5;
   const effectiveStreak = streak !== undefined ? streak : (() => {
@@ -199,12 +205,12 @@ export default function FlashcardViewer({
   const [isFilterExpanded, setIsFilterExpanded] = useState(false);
   const [userHasManuallyChangedStatuses, setUserHasManuallyChangedStatuses] = useState(false);
 
-  // Smart Default Tag Selection Logic:
-  // 1. As long as unrated (not studied) data exists in selected pool, default to ONLY 'unrated'
-  // 2. Once all words in pool are studied/rated, default to 'dont_know' & 'confusion' (Red & Yellow)
-  // 3. Once all words are green (learned), default to ALL tags
+  // Smart Default Tag Selection Logic (runs on course/pool initialization, does NOT override on active rating):
+  const hasInitializedTagsRef = useRef<string | null>(null);
   useEffect(() => {
-    if (userHasManuallyChangedStatuses) return;
+    const poolKey = `${courseSignature}_${selectedGroups.join(',')}`;
+    if (hasInitializedTagsRef.current === poolKey || userHasManuallyChangedStatuses) return;
+    hasInitializedTagsRef.current = poolKey;
 
     const currentPool = activeWordsList.filter(w =>
       selectedGroups.length === 0 || selectedGroups.some(g => String(g) === String(w.group))
@@ -212,25 +218,12 @@ export default function FlashcardViewer({
 
     if (currentPool.length === 0) return;
 
-    let unratedCount = 0;
-    let redCount = 0;
-    let yellowCount = 0;
-
-    currentPool.forEach(w => {
-      const st = progress[w.id]?.status || 'unrated';
-      if (st === 'unrated') unratedCount++;
-      else if (st === 'dont_know') redCount++;
-      else if (st === 'confusion') yellowCount++;
-    });
-
-    if (unratedCount > 0) {
-      setSelectedStatuses(['unrated']);
-    } else if (redCount > 0 || yellowCount > 0) {
-      setSelectedStatuses(['dont_know', 'confusion']);
+    if (settings?.defaultFlashcardTags && settings.defaultFlashcardTags.length > 0) {
+      setSelectedStatuses(settings.defaultFlashcardTags);
     } else {
       setSelectedStatuses(['know', 'confusion', 'dont_know', 'unrated']);
     }
-  }, [activeWordsList, selectedGroups, progress, userHasManuallyChangedStatuses]);
+  }, [activeWordsList, selectedGroups, userHasManuallyChangedStatuses, courseSignature, settings?.defaultFlashcardTags]);
 
   // Swipe gesture refs for mobile navigation
   const touchStartX = useRef<number | null>(null);
@@ -257,6 +250,7 @@ export default function FlashcardViewer({
 
     if (touchDuration < 600 && Math.abs(deltaX) > 65 && Math.abs(deltaX) > Math.abs(deltaY) * 1.8) {
       touchHandled.current = true;
+      e.stopPropagation();
       if (deltaX < 0) {
         handleNext();
       } else {
@@ -476,14 +470,58 @@ export default function FlashcardViewer({
 
     setFilteredWords(ordered);
 
-    const firstNonPariIndex = ordered.findIndex(w => {
-      const status = progress[w.id]?.status || 'unrated';
-      return status !== 'know';
-    });
+    if (ordered.length === 0) {
+      setCurrentIndex(0);
+      setIsFlipped(false);
+      return;
+    }
 
-    setCurrentIndex(firstNonPariIndex !== -1 ? firstNonPariIndex : 0);
+    // Determine target index:
+    // 1. If savedFlashcardPosition is available (from Cloud/localStorage):
+    if (savedFlashcardPosition) {
+      if (savedFlashcardPosition.lastWordId) {
+        const wordIdx = ordered.findIndex(w => w.id === savedFlashcardPosition.lastWordId);
+        if (wordIdx !== -1) {
+          setCurrentIndex(wordIdx);
+          setIsFlipped(false);
+          return;
+        }
+      }
+      if (typeof savedFlashcardPosition.lastIndex === 'number' && savedFlashcardPosition.lastIndex >= 0) {
+        const boundedIdx = Math.min(savedFlashcardPosition.lastIndex, ordered.length - 1);
+        setCurrentIndex(boundedIdx);
+        setIsFlipped(false);
+        return;
+      }
+    }
+
+    // 2. If current active word is still in the new ordered deck, keep position at that word
+    if (currentActiveWord?.id) {
+      const activeIdx = ordered.findIndex(w => w.id === currentActiveWord.id);
+      if (activeIdx !== -1) {
+        setCurrentIndex(activeIdx);
+        setIsFlipped(false);
+        return;
+      }
+    }
+
+    // 3. Fallback: preserve index if within bounds, otherwise start at 0
+    setCurrentIndex(prev => (prev < ordered.length ? prev : 0));
     setIsFlipped(false);
-  }, [selectedGroups, selectedStatuses, selectedFolder, activeWordsList, studyOrder, shuffleKey, isSessionActive]);
+  }, [selectedGroups, selectedStatuses, selectedFolder, activeWordsList, studyOrder, shuffleKey, isSessionActive, courseId]);
+
+  // Persist active card position in real time
+  useEffect(() => {
+    if (filteredWords.length > 0 && currentIndex >= 0 && currentIndex < filteredWords.length) {
+      const activeW = filteredWords[currentIndex];
+      if (activeW?.id) {
+        onSaveFlashcardPosition?.({
+          lastIndex: currentIndex,
+          lastWordId: activeW.id
+        });
+      }
+    }
+  }, [currentIndex, filteredWords, onSaveFlashcardPosition]);
 
   const currentActiveWord: VocabularyWord = filteredWords[currentIndex] || {
     id: '',

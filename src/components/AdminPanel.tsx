@@ -1197,7 +1197,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     const newStory: StoryItem = {
       id: `story-${selectedGameCourseId}-${Date.now()}`,
       title: manualStoryTitle.trim(),
-      story: manualStoryContent.trim(),
+      content: manualStoryContent.trim(),
       createdAt: new Date().toISOString()
     };
     const ok = await handleSaveCourseStories([newStory], 'append');

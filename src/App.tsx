@@ -349,6 +349,11 @@ export default function App() {
     return saved ? JSON.parse(saved) : {};
   });
 
+  const [flashcardPositions, setFlashcardPositions] = useState<Record<string, { lastIndex: number; lastWordId: string; updatedAt: string }>>(() => {
+    const saved = localStorage.getItem('vocab_memorizer_flashcard_positions');
+    return saved ? JSON.parse(saved) : {};
+  });
+
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('vocab_memorizer_dark_mode');
     return saved ? JSON.parse(saved) : false;
@@ -538,6 +543,10 @@ export default function App() {
   useEffect(() => {
     safeSetLocalStorage('vocab_memorizer_analogy_progress', JSON.stringify(analogyProgress));
   }, [analogyProgress]);
+
+  useEffect(() => {
+    safeSetLocalStorage('vocab_memorizer_flashcard_positions', JSON.stringify(flashcardPositions));
+  }, [flashcardPositions]);
 
   useEffect(() => {
     safeSetLocalStorage(LOCAL_STORAGE_SETTINGS_KEY, JSON.stringify(settings));
@@ -854,6 +863,7 @@ export default function App() {
       let mergedBlank: Record<string, any> = {};
       let mergedOoo: Record<string, any> = {};
       let mergedAnalogy: Record<string, any> = {};
+      let mergedFlashcardPositions: Record<string, any> = {};
       let mergedGoalObj: StudyGoal = {
         dailyTarget: 15,
         streak: 1,
@@ -884,6 +894,9 @@ export default function App() {
           }
           if (docData.analogyProgress && typeof docData.analogyProgress === 'object') {
             mergedAnalogy = mergeGameProgressRecords(mergedAnalogy, docData.analogyProgress);
+          }
+          if (docData.flashcardPositions && typeof docData.flashcardPositions === 'object') {
+            mergedFlashcardPositions = { ...mergedFlashcardPositions, ...docData.flashcardPositions };
           }
           if (docData.goal && typeof docData.goal === 'object') {
             mergedGoalObj = mergeStudyGoal(mergedGoalObj, docData.goal);
@@ -929,6 +942,13 @@ export default function App() {
         setBlankProgress(prev => mergeGameProgressRecords(prev, mergedBlank));
         setOooProgress(prev => mergeGameProgressRecords(prev, mergedOoo));
         setAnalogyProgress(prev => mergeGameProgressRecords(prev, mergedAnalogy));
+        if (Object.keys(mergedFlashcardPositions).length > 0) {
+          setFlashcardPositions(prev => {
+            const next = { ...prev, ...mergedFlashcardPositions };
+            safeSetLocalStorage('vocab_memorizer_flashcard_positions', JSON.stringify(next));
+            return next;
+          });
+        }
 
         if (mergedSettingsObj) {
           setSettings(prev => ({
@@ -1011,6 +1031,7 @@ export default function App() {
             blankProgress: mergedBlank,
             oooProgress: mergedOoo,
             analogyProgress: mergedAnalogy,
+            flashcardPositions: Object.keys(mergedFlashcardPositions).length > 0 ? mergedFlashcardPositions : flashcardPositions,
             settings: mergedSettingsObj || settings,
             enrolledCourseIds: mergedEnrolled,
             activeCourseId: resolvedActiveCourse || activeCourseId || 'bank-bcs-gre',
@@ -1117,6 +1138,7 @@ export default function App() {
           blankProgress: {},
           oooProgress: {},
           analogyProgress: {},
+          flashcardPositions: {},
           settings,
           enrolledCourseIds: cleanEnrolled,
           activeCourseId: cleanActive,
@@ -1217,6 +1239,13 @@ export default function App() {
         if (cloudData.analogyProgress && typeof cloudData.analogyProgress === 'object') {
           setAnalogyProgress(prev => mergeGameProgressRecords(prev, cloudData.analogyProgress));
         }
+        if (cloudData.flashcardPositions && typeof cloudData.flashcardPositions === 'object') {
+          setFlashcardPositions(prev => {
+            const next = { ...prev, ...cloudData.flashcardPositions };
+            safeSetLocalStorage('vocab_memorizer_flashcard_positions', JSON.stringify(next));
+            return next;
+          });
+        }
         if (Array.isArray(cloudData.enrolledCourseIds) && cloudData.enrolledCourseIds.length > 0) {
           setEnrolledCourseIds(prev => Array.from(new Set([...prev, ...cloudData.enrolledCourseIds])));
         }
@@ -1266,6 +1295,7 @@ export default function App() {
           blankProgress,
           oooProgress,
           analogyProgress,
+          flashcardPositions,
           settings,
           enrolledCourseIds,
           activeCourseId,
@@ -1304,7 +1334,7 @@ export default function App() {
     }, 350);
 
     return () => clearTimeout(timer);
-  }, [progress, folders, goal, synonymProgress, blankProgress, oooProgress, analogyProgress, settings, enrolledCourseIds, activeCourseId, quizScore, quizTaken, user, hasLoadedFromCloud]);
+  }, [progress, folders, goal, synonymProgress, blankProgress, oooProgress, analogyProgress, flashcardPositions, settings, enrolledCourseIds, activeCourseId, quizScore, quizTaken, user, hasLoadedFromCloud]);
 
   // Flush sync on tab hide / lock / before unload to guarantee no lost updates
   useEffect(() => {
@@ -1322,6 +1352,7 @@ export default function App() {
           blankProgress,
           oooProgress,
           analogyProgress,
+          flashcardPositions,
           settings,
           enrolledCourseIds,
           activeCourseId,
@@ -1350,6 +1381,7 @@ export default function App() {
           blankProgress,
           oooProgress,
           analogyProgress,
+          flashcardPositions,
           settings,
           enrolledCourseIds,
           activeCourseId,
@@ -1368,7 +1400,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [user, progress, folders, goal, synonymProgress, blankProgress, oooProgress, analogyProgress, settings, enrolledCourseIds, activeCourseId, quizScore, quizTaken, hasLoadedFromCloud]);
+  }, [user, progress, folders, goal, synonymProgress, blankProgress, oooProgress, analogyProgress, flashcardPositions, settings, enrolledCourseIds, activeCourseId, quizScore, quizTaken, hasLoadedFromCloud]);
 
   const forceSyncToCloud = async () => {
     if (!user) return;
@@ -1386,6 +1418,7 @@ export default function App() {
         blankProgress,
         oooProgress,
         analogyProgress,
+        flashcardPositions,
         settings,
         enrolledCourseIds,
         activeCourseId,
@@ -1434,6 +1467,7 @@ export default function App() {
         localStorage.removeItem(LOCAL_STORAGE_BLANK_PROGRESS_KEY);
         localStorage.removeItem('vocab_memorizer_ooo_progress');
         localStorage.removeItem('vocab_memorizer_analogy_progress');
+        localStorage.removeItem('vocab_memorizer_flashcard_positions');
         localStorage.removeItem(LOCAL_STORAGE_ENROLLED_COURSES_KEY);
         localStorage.removeItem(LOCAL_STORAGE_ACTIVE_COURSE_KEY);
         localStorage.removeItem('vocab_memorizer_quiz_score');
@@ -2284,6 +2318,17 @@ const getActiveCourse = (
                       coursePrice={activeCourse?.price}
                       courseTitle={activeCourse?.title}
                       onUnlockCourse={() => setProfileSubTab('my_courses')}
+                      courseId={activeCourseId}
+                      savedFlashcardPosition={flashcardPositions[activeCourseId]}
+                      onSaveFlashcardPosition={(pos) => {
+                        setFlashcardPositions(prev => ({
+                          ...prev,
+                          [activeCourseId]: {
+                            ...pos,
+                            updatedAt: new Date().toISOString()
+                          }
+                        }));
+                      }}
                     />
 
                     {/* Dashboard shown directly below Flashcard Setup */}
