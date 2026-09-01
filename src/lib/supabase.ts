@@ -1,10 +1,66 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const env = (import.meta as any).env || {};
-const supabaseUrl = env.VITE_SUPABASE_URL || 'https://haaxqfhkucuimyvyksrj.supabase.co';
-const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_abgr_qMdFxAOn8IhHpm_PA_GamaQUgF';
+// Default project fallback
+const DEFAULT_SUPABASE_URL = 'https://haaxqfhkucuimyvyksrj.supabase.co';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export function getStoredSupabaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    const local = localStorage.getItem('vocab_supabase_url') || localStorage.getItem('supabase_url');
+    if (local && local.trim()) return local.trim();
+  }
+  const env = (import.meta as any).env || {};
+  return (env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL).trim();
+}
+
+export function getStoredSupabaseKey(): string {
+  if (typeof window !== 'undefined') {
+    const serviceKey = localStorage.getItem('vocab_supabase_service_key');
+    if (serviceKey && serviceKey.trim()) return serviceKey.trim();
+
+    const anonKey = localStorage.getItem('vocab_supabase_anon_key') || localStorage.getItem('supabase_anon_key') || localStorage.getItem('supabase_key');
+    if (anonKey && anonKey.trim()) return anonKey.trim();
+  }
+  const env = (import.meta as any).env || {};
+  return (env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+}
+
+let cachedClient: SupabaseClient | null = null;
+let currentClientUrl = '';
+let currentClientKey = '';
+
+export function getSupabase(): SupabaseClient {
+  const url = getStoredSupabaseUrl();
+  const key = getStoredSupabaseKey();
+
+  if (!cachedClient || currentClientUrl !== url || currentClientKey !== key) {
+    currentClientUrl = url;
+    currentClientKey = key;
+    
+    // If no key is set yet, initialize with dummy key to prevent crash before user configures
+    const validKey = key || 'sb_publishable_placeholder_configure_in_admin_panel';
+    cachedClient = createClient(url, validKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      }
+    });
+  }
+
+  return cachedClient;
+}
+
+// Transparent Proxy for legacy imports: `import { supabase } from './supabase'`
+export const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
+  get(_target, prop) {
+    const client = getSupabase();
+    const value = (client as any)[prop];
+    if (typeof value === 'function') {
+      return value.bind(client);
+    }
+    return value;
+  }
+});
 
 export interface SupabaseDiagnosticResult {
   success: boolean;
@@ -16,23 +72,27 @@ export interface SupabaseDiagnosticResult {
 }
 
 /**
- * Diagnostic utility function to verify Supabase client initialization
- * and perform a simple 'read' operation on the database to verify active connection.
+ * Diagnostic utility function to test Supabase connection and read permissions
  */
 export async function testSupabaseConnection(tableName: string = 'users'): Promise<SupabaseDiagnosticResult> {
   const startTime = performance.now();
-  try {
-    if (!supabase) {
-      return {
-        success: false,
-        message: 'Supabase client is not initialized.',
-        url: supabaseUrl,
-        latencyMs: 0,
-      };
-    }
+  const url = getStoredSupabaseUrl();
+  const key = getStoredSupabaseKey();
 
-    // Perform a simple 'read' query with limit 1
-    const { data, error } = await supabase
+  if (!key) {
+    return {
+      success: false,
+      message: 'Supabase API Key (Anon/Service Role) is missing. Please configure it in Admin Panel > Supabase Sync.',
+      url,
+      latencyMs: 0,
+    };
+  }
+
+  try {
+    const client = getSupabase();
+
+    // Query 1: users table
+    const { data, error } = await client
       .from(tableName)
       .select('*')
       .limit(1);
@@ -40,15 +100,15 @@ export async function testSupabaseConnection(tableName: string = 'users'): Promi
     const latencyMs = Math.round(performance.now() - startTime);
 
     if (error) {
-      // Attempt fallback table read if primary table fails
+      // Fallback query to courses table
       if (tableName !== 'courses') {
-        const fallback = await supabase.from('courses').select('*').limit(1);
+        const fallback = await client.from('courses').select('*').limit(1);
         if (!fallback.error) {
           return {
             success: true,
-            message: `Supabase connection verified via fallback table 'courses' in ${Math.round(performance.now() - startTime)}ms.`,
-            url: supabaseUrl,
-            latencyMs: Math.round(performance.now() - startTime),
+            message: `Supabase connection verified via 'courses' table (${latencyMs}ms).`,
+            url,
+            latencyMs,
             dataSample: fallback.data,
           };
         }
@@ -56,8 +116,8 @@ export async function testSupabaseConnection(tableName: string = 'users'): Promi
 
       return {
         success: false,
-        message: `Supabase query on table '${tableName}' failed: ${error.message || JSON.stringify(error)}`,
-        url: supabaseUrl,
+        message: `Supabase query on '${tableName}' failed: ${error.message || JSON.stringify(error)}`,
+        url,
         latencyMs,
         error,
       };
@@ -65,8 +125,8 @@ export async function testSupabaseConnection(tableName: string = 'users'): Promi
 
     return {
       success: true,
-      message: `Supabase connection active and verified. Read test on '${tableName}' completed in ${latencyMs}ms.`,
-      url: supabaseUrl,
+      message: `Supabase connected successfully. Query on '${tableName}' returned in ${latencyMs}ms.`,
+      url,
       latencyMs,
       dataSample: data,
     };
@@ -74,16 +134,16 @@ export async function testSupabaseConnection(tableName: string = 'users'): Promi
     const latencyMs = Math.round(performance.now() - startTime);
     return {
       success: false,
-      message: `Unexpected exception testing Supabase connection: ${err?.message || String(err)}`,
-      url: supabaseUrl,
+      message: `Supabase connection error: ${err?.message || String(err)}`,
+      url,
       latencyMs,
       error: err,
     };
   }
 }
 
-// Attach to window object in browser environment for quick console diagnostics
+// Expose diagnostic tool globally in window for easy testing in DevTools console
 if (typeof window !== 'undefined') {
   (window as any).testSupabaseConnection = testSupabaseConnection;
+  (window as any).getSupabase = getSupabase;
 }
-

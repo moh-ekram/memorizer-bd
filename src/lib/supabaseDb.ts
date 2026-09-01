@@ -1,15 +1,22 @@
-import { supabase } from './supabase';
-import { safeSetLocalStorage, safeGetLocalStorage } from './storage';
+import { supabase, getSupabase } from './supabase';
+
+/**
+ * Supabase Database Translation Layer (Full Firestore Compatibility Interface)
+ * Automatically translates Firestore-like queries, documents, collections, and snapshots
+ * into Supabase PostgreSQL queries and JSON structures.
+ */
 
 export interface DocRef {
   _isDocRef: true;
   collection: string;
   id: string;
+  path: string;
 }
 
 export interface CollectionRef {
   _isCollectionRef: true;
   collection: string;
+  path: string;
 }
 
 export interface QueryFilter {
@@ -23,79 +30,135 @@ export interface QueryRef {
   collection: string;
   filters: QueryFilter[];
   limitCount?: number;
+  orderByField?: string;
+  orderDirection?: 'asc' | 'desc';
 }
 
-export function doc(dbOrCol: any, ...pathSegments: string[]): DocRef {
+export function collection(_db: any, collectionName: string): CollectionRef;
+export function collection(collectionName: string): CollectionRef;
+export function collection(...args: any[]): CollectionRef {
+  const collectionName = typeof args[0] === 'string' ? args[0] : args[1];
+  return {
+    _isCollectionRef: true,
+    collection: collectionName,
+    path: collectionName
+  };
+}
+
+export function doc(_db: any, collectionName: string, id: string): DocRef;
+export function doc(collectionName: string, id: string): DocRef;
+export function doc(...args: any[]): DocRef {
   let collectionName = '';
-  let docId = '';
-
-  if (typeof dbOrCol === 'string') {
-    collectionName = dbOrCol;
-    docId = pathSegments[0] || '';
-  } else if (dbOrCol?._isCollectionRef) {
-    collectionName = dbOrCol.collection;
-    docId = pathSegments[0] || '';
-  } else {
-    collectionName = pathSegments[0] || '';
-    docId = pathSegments[1] || '';
+  let id = '';
+  if (args.length === 3) {
+    collectionName = args[1];
+    id = args[2];
+  } else if (args.length === 2) {
+    if (typeof args[0] === 'string') {
+      collectionName = args[0];
+      id = args[1];
+    } else {
+      collectionName = args[0]?.collection || 'default';
+      id = args[1];
+    }
+  } else if (args.length === 1 && typeof args[0] === 'string') {
+    const parts = args[0].split('/');
+    collectionName = parts[0];
+    id = parts[1] || '';
   }
-
   return {
     _isDocRef: true,
     collection: collectionName,
-    id: docId
+    id,
+    path: `${collectionName}/${id}`
   };
 }
 
-export function collection(dbObj: any, collectionName: string): CollectionRef {
-  return {
-    _isCollectionRef: true,
-    collection: typeof dbObj === 'string' ? dbObj : collectionName
-  };
-}
+export function query(collectionRef: CollectionRef | QueryRef, ...queryConstraints: any[]): QueryRef {
+  const filters: QueryFilter[] = (collectionRef as any).filters ? [...(collectionRef as any).filters] : [];
+  let limitCount = (collectionRef as any).limitCount;
+  let orderByField = (collectionRef as any).orderByField;
+  let orderDirection = (collectionRef as any).orderDirection;
 
-export function where(field: string, op: string, value: any): QueryFilter {
-  return { field, op, value };
-}
-
-export function limit(count: number) {
-  return { _isLimit: true, count };
-}
-
-export function query(colRef: CollectionRef | any, ...queryConstraints: any[]): QueryRef {
-  const collectionName = colRef.collection || colRef;
-  const filters: QueryFilter[] = [];
-  let limitCount: number | undefined = undefined;
-
-  for (const c of queryConstraints) {
-    if (c?._isLimit) {
-      limitCount = c.count;
-    } else if (c?.field) {
-      filters.push(c);
+  for (const constraint of queryConstraints) {
+    if (constraint?._type === 'where') {
+      filters.push({ field: constraint.field, op: constraint.op, value: constraint.value });
+    } else if (constraint?._type === 'limit') {
+      limitCount = constraint.limit;
+    } else if (constraint?._type === 'orderBy') {
+      orderByField = constraint.field;
+      orderDirection = constraint.direction || 'asc';
     }
   }
 
   return {
     _isQueryRef: true,
-    collection: collectionName,
+    collection: collectionRef.collection,
     filters,
-    limitCount
+    limitCount,
+    orderByField,
+    orderDirection
   };
 }
 
-// ----------------------------------------------------
-// Data Translators between Firestore CamelCase and Supabase Postgres Schema
-// ----------------------------------------------------
+export function where(field: string, op: string, value: any) {
+  return { _type: 'where', field, op, value };
+}
+
+export function limit(limitCount: number) {
+  return { _type: 'limit', limit: limitCount };
+}
+
+export function orderBy(field: string, direction: 'asc' | 'desc' = 'asc') {
+  return { _type: 'orderBy', field, direction };
+}
+
+// ---------------- Helper Column Translation ----------------
+
+function translateFieldForDb(col: string, field: string): string {
+  if (col === 'access_requests') {
+    if (field === 'email' || field === 'userEmail') return 'user_email';
+    if (field === 'userId') return 'user_id';
+    if (field === 'courseId') return 'course_id';
+    if (field === 'courseIds') return 'course_ids';
+    if (field === 'bkashNumber') return 'bkash_number';
+    if (field === 'transactionId') return 'transaction_id';
+    if (field === 'createdAt') return 'created_at';
+    if (field === 'expiresAt') return 'expires_at';
+  } else if (col === 'users') {
+    if (field === 'displayName' || field === 'name') return 'display_name';
+    if (field === 'isApproved') return 'is_approved';
+    if (field === 'createdAt') return 'created_at';
+    if (field === 'updatedAt') return 'updated_at';
+    if (field === 'enrolledCourseIds' || field === 'enrolledCourses') return 'enrolled_course_ids';
+    if (field === 'activeCourseId') return 'active_course_id';
+    if (field === 'quizScore') return 'quiz_score';
+    if (field === 'quizTaken') return 'quiz_taken';
+    if (field === 'flashcardPositions') return 'flashcard_positions';
+    if (field === 'synonymProgress') return 'synonym_progress';
+    if (field === 'blankProgress') return 'blank_progress';
+    if (field === 'oooProgress') return 'ooo_progress';
+    if (field === 'analogyProgress') return 'analogy_progress';
+  } else if (col === 'courses') {
+    if (field === 'isFree') return 'is_free';
+    if (field === 'isPublished') return 'is_published';
+    if (field === 'thumbnailUrl') return 'thumbnail_url';
+    if (field === 'createdBy') return 'created_by';
+    if (field === 'createdAt') return 'created_at';
+    if (field === 'updatedAt') return 'updated_at';
+  }
+  return field;
+}
 
 export function mapUserToDb(data: any): any {
   const row: any = {};
   if (data.id) row.id = data.id;
-  if (data.email !== undefined) row.email = data.email;
+  if (data.email !== undefined) row.email = (data.email || '').trim().toLowerCase();
   if (data.displayName !== undefined || data.name !== undefined) {
     row.display_name = data.displayName || data.name || '';
   }
   if (data.role !== undefined) row.role = data.role;
-  if (data.isApproved !== undefined) row.is_approved = data.isApproved;
+  if (data.isApproved !== undefined) row.is_approved = !!data.isApproved;
   if (data.status !== undefined) row.status = data.status;
   if (data.progress !== undefined) row.progress = data.progress;
   if (data.flashcardPositions !== undefined) row.flashcard_positions = data.flashcardPositions;
@@ -180,10 +243,12 @@ export function mapCourseFromDb(row: any): any {
     isPublished: row.is_published ?? true,
     thumbnailUrl: row.thumbnail_url || '',
     createdBy: row.created_by || '',
-    words: row.words || [],
-    stories: row.stories || [],
-    articles: row.articles || [],
+    words: Array.isArray(row.words) ? row.words : [],
+    stories: Array.isArray(row.stories) ? row.stories : [],
+    articles: Array.isArray(row.articles) ? row.articles : [],
     metadata: row.metadata || {},
+    allowedUsers: Array.isArray(row.metadata?.allowedUsers) ? row.metadata.allowedUsers : (row.allowed_users || []),
+    isDefault: row.metadata?.isDefault ?? (row.is_free ? true : false),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -192,15 +257,17 @@ export function mapCourseFromDb(row: any): any {
 export function mapAccessRequestToDb(data: any): any {
   const row: any = {};
   if (data.id) row.id = data.id;
-  if (data.userId || data.user_id) row.user_id = data.userId || data.user_id;
-  if (data.userEmail || data.user_email) row.user_email = data.userEmail || data.user_email;
-  if (data.courseId || data.course_id) row.course_id = data.courseId || data.course_id;
-  if (data.courseIds || data.course_ids) row.course_ids = data.courseIds || data.course_ids;
-  if (data.bkashNumber || data.bkash_number) row.bkash_number = data.bkashNumber || data.bkash_number;
-  if (data.transactionId || data.transaction_id) row.transaction_id = data.transactionId || data.transaction_id;
+  if (data.userId !== undefined) row.user_id = data.userId;
+  if (data.userEmail !== undefined || data.email !== undefined) {
+    row.user_email = data.userEmail || data.email || '';
+  }
+  if (data.courseId !== undefined) row.course_id = data.courseId;
+  if (data.courseIds !== undefined) row.course_ids = data.courseIds;
+  if (data.bkashNumber !== undefined) row.bkash_number = data.bkashNumber;
+  if (data.transactionId !== undefined) row.transaction_id = data.transactionId;
   if (data.amount !== undefined) row.amount = data.amount;
   if (data.status !== undefined) row.status = data.status;
-  if (data.expiresAt || data.expires_at) row.expires_at = data.expiresAt || data.expires_at;
+  if (data.expiresAt !== undefined) row.expires_at = data.expiresAt;
   return row;
 }
 
@@ -208,12 +275,13 @@ export function mapAccessRequestFromDb(row: any): any {
   if (!row) return null;
   return {
     id: row.id,
-    userId: row.user_id,
-    userEmail: row.user_email,
-    courseId: row.course_id,
+    userId: row.user_id || '',
+    userEmail: row.user_email || '',
+    email: row.user_email || '',
+    courseId: row.course_id || '',
     courseIds: row.course_ids || (row.course_id ? [row.course_id] : []),
-    bkashNumber: row.bkash_number,
-    transactionId: row.transaction_id,
+    bkashNumber: row.bkash_number || '',
+    transactionId: row.transaction_id || '',
     amount: typeof row.amount === 'number' ? row.amount : Number(row.amount || 0),
     status: row.status || 'pending',
     createdAt: row.created_at,
@@ -221,33 +289,28 @@ export function mapAccessRequestFromDb(row: any): any {
   };
 }
 
-// ----------------------------------------------------
-// Core Database CRUD Operations on Supabase
-// ----------------------------------------------------
+// ---------------- Database CRUD Operations ----------------
 
-export async function getDoc(docRef: DocRef | any) {
+export async function getDoc(docRef: DocRef | any): Promise<{ id: string; exists: () => boolean; data: () => any }> {
   const col = docRef?.collection || docRef?.path?.split('/')[0];
   const id = docRef?.id || docRef?.path?.split('/')[1];
 
   if (!col || !id) {
-    return {
-      id: id || '',
-      exists: () => false,
-      data: () => null
-    };
+    return { id: id || '', exists: () => false, data: () => null };
   }
+
+  const client = getSupabase();
 
   // 1. system_settings
   if (col === 'system_settings' || col === 'settings') {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('system_settings')
         .select('key, value')
         .eq('key', id)
         .maybeSingle();
 
-      if (error) throw error;
-      if (data) {
+      if (!error && data) {
         const val = data.value || {};
         return {
           id,
@@ -256,36 +319,38 @@ export async function getDoc(docRef: DocRef | any) {
         };
       }
     } catch (e) {
-      console.warn(`Supabase getDoc notice for ${col}/${id}:`, e);
+      console.warn(`Supabase getDoc error for ${col}/${id}:`, e);
     }
   }
 
   // 2. users
   if (col === 'users') {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
+      let queryBuilder = client.from('users').select('*');
+      if (id.includes('@')) {
+        queryBuilder = queryBuilder.or(`id.eq.${id},email.eq.${id.toLowerCase()}`);
+      } else {
+        queryBuilder = queryBuilder.or(`id.eq.${id},email.eq.${id}`);
+      }
 
+      const { data, error } = await queryBuilder.maybeSingle();
       if (!error && data) {
         const mapped = mapUserFromDb(data);
         return {
-          id,
+          id: data.id || id,
           exists: () => true,
           data: () => mapped
         };
       }
     } catch (e) {
-      console.warn(`Supabase user getDoc notice:`, e);
+      console.warn(`Supabase user getDoc error:`, e);
     }
   }
 
   // 3. courses
   if (col === 'courses') {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('courses')
         .select('*')
         .eq('id', id)
@@ -300,14 +365,14 @@ export async function getDoc(docRef: DocRef | any) {
         };
       }
     } catch (e) {
-      console.warn(`Supabase course getDoc notice:`, e);
+      console.warn(`Supabase course getDoc error:`, e);
     }
   }
 
   // 4. access_requests
   if (col === 'access_requests') {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('access_requests')
         .select('*')
         .eq('id', id)
@@ -322,28 +387,27 @@ export async function getDoc(docRef: DocRef | any) {
         };
       }
     } catch (e) {
-      console.warn(`Supabase access_request getDoc notice:`, e);
+      console.warn(`Supabase access_requests getDoc error:`, e);
     }
   }
 
-  // Generic fallback table query
+  // 5. Generic collections (e.g. question banks)
   try {
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from(col)
       .select('*')
       .eq('id', id)
       .maybeSingle();
 
     if (!error && data) {
-      const resultData = data.data || data;
       return {
         id,
         exists: () => true,
-        data: () => resultData
+        data: () => data.data || data
       };
     }
   } catch (e) {
-    console.warn(`Supabase generic getDoc notice for ${col}/${id}:`, e);
+    // Suppress generic table missing errors gracefully
   }
 
   return {
@@ -353,22 +417,30 @@ export async function getDoc(docRef: DocRef | any) {
   };
 }
 
-export async function getDocs(queryOrColRef: CollectionRef | QueryRef | any) {
-  const col = queryOrColRef?.collection || 'courses';
-  const filters: QueryFilter[] = queryOrColRef?.filters || [];
-  const limitCount: number | undefined = queryOrColRef?.limitCount;
+export async function getDocs(queryRef: CollectionRef | QueryRef | any): Promise<{
+  docs: Array<{ id: string; exists: () => boolean; data: () => any }>;
+  empty: boolean;
+  size: number;
+  forEach: (cb: (doc: any) => void) => void;
+}> {
+  const col = queryRef?.collection || (typeof queryRef === 'string' ? queryRef : '');
+  const filters: QueryFilter[] = queryRef?.filters || [];
+  const limitCount = queryRef?.limitCount;
+  const orderByField = queryRef?.orderByField;
+  const orderDirection = queryRef?.orderDirection;
+
+  if (!col) {
+    return { docs: [], empty: true, size: 0, forEach: () => {} };
+  }
+
+  const client = getSupabase();
 
   try {
-    let queryBuilder = supabase.from(col).select('*');
+    let queryBuilder = client.from(col).select('*');
 
-    // Apply filters
+    // Apply translated filters
     for (const f of filters) {
-      let dbField = f.field;
-      if (col === 'access_requests') {
-        if (f.field === 'userId') dbField = 'user_id';
-        if (f.field === 'userEmail') dbField = 'user_email';
-        if (f.field === 'courseId') dbField = 'course_id';
-      }
+      const dbField = translateFieldForDb(col, f.field);
       if (f.op === '==' || f.op === '=') {
         queryBuilder = queryBuilder.eq(dbField, f.value);
       } else if (f.op === '>') {
@@ -380,8 +452,13 @@ export async function getDocs(queryOrColRef: CollectionRef | QueryRef | any) {
       } else if (f.op === '<=') {
         queryBuilder = queryBuilder.lte(dbField, f.value);
       } else if (f.op === 'in') {
-        queryBuilder = queryBuilder.in(dbField, f.value);
+        queryBuilder = queryBuilder.in(dbField, Array.isArray(f.value) ? f.value : [f.value]);
       }
+    }
+
+    if (orderByField) {
+      const dbOrderField = translateFieldForDb(col, orderByField);
+      queryBuilder = queryBuilder.order(dbOrderField, { ascending: orderDirection !== 'desc' });
     }
 
     if (limitCount && limitCount > 0) {
@@ -397,6 +474,7 @@ export async function getDocs(queryOrColRef: CollectionRef | QueryRef | any) {
       if (col === 'users') mappedData = mapUserFromDb(r);
       else if (col === 'courses') mappedData = mapCourseFromDb(r);
       else if (col === 'access_requests') mappedData = mapAccessRequestFromDb(r);
+      else if (col === 'system_settings') mappedData = r.value || r;
       else if (r.data) mappedData = { ...r.data, id: r.id };
 
       return {
@@ -429,35 +507,37 @@ export async function setDoc(docRef: DocRef | any, data: any, options?: { merge?
 
   if (!col || !id) return;
 
+  const client = getSupabase();
+
   try {
     // 1. system_settings
     if (col === 'system_settings' || col === 'settings') {
-      await supabase.from('system_settings').upsert({
+      await client.from('system_settings').upsert({
         key: id,
         value: data,
         updated_at: new Date().toISOString()
-      });
+      }, { onConflict: 'key' });
       return;
     }
 
     // 2. users
     if (col === 'users') {
       const userPayload = mapUserToDb({ ...data, id });
-      await supabase.from('users').upsert(userPayload);
+      await client.from('users').upsert(userPayload, { onConflict: 'id' });
       return;
     }
 
     // 3. courses
     if (col === 'courses') {
       const coursePayload = mapCourseToDb({ ...data, id });
-      await supabase.from('courses').upsert(coursePayload);
+      await client.from('courses').upsert(coursePayload, { onConflict: 'id' });
       return;
     }
 
     // 4. access_requests
     if (col === 'access_requests') {
       const reqPayload = mapAccessRequestToDb({ ...data, id });
-      await supabase.from('access_requests').upsert(reqPayload);
+      await client.from('access_requests').upsert(reqPayload, { onConflict: 'id' });
       return;
     }
 
@@ -471,7 +551,7 @@ export async function setDoc(docRef: DocRef | any, data: any, options?: { merge?
       genericPayload.course_id = data.courseId || data.course_id;
     }
 
-    await supabase.from(col).upsert(genericPayload);
+    await client.from(col).upsert(genericPayload, { onConflict: 'id' });
   } catch (err) {
     console.error(`Supabase setDoc error for ${col}/${id}:`, err);
     throw err;
@@ -488,12 +568,14 @@ export async function deleteDoc(docRef: DocRef | any) {
 
   if (!col || !id) return;
 
+  const client = getSupabase();
+
   try {
     if (col === 'system_settings' || col === 'settings') {
-      await supabase.from('system_settings').delete().eq('key', id);
+      await client.from('system_settings').delete().eq('key', id);
       return;
     }
-    await supabase.from(col).delete().eq('id', id);
+    await client.from(col).delete().eq('id', id);
   } catch (err) {
     console.error(`Supabase deleteDoc error for ${col}/${id}:`, err);
     throw err;
@@ -522,7 +604,7 @@ export function onSnapshot(
     });
   }
 
-  // 2. Setup periodic revalidation (every 4 seconds for active views)
+  // 2. Setup periodic polling for real-time consistency
   const intervalId = setInterval(() => {
     if (!isSubscribed) return;
     if (refOrQuery?._isDocRef) {
@@ -534,7 +616,7 @@ export function onSnapshot(
         if (isSubscribed) callback(snap);
       }).catch(() => {});
     }
-  }, 4000);
+  }, 3500);
 
   return () => {
     isSubscribed = false;
@@ -563,6 +645,7 @@ export async function saveBulkDocs(
   onProgress?: (current: number, total: number) => void
 ) {
   if (!items || items.length === 0) return;
+  const client = getSupabase();
   try {
     const BATCH_SIZE = 100;
     const totalItems = items.length;
@@ -583,7 +666,7 @@ export async function saveBulkDocs(
         };
       });
 
-      const { error } = await supabase.from(collectionName).upsert(rows);
+      const { error } = await client.from(collectionName).upsert(rows);
       if (error) {
         console.warn(`saveBulkDocs chunk upsert notice for ${collectionName}:`, error);
       }
@@ -601,11 +684,12 @@ export async function saveBulkDocs(
 
 export async function deleteBulkDocs(collectionName: string, docIds: string[]) {
   if (!docIds || docIds.length === 0) return;
+  const client = getSupabase();
   try {
     const BATCH_SIZE = 200;
     for (let i = 0; i < docIds.length; i += BATCH_SIZE) {
       const chunk = docIds.slice(i, i + BATCH_SIZE);
-      await supabase.from(collectionName).delete().in('id', chunk);
+      await client.from(collectionName).delete().in('id', chunk);
     }
   } catch (err) {
     console.error(`deleteBulkDocs error for ${collectionName}:`, err);
@@ -614,11 +698,12 @@ export async function deleteBulkDocs(collectionName: string, docIds: string[]) {
 }
 
 export async function clearCollectionDocs(collectionName: string, courseId?: string) {
+  const client = getSupabase();
   try {
     if (courseId) {
-      await supabase.from(collectionName).delete().eq('course_id', courseId);
+      await client.from(collectionName).delete().eq('course_id', courseId);
     } else {
-      await supabase.from(collectionName).delete().neq('id', '___non_existent_id___');
+      await client.from(collectionName).delete().neq('id', '___non_existent_id___');
     }
   } catch (err) {
     console.error(`clearCollectionDocs error for ${collectionName}:`, err);
