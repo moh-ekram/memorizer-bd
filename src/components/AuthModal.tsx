@@ -3,9 +3,7 @@ import {
   auth, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
-  GoogleAuthProvider, 
-  signInWithPopup,
-  signInWithRedirect
+  signInWithGoogle
 } from '../lib/db';
 import { Mail, Lock, X, AlertCircle, LogIn, UserPlus, Sparkles, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -44,16 +42,12 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
     } catch (err: any) {
       console.error('Auth Error:', err);
       let errMsg = 'Authentication failed. Please try again.';
-      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+      if (err.code === 'auth/wrong-password' || err.message?.includes('Invalid login credentials')) {
         errMsg = 'Incorrect email or password. Please verify your credentials.';
-      } else if (err.code === 'auth/user-not-found') {
+      } else if (err.code === 'auth/user-not-found' || err.message?.includes('User not found')) {
         errMsg = 'No account found with this email address.';
-      } else if (err.code === 'auth/email-already-in-use') {
+      } else if (err.code === 'auth/email-already-in-use' || err.message?.includes('already registered') || err.message?.includes('User already registered')) {
         errMsg = 'This email is already registered. Please log in instead.';
-      } else if (err.code === 'auth/invalid-email') {
-        errMsg = 'Please provide a valid email address.';
-      } else if (err.code === 'auth/weak-password') {
-        errMsg = 'Password is too weak. Please use at least 6 characters.';
       } else if (err.message) {
         errMsg = err.message;
       }
@@ -66,36 +60,18 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
   const handleGoogleSignIn = async () => {
     setError('');
     setLoading(true);
-    const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: 'select_account' });
 
     try {
-      await signInWithPopup(auth, provider);
+      await signInWithGoogle();
       if (onAuthSuccess) onAuthSuccess();
       onClose();
     } catch (err: any) {
-      console.error('Google Sign-In Error:', err);
-      if (err.code === 'auth/popup-closed-by-user') {
-        setLoading(false);
-        return;
-      }
-
-      if (err.code === 'auth/popup-blocked' || err.code === 'auth/cancelled-popup-request') {
-        try {
-          await signInWithRedirect(auth, provider);
-          return;
-        } catch (redirectErr: any) {
-          console.error('Google Redirect Error:', redirectErr);
-        }
-      }
-      
+      console.error('Supabase Google Sign-In Error:', err);
       let errMsg = 'Could not complete Google Sign-In.';
-      if (err.code === 'auth/unauthorized-domain') {
-        errMsg = `This domain (${window.location.hostname}) is not authorized in Firebase Console.`;
-      } else if (err.code) {
-        errMsg = `${errMsg} (${err.code})`;
+      if (err.message?.includes('provider is not enabled') || err.message?.includes('Unsupported provider')) {
+        errMsg = 'Supabase-এ Google Provider চালু করতে Supabase Dashboard ➔ Authentication ➔ Providers ➔ Google এনাবল করুন।';
       } else if (err.message) {
-        errMsg = `${errMsg} (${err.message})`;
+        errMsg = err.message;
       }
       setError(errMsg);
     } finally {

@@ -1,4 +1,4 @@
-import { db, auth, googleProvider } from './firebase';
+import { db } from './firebase';
 import {
   doc,
   collection,
@@ -22,10 +22,20 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
-  GoogleAuthProvider
-} from 'firebase/auth';
+  GoogleAuthProvider,
+  signInWithGoogle,
+  normalizeSupabaseUser
+} from './supabaseAuth';
+import type { AppUser } from './supabaseAuth';
 import { normalizeCourseId, matchesCourseId, clearQuestionsCache } from './courseUtils';
 import { safeSetLocalStorage } from './storage';
+
+// Compatible auth object reference
+const auth = {
+  currentUser: null as AppUser | null,
+};
+
+const googleProvider = new GoogleAuthProvider();
 
 export {
   db,
@@ -46,10 +56,13 @@ export {
   signInWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
+  signInWithGoogle,
+  normalizeSupabaseUser,
   normalizeCourseId,
   matchesCourseId,
   clearQuestionsCache
 };
+export type { AppUser };
 
 export async function getDoc(docRef: any) {
   try {

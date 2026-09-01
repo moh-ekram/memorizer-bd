@@ -12,9 +12,7 @@ import {
   auth, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
-  GoogleAuthProvider, 
-  signInWithPopup,
-  signInWithRedirect
+  signInWithGoogle
 } from '../lib/db';
 import { Course, AppSettings } from '../types';
 import MyCoursesView from './MyCoursesView';
@@ -107,41 +105,16 @@ export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse
   const handleGoogleSignIn = async () => {
     setError('');
     setLoading(true);
-    const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
+      await signInWithGoogle();
       onAuthSuccess();
     } catch (err: any) {
       console.error('Google Sign-In Error:', err);
-      if (err.code === 'auth/popup-closed-by-user') {
-        setLoading(false);
-        return;
-      }
-
-      // If popup is blocked in mobile WebView, attempt redirect fallback
-      if (err.code === 'auth/popup-blocked' || err.code === 'auth/cancelled-popup-request') {
-        try {
-          await signInWithRedirect(auth, provider);
-          return;
-        } catch (redirectErr: any) {
-          console.error('Google Redirect Error:', redirectErr);
-        }
-      }
-
       let errMsg = 'গুগল সাইন-ইন সম্পন্ন করা যায়নি।';
-      if (err.code === 'auth/unauthorized-domain') {
-        const currentDomain = window.location.hostname;
-        errMsg = `এই ডোমেইনটি (${currentDomain}) ফায়ারবেসে অনুমোদিত নয় (Unauthorized Domain)।`;
-      } else if (
-        err.message?.includes('missing initial state') ||
-        err.code === 'auth/web-storage-unsupported' ||
-        err.message?.includes('sessionStorage')
-      ) {
-        errMsg = 'মোবাইল অ্যাপ/ইন-অ্যাপ ব্রাউজারে (WebView) স্টোরেজ নিরাপত্তার কারণে Google Sign-In বাধাগ্রস্ত হতে পারে। সমাধান: ১) নিচে ইমেইল ও পাসওয়ার্ড দিয়ে সাইন-ইন/রেজিস্টার করুন, অথবা ২) ব্রাউজারের ৩-ডট মেনু থেকে "Open in Chrome" সিলেক্ট করুন।';
-      } else if (err.code) {
-        errMsg = `${errMsg} (${err.code})`;
+      if (err.message?.includes('provider is not enabled') || err.message?.includes('Unsupported provider')) {
+        errMsg = 'Supabase-এ Google Provider চালু করতে Supabase Dashboard ➔ Authentication ➔ Providers ➔ Google এনাবল করুন।';
       } else if (err.message) {
-        errMsg = `${errMsg} (${err.message})`;
+        errMsg = err.message;
       }
       setError(errMsg);
     } finally {

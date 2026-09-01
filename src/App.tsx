@@ -64,7 +64,7 @@ import {
   query,
   where
 } from './lib/db';
-import type { User as DbUser } from 'firebase/auth';
+import type { AppUser as DbUser } from './lib/supabaseAuth';
 import { Course } from './types';
 import { isCourseEnrolled, isCourseAccessible } from './lib/courseAccess';
 import AuthModal from './components/AuthModal';
