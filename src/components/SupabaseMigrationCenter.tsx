@@ -96,11 +96,19 @@ export default function SupabaseMigrationCenter() {
 
   const [copiedSql, setCopiedSql] = useState(false);
   const [copiedGeneratedSql, setCopiedGeneratedSql] = useState(false);
+  const [copiedPartIndex, setCopiedPartIndex] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'migration' | 'json-backup' | 'json-to-sql' | 'sql'>('json-backup');
   const [isExportingJson, setIsExportingJson] = useState(false);
   const [isRestoringJson, setIsRestoringJson] = useState(false);
   const [isGeneratingSql, setIsGeneratingSql] = useState(false);
   const [generatedSqlText, setGeneratedSqlText] = useState<string>('');
+  const [sqlParts, setSqlParts] = useState<{
+    part1: string;
+    courseChunks: { label: string; sql: string; count: number }[];
+    part3: string;
+    fullSql: string;
+  } | null>(null);
+  const [selectedSqlTab, setSelectedSqlTab] = useState<string>('part1');
   const [jsonUploadStats, setJsonUploadStats] = useState<{
     users: number;
     courses: number;
@@ -117,8 +125,8 @@ export default function SupabaseMigrationCenter() {
     setLogs((prev) => [{ timestamp: time, message, type }, ...prev].slice(0, 300));
   };
 
-  // Helper function to build bulletproof Supabase SQL from JSON
-  const buildSupabaseSqlFromJson = (jsonData: any): string => {
+  // Helper function to build bulletproof Supabase SQL from JSON in manageable chunks
+  const buildSupabaseSqlPartsFromJson = (jsonData: any) => {
     const escapeSql = (val: any): string => {
       if (val === null || val === undefined) return "''";
       return `'${String(val).replace(/'/g, "''")}'`;
@@ -147,20 +155,12 @@ export default function SupabaseMigrationCenter() {
     const analogyObj = jsonData.word_analogy_questions || {};
     const mcqObj = jsonData.mcq_questions || {};
 
-    let sql = `-- ==============================================================================
--- VOCABULARY MASTER: FULL DATABASE IMPORT SCRIPT
--- Generated on: ${new Date().toISOString()}
--- Total Users: ${Object.keys(usersObj).length} | Total Courses: ${Object.keys(coursesObj).length} | Requests: ${Object.keys(requestsObj).length}
+    // --- PART 1: SCHEMA & USERS & SETTINGS ---
+    let part1 = `-- ==============================================================================
+-- PART 1 of 3: SUPABASE SCHEMA, RLS POLICIES & USERS
 -- ==============================================================================
--- How to run:
--- 1. Open Supabase Dashboard (https://supabase.com/dashboard)
--- 2. Go to: SQL Editor ( >_ ) -> Click '+ New Query'
--- 3. Paste this script and click 'Run' (Ctrl + Enter)
--- ==============================================================================
-
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 1. CREATE TABLES
 CREATE TABLE IF NOT EXISTS public.system_settings (
   key TEXT PRIMARY KEY,
   value JSONB NOT NULL,
@@ -257,7 +257,7 @@ CREATE TABLE IF NOT EXISTS public.mcq_questions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. ENABLE ROW LEVEL SECURITY & OPEN POLICIES
+-- ENABLE RLS & FULL OPEN POLICIES
 ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.courses ENABLE ROW LEVEL SECURITY;
@@ -307,59 +307,14 @@ DROP POLICY IF EXISTS "Public Write mcq_questions" ON public.mcq_questions;
 CREATE POLICY "Public Read mcq_questions" ON public.mcq_questions FOR SELECT USING (true);
 CREATE POLICY "Public Write mcq_questions" ON public.mcq_questions FOR ALL USING (true) WITH CHECK (true);
 
--- ==============================================================================
--- 3. INSERT SYSTEM SETTINGS
--- ==============================================================================
+-- INSERT SYSTEM SETTINGS
 `;
 
     for (const [sKey, sVal] of Object.entries(settingsObj) as any) {
-      sql += `INSERT INTO public.system_settings (key, value, updated_at) VALUES (${escapeSql(sKey)}, ${toJsonbDollar(sVal)}, NOW()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW();\n`;
+      part1 += `INSERT INTO public.system_settings (key, value, updated_at) VALUES (${escapeSql(sKey)}, ${toJsonbDollar(sVal)}, NOW()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW();\n`;
     }
 
-    sql += `\n-- ==============================================================================\n-- 4. INSERT COURSES & VOCABULARIES\n-- ==============================================================================\n`;
-
-    for (const [cId, cVal] of Object.entries(coursesObj) as any) {
-      const title = cVal.title || cId;
-      const desc = cVal.description || '';
-      const category = cVal.category || 'General';
-      const level = cVal.level || 'All Levels';
-      const price = typeof cVal.price === 'number' ? cVal.price : 0.0;
-      const isFree = !!cVal.isDefault || !cVal.price;
-      const isPub = cVal.hidden !== true;
-      const thumb = cVal.thumbnail || '';
-      const createdBy = cVal.createdBy || 'admin@gmail.com';
-      const words = Array.isArray(cVal.words) ? cVal.words : [];
-      const stories = Array.isArray(cVal.stories) ? cVal.stories : [];
-      const articles = Array.isArray(cVal.articles) ? cVal.articles : [];
-      const meta = {
-        placeLabels: cVal.placeLabels || {},
-        order: cVal.order || 0,
-        allowedUsers: cVal.allowedUsers || [],
-        enabledGames: cVal.enabledGames || {}
-      };
-
-      sql += `INSERT INTO public.courses (id, title, description, category, level, price, is_free, is_published, thumbnail_url, created_by, words, stories, articles, metadata, updated_at) VALUES (${escapeSql(cId)}, ${escapeSql(title)}, ${escapeSql(desc)}, ${escapeSql(category)}, ${escapeSql(level)}, ${price}, ${isFree}, ${isPub}, ${escapeSql(thumb)}, ${escapeSql(createdBy)}, ${toJsonbDollar(words)}, ${toJsonbDollar(stories)}, ${toJsonbDollar(articles)}, ${toJsonbDollar(meta)}, NOW()) ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description, category = EXCLUDED.category, level = EXCLUDED.level, price = EXCLUDED.price, is_free = EXCLUDED.is_free, is_published = EXCLUDED.is_published, thumbnail_url = EXCLUDED.thumbnail_url, words = EXCLUDED.words, stories = EXCLUDED.stories, articles = EXCLUDED.articles, metadata = EXCLUDED.metadata, updated_at = NOW();\n`;
-    }
-
-    sql += `\n-- ==============================================================================\n-- 5. INSERT ACCESS REQUESTS & BKASH PAYMENTS\n-- ==============================================================================\n`;
-
-    for (const [rId, rVal] of Object.entries(requestsObj) as any) {
-      const uId = rVal.userId || rVal.email || rId;
-      const email = rVal.email || '';
-      const courseId = rVal.courseId || 'bank-bcs-gre';
-      const courseIds = Array.isArray(rVal.courseIds) ? rVal.courseIds : [courseId];
-      const bkash = rVal.bkashNumber || '';
-      const trx = rVal.trxId || rVal.transactionId || '';
-      const amount = typeof rVal.amount === 'number' ? rVal.amount : 0.0;
-      const status = rVal.status || 'pending';
-      const createdAt = rVal.createdAt ? escapeSql(rVal.createdAt) : 'NOW()';
-      const expiresAt = rVal.expiresAt ? escapeSql(rVal.expiresAt) : 'NULL';
-
-      sql += `INSERT INTO public.access_requests (id, user_id, user_email, course_id, course_ids, bkash_number, transaction_id, amount, status, created_at, expires_at) VALUES (${escapeSql(rId)}, ${escapeSql(uId)}, ${escapeSql(email)}, ${escapeSql(courseId)}, ${toTextArray(courseIds)}, ${escapeSql(bkash)}, ${escapeSql(trx)}, ${amount}, ${escapeSql(status)}, ${createdAt === 'NOW()' ? 'NOW()' : `${createdAt}::timestamptz`}, ${expiresAt === 'NULL' ? 'NULL' : `${expiresAt}::timestamptz`}) ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, expires_at = EXCLUDED.expires_at;\n`;
-    }
-
-    sql += `\n-- ==============================================================================\n-- 6. INSERT USERS, PROGRESS & FLASHCARD POSITIONS\n-- ==============================================================================\n`;
-
+    part1 += `\n-- INSERT ${Object.keys(usersObj).length} USERS\n`;
     for (const [uId, uVal] of Object.entries(usersObj) as any) {
       const email = uVal.email || `${uId}@user.local`;
       const name = uVal.displayName || uVal.name || '';
@@ -381,34 +336,103 @@ CREATE POLICY "Public Write mcq_questions" ON public.mcq_questions FOR ALL USING
       const qTaken = typeof uVal.quizTaken === 'number' ? uVal.quizTaken : 0;
       const balance = typeof uVal.balance === 'number' ? uVal.balance : (uVal.walletBalance || 0.0);
 
-      sql += `INSERT INTO public.users (id, email, display_name, role, is_approved, status, progress, flashcard_positions, folders, goal, settings, synonym_progress, blank_progress, ooo_progress, analogy_progress, enrolled_course_ids, active_course_id, quiz_score, quiz_taken, balance, updated_at) VALUES (${escapeSql(uId)}, ${escapeSql(email)}, ${escapeSql(name)}, ${escapeSql(role)}, ${isApproved}, ${escapeSql(status)}, ${toJsonbDollar(prog)}, ${toJsonbDollar(flashPos)}, ${toJsonbDollar(folders)}, ${toJsonbDollar(goal)}, ${toJsonbDollar(settings)}, ${toJsonbDollar(synProg)}, ${toJsonbDollar(blankProg)}, ${toJsonbDollar(oooProg)}, ${toJsonbDollar(analogyProg)}, ${toTextArray(enrolled)}, ${escapeSql(activeC)}, ${qScore}, ${qTaken}, ${balance}, NOW()) ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name, role = EXCLUDED.role, is_approved = EXCLUDED.is_approved, status = EXCLUDED.status, progress = EXCLUDED.progress, flashcard_positions = EXCLUDED.flashcard_positions, folders = EXCLUDED.folders, goal = EXCLUDED.goal, settings = EXCLUDED.settings, synonym_progress = EXCLUDED.synonym_progress, blank_progress = EXCLUDED.blank_progress, ooo_progress = EXCLUDED.ooo_progress, analogy_progress = EXCLUDED.analogy_progress, enrolled_course_ids = EXCLUDED.enrolled_course_ids, active_course_id = EXCLUDED.active_course_id, quiz_score = EXCLUDED.quiz_score, quiz_taken = EXCLUDED.quiz_taken, balance = EXCLUDED.balance, updated_at = NOW();\n`;
+      part1 += `INSERT INTO public.users (id, email, display_name, role, is_approved, status, progress, flashcard_positions, folders, goal, settings, synonym_progress, blank_progress, ooo_progress, analogy_progress, enrolled_course_ids, active_course_id, quiz_score, quiz_taken, balance, updated_at) VALUES (${escapeSql(uId)}, ${escapeSql(email)}, ${escapeSql(name)}, ${escapeSql(role)}, ${isApproved}, ${escapeSql(status)}, ${toJsonbDollar(prog)}, ${toJsonbDollar(flashPos)}, ${toJsonbDollar(folders)}, ${toJsonbDollar(goal)}, ${toJsonbDollar(settings)}, ${toJsonbDollar(synProg)}, ${toJsonbDollar(blankProg)}, ${toJsonbDollar(oooProg)}, ${toJsonbDollar(analogyProg)}, ${toTextArray(enrolled)}, ${escapeSql(activeC)}, ${qScore}, ${qTaken}, ${balance}, NOW()) ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name, role = EXCLUDED.role, is_approved = EXCLUDED.is_approved, status = EXCLUDED.status, progress = EXCLUDED.progress, flashcard_positions = EXCLUDED.flashcard_positions, folders = EXCLUDED.folders, goal = EXCLUDED.goal, settings = EXCLUDED.settings, synonym_progress = EXCLUDED.synonym_progress, blank_progress = EXCLUDED.blank_progress, ooo_progress = EXCLUDED.ooo_progress, analogy_progress = EXCLUDED.analogy_progress, enrolled_course_ids = EXCLUDED.enrolled_course_ids, active_course_id = EXCLUDED.active_course_id, quiz_score = EXCLUDED.quiz_score, quiz_taken = EXCLUDED.quiz_taken, balance = EXCLUDED.balance, updated_at = NOW();\n`;
     }
 
-    sql += `\n-- ==============================================================================\n-- 7. INSERT GAME QUESTION BANKS\n-- ==============================================================================\n`;
+    // --- PART 2: COURSES CHUNKS (3-4 courses per chunk so it never exceeds SQL editor size) ---
+    const courseEntries = Object.entries(coursesObj);
+    const courseChunks: { label: string; sql: string; count: number }[] = [];
+    const CHUNK_SIZE = 4;
 
+    for (let i = 0; i < courseEntries.length; i += CHUNK_SIZE) {
+      const slice = courseEntries.slice(i, i + CHUNK_SIZE);
+      const chunkIndex = Math.floor(i / CHUNK_SIZE) + 1;
+      const totalChunks = Math.ceil(courseEntries.length / CHUNK_SIZE);
+
+      let chunkSql = `-- ==============================================================================\n-- PART 2 - BATCH ${chunkIndex}/${totalChunks}: COURSES & VOCABULARIES (${slice.map(([k]) => k).join(', ')})\n-- ==============================================================================\n`;
+
+      for (const [cId, cVal] of slice as any) {
+        const title = cVal.title || cId;
+        const desc = cVal.description || '';
+        const category = cVal.category || 'General';
+        const level = cVal.level || 'All Levels';
+        const price = typeof cVal.price === 'number' ? cVal.price : 0.0;
+        const isFree = !!cVal.isDefault || !cVal.price;
+        const isPub = cVal.hidden !== true;
+        const thumb = cVal.thumbnail || '';
+        const createdBy = cVal.createdBy || 'admin@gmail.com';
+        const words = Array.isArray(cVal.words) ? cVal.words : [];
+        const stories = Array.isArray(cVal.stories) ? cVal.stories : [];
+        const articles = Array.isArray(cVal.articles) ? cVal.articles : [];
+        const meta = {
+          placeLabels: cVal.placeLabels || {},
+          order: cVal.order || 0,
+          allowedUsers: cVal.allowedUsers || [],
+          enabledGames: cVal.enabledGames || {}
+        };
+
+        chunkSql += `INSERT INTO public.courses (id, title, description, category, level, price, is_free, is_published, thumbnail_url, created_by, words, stories, articles, metadata, updated_at) VALUES (${escapeSql(cId)}, ${escapeSql(title)}, ${escapeSql(desc)}, ${escapeSql(category)}, ${escapeSql(level)}, ${price}, ${isFree}, ${isPub}, ${escapeSql(thumb)}, ${escapeSql(createdBy)}, ${toJsonbDollar(words)}, ${toJsonbDollar(stories)}, ${toJsonbDollar(articles)}, ${toJsonbDollar(meta)}, NOW()) ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description, category = EXCLUDED.category, level = EXCLUDED.level, price = EXCLUDED.price, is_free = EXCLUDED.is_free, is_published = EXCLUDED.is_published, thumbnail_url = EXCLUDED.thumbnail_url, words = EXCLUDED.words, stories = EXCLUDED.stories, articles = EXCLUDED.articles, metadata = EXCLUDED.metadata, updated_at = NOW();\n\n`;
+      }
+
+      courseChunks.push({
+        label: `Part 2 - Batch ${chunkIndex} of ${totalChunks} (${slice.length} Courses)`,
+        sql: chunkSql,
+        count: slice.length
+      });
+    }
+
+    // --- PART 3: ACCESS REQUESTS & QUESTION BANKS ---
+    let part3 = `-- ==============================================================================
+-- PART 3 of 3: ACCESS REQUESTS, PAYMENTS & QUESTION BANKS
+-- ==============================================================================
+`;
+
+    for (const [rId, rVal] of Object.entries(requestsObj) as any) {
+      const uId = rVal.userId || rVal.email || rId;
+      const email = rVal.email || '';
+      const courseId = rVal.courseId || 'bank-bcs-gre';
+      const courseIds = Array.isArray(rVal.courseIds) ? rVal.courseIds : [courseId];
+      const bkash = rVal.bkashNumber || '';
+      const trx = rVal.trxId || rVal.transactionId || '';
+      const amount = typeof rVal.amount === 'number' ? rVal.amount : 0.0;
+      const status = rVal.status || 'pending';
+      const createdAt = rVal.createdAt ? escapeSql(rVal.createdAt) : 'NOW()';
+      const expiresAt = rVal.expiresAt ? escapeSql(rVal.expiresAt) : 'NULL';
+
+      part3 += `INSERT INTO public.access_requests (id, user_id, user_email, course_id, course_ids, bkash_number, transaction_id, amount, status, created_at, expires_at) VALUES (${escapeSql(rId)}, ${escapeSql(uId)}, ${escapeSql(email)}, ${escapeSql(courseId)}, ${toTextArray(courseIds)}, ${escapeSql(bkash)}, ${escapeSql(trx)}, ${amount}, ${escapeSql(status)}, ${createdAt === 'NOW()' ? 'NOW()' : `${createdAt}::timestamptz`}, ${expiresAt === 'NULL' ? 'NULL' : `${expiresAt}::timestamptz`}) ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, expires_at = EXCLUDED.expires_at;\n`;
+    }
+
+    part3 += `\n-- QUESTION BANKS\n`;
     for (const [id, val] of Object.entries(oooObj) as any) {
       const cId = val.courseId || val.course_id || 'bank-bcs-gre';
-      sql += `INSERT INTO public.odd_one_out_questions (id, course_id, data, updated_at) VALUES (${escapeSql(id)}, ${escapeSql(cId)}, ${toJsonbDollar(val)}, NOW()) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();\n`;
+      part3 += `INSERT INTO public.odd_one_out_questions (id, course_id, data, updated_at) VALUES (${escapeSql(id)}, ${escapeSql(cId)}, ${toJsonbDollar(val)}, NOW()) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();\n`;
     }
 
     for (const [id, val] of Object.entries(blankObj) as any) {
       const cId = val.courseId || val.course_id || 'bank-bcs-gre';
-      sql += `INSERT INTO public.blank_questions (id, course_id, data, updated_at) VALUES (${escapeSql(id)}, ${escapeSql(cId)}, ${toJsonbDollar(val)}, NOW()) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();\n`;
+      part3 += `INSERT INTO public.blank_questions (id, course_id, data, updated_at) VALUES (${escapeSql(id)}, ${escapeSql(cId)}, ${toJsonbDollar(val)}, NOW()) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();\n`;
     }
 
     for (const [id, val] of Object.entries(analogyObj) as any) {
       const cId = val.courseId || val.course_id || 'bank-bcs-gre';
-      sql += `INSERT INTO public.word_analogy_questions (id, course_id, data, updated_at) VALUES (${escapeSql(id)}, ${escapeSql(cId)}, ${toJsonbDollar(val)}, NOW()) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();\n`;
+      part3 += `INSERT INTO public.word_analogy_questions (id, course_id, data, updated_at) VALUES (${escapeSql(id)}, ${escapeSql(cId)}, ${toJsonbDollar(val)}, NOW()) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();\n`;
     }
 
     for (const [id, val] of Object.entries(mcqObj) as any) {
       const cId = val.courseId || val.course_id || 'bank-bcs-gre';
-      sql += `INSERT INTO public.mcq_questions (id, course_id, data, updated_at) VALUES (${escapeSql(id)}, ${escapeSql(cId)}, ${toJsonbDollar(val)}, NOW()) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();\n`;
+      part3 += `INSERT INTO public.mcq_questions (id, course_id, data, updated_at) VALUES (${escapeSql(id)}, ${escapeSql(cId)}, ${toJsonbDollar(val)}, NOW()) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();\n`;
     }
 
-    sql += `\n-- ==============================================================================\n-- VERIFICATION QUERY\n-- ==============================================================================\nSELECT \n  (SELECT COUNT(*) FROM public.users) AS total_users,\n  (SELECT COUNT(*) FROM public.courses) AS total_courses,\n  (SELECT COUNT(*) FROM public.access_requests) AS total_requests,\n  (SELECT COUNT(*) FROM public.system_settings) AS total_settings;\n`;
+    part3 += `\n-- VERIFICATION QUERY\nSELECT \n  (SELECT COUNT(*) FROM public.users) AS total_users,\n  (SELECT COUNT(*) FROM public.courses) AS total_courses,\n  (SELECT COUNT(*) FROM public.access_requests) AS total_requests,\n  (SELECT COUNT(*) FROM public.system_settings) AS total_settings;\n`;
 
-    return sql;
+    const fullSql = `${part1}\n${courseChunks.map((c) => c.sql).join('\n')}\n${part3}`;
+
+    return {
+      part1,
+      courseChunks,
+      part3,
+      fullSql
+    };
   };
 
   // Test Firestore Connection on load
@@ -967,7 +991,18 @@ CREATE POLICY "Public Write mcq_questions" ON public.mcq_questions FOR ALL USING
     }
   };
 
-  const downloadGeneratedSql = (customSql?: string) => {
+  const handleCopyPartSql = async (sqlToCopy: string, partId: string) => {
+    if (!sqlToCopy) return;
+    try {
+      await navigator.clipboard.writeText(sqlToCopy);
+      setCopiedPartIndex(partId);
+      setTimeout(() => setCopiedPartIndex(null), 3000);
+    } catch {
+      alert('Unable to copy SQL script part.');
+    }
+  };
+
+  const downloadGeneratedSql = (customSql?: string, customName?: string) => {
     const textToDownload = customSql || generatedSqlText;
     if (!textToDownload) return;
     const blob = new Blob([textToDownload], { type: 'text/sql;charset=utf-8;' });
@@ -975,7 +1010,7 @@ CREATE POLICY "Public Write mcq_questions" ON public.mcq_questions FOR ALL USING
     const a = document.createElement('a');
     const dateStr = new Date().toISOString().slice(0, 10);
     a.href = url;
-    a.download = `supabase_full_data_import_${dateStr}.sql`;
+    a.download = customName || `supabase_full_data_import_${dateStr}.sql`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1011,10 +1046,12 @@ CREATE POLICY "Public Write mcq_questions" ON public.mcq_questions FOR ALL USING
 
         addLog(`⚡ Converting ${usersCount} Users, ${coursesCount} Courses & ${reqCount} Requests into Ready-to-Run Supabase SQL...`, 'info');
 
-        const sql = buildSupabaseSqlFromJson(parsed);
-        setGeneratedSqlText(sql);
+        const parts = buildSupabaseSqlPartsFromJson(parsed);
+        setSqlParts(parts);
+        setGeneratedSqlText(parts.fullSql);
+        setSelectedSqlTab('part1');
         setActiveTab('json-to-sql');
-        addLog(`🎉 SQL Script successfully generated (${(sql.length / 1024).toFixed(1)} KB)!`, 'success');
+        addLog(`🎉 SQL Script successfully generated and split into manageable parts!`, 'success');
       } catch (err: any) {
         console.error('Failed to convert JSON to SQL:', err);
         addLog(`❌ JSON to SQL conversion error: ${err.message}`, 'error');
@@ -1076,8 +1113,10 @@ CREATE POLICY "Public Write mcq_questions" ON public.mcq_questions FOR ALL USING
         fileName: 'Live Firebase Snapshot'
       });
 
-      const sql = buildSupabaseSqlFromJson(backupData);
-      setGeneratedSqlText(sql);
+      const parts = buildSupabaseSqlPartsFromJson(backupData);
+      setSqlParts(parts);
+      setGeneratedSqlText(parts.fullSql);
+      setSelectedSqlTab('part1');
       setActiveTab('json-to-sql');
       addLog(`🎉 Generated complete SQL script for ${usersSnap.size} Users & ${coursesSnap.size} Courses!`, 'success');
     } catch (err: any) {
@@ -1610,34 +1649,55 @@ CREATE POLICY "Public Write mcq_questions" ON public.mcq_questions FOR ALL USING
                   <Sparkles className="w-5 h-5" />
                 </span>
                 <h4 className="font-extrabold text-slate-850 text-base">
-                  JSON ➔ Supabase Ready-to-Run SQL Import Generator
+                  Supabase Ready-to-Run SQL Import Generator (Split in Small Parts)
                 </h4>
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                এই স্ক্রিপ্টটি রান করলে কোনো পারমিশন এরর বা RLS রেস্ট্রিকশন ছাড়াই সমস্ত ইউজার, কোর্স ও পেমেন্ট রেকর্ড Supabase-এ যুক্ত হবে।
+                ১৭টি কোর্সের হাজার হাজার ভোকাবুলারি থাকার কারণে সম্পূর্ণ SQL বড় হয়ে গেলে Supabase SQL Editor সাইজ লিমিট দেয়। তাই নিচে <strong>অল্প অল্প করে (Part 1, 2, 3)</strong> রান করার সুবিধাজনক ব্যবস্থা রয়েছে।
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={handleCopyGeneratedSql}
-                disabled={!generatedSqlText}
-                className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-md"
-              >
-                {copiedGeneratedSql ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-                <span>{copiedGeneratedSql ? 'সম্পূর্ণ SQL কপি হয়েছে!' : '📋 Copy Full SQL Script'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => downloadGeneratedSql()}
+                onClick={() => downloadGeneratedSql(generatedSqlText, 'supabase_full_database.sql')}
                 disabled={!generatedSqlText}
                 className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-md"
               >
                 <Download className="w-4 h-4" />
-                <span>📥 Download .sql File</span>
+                <span>📥 Download Full .sql File</span>
               </button>
+            </div>
+          </div>
+
+          {/* Solution Recommendation Box */}
+          <div className="p-5 bg-gradient-to-br from-indigo-900 to-purple-950 text-white rounded-2xl shadow-md space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 bg-amber-400 text-slate-900 text-[10px] font-black rounded-full uppercase">
+                সহজ সমাধান
+              </span>
+              <h5 className="font-extrabold text-sm">
+                কেন "Query is too large" এরর আসে এবং করণীয়:
+              </h5>
+            </div>
+            <p className="text-xs text-indigo-200 leading-relaxed">
+              Supabase-এর ওয়েব ব্রাউজার SQL Editor একবারে ১-২ মেগাবাইটের বেশি কুয়েরি রান করতে পারে না। আপনার পছন্দমতো নিচের যেকোনো ১টি পদ্ধতিতে সমাধান করতে পারেন:
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              <div className="p-3.5 bg-white/10 rounded-xl border border-white/10 space-y-1">
+                <span className="text-[11px] font-bold text-amber-300">পদ্ধতি ১ (পার্ট-বাই-পার্ট ছোট SQL রান - সবচেয়ে নিরাপদ):</span>
+                <p className="text-[11px] text-indigo-100">
+                  নিচের <strong>Part 1</strong> (টেবিল ও ইউজার), এরপর <strong>Part 2</strong> (কোর্স ব্যাচসমূহ), এবং <strong>Part 3</strong> (পেমেন্ট ও গেমস) আলাদা আলাদা করে SQL Editor-এ রান করুন। কোনো সাইজ এরর আসবে না!
+                </p>
+              </div>
+
+              <div className="p-3.5 bg-white/10 rounded-xl border border-white/10 space-y-1">
+                <span className="text-[11px] font-bold text-emerald-300">পদ্ধতি ২ (সরাসরি ডিরেক্ট ক্লাউড আপলোড):</span>
+                <p className="text-[11px] text-indigo-100">
+                  প্রথমে নিচের <strong>Part 1</strong> রান করে টেবিলগুলো বানিয়ে নিন। এরপর <strong>"JSON File Transfer"</strong> ট্যাবে গিয়ে জাস্ট আপনার JSON ফাইলটি আপলোড দিন, ব্রাউজার নিজে থেকেই সব ডেটা পাঠিয়ে দিবে!
+                </p>
+              </div>
             </div>
           </div>
 
@@ -1646,7 +1706,7 @@ CREATE POLICY "Public Write mcq_questions" ON public.mcq_questions FOR ALL USING
             <div className="p-4 bg-purple-900 text-white rounded-2xl flex flex-wrap items-center justify-between gap-4 text-xs">
               <div className="flex items-center gap-2">
                 <CheckCircle className="w-4 h-4 text-emerald-400" />
-                <span className="font-bold">SQL Ready:</span>
+                <span className="font-bold">Source:</span>
                 <span className="font-mono text-purple-200">{jsonUploadStats.fileName}</span>
               </div>
               <div className="flex items-center gap-4 text-purple-200">
@@ -1658,80 +1718,190 @@ CREATE POLICY "Public Write mcq_questions" ON public.mcq_questions FOR ALL USING
             </div>
           )}
 
-          {/* How to Run Instructions Banner */}
-          <div className="p-5 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-200 text-xs text-amber-950 space-y-2">
-            <h5 className="font-black text-amber-900 flex items-center gap-1.5 text-sm">
-              <Play className="w-4 h-4 text-amber-600 fill-amber-600" />
-              <span>কিভাবে Supabase-এ রান করবেন (মাত্র ৩টি সহজ ধাপ):</span>
-            </h5>
-            <ol className="list-decimal list-inside space-y-1.5 text-slate-800 font-medium leading-relaxed">
-              <li>
-                উপরের <strong>"📋 Copy Full SQL Script"</strong> বাটনে ক্লিক করে পুরো কোডটি কপি করে নিন (অথবা <strong>.sql ফাইল ডাউনলোড</strong> করুন)।
-              </li>
-              <li>
-                <a
-                  href="https://supabase.com/dashboard"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-indigo-600 font-bold underline hover:text-indigo-800"
-                >
-                  Supabase Dashboard
-                </a>
-                -এ যান ➔ বাম পাশের মেনু থেকে <strong>SQL Editor</strong> (<code>&gt;_</code> আইকন)-এ ক্লিক করুন ➔ <strong>+ New Query</strong> বাটনে চাপ দিন।
-              </li>
-              <li>
-                কপি করা কোডটি পেস্ট করে নিচে ডানপাশের <strong>'Run'</strong> (বা কিবোর্ডের <kbd className="px-1.5 py-0.5 bg-slate-200 rounded font-mono text-[10px]">Ctrl + Enter</kbd>) চাপুন। সাথে সাথে সব ডেটা লোড হয়ে যাবে!
-              </li>
-            </ol>
-          </div>
-
-          {/* SQL Text Area Preview */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-              <span>SQL Script Output Preview:</span>
-              <span className="font-mono text-slate-400">
-                {generatedSqlText ? `${(generatedSqlText.length / 1024).toFixed(1)} KB` : 'No SQL Generated Yet'}
-              </span>
-            </div>
-
-            {generatedSqlText ? (
-              <pre className="p-4 bg-slate-950 text-emerald-400 font-mono text-[11px] rounded-2xl overflow-x-auto max-h-[450px] leading-relaxed border border-slate-800">
-                {generatedSqlText}
-              </pre>
-            ) : (
-              <div className="p-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-300 space-y-3">
-                <Sparkles className="w-8 h-8 text-slate-400 mx-auto" />
-                <p className="text-xs text-slate-500 font-medium">
-                  এখনো কোনো SQL তৈরি করা হয়নি। আপনার ডাউনলোড করা JSON ফাইলটি দিয়ে SQL তৈরি করতে পারেন অথবা সরাসরি তৈরি করতে পারেন।
-                </p>
-                <div className="flex items-center justify-center gap-3 pt-2">
-                  <input
-                    type="file"
-                    accept=".json,application/json"
-                    onChange={handleConvertJsonFileToSql}
-                    className="hidden"
-                    id="direct-json-to-sql-file-input"
-                  />
-                  <label
-                    htmlFor="direct-json-to-sql-file-input"
-                    className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl cursor-pointer shadow-sm flex items-center gap-1.5"
-                  >
-                    <Archive className="w-4 h-4" />
-                    <span>Select Downloaded JSON File</span>
-                  </label>
-
-                  <button
-                    type="button"
-                    onClick={handleGenerateSqlFromFirebase}
-                    className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl cursor-pointer shadow-sm flex items-center gap-1.5"
-                  >
-                    <Zap className="w-4 h-4" />
-                    <span>Generate Directly from Live DB</span>
-                  </button>
-                </div>
+          {/* MULTI-PART SQL TABS & CONTROLS */}
+          {sqlParts ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                  ছোট ছোট ভাগে ভাগ করা SQL কুয়েরিসমূহ:
+                </span>
+                <span className="text-xs text-slate-500">
+                  যেকোনো পার্ট কপি করে Supabase SQL Editor-এ রান করুন
+                </span>
               </div>
-            )}
-          </div>
+
+              {/* Part Navigation Buttons */}
+              <div className="flex flex-wrap gap-2">
+                {/* Part 1 */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedSqlTab('part1')}
+                  className={`px-3.5 py-2 text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+                    selectedSqlTab === 'part1'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <span className="w-4 h-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center font-black">1</span>
+                  <span>Part 1: Schema & Users ({jsonUploadStats?.users || 0} Users)</span>
+                </button>
+
+                {/* Part 2 Course Chunks */}
+                {sqlParts.courseChunks.map((chunk, idx) => {
+                  const tabKey = `part2_${idx}`;
+                  return (
+                    <button
+                      key={tabKey}
+                      type="button"
+                      onClick={() => setSelectedSqlTab(tabKey)}
+                      className={`px-3.5 py-2 text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+                        selectedSqlTab === tabKey
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      <span className="w-4 h-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center font-black">2.{idx + 1}</span>
+                      <span>Courses Batch {idx + 1} ({chunk.count} Courses)</span>
+                    </button>
+                  );
+                })}
+
+                {/* Part 3 */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedSqlTab('part3')}
+                  className={`px-3.5 py-2 text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+                    selectedSqlTab === 'part3'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <span className="w-4 h-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center font-black">3</span>
+                  <span>Part 3: Requests & Questions</span>
+                </button>
+
+                {/* Full SQL */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedSqlTab('full')}
+                  className={`px-3.5 py-2 text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+                    selectedSqlTab === 'full'
+                      ? 'bg-slate-800 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <span>Full Combined SQL</span>
+                </button>
+              </div>
+
+              {/* Active Part Action Bar */}
+              {(() => {
+                let currentSql = '';
+                let currentTitle = '';
+                let currentDescription = '';
+                let currentPartId = selectedSqlTab;
+
+                if (selectedSqlTab === 'part1') {
+                  currentSql = sqlParts.part1;
+                  currentTitle = 'Part 1: Schema, Tables, RLS Policies, Settings & Users';
+                  currentDescription = 'প্রথমে এই অংশটি রান করুন। এটি সব টেবিল, পারমিশন রুলস এবং সমস্ত ইউজার প্রোফাইল ও লার্নিং প্রগ্রেস লোড করবে। (সাইজ: ~' + (currentSql.length / 1024).toFixed(1) + ' KB)';
+                } else if (selectedSqlTab.startsWith('part2_')) {
+                  const idx = parseInt(selectedSqlTab.replace('part2_', ''), 10);
+                  const chunk = sqlParts.courseChunks[idx];
+                  if (chunk) {
+                    currentSql = chunk.sql;
+                    currentTitle = chunk.label;
+                    currentDescription = `এই ব্যাচে ${chunk.count}টি কোর্সের সমস্ত ভোকাবুলারি শব্দ রয়েছে। (সাইজ: ~${(currentSql.length / 1024).toFixed(1)} KB)`;
+                  }
+                } else if (selectedSqlTab === 'part3') {
+                  currentSql = sqlParts.part3;
+                  currentTitle = 'Part 3: Payment Records & Game Question Banks';
+                  currentDescription = 'এটি সমস্ত bKash পেমেন্ট রিকোয়েস্ট এবং কুইজ প্রশ্ন লোড করবে। (সাইজ: ~' + (currentSql.length / 1024).toFixed(1) + ' KB)';
+                } else {
+                  currentSql = sqlParts.fullSql;
+                  currentTitle = 'Full Database Combined SQL Script';
+                  currentDescription = 'সম্পূর্ণ ডেটাবেজের একীভূত SQL কোড। (সাইজ: ~' + (currentSql.length / 1024).toFixed(1) + ' KB)';
+                }
+
+                return (
+                  <div className="space-y-3">
+                    <div className="p-4 bg-slate-100 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-slate-200">
+                      <div>
+                        <h6 className="font-extrabold text-slate-800 text-xs sm:text-sm">{currentTitle}</h6>
+                        <p className="text-[11px] text-slate-500 mt-0.5">{currentDescription}</p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleCopyPartSql(currentSql, currentPartId)}
+                          className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-md"
+                        >
+                          {copiedPartIndex === currentPartId ? (
+                            <>
+                              <Check className="w-4 h-4 text-emerald-300" />
+                              <span>কপি হয়েছে!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-4 h-4" />
+                              <span>📋 Copy Selected Part</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => downloadGeneratedSql(currentSql, `${currentPartId}.sql`)}
+                          className="px-3.5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>.sql</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* SQL Preview Box */}
+                    <pre className="p-4 bg-slate-950 text-emerald-400 font-mono text-[11px] rounded-2xl overflow-x-auto max-h-[380px] leading-relaxed border border-slate-800">
+                      {currentSql}
+                    </pre>
+                  </div>
+                );
+              })()}
+            </div>
+          ) : (
+            <div className="p-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-300 space-y-3">
+              <Sparkles className="w-8 h-8 text-slate-400 mx-auto" />
+              <p className="text-xs text-slate-500 font-medium">
+                এখনো কোনো SQL তৈরি করা হয়নি। আপনার ডাউনলোড করা JSON ফাইলটি দিয়ে ছোট ছোট পার্টে SQL তৈরি করতে পারেন অথবা লাইভ ডেটাবেজ থেকে তৈরি করতে পারেন।
+              </p>
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={handleConvertJsonFileToSql}
+                  className="hidden"
+                  id="direct-json-to-sql-file-input"
+                />
+                <label
+                  htmlFor="direct-json-to-sql-file-input"
+                  className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl cursor-pointer shadow-sm flex items-center gap-1.5"
+                >
+                  <Archive className="w-4 h-4" />
+                  <span>Select Downloaded JSON File</span>
+                </label>
+
+                <button
+                  type="button"
+                  onClick={handleGenerateSqlFromFirebase}
+                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl cursor-pointer shadow-sm flex items-center gap-1.5"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>Generate Directly from Live DB</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
