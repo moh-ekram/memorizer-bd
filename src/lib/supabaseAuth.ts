@@ -51,11 +51,13 @@ export function normalizeSupabaseUser(user: any): AppUser | null {
  */
 export async function signInWithGoogle(options?: { redirectTo?: string }) {
   const redirectTo = options?.redirectTo || window.location.origin;
+  const isIframe = typeof window !== 'undefined' && window.self !== window.top;
   
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo,
+      skipBrowserRedirect: isIframe,
       queryParams: {
         access_type: 'offline',
         prompt: 'select_account'
@@ -66,6 +68,21 @@ export async function signInWithGoogle(options?: { redirectTo?: string }) {
   if (error) {
     console.error('Supabase Google Sign-In Error:', error);
     throw error;
+  }
+
+  if (isIframe && data?.url) {
+    const width = 500;
+    const height = 650;
+    const left = window.screen.width / 2 - width / 2;
+    const top = window.screen.height / 2 - height / 2;
+    const popup = window.open(
+      data.url,
+      'supabase_oauth_popup',
+      `width=${width},height=${height},top=${top},left=${left},status=no,resizable=yes,scrollbars=yes`
+    );
+    if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+      window.open(data.url, '_blank');
+    }
   }
 
   return data;
