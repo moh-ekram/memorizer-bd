@@ -1,0 +1,50 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "users",
+      "fieldPath": "progress",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "users",
+      "fieldPath": "synonymProgress",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "users",
+      "fieldPath": "blankProgress",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "users",
+      "fieldPath": "oooProgress",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "users",
+      "fieldPath": "analogyProgress",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "users",
+      "fieldPath": "flashcardPositions",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "users",
+      "fieldPath": "goal",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "users",
+      "fieldPath": "folders",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "users",
+      "fieldPath": "settings",
+      "indexes": []
+    }
+  ]
+}
