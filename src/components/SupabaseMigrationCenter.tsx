@@ -104,7 +104,7 @@ export default function SupabaseMigrationCenter() {
   const [generatedSqlText, setGeneratedSqlText] = useState<string>('');
   const [sqlParts, setSqlParts] = useState<{
     part1: string;
-    courseChunks: { label: string; sql: string; count: number }[];
+    courseChunks: { label: string; sql: string; count: number; courseTitle: string }[];
     part3: string;
     fullSql: string;
   } | null>(null);
@@ -339,52 +339,82 @@ CREATE POLICY "Public Write mcq_questions" ON public.mcq_questions FOR ALL USING
       part1 += `INSERT INTO public.users (id, email, display_name, role, is_approved, status, progress, flashcard_positions, folders, goal, settings, synonym_progress, blank_progress, ooo_progress, analogy_progress, enrolled_course_ids, active_course_id, quiz_score, quiz_taken, balance, updated_at) VALUES (${escapeSql(uId)}, ${escapeSql(email)}, ${escapeSql(name)}, ${escapeSql(role)}, ${isApproved}, ${escapeSql(status)}, ${toJsonbDollar(prog)}, ${toJsonbDollar(flashPos)}, ${toJsonbDollar(folders)}, ${toJsonbDollar(goal)}, ${toJsonbDollar(settings)}, ${toJsonbDollar(synProg)}, ${toJsonbDollar(blankProg)}, ${toJsonbDollar(oooProg)}, ${toJsonbDollar(analogyProg)}, ${toTextArray(enrolled)}, ${escapeSql(activeC)}, ${qScore}, ${qTaken}, ${balance}, NOW()) ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name, role = EXCLUDED.role, is_approved = EXCLUDED.is_approved, status = EXCLUDED.status, progress = EXCLUDED.progress, flashcard_positions = EXCLUDED.flashcard_positions, folders = EXCLUDED.folders, goal = EXCLUDED.goal, settings = EXCLUDED.settings, synonym_progress = EXCLUDED.synonym_progress, blank_progress = EXCLUDED.blank_progress, ooo_progress = EXCLUDED.ooo_progress, analogy_progress = EXCLUDED.analogy_progress, enrolled_course_ids = EXCLUDED.enrolled_course_ids, active_course_id = EXCLUDED.active_course_id, quiz_score = EXCLUDED.quiz_score, quiz_taken = EXCLUDED.quiz_taken, balance = EXCLUDED.balance, updated_at = NOW();\n`;
     }
 
-    // --- PART 2: COURSES CHUNKS (3-4 courses per chunk so it never exceeds SQL editor size) ---
+    // --- PART 2: COURSES CHUNKS (1 course per batch so even massive courses with thousands of words never exceed SQL editor size) ---
     const courseEntries = Object.entries(coursesObj);
-    const courseChunks: { label: string; sql: string; count: number }[] = [];
-    const CHUNK_SIZE = 4;
+    const courseChunks: { label: string; sql: string; count: number; courseTitle: string }[] = [];
 
-    for (let i = 0; i < courseEntries.length; i += CHUNK_SIZE) {
-      const slice = courseEntries.slice(i, i + CHUNK_SIZE);
-      const chunkIndex = Math.floor(i / CHUNK_SIZE) + 1;
-      const totalChunks = Math.ceil(courseEntries.length / CHUNK_SIZE);
+    courseEntries.forEach(([cId, cVal]: [string, any], idx: number) => {
+      const title = cVal.title || cId;
+      const desc = cVal.description || '';
+      const category = cVal.category || 'General';
+      const level = cVal.level || 'All Levels';
+      const price = typeof cVal.price === 'number' ? cVal.price : 0.0;
+      const isFree = !!cVal.isDefault || !cVal.price;
+      const isPub = cVal.hidden !== true;
+      const thumb = cVal.thumbnail || '';
+      const createdBy = cVal.createdBy || 'admin@gmail.com';
+      const words = Array.isArray(cVal.words) ? cVal.words : [];
+      const stories = Array.isArray(cVal.stories) ? cVal.stories : [];
+      const articles = Array.isArray(cVal.articles) ? cVal.articles : [];
+      const meta = {
+        placeLabels: cVal.placeLabels || {},
+        order: cVal.order || 0,
+        allowedUsers: cVal.allowedUsers || [],
+        enabledGames: cVal.enabledGames || {}
+      };
 
-      let chunkSql = `-- ==============================================================================\n-- PART 2 - BATCH ${chunkIndex}/${totalChunks}: COURSES & VOCABULARIES (${slice.map(([k]) => k).join(', ')})\n-- ==============================================================================\n`;
-
-      for (const [cId, cVal] of slice as any) {
-        const title = cVal.title || cId;
-        const desc = cVal.description || '';
-        const category = cVal.category || 'General';
-        const level = cVal.level || 'All Levels';
-        const price = typeof cVal.price === 'number' ? cVal.price : 0.0;
-        const isFree = !!cVal.isDefault || !cVal.price;
-        const isPub = cVal.hidden !== true;
-        const thumb = cVal.thumbnail || '';
-        const createdBy = cVal.createdBy || 'admin@gmail.com';
-        const words = Array.isArray(cVal.words) ? cVal.words : [];
-        const stories = Array.isArray(cVal.stories) ? cVal.stories : [];
-        const articles = Array.isArray(cVal.articles) ? cVal.articles : [];
-        const meta = {
-          placeLabels: cVal.placeLabels || {},
-          order: cVal.order || 0,
-          allowedUsers: cVal.allowedUsers || [],
-          enabledGames: cVal.enabledGames || {}
-        };
-
-        chunkSql += `INSERT INTO public.courses (id, title, description, category, level, price, is_free, is_published, thumbnail_url, created_by, words, stories, articles, metadata, updated_at) VALUES (${escapeSql(cId)}, ${escapeSql(title)}, ${escapeSql(desc)}, ${escapeSql(category)}, ${escapeSql(level)}, ${price}, ${isFree}, ${isPub}, ${escapeSql(thumb)}, ${escapeSql(createdBy)}, ${toJsonbDollar(words)}, ${toJsonbDollar(stories)}, ${toJsonbDollar(articles)}, ${toJsonbDollar(meta)}, NOW()) ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description, category = EXCLUDED.category, level = EXCLUDED.level, price = EXCLUDED.price, is_free = EXCLUDED.is_free, is_published = EXCLUDED.is_published, thumbnail_url = EXCLUDED.thumbnail_url, words = EXCLUDED.words, stories = EXCLUDED.stories, articles = EXCLUDED.articles, metadata = EXCLUDED.metadata, updated_at = NOW();\n\n`;
-      }
+      let chunkSql = `-- ==============================================================================
+-- PART 2.${idx + 1}: COURSE "${title}" (${words.length} Words)
+-- ==============================================================================
+INSERT INTO public.courses (
+  id, title, description, category, level, price, is_free, is_published, thumbnail_url, created_by, words, stories, articles, metadata, updated_at
+) VALUES (
+  ${escapeSql(cId)},
+  ${escapeSql(title)},
+  ${escapeSql(desc)},
+  ${escapeSql(category)},
+  ${escapeSql(level)},
+  ${price},
+  ${isFree},
+  ${isPub},
+  ${escapeSql(thumb)},
+  ${escapeSql(createdBy)},
+  ${toJsonbDollar(words)},
+  ${toJsonbDollar(stories)},
+  ${toJsonbDollar(articles)},
+  ${toJsonbDollar(meta)},
+  NOW()
+) ON CONFLICT (id) DO UPDATE SET 
+  title = EXCLUDED.title,
+  description = EXCLUDED.description,
+  category = EXCLUDED.category,
+  level = EXCLUDED.level,
+  price = EXCLUDED.price,
+  is_free = EXCLUDED.is_free,
+  is_published = EXCLUDED.is_published,
+  thumbnail_url = EXCLUDED.thumbnail_url,
+  words = EXCLUDED.words,
+  stories = EXCLUDED.stories,
+  articles = EXCLUDED.articles,
+  metadata = EXCLUDED.metadata,
+  updated_at = NOW();
+`;
 
       courseChunks.push({
-        label: `Part 2 - Batch ${chunkIndex} of ${totalChunks} (${slice.length} Courses)`,
+        label: `Part 2.${idx + 1}: ${title} (${words.length} words)`,
+        courseTitle: title,
         sql: chunkSql,
-        count: slice.length
+        count: 1
       });
-    }
+    });
 
-    // --- PART 3: ACCESS REQUESTS & QUESTION BANKS ---
+    // Ensure missing columns are gracefully added if table was previously created with older schema
     let part3 = `-- ==============================================================================
 -- PART 3 of 3: ACCESS REQUESTS, PAYMENTS & QUESTION BANKS
 -- ==============================================================================
+-- Ensure columns exist in access_requests table
+ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS course_ids TEXT[] DEFAULT ARRAY['bank-bcs-gre']::TEXT[];
+ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 `;
 
     for (const [rId, rVal] of Object.entries(requestsObj) as any) {
@@ -1754,14 +1784,14 @@ CREATE POLICY "Public Write mcq_questions" ON public.mcq_questions FOR ALL USING
                       key={tabKey}
                       type="button"
                       onClick={() => setSelectedSqlTab(tabKey)}
-                      className={`px-3.5 py-2 text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+                      className={`px-3 py-1.5 text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
                         selectedSqlTab === tabKey
                           ? 'bg-indigo-600 text-white shadow-xs'
                           : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                       }`}
                     >
                       <span className="w-4 h-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center font-black">2.{idx + 1}</span>
-                      <span>Courses Batch {idx + 1} ({chunk.count} Courses)</span>
+                      <span className="max-w-[140px] truncate" title={chunk.courseTitle}>{chunk.courseTitle}</span>
                     </button>
                   );
                 })}
@@ -1811,7 +1841,7 @@ CREATE POLICY "Public Write mcq_questions" ON public.mcq_questions FOR ALL USING
                   if (chunk) {
                     currentSql = chunk.sql;
                     currentTitle = chunk.label;
-                    currentDescription = `এই ব্যাচে ${chunk.count}টি কোর্সের সমস্ত ভোকাবুলারি শব্দ রয়েছে। (সাইজ: ~${(currentSql.length / 1024).toFixed(1)} KB)`;
+                    currentDescription = `"${chunk.courseTitle}" কোর্সের সমস্ত ভোকাবুলারি শব্দ ও ডেটা। (সাইজ: ~${(currentSql.length / 1024).toFixed(1)} KB)`;
                   }
                 } else if (selectedSqlTab === 'part3') {
                   currentSql = sqlParts.part3;
