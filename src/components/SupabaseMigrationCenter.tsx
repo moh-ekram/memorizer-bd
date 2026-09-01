@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Database,
   Cloud,
@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   RefreshCw,
   Download,
+  Upload,
   Copy,
   Check,
   ShieldCheck,
@@ -14,6 +15,7 @@ import {
   Server,
   Play,
   FileCode,
+  FileText,
   Users,
   BookOpen,
   HelpCircle,
@@ -21,10 +23,13 @@ import {
   Sliders,
   Terminal,
   Clock,
-  Sparkles
+  Sparkles,
+  Layers,
+  Archive,
+  ArrowUpCircle
 } from 'lucide-react';
 import { db } from '../lib/firebase';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_RLS_SQL_SCRIPT } from './SupabaseRlsModal';
 
@@ -90,8 +95,18 @@ export default function SupabaseMigrationCenter() {
   });
 
   const [copiedSql, setCopiedSql] = useState(false);
-  const [activeTab, setActiveTab] = useState<'migration' | 'sql' | 'export'>('migration');
+  const [activeTab, setActiveTab] = useState<'migration' | 'json-backup' | 'sql'>('migration');
   const [isExportingJson, setIsExportingJson] = useState(false);
+  const [isRestoringJson, setIsRestoringJson] = useState(false);
+  const [jsonUploadStats, setJsonUploadStats] = useState<{
+    users: number;
+    courses: number;
+    access_requests: number;
+    system_settings: number;
+    fileName?: string;
+  } | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addLog = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     const time = new Date().toLocaleTimeString();
@@ -136,7 +151,6 @@ export default function SupabaseMigrationCenter() {
 
       const { data, error } = await client.from('courses').select('id').limit(1);
       if (error && error.code !== 'PGRST116') {
-        // If courses table not created yet, check if client reached database
         const pingTest = await client.from('users').select('id').limit(1);
         if (pingTest.error && !pingTest.error.message.includes('relation "public.users" does not exist')) {
           throw new Error(pingTest.error.message);
@@ -167,17 +181,15 @@ export default function SupabaseMigrationCenter() {
     setIsMigrating(true);
     setProgressPercent(5);
     setLogs([]);
-    addLog('🚀 Zero-Data-Loss Migration process started...', 'info');
+    addLog('🚀 Zero-Data-Loss Live Cloud Migration started...', 'info');
 
     const client = createClient(supabaseUrl.trim(), supabaseKey.trim(), {
       auth: { persistSession: false, autoRefreshToken: false }
     });
 
     try {
-      // -------------------------------------------------------------
-      // PHASE 1: Migrate System Settings
-      // -------------------------------------------------------------
-      setCurrentStep('1/6: System Settings & Platform Configurations Migration...');
+      // 1. Settings
+      setCurrentStep('1/6: System Settings Migration...');
       setProgressPercent(15);
       addLog('📦 [1/6] Fetching and migrating System Settings...', 'info');
 
@@ -197,22 +209,17 @@ export default function SupabaseMigrationCenter() {
         addLog(`⚠️ Note on system_settings: ${err.message}`, 'warning');
       }
 
-      // -------------------------------------------------------------
-      // PHASE 2: Migrate Courses, Words & Articles
-      // -------------------------------------------------------------
-      setCurrentStep('2/6: Courses, Vocabularies & Articles Migration...');
+      // 2. Courses
+      setCurrentStep('2/6: Courses & Vocabularies Migration...');
       setProgressPercent(30);
       addLog('📦 [2/6] Reading Courses from Firebase Firestore...', 'info');
 
       const coursesSnap = await getDocs(collection(db, 'courses'));
       setStats((prev) => ({ ...prev, coursesTotal: coursesSnap.size }));
-      addLog(`Found ${coursesSnap.size} courses to migrate.`, 'info');
-
       let courseCount = 0;
       for (const docSnap of coursesSnap.docs) {
         const cData = docSnap.data();
         const courseId = docSnap.id;
-
         const payload = {
           id: courseId,
           title: cData.title || courseId,
@@ -238,7 +245,7 @@ export default function SupabaseMigrationCenter() {
 
         const { error } = await client.from('courses').upsert(payload, { onConflict: 'id' });
         if (error) {
-          addLog(`❌ Failed to migrate Course "${courseId}": ${error.message}`, 'error');
+          addLog(`❌ Failed course "${courseId}": ${error.message}`, 'error');
         } else {
           courseCount++;
           setStats((prev) => ({ ...prev, coursesDone: courseCount }));
@@ -246,13 +253,10 @@ export default function SupabaseMigrationCenter() {
         }
       }
 
-      // -------------------------------------------------------------
-      // PHASE 3: Migrate Question Banks (MCQ, Blank, Analogy, OddOneOut)
-      // -------------------------------------------------------------
-      setCurrentStep('3/6: Interactive Game Question Banks Migration...');
+      // 3. Questions
+      setCurrentStep('3/6: Interactive Question Banks Migration...');
       setProgressPercent(50);
       addLog('📦 [3/6] Migrating MCQ, Blank, Analogy, and Odd One Out questions...', 'info');
-
       let totalQuestions = 0;
       const questionTables = [
         { col: 'odd_one_out_questions', tbl: 'odd_one_out_questions' },
@@ -278,24 +282,18 @@ export default function SupabaseMigrationCenter() {
           if (qSnap.size > 0) {
             addLog(`✅ Migrated ${qSnap.size} items from "${item.col}".`, 'success');
           }
-        } catch (e: any) {
-          // collection might not exist, skip silently
-        }
+        } catch (e: any) {}
       }
       setStats((prev) => ({ ...prev, questionsTotal: totalQuestions, questionsDone: totalQuestions }));
 
-      // -------------------------------------------------------------
-      // PHASE 4: Migrate Access Requests & bKash Transactions
-      // -------------------------------------------------------------
+      // 4. Access Requests
       setCurrentStep('4/6: bKash Transactions & Course Enrollments Migration...');
       setProgressPercent(70);
       addLog('📦 [4/6] Migrating Access Requests and Payment Logs...', 'info');
-
       let reqCount = 0;
       try {
         const reqSnap = await getDocs(collection(db, 'access_requests'));
         setStats((prev) => ({ ...prev, requestsTotal: reqSnap.size }));
-
         for (const rDoc of reqSnap.docs) {
           const rData = rDoc.data();
           await client.from('access_requests').upsert({
@@ -319,22 +317,16 @@ export default function SupabaseMigrationCenter() {
         addLog(`⚠️ Note on access_requests: ${err.message}`, 'warning');
       }
 
-      // -------------------------------------------------------------
-      // PHASE 5: Migrate Users & Student Progress
-      // -------------------------------------------------------------
+      // 5. Users
       setCurrentStep('5/6: User Profiles & Study Progress Migration...');
       setProgressPercent(85);
       addLog('📦 [5/6] Reading Users and Learning Progress from Firebase...', 'info');
-
       const usersSnap = await getDocs(collection(db, 'users'));
       setStats((prev) => ({ ...prev, usersTotal: usersSnap.size }));
-      addLog(`Found ${usersSnap.size} user accounts to migrate.`, 'info');
-
       let userCount = 0;
       for (const uDoc of usersSnap.docs) {
         const uData = uDoc.data();
         const userId = uDoc.id;
-
         const payload = {
           id: userId,
           email: uData.email || `${userId}@user.local`,
@@ -371,9 +363,7 @@ export default function SupabaseMigrationCenter() {
       }
       addLog(`✅ Successfully migrated ${userCount}/${usersSnap.size} user profiles with full progress.`, 'success');
 
-      // -------------------------------------------------------------
-      // PHASE 6: Complete
-      // -------------------------------------------------------------
+      // 6. Finish
       setCurrentStep('Migration Completed Successfully!');
       setProgressPercent(100);
       addLog('🎉🎉 FULL ZERO-DATA-LOSS MIGRATION COMPLETED SUCCESSFULLY! 🎉🎉', 'success');
@@ -387,62 +377,249 @@ export default function SupabaseMigrationCenter() {
     }
   };
 
-  // Export Full JSON Backup
+  // EXPORT ALL DATA TO 1 COMPLETE JSON FILE
   const exportFullJsonBackup = async () => {
     setIsExportingJson(true);
-    addLog('📥 Generating complete JSON export from Firebase...', 'info');
+    addLog('📥 Generating complete JSON snapshot of all Firebase Firestore data...', 'info');
 
     try {
       const backupData: Record<string, any> = {
-        exportedAt: new Date().toISOString(),
+        meta: {
+          exportVersion: '2.0',
+          appName: 'Vocabulary Memorizer',
+          exportedAt: new Date().toISOString(),
+          description: 'Complete database export for Supabase transfer'
+        },
         users: {},
         courses: {},
         access_requests: {},
         system_settings: {},
-        questions: {}
+        odd_one_out_questions: {},
+        blank_questions: {},
+        word_analogy_questions: {},
+        mcq_questions: {}
       };
 
-      // Users
+      // 1. Users
       const usersSnap = await getDocs(collection(db, 'users'));
       usersSnap.forEach((d) => {
         backupData.users[d.id] = d.data();
       });
+      addLog(`Fetched ${usersSnap.size} Users with progress data.`, 'info');
 
-      // Courses
+      // 2. Courses
       const coursesSnap = await getDocs(collection(db, 'courses'));
       coursesSnap.forEach((d) => {
         backupData.courses[d.id] = d.data();
       });
+      addLog(`Fetched ${coursesSnap.size} Courses with full vocabularies.`, 'info');
 
-      // Access Requests
+      // 3. Access Requests
       const reqSnap = await getDocs(collection(db, 'access_requests'));
       reqSnap.forEach((d) => {
         backupData.access_requests[d.id] = d.data();
       });
+      addLog(`Fetched ${reqSnap.size} Payment & Access requests.`, 'info');
 
-      // System Settings
+      // 4. System Settings
       const sysSnap = await getDocs(collection(db, 'system_settings'));
       sysSnap.forEach((d) => {
         backupData.system_settings[d.id] = d.data();
       });
 
+      // 5. Question Banks
+      const questionCols = [
+        'odd_one_out_questions',
+        'blank_questions',
+        'word_analogy_questions',
+        'mcq_questions'
+      ];
+      for (const colName of questionCols) {
+        try {
+          const qSnap = await getDocs(collection(db, colName));
+          qSnap.forEach((d) => {
+            backupData[colName][d.id] = d.data();
+          });
+        } catch (e) {}
+      }
+
       const jsonStr = JSON.stringify(backupData, null, 2);
       const blob = new Blob([jsonStr], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
+      const dateStr = new Date().toISOString().slice(0, 10);
       a.href = url;
-      a.download = `vocabulary_firebase_full_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `vocabulary_database_complete_backup_${dateStr}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      addLog('✅ Complete JSON Backup downloaded successfully!', 'success');
+      addLog(`✅ Complete JSON Snapshot (${(jsonStr.length / 1024).toFixed(1)} KB) downloaded successfully!`, 'success');
+      alert(`✅ সম্পূর্ণ ডেটাবেজের JSON ফাইল ডাউনলোড সম্পন্ন হয়েছে!\n\nফাইলে ${usersSnap.size} জন ইউজার, ${coursesSnap.size} টি কোর্স এবং পেমেন্ট হিস্ট্রি রয়েছে।`);
     } catch (err: any) {
       addLog(`❌ Backup download failed: ${err.message}`, 'error');
       alert(`Backup error: ${err.message}`);
     } finally {
       setIsExportingJson(false);
+    }
+  };
+
+  // UPLOAD JSON FILE TO SUPABASE
+  const handleUploadJsonToSupabase = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!supabaseUrl.trim() || !supabaseKey.trim()) {
+      alert('অনুগ্রহ করে Supabase Project URL এবং API Key (Service Role Key) প্রদান করুন।');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    try {
+      setIsRestoringJson(true);
+      addLog(`📂 Reading JSON file: ${file.name}...`, 'info');
+      const fileText = await file.text();
+      const jsonData = JSON.parse(fileText);
+
+      const usersObj = jsonData.users || {};
+      const coursesObj = jsonData.courses || {};
+      const requestsObj = jsonData.access_requests || {};
+      const settingsObj = jsonData.system_settings || {};
+
+      const userCount = Object.keys(usersObj).length;
+      const courseCount = Object.keys(coursesObj).length;
+      const reqCount = Object.keys(requestsObj).length;
+      const settingCount = Object.keys(settingsObj).length;
+
+      setJsonUploadStats({
+        users: userCount,
+        courses: courseCount,
+        access_requests: reqCount,
+        system_settings: settingCount,
+        fileName: file.name
+      });
+
+      addLog(`Found in JSON: ${userCount} users, ${courseCount} courses, ${reqCount} requests, ${settingCount} settings.`, 'info');
+
+      const confirmUpload = window.confirm(
+        `JSON ফাইল থেকে ${userCount} জন ইউজার, ${courseCount} টি কোর্স এবং ${reqCount} টি পেমেন্ট রেকর্ড Supabase-এ আপলোড করবেন?`
+      );
+      if (!confirmUpload) {
+        setIsRestoringJson(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+
+      const client = createClient(supabaseUrl.trim(), supabaseKey.trim(), {
+        auth: { persistSession: false, autoRefreshToken: false }
+      });
+
+      // 1. Settings
+      addLog('📦 [1/4] Uploading System Settings from JSON...', 'info');
+      for (const [key, val] of Object.entries(settingsObj)) {
+        await client.from('system_settings').upsert({
+          key,
+          value: val,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'key' });
+      }
+      addLog(`✅ Uploaded ${settingCount} System Settings.`, 'success');
+
+      // 2. Courses
+      addLog('📦 [2/4] Uploading Courses from JSON...', 'info');
+      let cDone = 0;
+      for (const [cId, cVal] of Object.entries(coursesObj) as any) {
+        const payload = {
+          id: cId,
+          title: cVal.title || cId,
+          description: cVal.description || '',
+          category: cVal.category || 'General',
+          level: cVal.level || 'All Levels',
+          price: typeof cVal.price === 'number' ? cVal.price : 0.0,
+          is_free: !!cVal.isDefault || !cVal.price,
+          is_published: cVal.hidden !== true,
+          thumbnail_url: cVal.thumbnail || '',
+          created_by: cVal.createdBy || 'admin@gmail.com',
+          words: Array.isArray(cVal.words) ? cVal.words : [],
+          stories: Array.isArray(cVal.stories) ? cVal.stories : [],
+          articles: Array.isArray(cVal.articles) ? cVal.articles : [],
+          metadata: {
+            placeLabels: cVal.placeLabels || {},
+            order: cVal.order || 0,
+            allowedUsers: cVal.allowedUsers || [],
+            enabledGames: cVal.enabledGames || {}
+          },
+          updated_at: new Date().toISOString()
+        };
+        const { error } = await client.from('courses').upsert(payload, { onConflict: 'id' });
+        if (!error) cDone++;
+      }
+      addLog(`✅ Uploaded ${cDone}/${courseCount} Courses with vocabularies to Supabase.`, 'success');
+
+      // 3. Requests
+      addLog('📦 [3/4] Uploading Access Requests from JSON...', 'info');
+      let rDone = 0;
+      for (const [rId, rVal] of Object.entries(requestsObj) as any) {
+        await client.from('access_requests').upsert({
+          id: rId,
+          user_id: rVal.userId || rVal.email || rId,
+          user_email: rVal.email || '',
+          course_id: rVal.courseId || 'bank-bcs-gre',
+          course_ids: Array.isArray(rVal.courseIds) ? rVal.courseIds : [rVal.courseId || 'bank-bcs-gre'],
+          bkash_number: rVal.bkashNumber || '',
+          transaction_id: rVal.trxId || rVal.transactionId || '',
+          amount: typeof rVal.amount === 'number' ? rVal.amount : 0.0,
+          status: rVal.status || 'pending',
+          created_at: rVal.createdAt || new Date().toISOString(),
+          expires_at: rVal.expiresAt || null
+        }, { onConflict: 'id' });
+        rDone++;
+      }
+      addLog(`✅ Uploaded ${rDone}/${reqCount} Access & Payment records.`, 'success');
+
+      // 4. Users
+      addLog('📦 [4/4] Uploading Users & Learning Progress from JSON...', 'info');
+      let uDone = 0;
+      for (const [uId, uVal] of Object.entries(usersObj) as any) {
+        const payload = {
+          id: uId,
+          email: uVal.email || `${uId}@user.local`,
+          display_name: uVal.displayName || uVal.name || '',
+          role: uVal.role || 'student',
+          is_approved: uVal.isApproved !== undefined ? uVal.isApproved : true,
+          status: uVal.status || 'active',
+          progress: uVal.progress || {},
+          flashcard_positions: uVal.flashcardPositions || {},
+          folders: Array.isArray(uVal.folders) ? uVal.folders : [],
+          goal: uVal.goal || { dailyTarget: 15, streak: 1 },
+          settings: uVal.settings || {},
+          synonym_progress: uVal.synonymProgress || {},
+          blank_progress: uVal.blankProgress || {},
+          ooo_progress: uVal.oooProgress || {},
+          analogy_progress: uVal.analogyProgress || {},
+          enrolled_course_ids: Array.isArray(uVal.enrolledCourseIds)
+            ? uVal.enrolledCourseIds
+            : ['bank-bcs-gre'],
+          active_course_id: uVal.activeCourseId || 'bank-bcs-gre',
+          quiz_score: typeof uVal.quizScore === 'number' ? uVal.quizScore : 0,
+          quiz_taken: typeof uVal.quizTaken === 'number' ? uVal.quizTaken : 0,
+          balance: typeof uVal.balance === 'number' ? uVal.balance : (uVal.walletBalance || 0.0),
+          updated_at: new Date().toISOString()
+        };
+        const { error } = await client.from('users').upsert(payload, { onConflict: 'id' });
+        if (!error) uDone++;
+      }
+      addLog(`✅ Uploaded ${uDone}/${userCount} User Profiles with full progress to Supabase!`, 'success');
+
+      alert(`🎉 JSON ফাইল থেকে সফলভাবে Supabase-এ সমস্ত ডেটা আপলোড সম্পন্ন হয়েছে!\n\nমোট: ${uDone} জন ইউজার, ${cDone} টি কোর্স।`);
+    } catch (err: any) {
+      console.error('JSON upload failed:', err);
+      addLog(`❌ JSON Upload error: ${err.message}`, 'error');
+      alert(`JSON আপলোডে ত্রুটি হয়েছে: ${err.message}`);
+    } finally {
+      setIsRestoringJson(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -462,7 +639,7 @@ export default function SupabaseMigrationCenter() {
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 rounded-3xl shadow-xl border border-indigo-800/50">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-emerald-500/20 border border-emerald-500/30 rounded-2xl text-emerald-400">
+            <div className="p-3.5 bg-emerald-500/20 border border-emerald-500/30 rounded-2xl text-emerald-400">
               <Cloud className="w-8 h-8" />
             </div>
             <div>
@@ -473,7 +650,7 @@ export default function SupabaseMigrationCenter() {
                 </span>
               </div>
               <p className="text-xs text-slate-300 font-medium mt-1">
-                Directly migrate all users, vocabulary progress, courses, payments, and question banks to Supabase with 1-click.
+                Direct Cloud Migration অথবা ১-ক্লিকে সম্পূর্ণ ডেটাবেজের JSON ব্যাকআপ ডাউনলোড ও সুপাবেজে আপলোড করুন।
               </p>
             </div>
           </div>
@@ -482,11 +659,11 @@ export default function SupabaseMigrationCenter() {
             <button
               onClick={exportFullJsonBackup}
               disabled={isExportingJson}
-              className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 border border-white/10 cursor-pointer"
-              title="Download full JSON backup of Firebase database"
+              className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-lg cursor-pointer"
+              title="Download entire database as single JSON file"
             >
-              <Download className="w-3.5 h-3.5 text-emerald-400" />
-              <span>{isExportingJson ? 'Exporting...' : 'Backup JSON'}</span>
+              <Download className="w-4 h-4 fill-slate-950" />
+              <span>{isExportingJson ? 'Exporting...' : 'Download Full JSON File'}</span>
             </button>
           </div>
         </div>
@@ -496,7 +673,7 @@ export default function SupabaseMigrationCenter() {
       <div className="flex border-b border-slate-200 gap-2 pb-2">
         <button
           onClick={() => setActiveTab('migration')}
-          className={`px-4 py-2 text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+          className={`px-4 py-2.5 text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
             activeTab === 'migration'
               ? 'bg-indigo-600 text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100'
@@ -507,8 +684,20 @@ export default function SupabaseMigrationCenter() {
         </button>
 
         <button
+          onClick={() => setActiveTab('json-backup')}
+          className={`px-4 py-2.5 text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'json-backup'
+              ? 'bg-emerald-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Archive className="w-4 h-4" />
+          <span>JSON File Download & Upload (সরাসরি ফাইল ট্রান্সফার)</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('sql')}
-          className={`px-4 py-2 text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+          className={`px-4 py-2.5 text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
             activeTab === 'sql'
               ? 'bg-indigo-600 text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100'
@@ -517,18 +706,6 @@ export default function SupabaseMigrationCenter() {
           <FileCode className="w-4 h-4" />
           <span>Supabase SQL Schema</span>
         </button>
-
-        <button
-          onClick={() => setActiveTab('export')}
-          className={`px-4 py-2 text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
-            activeTab === 'export'
-              ? 'bg-indigo-600 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Download className="w-4 h-4" />
-          <span>Offline Backup & Restore</span>
-        </button>
       </div>
 
       {/* TAB 1: LIVE 1-CLICK MIGRATION */}
@@ -536,7 +713,6 @@ export default function SupabaseMigrationCenter() {
         <div className="space-y-6">
           {/* Connection Status Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Source: Firebase */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-amber-50 rounded-xl text-amber-600">
@@ -553,7 +729,6 @@ export default function SupabaseMigrationCenter() {
               </span>
             </div>
 
-            {/* Target: Supabase */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-emerald-50 rounded-xl text-emerald-600">
@@ -791,7 +966,123 @@ export default function SupabaseMigrationCenter() {
         </div>
       )}
 
-      {/* TAB 2: SUPABASE SQL SCHEMA */}
+      {/* TAB 2: JSON BACKUP DOWNLOAD & RESTORE */}
+      {activeTab === 'json-backup' && (
+        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-6">
+          <div className="border-b border-slate-100 pb-4">
+            <h4 className="font-extrabold text-slate-800 text-base flex items-center gap-2">
+              <Archive className="w-5 h-5 text-emerald-600" />
+              <span>Full Database JSON Backup & Supabase Importer</span>
+            </h4>
+            <p className="text-xs text-slate-500 mt-1">
+              ১টি ক্লিকে Firebase-এর সব ডেটা (Users, Progress, Courses, Words, bKash Payments) একটি JSON ফাইলে সেভ করুন এবং সেই ফাইলটি সরাসরি Supabase-এ আপলোড করুন।
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* STEP 1: DOWNLOAD JSON */}
+            <div className="p-6 bg-gradient-to-br from-emerald-50/70 to-teal-50/40 rounded-2xl border border-emerald-200/80 space-y-4 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-black flex items-center justify-center">1</span>
+                  <h5 className="text-sm font-black text-slate-850">Firebase থেকে JSON ফাইল ডাউনলোড করুন</h5>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed pl-8">
+                  এই বাটনে ক্লিক করলে আপনার Firebase এর সব ইউজার প্রোফাইল, লার্নিং প্রগ্রেস, ফ্ল্যাশকার্ডের লাস্ট পজিশন ও কোর্স ডেটা একটি কমপ্লিট <code>.json</code> ফাইল হিসেবে আপনার পিসিতে ডাউনলোড হয়ে যাবে।
+                </p>
+              </div>
+
+              <div className="pt-2 pl-8">
+                <button
+                  type="button"
+                  onClick={exportFullJsonBackup}
+                  disabled={isExportingJson}
+                  className="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-2 shadow-md cursor-pointer disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>{isExportingJson ? 'ডাউনলোড তৈরি হচ্ছে...' : '📥 ডাউনলোড করুন Complete JSON Backup'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* STEP 2: UPLOAD TO SUPABASE */}
+            <div className="p-6 bg-gradient-to-br from-indigo-50/70 to-purple-50/40 rounded-2xl border border-indigo-200/80 space-y-4 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-black flex items-center justify-center">2</span>
+                  <h5 className="text-sm font-black text-slate-850">ডাউনলোডকৃত JSON ফাইল Supabase-এ আপলোড করুন</h5>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed pl-8">
+                  আপনার ডাউনলোড করা <code>vocabulary_database_complete_backup.json</code> ফাইলটি এখানে সিলেক্ট করলেই সমস্ত ডেটা কোনো ডাটা লস ছাড়াই Supabase-এর টেবিলে ইমপোর্ট হয়ে যাবে।
+                </p>
+              </div>
+
+              <div className="pt-2 pl-8">
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  ref={fileInputRef}
+                  onChange={handleUploadJsonToSupabase}
+                  disabled={isRestoringJson}
+                  className="hidden"
+                  id="json-backup-upload-input"
+                />
+                <label
+                  htmlFor="json-backup-upload-input"
+                  className={`w-full sm:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-2 shadow-md cursor-pointer ${
+                    isRestoringJson ? 'opacity-50 pointer-events-none' : ''
+                  }`}
+                >
+                  {isRestoringJson ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>সুপাবেজে আপলোড হচ্ছে...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowUpCircle className="w-4 h-4" />
+                      <span>📤 JSON ফাইল সিলেক্ট করে Supabase-এ আপলোড দিন</span>
+                    </>
+                  )}
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* JSON Summary Badge if available */}
+          {jsonUploadStats && (
+            <div className="p-4 bg-slate-900 text-white rounded-2xl flex flex-wrap items-center justify-between gap-4 text-xs">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-emerald-400" />
+                <span className="font-bold">Loaded File:</span>
+                <span className="font-mono text-emerald-300">{jsonUploadStats.fileName}</span>
+              </div>
+              <div className="flex items-center gap-4 text-slate-300">
+                <span>Users: <strong className="text-white">{jsonUploadStats.users}</strong></span>
+                <span>Courses: <strong className="text-white">{jsonUploadStats.courses}</strong></span>
+                <span>Requests: <strong className="text-white">{jsonUploadStats.access_requests}</strong></span>
+                <span>Settings: <strong className="text-white">{jsonUploadStats.system_settings}</strong></span>
+              </div>
+            </div>
+          )}
+
+          {/* Step-by-step Guide */}
+          <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-700 space-y-2">
+            <h6 className="font-bold text-slate-900 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <span>সহজ নির্দেশনা (JSON ফাইলের মাধ্যমে ট্রান্সফার):</span>
+            </h6>
+            <ol className="list-decimal list-inside space-y-1 text-slate-600 leading-relaxed">
+              <li>প্রথম ধাপে <strong>"ডাউনলোড করুন Complete JSON Backup"</strong> বাটনে চাপ দিন। আপনার ডিভাইসে একটি <code>.json</code> ফাইল সেভ হবে।</li>
+              <li>উপরে বা লাইভ ট্যাবে Supabase Credentials (URL ও Key) ঠিক আছে কিনা তা দেখে নিন।</li>
+              <li>দ্বিতীয় ধাপে <strong>"JSON ফাইল সিলেক্ট করে Supabase-এ আপলোড দিন"</strong> বাটনে ক্লিক করে ডাউনলোড করা ফাইলটি বেছে নিন।</li>
+              <li>১-২ মিনিটের মধ্যেই সব ইউজার প্রগ্রেস ও কোর্স Supabase ক্লাউডে সফলভাবে ট্রান্সফার হয়ে যাবে!</li>
+            </ol>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: SUPABASE SQL SCHEMA */}
       {activeTab === 'sql' && (
         <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
           <div className="flex items-center justify-between">
@@ -814,40 +1105,6 @@ export default function SupabaseMigrationCenter() {
           <pre className="p-4 bg-slate-900 text-emerald-400 font-mono text-xs rounded-xl overflow-x-auto max-h-[400px]">
             {SUPABASE_RLS_SQL_SCRIPT}
           </pre>
-        </div>
-      )}
-
-      {/* TAB 3: OFFLINE BACKUP */}
-      {activeTab === 'export' && (
-        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-6">
-          <div>
-            <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
-              <Download className="w-4 h-4 text-emerald-600" />
-              <span>Offline Database JSON Backup</span>
-            </h4>
-            <p className="text-xs text-slate-500 mt-1">
-              Download all collections (users, progress records, custom courses, and transactions) as a single JSON file.
-            </p>
-          </div>
-
-          <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h5 className="text-xs font-black text-slate-800">Complete JSON Snapshot</h5>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                Contains complete users with progress map, flashcard indices, course words, and question bank records.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={exportFullJsonBackup}
-              disabled={isExportingJson}
-              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer shadow-xs"
-            >
-              <Download className="w-4 h-4" />
-              <span>{isExportingJson ? 'Downloading...' : 'Download Full JSON Backup'}</span>
-            </button>
-          </div>
         </div>
       )}
     </div>
