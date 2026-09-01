@@ -67,9 +67,13 @@ export function mergeProgressRecords(
 }
 
 /**
- * Merge game progress records (synonyms, blank, ooo, analogy) by timestamp
+ * Merge game progress records (synonyms, blank, ooo, analogy, flashcard
+ * positions) by timestamp. Only requires `updatedAt` — callers whose records
+ * also carry a `correct` field (the quiz-style game progress types) satisfy
+ * this just as well, since TypeScript's structural typing allows passing
+ * objects with extra properties.
  */
-export function mergeGameProgressRecords<T extends { correct: boolean; updatedAt?: string }>(
+export function mergeGameProgressRecords<T extends { updatedAt?: string }>(
   base: Record<string, T> = {},
   incoming: Record<string, T> = {}
 ): Record<string, T> {

@@ -896,7 +896,7 @@ export default function App() {
             mergedAnalogy = mergeGameProgressRecords(mergedAnalogy, docData.analogyProgress);
           }
           if (docData.flashcardPositions && typeof docData.flashcardPositions === 'object') {
-            mergedFlashcardPositions = { ...mergedFlashcardPositions, ...docData.flashcardPositions };
+            mergedFlashcardPositions = mergeGameProgressRecords(mergedFlashcardPositions, docData.flashcardPositions);
           }
           if (docData.goal && typeof docData.goal === 'object') {
             mergedGoalObj = mergeStudyGoal(mergedGoalObj, docData.goal);
@@ -944,7 +944,7 @@ export default function App() {
         setAnalogyProgress(prev => mergeGameProgressRecords(prev, mergedAnalogy));
         if (Object.keys(mergedFlashcardPositions).length > 0) {
           setFlashcardPositions(prev => {
-            const next = { ...prev, ...mergedFlashcardPositions };
+            const next = mergeGameProgressRecords(prev, mergedFlashcardPositions);
             safeSetLocalStorage('vocab_memorizer_flashcard_positions', JSON.stringify(next));
             return next;
           });
@@ -1241,7 +1241,7 @@ export default function App() {
         }
         if (cloudData.flashcardPositions && typeof cloudData.flashcardPositions === 'object') {
           setFlashcardPositions(prev => {
-            const next = { ...prev, ...cloudData.flashcardPositions };
+            const next = mergeGameProgressRecords(prev, cloudData.flashcardPositions);
             safeSetLocalStorage('vocab_memorizer_flashcard_positions', JSON.stringify(next));
             return next;
           });
