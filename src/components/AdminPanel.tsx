@@ -54,6 +54,7 @@ import { CourseExamsSummaryView } from './CourseExamsSummaryView';
 import { SupabaseRlsModal } from './SupabaseRlsModal';
 import { TransactionDebugger, TransactionLogItem } from './TransactionDebugger';
 import SupabaseMigrationCenter from './SupabaseMigrationCenter';
+import SupabaseStatusBanner from './SupabaseStatusBanner';
 import { Code, Bug, TerminalSquare, AlertCircle, Cloud } from 'lucide-react';
 import { 
   Users, 
@@ -3496,6 +3497,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           </div>
         </div>
       </div>
+
+      {/* Real-time Backend Ping & Connection Diagnostic Banner */}
+      <SupabaseStatusBanner className="shadow-sm" />
 
       {/* Admin Tab Navigation - Single Line Icon & Label Bar */}
       <div className="bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-1 sm:gap-1.5 overflow-x-auto scrollbar-none">

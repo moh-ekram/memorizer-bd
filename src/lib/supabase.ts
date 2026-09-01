@@ -3,25 +3,131 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 // Default project fallback
 const DEFAULT_SUPABASE_URL = 'https://haaxqfhkucuimyvyksrj.supabase.co';
 
+export interface DatabaseEndpointInfo {
+  url: string;
+  urlSource: 'localStorage' | 'import.meta.env' | 'process.env' | 'default';
+  hasKey: boolean;
+  keySource: 'localStorage' | 'import.meta.env' | 'process.env' | 'none';
+  keyType: 'anon' | 'service_role' | 'placeholder' | 'none';
+  keyPreview: string;
+}
+
+/**
+ * Safely retrieve environment variable from either Vite's import.meta.env or Node's process.env
+ */
+function readEnvVar(name: string): string {
+  try {
+    if (typeof import.meta !== 'undefined' && (import.meta as any)?.env) {
+      const val = (import.meta as any).env[name];
+      if (val && typeof val === 'string' && val.trim()) return val.trim();
+    }
+  } catch (e) {}
+
+  try {
+    if (typeof process !== 'undefined' && process?.env) {
+      const val = process.env[name];
+      if (val && typeof val === 'string' && val.trim()) return val.trim();
+    }
+  } catch (e) {}
+
+  return '';
+}
+
 export function getStoredSupabaseUrl(): string {
+  // 1. Check LocalStorage (configured via Admin UI)
   if (typeof window !== 'undefined') {
     const local = localStorage.getItem('vocab_supabase_url') || localStorage.getItem('supabase_url');
     if (local && local.trim()) return local.trim();
   }
-  const env = (import.meta as any).env || {};
-  return (env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL).trim();
+
+  // 2. Check Environment Variables (Vite & Process)
+  const envUrl = 
+    readEnvVar('VITE_SUPABASE_URL') || 
+    readEnvVar('SUPABASE_URL') || 
+    readEnvVar('VITE_SUPABASE_PROJECT_URL') ||
+    readEnvVar('PUBLIC_SUPABASE_URL');
+
+  if (envUrl) return envUrl;
+
+  // 3. Fallback to default project URL
+  return DEFAULT_SUPABASE_URL;
 }
 
 export function getStoredSupabaseKey(): string {
+  // 1. Check LocalStorage
   if (typeof window !== 'undefined') {
     const serviceKey = localStorage.getItem('vocab_supabase_service_key');
     if (serviceKey && serviceKey.trim()) return serviceKey.trim();
 
-    const anonKey = localStorage.getItem('vocab_supabase_anon_key') || localStorage.getItem('supabase_anon_key') || localStorage.getItem('supabase_key');
+    const anonKey = 
+      localStorage.getItem('vocab_supabase_anon_key') || 
+      localStorage.getItem('supabase_anon_key') || 
+      localStorage.getItem('supabase_key');
     if (anonKey && anonKey.trim()) return anonKey.trim();
   }
-  const env = (import.meta as any).env || {};
-  return (env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+
+  // 2. Check Environment Variables
+  const envKey = 
+    readEnvVar('VITE_SUPABASE_ANON_KEY') || 
+    readEnvVar('SUPABASE_ANON_KEY') || 
+    readEnvVar('VITE_SUPABASE_KEY') || 
+    readEnvVar('SUPABASE_SERVICE_ROLE_KEY') ||
+    readEnvVar('SUPABASE_KEY');
+
+  if (envKey) return envKey;
+
+  return '';
+}
+
+/**
+ * Returns diagnostic metadata about the current Supabase connection configuration and source
+ */
+export function getDatabaseEndpointInfo(): DatabaseEndpointInfo {
+  let url = DEFAULT_SUPABASE_URL;
+  let urlSource: DatabaseEndpointInfo['urlSource'] = 'default';
+
+  if (typeof window !== 'undefined' && (localStorage.getItem('vocab_supabase_url') || localStorage.getItem('supabase_url'))) {
+    url = (localStorage.getItem('vocab_supabase_url') || localStorage.getItem('supabase_url'))!.trim();
+    urlSource = 'localStorage';
+  } else if (readEnvVar('VITE_SUPABASE_URL')) {
+    url = readEnvVar('VITE_SUPABASE_URL');
+    urlSource = 'import.meta.env';
+  } else if (readEnvVar('SUPABASE_URL')) {
+    url = readEnvVar('SUPABASE_URL');
+    urlSource = 'process.env';
+  }
+
+  let key = '';
+  let keySource: DatabaseEndpointInfo['keySource'] = 'none';
+
+  if (typeof window !== 'undefined' && (localStorage.getItem('vocab_supabase_service_key') || localStorage.getItem('vocab_supabase_anon_key') || localStorage.getItem('supabase_anon_key'))) {
+    key = (localStorage.getItem('vocab_supabase_service_key') || localStorage.getItem('vocab_supabase_anon_key') || localStorage.getItem('supabase_anon_key'))!.trim();
+    keySource = 'localStorage';
+  } else if (readEnvVar('VITE_SUPABASE_ANON_KEY') || readEnvVar('VITE_SUPABASE_KEY')) {
+    key = readEnvVar('VITE_SUPABASE_ANON_KEY') || readEnvVar('VITE_SUPABASE_KEY');
+    keySource = 'import.meta.env';
+  } else if (readEnvVar('SUPABASE_ANON_KEY') || readEnvVar('SUPABASE_SERVICE_ROLE_KEY')) {
+    key = readEnvVar('SUPABASE_ANON_KEY') || readEnvVar('SUPABASE_SERVICE_ROLE_KEY');
+    keySource = 'process.env';
+  }
+
+  let keyType: DatabaseEndpointInfo['keyType'] = 'none';
+  if (key) {
+    if (key.startsWith('sb_publishable_placeholder')) keyType = 'placeholder';
+    else if (key.includes('role":"service_role"') || key.length > 200) keyType = 'service_role';
+    else keyType = 'anon';
+  }
+
+  const keyPreview = key ? `${key.substring(0, 10)}...${key.substring(key.length - 6)}` : '(not set)';
+
+  return {
+    url,
+    urlSource,
+    hasKey: !!key && keyType !== 'placeholder',
+    keySource,
+    keyType,
+    keyPreview
+  };
 }
 
 let cachedClient: SupabaseClient | null = null;
@@ -36,7 +142,7 @@ export function getSupabase(): SupabaseClient {
     currentClientUrl = url;
     currentClientKey = key;
     
-    // If no key is set yet, initialize with dummy key to prevent crash before user configures
+    // If no key is set yet, initialize with placeholder to prevent immediate JS crash before configuration
     const validKey = key || 'sb_publishable_placeholder_configure_in_admin_panel';
     cachedClient = createClient(url, validKey, {
       auth: {
@@ -62,88 +168,167 @@ export const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
   }
 });
 
-export interface SupabaseDiagnosticResult {
-  success: boolean;
-  message: string;
-  url: string;
+export interface SupabasePingResult {
+  isReachable: boolean;
+  status: 'connected' | 'unauthorized' | 'network_error' | 'misconfigured';
+  statusCode?: number;
   latencyMs: number;
+  message: string;
+  endpoint: string;
+  source: 'localStorage' | 'import.meta.env' | 'process.env' | 'default';
+  keyType: 'anon' | 'service_role' | 'placeholder' | 'none';
+  timestamp: string;
   dataSample?: any;
-  error?: any;
+  errorDetails?: any;
 }
 
 /**
- * Diagnostic utility function to test Supabase connection and read permissions
+ * Temporary Utility function: Performs a simple ping to the Supabase instance using the anon key
+ * Tests HTTP reachability, authentication handshake, and latency in milliseconds.
  */
-export async function testSupabaseConnection(tableName: string = 'users'): Promise<SupabaseDiagnosticResult> {
+export async function pingSupabaseInstance(customKey?: string): Promise<SupabasePingResult> {
   const startTime = performance.now();
-  const url = getStoredSupabaseUrl();
-  const key = getStoredSupabaseKey();
+  const info = getDatabaseEndpointInfo();
+  const url = info.url;
+  const key = customKey || getStoredSupabaseKey() || readEnvVar('VITE_SUPABASE_ANON_KEY') || readEnvVar('SUPABASE_ANON_KEY');
+  const timestamp = new Date().toISOString();
+
+  if (!url) {
+    return {
+      isReachable: false,
+      status: 'misconfigured',
+      latencyMs: 0,
+      message: 'Supabase URL is not configured.',
+      endpoint: '',
+      source: info.urlSource,
+      keyType: info.keyType,
+      timestamp
+    };
+  }
 
   if (!key) {
     return {
-      success: false,
-      message: 'Supabase API Key (Anon/Service Role) is missing. Please configure it in Admin Panel > Supabase Sync.',
-      url,
+      isReachable: false,
+      status: 'misconfigured',
       latencyMs: 0,
+      message: 'Supabase Anon/Public API Key is missing. Please configure it in Admin Panel > Cloud Migration.',
+      endpoint: url,
+      source: info.urlSource,
+      keyType: 'none',
+      timestamp
     };
   }
 
   try {
-    const client = getSupabase();
-
-    // Query 1: users table
-    const { data, error } = await client
-      .from(tableName)
-      .select('*')
-      .limit(1);
+    // 1. Direct REST ping test using anon key on PostgREST root endpoint
+    const restEndpoint = `${url.replace(/\/$/, '')}/rest/v1/`;
+    let restResponse: Response | null = null;
+    try {
+      restResponse = await fetch(`${restEndpoint}?limit=1`, {
+        method: 'GET',
+        headers: {
+          'apikey': key,
+          'Authorization': `Bearer ${key}`
+        }
+      });
+    } catch (fetchErr: any) {
+      const latencyMs = Math.round(performance.now() - startTime);
+      return {
+        isReachable: false,
+        status: 'network_error',
+        latencyMs,
+        message: `Network Handshake Failed: ${fetchErr?.message || 'Could not reach Supabase endpoint. Check internet connection or CORS.'}`,
+        endpoint: url,
+        source: info.urlSource,
+        keyType: info.keyType,
+        timestamp,
+        errorDetails: fetchErr
+      };
+    }
 
     const latencyMs = Math.round(performance.now() - startTime);
 
-    if (error) {
-      // Fallback query to courses table
-      if (tableName !== 'courses') {
-        const fallback = await client.from('courses').select('*').limit(1);
-        if (!fallback.error) {
+    // 2. Evaluate status codes
+    if (restResponse) {
+      if (restResponse.status === 401 || restResponse.status === 403) {
+        return {
+          isReachable: true,
+          status: 'unauthorized',
+          statusCode: restResponse.status,
+          latencyMs,
+          message: `Credential Rejection: Supabase responded with HTTP ${restResponse.status}. The Anon API Key was rejected.`,
+          endpoint: url,
+          source: info.urlSource,
+          keyType: info.keyType,
+          timestamp
+        };
+      }
+
+      // Also verify querying a real table
+      const client = getSupabase();
+      const { data, error } = await client.from('courses').select('id, title').limit(1);
+
+      if (error) {
+        if (error.code === 'PGRST301' || error.message?.includes('JWT') || error.message?.includes('API key')) {
           return {
-            success: true,
-            message: `Supabase connection verified via 'courses' table (${latencyMs}ms).`,
-            url,
+            isReachable: true,
+            status: 'unauthorized',
+            statusCode: 401,
             latencyMs,
-            dataSample: fallback.data,
+            message: `Supabase reached (${latencyMs}ms), but API key was rejected: ${error.message}`,
+            endpoint: url,
+            source: info.urlSource,
+            keyType: info.keyType,
+            timestamp,
+            errorDetails: error
           };
         }
       }
 
       return {
-        success: false,
-        message: `Supabase query on '${tableName}' failed: ${error.message || JSON.stringify(error)}`,
-        url,
+        isReachable: true,
+        status: 'connected',
+        statusCode: 200,
         latencyMs,
-        error,
+        message: `Supabase backend is online & reachable (${latencyMs}ms response time).`,
+        endpoint: url,
+        source: info.urlSource,
+        keyType: info.keyType,
+        timestamp,
+        dataSample: data
       };
     }
 
     return {
-      success: true,
-      message: `Supabase connected successfully. Query on '${tableName}' returned in ${latencyMs}ms.`,
-      url,
+      isReachable: true,
+      status: 'connected',
+      statusCode: 200,
       latencyMs,
-      dataSample: data,
+      message: `Supabase reached in ${latencyMs}ms.`,
+      endpoint: url,
+      source: info.urlSource,
+      keyType: info.keyType,
+      timestamp
     };
   } catch (err: any) {
     const latencyMs = Math.round(performance.now() - startTime);
     return {
-      success: false,
-      message: `Supabase connection error: ${err?.message || String(err)}`,
-      url,
+      isReachable: false,
+      status: 'network_error',
       latencyMs,
-      error: err,
+      message: `Ping failure: ${err?.message || String(err)}`,
+      endpoint: url,
+      source: info.urlSource,
+      keyType: info.keyType,
+      timestamp,
+      errorDetails: err
     };
   }
 }
 
-// Expose diagnostic tool globally in window for easy testing in DevTools console
+// Expose diagnostic tools globally in window for easy manual testing
 if (typeof window !== 'undefined') {
-  (window as any).testSupabaseConnection = testSupabaseConnection;
+  (window as any).pingSupabaseInstance = pingSupabaseInstance;
+  (window as any).getDatabaseEndpointInfo = getDatabaseEndpointInfo;
   (window as any).getSupabase = getSupabase;
 }

@@ -16,6 +16,9 @@ import { SyncConflictModal, SyncConflictData } from './components/SyncConflictMo
 import { safeSetLocalStorage, clearNonEssentialLocalStorageCache } from './lib/storage';
 import { mergeProgressRecords, mergeGameProgressRecords, mergeStudyGoal } from './utils/syncUtils';
 import { parseRoute, syncRouteUrl } from './lib/router';
+import SupabaseStatusBanner from './components/SupabaseStatusBanner';
+import { pingSupabaseInstance, getDatabaseEndpointInfo, SupabasePingResult } from './lib/supabase';
+import { classifySyncError, logSyncErrorToConsole, DetailedSyncError } from './lib/syncErrorHandler';
 
 import {
   LayoutDashboard,
@@ -455,8 +458,34 @@ export default function App() {
   });
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(() => !!initialRoute.current.openLoginModal);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
+  const [lastSyncError, setLastSyncError] = useState<DetailedSyncError | null>(null);
+  const [supabasePingResult, setSupabasePingResult] = useState<SupabasePingResult | null>(null);
+  const [isPingingSupabase, setIsPingingSupabase] = useState(false);
   const isSyncingFromCloud = useRef(false);
   const [hasLoadedFromCloud, setHasLoadedFromCloud] = useState(false);
+
+  const handlePingSupabase = async () => {
+    setIsPingingSupabase(true);
+    try {
+      const res = await pingSupabaseInstance();
+      setSupabasePingResult(res);
+      if (res.status === 'connected') {
+        setLastSyncError(null);
+      } else if (res.status === 'unauthorized') {
+        setLastSyncError(classifySyncError({ status: 401, message: res.message }));
+      } else if (res.status === 'network_error') {
+        setLastSyncError(classifySyncError({ status: 0, message: res.message }));
+      }
+      return res;
+    } catch (err: any) {
+      const classified = classifySyncError(err);
+      setLastSyncError(classified);
+      logSyncErrorToConsole('Manual Ping Handshake', classified);
+      return null;
+    } finally {
+      setIsPingingSupabase(false);
+    }
+  };
 
   // Data Conflict Resolution states
   const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
@@ -820,6 +849,9 @@ export default function App() {
   const fetchUserDataFromCloud = async (currentUser: DbUser) => {
     setSyncStatus('syncing');
     isSyncingFromCloud.current = true;
+    const endpointInfo = getDatabaseEndpointInfo();
+    console.log(`[Cloud Data Sync] Handshake initiated to: ${endpointInfo.url} (Source: ${endpointInfo.urlSource}, Key: ${endpointInfo.keyType})`);
+
     try {
       const cleanUserEmail = (currentUser.email || '').trim().toLowerCase();
       const docsToMerge: any[] = [];
@@ -829,8 +861,9 @@ export default function App() {
       try {
         const uidSnap = await getDoc(userDocRef);
         if (uidSnap.exists()) docsToMerge.push(uidSnap.data());
-      } catch (err) {
-        console.warn("Fetch UID doc error:", err);
+      } catch (err: any) {
+        const classified = classifySyncError(err);
+        logSyncErrorToConsole('Fetch UID doc', classified);
       }
 
       // 2. Fetch by email doc ID if different
@@ -838,8 +871,9 @@ export default function App() {
         try {
           const emailSnap = await getDoc(doc(db, 'users', cleanUserEmail));
           if (emailSnap.exists()) docsToMerge.push(emailSnap.data());
-        } catch (err) {
-          console.warn("Fetch Email doc error:", err);
+        } catch (err: any) {
+          const classified = classifySyncError(err);
+          logSyncErrorToConsole('Fetch Email doc', classified);
         }
       }
 
@@ -853,8 +887,9 @@ export default function App() {
               docsToMerge.push(d.data());
             }
           });
-        } catch (err) {
-          console.warn("Query users by email error:", err);
+        } catch (err: any) {
+          const classified = classifySyncError(err);
+          logSyncErrorToConsole('Query users by email', classified);
         }
       }
 
@@ -1150,10 +1185,14 @@ export default function App() {
         });
         setSyncStatus('synced');
         setHasLoadedFromCloud(true);
+        setLastSyncError(null);
       }
-    } catch (err) {
-      console.error('Error fetching user data from Firestore:', err);
+    } catch (err: any) {
+      const classified = classifySyncError(err);
+      logSyncErrorToConsole('fetchUserDataFromCloud Main Handshake', classified);
+      setLastSyncError(classified);
       setSyncStatus('error');
+      addSyncLog('cloud_fetch', `[${classified.category}] ${classified.title}: ${classified.description}`, 'error', 0);
     } finally {
       setTimeout(() => {
         isSyncingFromCloud.current = false;
@@ -1310,18 +1349,22 @@ export default function App() {
           if (cleanEmail && cleanEmail !== user.uid.toLowerCase()) {
             try {
               await setDoc(doc(db, 'users', cleanEmail), payload, { merge: true });
-            } catch (e2) {
-              console.warn("Secondary email doc sync warning:", e2);
+            } catch (e2: any) {
+              const secondaryClassified = classifySyncError(e2);
+              logSyncErrorToConsole('Secondary email doc auto-sync', secondaryClassified);
             }
           }
         }
         setSyncStatus('synced');
+        setLastSyncError(null);
         const itemCount = Object.keys(progress || {}).length;
         addSyncLog('auto', `Saved ${itemCount} study item${itemCount === 1 ? '' : 's'} & preferences to Cloud`, 'success', itemCount);
-      } catch (err) {
-        console.error('Error saving to Cloud:', err);
+      } catch (err: any) {
+        const classified = classifySyncError(err);
+        logSyncErrorToConsole('Cloud Synchronization useEffect Handshake', classified);
+        setLastSyncError(classified);
         setSyncStatus('error');
-        addSyncLog('auto', 'Automatic cloud sync failed', 'error', 0);
+        addSyncLog('auto', `[${classified.category}] ${classified.title}: ${classified.description}`, 'error', 0);
       } finally {
         setTimeout(() => {
           isSyncingToCloud.current = false;
@@ -1361,11 +1404,17 @@ export default function App() {
           email: user.email,
           updatedAt: new Date().toISOString()
         };
-        setDoc(doc(db, 'users', user.uid), payload, { merge: true }).catch(console.error);
+        setDoc(doc(db, 'users', user.uid), payload, { merge: true }).catch(err => {
+          const classified = classifySyncError(err);
+          logSyncErrorToConsole('Visibility Change Flush Sync', classified);
+        });
         if (user.email) {
           const cleanEmail = user.email.trim().toLowerCase();
           if (cleanEmail && cleanEmail !== user.uid.toLowerCase()) {
-            setDoc(doc(db, 'users', cleanEmail), payload, { merge: true }).catch(console.error);
+            setDoc(doc(db, 'users', cleanEmail), payload, { merge: true }).catch(err => {
+              const classified = classifySyncError(err);
+              logSyncErrorToConsole('Visibility Change Email Flush Sync', classified);
+            });
           }
         }
       }
@@ -1434,19 +1483,23 @@ export default function App() {
         if (cleanEmail && cleanEmail !== user.uid.toLowerCase()) {
           try {
             await setDoc(doc(db, 'users', cleanEmail), payload, { merge: true });
-          } catch (e2) {
-            console.warn("Secondary email doc manual sync warning:", e2);
+          } catch (e2: any) {
+            const secondaryClassified = classifySyncError(e2);
+            logSyncErrorToConsole('Secondary email manual sync', secondaryClassified);
           }
         }
       }
 
       setSyncStatus('synced');
+      setLastSyncError(null);
       const itemsProcessed = Object.keys(progress || {}).length;
       addSyncLog('manual', `Manual cloud backup & 2-way sync completed (${itemsProcessed} item${itemsProcessed === 1 ? '' : 's'} verified)`, 'success', itemsProcessed);
-    } catch (err) {
-      console.error('Manual sync failed:', err);
+    } catch (err: any) {
+      const classified = classifySyncError(err);
+      logSyncErrorToConsole('Manual Force Sync Handshake', classified);
+      setLastSyncError(classified);
       setSyncStatus('error');
-      addSyncLog('manual', 'Manual cloud backup failed', 'error', 0);
+      addSyncLog('manual', `[${classified.category}] ${classified.title}: ${classified.description}`, 'error', 0);
     } finally {
       setTimeout(() => {
         isSyncingToCloud.current = false;
@@ -2043,6 +2096,16 @@ const getActiveCourse = (
                 </span>
               </div>
 
+              {/* Ping Database Button */}
+              <button
+                onClick={handlePingSupabase}
+                disabled={isPingingSupabase}
+                className="hidden lg:flex items-center gap-1 text-[10px] text-emerald-300 hover:text-white font-extrabold cursor-pointer hover:underline bg-emerald-950/50 border border-emerald-500/30 px-2 py-0.5 rounded-md transition"
+                title="Test Supabase Handshake"
+              >
+                {isPingingSupabase ? 'Pinging...' : 'Ping DB'}
+              </button>
+
               {/* Force Sync button */}
               <button
                 onClick={forceSyncToCloud}
@@ -2227,6 +2290,16 @@ const getActiveCourse = (
         onTouchEnd={handleTouchEnd}
       >
         <div className={activeTab === 'admin' ? "w-full" : "max-w-7xl mx-auto"}>
+          {/* Real-time Handshake / Sync Diagnostic Alert when active sync error occurs */}
+          {lastSyncError && activeTab !== 'admin' && (
+            <div className="mb-6 animate-in fade-in slide-in-from-top-2 duration-200">
+              <SupabaseStatusBanner 
+                lastSyncError={lastSyncError} 
+                onClearSyncError={() => setLastSyncError(null)}
+                showDetailsDefault={true}
+              />
+            </div>
+          )}
           {['profile', 'dashboard', 'my_courses', 'flashcard'].includes(activeTab) && (
             <div className="space-y-6">
               {/* My Profile Sub-Navigation Pills */}
