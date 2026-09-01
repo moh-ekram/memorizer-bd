@@ -517,12 +517,17 @@ export default function SupabaseMigrationCenter() {
 
       // 1. Settings
       addLog('📦 [1/4] Uploading System Settings from JSON...', 'info');
+      let lastErrorMessage = '';
       for (const [key, val] of Object.entries(settingsObj)) {
-        await client.from('system_settings').upsert({
+        const { error } = await client.from('system_settings').upsert({
           key,
           value: val,
           updated_at: new Date().toISOString()
         }, { onConflict: 'key' });
+        if (error) {
+          lastErrorMessage = error.message;
+          addLog(`⚠️ Settings note (${key}): ${error.message}`, 'warning');
+        }
       }
       addLog(`✅ Uploaded ${settingCount} System Settings.`, 'success');
 
@@ -553,7 +558,12 @@ export default function SupabaseMigrationCenter() {
           updated_at: new Date().toISOString()
         };
         const { error } = await client.from('courses').upsert(payload, { onConflict: 'id' });
-        if (!error) cDone++;
+        if (!error) {
+          cDone++;
+        } else {
+          lastErrorMessage = error.message;
+          addLog(`❌ Failed course "${cId}": ${error.message}`, 'error');
+        }
       }
       addLog(`✅ Uploaded ${cDone}/${courseCount} Courses with vocabularies to Supabase.`, 'success');
 
@@ -561,7 +571,7 @@ export default function SupabaseMigrationCenter() {
       addLog('📦 [3/4] Uploading Access Requests from JSON...', 'info');
       let rDone = 0;
       for (const [rId, rVal] of Object.entries(requestsObj) as any) {
-        await client.from('access_requests').upsert({
+        const { error } = await client.from('access_requests').upsert({
           id: rId,
           user_id: rVal.userId || rVal.email || rId,
           user_email: rVal.email || '',
@@ -574,7 +584,11 @@ export default function SupabaseMigrationCenter() {
           created_at: rVal.createdAt || new Date().toISOString(),
           expires_at: rVal.expiresAt || null
         }, { onConflict: 'id' });
-        rDone++;
+        if (!error) {
+          rDone++;
+        } else {
+          lastErrorMessage = error.message;
+        }
       }
       addLog(`✅ Uploaded ${rDone}/${reqCount} Access & Payment records.`, 'success');
 
@@ -608,11 +622,22 @@ export default function SupabaseMigrationCenter() {
           updated_at: new Date().toISOString()
         };
         const { error } = await client.from('users').upsert(payload, { onConflict: 'id' });
-        if (!error) uDone++;
+        if (!error) {
+          uDone++;
+        } else {
+          lastErrorMessage = error.message;
+          addLog(`❌ Failed user ${uId}: ${error.message}`, 'error');
+        }
       }
-      addLog(`✅ Uploaded ${uDone}/${userCount} User Profiles with full progress to Supabase!`, 'success');
 
-      alert(`🎉 JSON ফাইল থেকে সফলভাবে Supabase-এ সমস্ত ডেটা আপলোড সম্পন্ন হয়েছে!\n\nমোট: ${uDone} জন ইউজার, ${cDone} টি কোর্স।`);
+      if (uDone === 0 && userCount > 0 && lastErrorMessage) {
+        alert(
+          `⚠️ Supabase আপলোডে পারমিশন সমস্যা পাওয়া গেছে!\n\nকারণ: ${lastErrorMessage}\n\nসমাধান:\n১. 'Supabase SQL Schema' ট্যাব থেকে কোড কপি করে Supabase SQL Editor-এ একবার Run দিন।\n২. অথবা Supabase Dashboard > Settings > API থেকে Service Role Key ব্যবহার করুন।`
+        );
+      } else {
+        addLog(`✅ Uploaded ${uDone}/${userCount} User Profiles with full progress to Supabase!`, 'success');
+        alert(`🎉 JSON ফাইল থেকে সফলভাবে Supabase-এ ডেটা আপলোড সম্পন্ন হয়েছে!\n\nমোট: ${uDone} জন ইউজার, ${cDone} টি কোর্স, ${rDone} টি পেমেন্ট রেকর্ড।`);
+      }
     } catch (err: any) {
       console.error('JSON upload failed:', err);
       addLog(`❌ JSON Upload error: ${err.message}`, 'error');

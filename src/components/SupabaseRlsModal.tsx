@@ -6,90 +6,198 @@ interface SupabaseRlsModalProps {
   onClose: () => void;
 }
 
-export const SUPABASE_RLS_SQL_SCRIPT = `-- =========================================================
--- SUPABASE PUBLIC READ RLS POLICY SCRIPT
--- For Game Questions: Odd One Out, Blank, Word Analogy, MCQ
--- =========================================================
+export const SUPABASE_RLS_SQL_SCRIPT = `-- ==============================================================================
+-- VOCABULARY MASTER: COMPLETE SUPABASE DATABASE SCHEMA & RLS POLICIES
+-- ==============================================================================
+-- Run this script in your Supabase Dashboard:
+-- SQL Editor -> New Query -> Paste & Click 'Run'
+-- ==============================================================================
 
--- 1. Create Question Tables if they don't already exist
+-- 1. Enable UUID Extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- 2. System Settings Table
+CREATE TABLE IF NOT EXISTS public.system_settings (
+  key TEXT PRIMARY KEY,
+  value JSONB NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. Users Table (Stores user profiles, word progress & flashcard positions)
+CREATE TABLE IF NOT EXISTS public.users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  display_name TEXT,
+  role TEXT DEFAULT 'student',
+  is_approved BOOLEAN DEFAULT true,
+  status TEXT DEFAULT 'active',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  progress JSONB DEFAULT '{}'::jsonb,
+  flashcard_positions JSONB DEFAULT '{}'::jsonb,
+  folders JSONB DEFAULT '[]'::jsonb,
+  goal JSONB DEFAULT '{"dailyTarget": 15, "streak": 1}'::jsonb,
+  settings JSONB DEFAULT '{}'::jsonb,
+  synonym_progress JSONB DEFAULT '{}'::jsonb,
+  blank_progress JSONB DEFAULT '{}'::jsonb,
+  ooo_progress JSONB DEFAULT '{}'::jsonb,
+  analogy_progress JSONB DEFAULT '{}'::jsonb,
+  enrolled_course_ids TEXT[] DEFAULT ARRAY['bank-bcs-gre']::TEXT[],
+  active_course_id TEXT DEFAULT 'bank-bcs-gre',
+  quiz_score INTEGER DEFAULT 0,
+  quiz_taken INTEGER DEFAULT 0,
+  balance NUMERIC(10, 2) DEFAULT 0.00
+);
+CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
+CREATE INDEX IF NOT EXISTS idx_users_role ON public.users(role);
+
+-- 4. Courses Table
+CREATE TABLE IF NOT EXISTS public.courses (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  category TEXT,
+  level TEXT,
+  price NUMERIC(10, 2) DEFAULT 0.00,
+  is_free BOOLEAN DEFAULT false,
+  is_published BOOLEAN DEFAULT true,
+  thumbnail_url TEXT,
+  created_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  words JSONB DEFAULT '[]'::jsonb,
+  stories JSONB DEFAULT '[]'::jsonb,
+  articles JSONB DEFAULT '[]'::jsonb,
+  metadata JSONB DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS idx_courses_published ON public.courses(is_published);
+
+-- 5. Access Requests & bKash Transactions
+CREATE TABLE IF NOT EXISTS public.access_requests (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  user_email TEXT NOT NULL,
+  course_id TEXT NOT NULL,
+  course_ids TEXT[] DEFAULT ARRAY['bank-bcs-gre']::TEXT[],
+  bkash_number TEXT,
+  transaction_id TEXT,
+  amount NUMERIC(10, 2) DEFAULT 0.00,
+  status TEXT DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_access_req_user ON public.access_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_access_req_status ON public.access_requests(status);
+
+-- 6. Interactive Game Question Tables
 CREATE TABLE IF NOT EXISTS public.odd_one_out_questions (
   id TEXT PRIMARY KEY,
-  data JSONB,
-  "courseId" TEXT,
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+  course_id TEXT,
+  data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_ooo_course ON public.odd_one_out_questions(course_id);
 
 CREATE TABLE IF NOT EXISTS public.blank_questions (
   id TEXT PRIMARY KEY,
-  data JSONB,
-  "courseId" TEXT,
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+  course_id TEXT,
+  data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_blank_course ON public.blank_questions(course_id);
 
 CREATE TABLE IF NOT EXISTS public.word_analogy_questions (
   id TEXT PRIMARY KEY,
-  data JSONB,
-  "courseId" TEXT,
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+  course_id TEXT,
+  data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_analogy_course ON public.word_analogy_questions(course_id);
 
 CREATE TABLE IF NOT EXISTS public.mcq_questions (
   id TEXT PRIMARY KEY,
-  data JSONB,
-  "courseId" TEXT,
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+  course_id TEXT,
+  data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_mcq_course ON public.mcq_questions(course_id);
+
+-- 7. Announcements & Activity Logs
+CREATE TABLE IF NOT EXISTS public.announcements (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  type TEXT DEFAULT 'info',
+  is_active BOOLEAN DEFAULT true,
+  target_course_id TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. Enable Row Level Security (RLS) on all Question Tables
+-- ==============================================================================
+-- 8. ROW LEVEL SECURITY (RLS) POLICIES & PERMISSIONS
+-- ==============================================================================
+-- Enable RLS on all tables
+ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.courses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.access_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.odd_one_out_questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.blank_questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.word_analogy_questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mcq_questions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
 
--- 3. Drop existing policies to prevent conflict duplicates
-DROP POLICY IF EXISTS "Public Read Access for Odd One Out" ON public.odd_one_out_questions;
-DROP POLICY IF EXISTS "Public Read Access for Blank Questions" ON public.blank_questions;
-DROP POLICY IF EXISTS "Public Read Access for Word Analogy" ON public.word_analogy_questions;
-DROP POLICY IF EXISTS "Public Read Access for MCQ Questions" ON public.mcq_questions;
+-- Drop existing policies to prevent conflict
+DROP POLICY IF EXISTS "Public Read system_settings" ON public.system_settings;
+DROP POLICY IF EXISTS "Public Write system_settings" ON public.system_settings;
+DROP POLICY IF EXISTS "Public Read users" ON public.users;
+DROP POLICY IF EXISTS "Public Write users" ON public.users;
+DROP POLICY IF EXISTS "Public Read courses" ON public.courses;
+DROP POLICY IF EXISTS "Public Write courses" ON public.courses;
+DROP POLICY IF EXISTS "Public Read access_requests" ON public.access_requests;
+DROP POLICY IF EXISTS "Public Write access_requests" ON public.access_requests;
+DROP POLICY IF EXISTS "Public Read odd_one_out_questions" ON public.odd_one_out_questions;
+DROP POLICY IF EXISTS "Public Write odd_one_out_questions" ON public.odd_one_out_questions;
+DROP POLICY IF EXISTS "Public Read blank_questions" ON public.blank_questions;
+DROP POLICY IF EXISTS "Public Write blank_questions" ON public.blank_questions;
+DROP POLICY IF EXISTS "Public Read word_analogy_questions" ON public.word_analogy_questions;
+DROP POLICY IF EXISTS "Public Write word_analogy_questions" ON public.word_analogy_questions;
+DROP POLICY IF EXISTS "Public Read mcq_questions" ON public.mcq_questions;
+DROP POLICY IF EXISTS "Public Write mcq_questions" ON public.mcq_questions;
+DROP POLICY IF EXISTS "Public Read announcements" ON public.announcements;
+DROP POLICY IF EXISTS "Public Write announcements" ON public.announcements;
 
-DROP POLICY IF EXISTS "Enable all access for authenticated users on OOO" ON public.odd_one_out_questions;
-DROP POLICY IF EXISTS "Enable all access for authenticated users on Blank" ON public.blank_questions;
-DROP POLICY IF EXISTS "Enable all access for authenticated users on Analogy" ON public.word_analogy_questions;
-DROP POLICY IF EXISTS "Enable all access for authenticated users on MCQ" ON public.mcq_questions;
+-- Create Permissive Policies (Allows Frontend Client, Migration Script & Service Role to read & write)
+CREATE POLICY "Public Read system_settings" ON public.system_settings FOR SELECT USING (true);
+CREATE POLICY "Public Write system_settings" ON public.system_settings FOR ALL USING (true) WITH CHECK (true);
 
--- 4. Create Public / Authenticated Read Access Policies (SELECT FOR ALL)
-CREATE POLICY "Public Read Access for Odd One Out"
-ON public.odd_one_out_questions FOR SELECT
-USING (true);
+CREATE POLICY "Public Read users" ON public.users FOR SELECT USING (true);
+CREATE POLICY "Public Write users" ON public.users FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Public Read Access for Blank Questions"
-ON public.blank_questions FOR SELECT
-USING (true);
+CREATE POLICY "Public Read courses" ON public.courses FOR SELECT USING (true);
+CREATE POLICY "Public Write courses" ON public.courses FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Public Read Access for Word Analogy"
-ON public.word_analogy_questions FOR SELECT
-USING (true);
+CREATE POLICY "Public Read access_requests" ON public.access_requests FOR SELECT USING (true);
+CREATE POLICY "Public Write access_requests" ON public.access_requests FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Public Read Access for MCQ Questions"
-ON public.mcq_questions FOR SELECT
-USING (true);
+CREATE POLICY "Public Read odd_one_out_questions" ON public.odd_one_out_questions FOR SELECT USING (true);
+CREATE POLICY "Public Write odd_one_out_questions" ON public.odd_one_out_questions FOR ALL USING (true) WITH CHECK (true);
 
--- 5. Create Full Access Policies for Inserting/Updating/Deleting Questions
-CREATE POLICY "Enable all access for authenticated users on OOO"
-ON public.odd_one_out_questions FOR ALL
-USING (true);
+CREATE POLICY "Public Read blank_questions" ON public.blank_questions FOR SELECT USING (true);
+CREATE POLICY "Public Write blank_questions" ON public.blank_questions FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Enable all access for authenticated users on Blank"
-ON public.blank_questions FOR ALL
-USING (true);
+CREATE POLICY "Public Read word_analogy_questions" ON public.word_analogy_questions FOR SELECT USING (true);
+CREATE POLICY "Public Write word_analogy_questions" ON public.word_analogy_questions FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Enable all access for authenticated users on Analogy"
-ON public.word_analogy_questions FOR ALL
-USING (true);
+CREATE POLICY "Public Read mcq_questions" ON public.mcq_questions FOR SELECT USING (true);
+CREATE POLICY "Public Write mcq_questions" ON public.mcq_questions FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Enable all access for authenticated users on MCQ"
-ON public.mcq_questions FOR ALL
-USING (true);
+CREATE POLICY "Public Read announcements" ON public.announcements FOR SELECT USING (true);
+CREATE POLICY "Public Write announcements" ON public.announcements FOR ALL USING (true) WITH CHECK (true);
 `;
 
 export const SupabaseRlsModal: React.FC<SupabaseRlsModalProps> = ({ isOpen, onClose }) => {

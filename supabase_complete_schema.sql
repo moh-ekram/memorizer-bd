@@ -176,8 +176,14 @@ CREATE TABLE IF NOT EXISTS public.transactions (
 CREATE INDEX IF NOT EXISTS idx_trx_user ON public.transactions(user_id);
 
 -- ==============================================================================
--- 6. ANNOUNCEMENTS & ACTIVITY LOGS
+-- 6. ANNOUNCEMENTS, SYSTEM SETTINGS & ACTIVITY LOGS
 -- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.system_settings (
+  key TEXT PRIMARY KEY,
+  value JSONB NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS public.announcements (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
