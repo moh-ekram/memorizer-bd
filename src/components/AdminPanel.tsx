@@ -53,7 +53,8 @@ import { QuestionBankView } from './QuestionBankView';
 import { CourseExamsSummaryView } from './CourseExamsSummaryView';
 import { SupabaseRlsModal } from './SupabaseRlsModal';
 import { TransactionDebugger, TransactionLogItem } from './TransactionDebugger';
-import { Code, Bug, TerminalSquare, AlertCircle } from 'lucide-react';
+import SupabaseMigrationCenter from './SupabaseMigrationCenter';
+import { Code, Bug, TerminalSquare, AlertCircle, Cloud } from 'lucide-react';
 import { 
   Users, 
   ShieldCheck, 
@@ -359,7 +360,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const [activeWordFilter, setActiveWordFilter] = useState<'all' | 'know' | 'confusion' | 'dont_know'>('all');
 
   // Course management and upload states
-  const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'courses' | 'reports' | 'access-requests' | 'autoverify' | 'system-settings' | 'landing-editor' | 'blank-questions' | 'activity-logs' | 'transaction-debugger' | 'question-bank' | 'exam-summary'>('courses');
+  const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'courses' | 'reports' | 'access-requests' | 'autoverify' | 'system-settings' | 'landing-editor' | 'blank-questions' | 'activity-logs' | 'transaction-debugger' | 'question-bank' | 'exam-summary' | 'migration'>('courses');
   const [requestsSubTab, setRequestsSubTab] = useState<'pending' | 'autoverify' | 'history' | 'debugger'>('pending');
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [bulkCsvCourse, setBulkCsvCourse] = useState<Course | null>(null);
@@ -3656,7 +3657,26 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           <Bug className="w-4 h-4 text-amber-500 shrink-0" />
           <span className="hidden sm:inline whitespace-nowrap">Tx Debugger</span>
         </button>
+
+        <button
+          onClick={() => setActiveAdminTab('migration')}
+          title="Firebase to Supabase Cloud Migration"
+          className={`px-2.5 sm:px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
+            activeAdminTab === 'migration'
+              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md font-black border border-emerald-700'
+              : 'bg-emerald-50/80 text-emerald-900 hover:bg-emerald-100 border border-emerald-200/80'
+          }`}
+        >
+          <Cloud className="w-4 h-4 text-emerald-500 shrink-0" />
+          <span className="hidden sm:inline whitespace-nowrap font-extrabold">Cloud Migration</span>
+          <span className="px-1.5 py-0.2 text-[9px] bg-emerald-600 text-white rounded font-bold uppercase">New</span>
+        </button>
       </div>
+
+      {/* Cloud Migration Tab View */}
+      {activeAdminTab === 'migration' && (
+        <SupabaseMigrationCenter />
+      )}
 
       {/* Question Bank Tab View */}
       {activeAdminTab === 'question-bank' && (
@@ -4958,6 +4978,35 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             <p className="text-xs text-slate-500 font-medium mt-1">
               Configure item ordering, support contact info, and platform defaults across the platform.
             </p>
+          </div>
+
+          {/* Direct Firebase to Supabase Migration Card */}
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 rounded-2xl border border-indigo-700/60 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="p-3 bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-emerald-400">
+                <Cloud className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-black text-white">Direct Firebase to Supabase Cloud Migration</h4>
+                  <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] font-black rounded-md uppercase border border-emerald-500/30">
+                    Zero Data Loss
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 font-medium mt-0.5">
+                  1-ক্লিকে সমস্ত ইউজার প্রগ্রেস, ফ্ল্যাশকার্ড হিস্ট্রি, শব্দ তালিকা ও পেমেন্ট রেকর্ড Supabase ক্লাউডে সিঙ্ক করুন।
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setActiveAdminTab('migration')}
+              className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl transition shadow-lg flex items-center justify-center gap-2 cursor-pointer shrink-0"
+            >
+              <Zap className="w-4 h-4 fill-slate-950" />
+              <span>ওপেন মাইগ্রেশন সেন্টার (Open Migration Center)</span>
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
