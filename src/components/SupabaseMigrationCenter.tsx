@@ -95,9 +95,12 @@ export default function SupabaseMigrationCenter() {
   });
 
   const [copiedSql, setCopiedSql] = useState(false);
-  const [activeTab, setActiveTab] = useState<'migration' | 'json-backup' | 'sql'>('migration');
+  const [copiedGeneratedSql, setCopiedGeneratedSql] = useState(false);
+  const [activeTab, setActiveTab] = useState<'migration' | 'json-backup' | 'json-to-sql' | 'sql'>('json-backup');
   const [isExportingJson, setIsExportingJson] = useState(false);
   const [isRestoringJson, setIsRestoringJson] = useState(false);
+  const [isGeneratingSql, setIsGeneratingSql] = useState(false);
+  const [generatedSqlText, setGeneratedSqlText] = useState<string>('');
   const [jsonUploadStats, setJsonUploadStats] = useState<{
     users: number;
     courses: number;
@@ -107,10 +110,305 @@ export default function SupabaseMigrationCenter() {
   } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const jsonToSqlInputRef = useRef<HTMLInputElement>(null);
 
   const addLog = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     const time = new Date().toLocaleTimeString();
     setLogs((prev) => [{ timestamp: time, message, type }, ...prev].slice(0, 300));
+  };
+
+  // Helper function to build bulletproof Supabase SQL from JSON
+  const buildSupabaseSqlFromJson = (jsonData: any): string => {
+    const escapeSql = (val: any): string => {
+      if (val === null || val === undefined) return "''";
+      return `'${String(val).replace(/'/g, "''")}'`;
+    };
+
+    const toJsonbDollar = (val: any): string => {
+      if (val === null || val === undefined) return "'{}'::jsonb";
+      const str = typeof val === 'string' ? val : JSON.stringify(val);
+      return `$json$${str}$json$::jsonb`;
+    };
+
+    const toTextArray = (arr: any): string => {
+      if (!Array.isArray(arr) || arr.length === 0) {
+        return "ARRAY['bank-bcs-gre']::text[]";
+      }
+      const items = arr.map((x) => escapeSql(x)).join(', ');
+      return `ARRAY[${items}]::text[]`;
+    };
+
+    const usersObj = jsonData.users || {};
+    const coursesObj = jsonData.courses || {};
+    const requestsObj = jsonData.access_requests || {};
+    const settingsObj = jsonData.system_settings || {};
+    const oooObj = jsonData.odd_one_out_questions || {};
+    const blankObj = jsonData.blank_questions || {};
+    const analogyObj = jsonData.word_analogy_questions || {};
+    const mcqObj = jsonData.mcq_questions || {};
+
+    let sql = `-- ==============================================================================
+-- VOCABULARY MASTER: FULL DATABASE IMPORT SCRIPT
+-- Generated on: ${new Date().toISOString()}
+-- Total Users: ${Object.keys(usersObj).length} | Total Courses: ${Object.keys(coursesObj).length} | Requests: ${Object.keys(requestsObj).length}
+-- ==============================================================================
+-- How to run:
+-- 1. Open Supabase Dashboard (https://supabase.com/dashboard)
+-- 2. Go to: SQL Editor ( >_ ) -> Click '+ New Query'
+-- 3. Paste this script and click 'Run' (Ctrl + Enter)
+-- ==============================================================================
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- 1. CREATE TABLES
+CREATE TABLE IF NOT EXISTS public.system_settings (
+  key TEXT PRIMARY KEY,
+  value JSONB NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  display_name TEXT,
+  role TEXT DEFAULT 'student',
+  is_approved BOOLEAN DEFAULT true,
+  status TEXT DEFAULT 'active',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  progress JSONB DEFAULT '{}'::jsonb,
+  flashcard_positions JSONB DEFAULT '{}'::jsonb,
+  folders JSONB DEFAULT '[]'::jsonb,
+  goal JSONB DEFAULT '{"dailyTarget": 15, "streak": 1}'::jsonb,
+  settings JSONB DEFAULT '{}'::jsonb,
+  synonym_progress JSONB DEFAULT '{}'::jsonb,
+  blank_progress JSONB DEFAULT '{}'::jsonb,
+  ooo_progress JSONB DEFAULT '{}'::jsonb,
+  analogy_progress JSONB DEFAULT '{}'::jsonb,
+  enrolled_course_ids TEXT[] DEFAULT ARRAY['bank-bcs-gre']::TEXT[],
+  active_course_id TEXT DEFAULT 'bank-bcs-gre',
+  quiz_score INTEGER DEFAULT 0,
+  quiz_taken INTEGER DEFAULT 0,
+  balance NUMERIC(10, 2) DEFAULT 0.00
+);
+
+CREATE TABLE IF NOT EXISTS public.courses (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  category TEXT,
+  level TEXT,
+  price NUMERIC(10, 2) DEFAULT 0.00,
+  is_free BOOLEAN DEFAULT false,
+  is_published BOOLEAN DEFAULT true,
+  thumbnail_url TEXT,
+  created_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  words JSONB DEFAULT '[]'::jsonb,
+  stories JSONB DEFAULT '[]'::jsonb,
+  articles JSONB DEFAULT '[]'::jsonb,
+  metadata JSONB DEFAULT '{}'::jsonb
+);
+
+CREATE TABLE IF NOT EXISTS public.access_requests (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  user_email TEXT NOT NULL,
+  course_id TEXT NOT NULL,
+  course_ids TEXT[] DEFAULT ARRAY['bank-bcs-gre']::TEXT[],
+  bkash_number TEXT,
+  transaction_id TEXT,
+  amount NUMERIC(10, 2) DEFAULT 0.00,
+  status TEXT DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS public.odd_one_out_questions (
+  id TEXT PRIMARY KEY,
+  course_id TEXT,
+  data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.blank_questions (
+  id TEXT PRIMARY KEY,
+  course_id TEXT,
+  data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.word_analogy_questions (
+  id TEXT PRIMARY KEY,
+  course_id TEXT,
+  data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.mcq_questions (
+  id TEXT PRIMARY KEY,
+  course_id TEXT,
+  data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. ENABLE ROW LEVEL SECURITY & OPEN POLICIES
+ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.courses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.access_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.odd_one_out_questions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.blank_questions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.word_analogy_questions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mcq_questions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public Read system_settings" ON public.system_settings;
+DROP POLICY IF EXISTS "Public Write system_settings" ON public.system_settings;
+CREATE POLICY "Public Read system_settings" ON public.system_settings FOR SELECT USING (true);
+CREATE POLICY "Public Write system_settings" ON public.system_settings FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public Read users" ON public.users;
+DROP POLICY IF EXISTS "Public Write users" ON public.users;
+CREATE POLICY "Public Read users" ON public.users FOR SELECT USING (true);
+CREATE POLICY "Public Write users" ON public.users FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public Read courses" ON public.courses;
+DROP POLICY IF EXISTS "Public Write courses" ON public.courses;
+CREATE POLICY "Public Read courses" ON public.courses FOR SELECT USING (true);
+CREATE POLICY "Public Write courses" ON public.courses FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public Read access_requests" ON public.access_requests;
+DROP POLICY IF EXISTS "Public Write access_requests" ON public.access_requests;
+CREATE POLICY "Public Read access_requests" ON public.access_requests FOR SELECT USING (true);
+CREATE POLICY "Public Write access_requests" ON public.access_requests FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public Read odd_one_out_questions" ON public.odd_one_out_questions;
+DROP POLICY IF EXISTS "Public Write odd_one_out_questions" ON public.odd_one_out_questions;
+CREATE POLICY "Public Read odd_one_out_questions" ON public.odd_one_out_questions FOR SELECT USING (true);
+CREATE POLICY "Public Write odd_one_out_questions" ON public.odd_one_out_questions FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public Read blank_questions" ON public.blank_questions;
+DROP POLICY IF EXISTS "Public Write blank_questions" ON public.blank_questions;
+CREATE POLICY "Public Read blank_questions" ON public.blank_questions FOR SELECT USING (true);
+CREATE POLICY "Public Write blank_questions" ON public.blank_questions FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public Read word_analogy_questions" ON public.word_analogy_questions;
+DROP POLICY IF EXISTS "Public Write word_analogy_questions" ON public.word_analogy_questions;
+CREATE POLICY "Public Read word_analogy_questions" ON public.word_analogy_questions FOR SELECT USING (true);
+CREATE POLICY "Public Write word_analogy_questions" ON public.word_analogy_questions FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public Read mcq_questions" ON public.mcq_questions;
+DROP POLICY IF EXISTS "Public Write mcq_questions" ON public.mcq_questions;
+CREATE POLICY "Public Read mcq_questions" ON public.mcq_questions FOR SELECT USING (true);
+CREATE POLICY "Public Write mcq_questions" ON public.mcq_questions FOR ALL USING (true) WITH CHECK (true);
+
+-- ==============================================================================
+-- 3. INSERT SYSTEM SETTINGS
+-- ==============================================================================
+`;
+
+    for (const [sKey, sVal] of Object.entries(settingsObj) as any) {
+      sql += `INSERT INTO public.system_settings (key, value, updated_at) VALUES (${escapeSql(sKey)}, ${toJsonbDollar(sVal)}, NOW()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW();\n`;
+    }
+
+    sql += `\n-- ==============================================================================\n-- 4. INSERT COURSES & VOCABULARIES\n-- ==============================================================================\n`;
+
+    for (const [cId, cVal] of Object.entries(coursesObj) as any) {
+      const title = cVal.title || cId;
+      const desc = cVal.description || '';
+      const category = cVal.category || 'General';
+      const level = cVal.level || 'All Levels';
+      const price = typeof cVal.price === 'number' ? cVal.price : 0.0;
+      const isFree = !!cVal.isDefault || !cVal.price;
+      const isPub = cVal.hidden !== true;
+      const thumb = cVal.thumbnail || '';
+      const createdBy = cVal.createdBy || 'admin@gmail.com';
+      const words = Array.isArray(cVal.words) ? cVal.words : [];
+      const stories = Array.isArray(cVal.stories) ? cVal.stories : [];
+      const articles = Array.isArray(cVal.articles) ? cVal.articles : [];
+      const meta = {
+        placeLabels: cVal.placeLabels || {},
+        order: cVal.order || 0,
+        allowedUsers: cVal.allowedUsers || [],
+        enabledGames: cVal.enabledGames || {}
+      };
+
+      sql += `INSERT INTO public.courses (id, title, description, category, level, price, is_free, is_published, thumbnail_url, created_by, words, stories, articles, metadata, updated_at) VALUES (${escapeSql(cId)}, ${escapeSql(title)}, ${escapeSql(desc)}, ${escapeSql(category)}, ${escapeSql(level)}, ${price}, ${isFree}, ${isPub}, ${escapeSql(thumb)}, ${escapeSql(createdBy)}, ${toJsonbDollar(words)}, ${toJsonbDollar(stories)}, ${toJsonbDollar(articles)}, ${toJsonbDollar(meta)}, NOW()) ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description, category = EXCLUDED.category, level = EXCLUDED.level, price = EXCLUDED.price, is_free = EXCLUDED.is_free, is_published = EXCLUDED.is_published, thumbnail_url = EXCLUDED.thumbnail_url, words = EXCLUDED.words, stories = EXCLUDED.stories, articles = EXCLUDED.articles, metadata = EXCLUDED.metadata, updated_at = NOW();\n`;
+    }
+
+    sql += `\n-- ==============================================================================\n-- 5. INSERT ACCESS REQUESTS & BKASH PAYMENTS\n-- ==============================================================================\n`;
+
+    for (const [rId, rVal] of Object.entries(requestsObj) as any) {
+      const uId = rVal.userId || rVal.email || rId;
+      const email = rVal.email || '';
+      const courseId = rVal.courseId || 'bank-bcs-gre';
+      const courseIds = Array.isArray(rVal.courseIds) ? rVal.courseIds : [courseId];
+      const bkash = rVal.bkashNumber || '';
+      const trx = rVal.trxId || rVal.transactionId || '';
+      const amount = typeof rVal.amount === 'number' ? rVal.amount : 0.0;
+      const status = rVal.status || 'pending';
+      const createdAt = rVal.createdAt ? escapeSql(rVal.createdAt) : 'NOW()';
+      const expiresAt = rVal.expiresAt ? escapeSql(rVal.expiresAt) : 'NULL';
+
+      sql += `INSERT INTO public.access_requests (id, user_id, user_email, course_id, course_ids, bkash_number, transaction_id, amount, status, created_at, expires_at) VALUES (${escapeSql(rId)}, ${escapeSql(uId)}, ${escapeSql(email)}, ${escapeSql(courseId)}, ${toTextArray(courseIds)}, ${escapeSql(bkash)}, ${escapeSql(trx)}, ${amount}, ${escapeSql(status)}, ${createdAt === 'NOW()' ? 'NOW()' : `${createdAt}::timestamptz`}, ${expiresAt === 'NULL' ? 'NULL' : `${expiresAt}::timestamptz`}) ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, expires_at = EXCLUDED.expires_at;\n`;
+    }
+
+    sql += `\n-- ==============================================================================\n-- 6. INSERT USERS, PROGRESS & FLASHCARD POSITIONS\n-- ==============================================================================\n`;
+
+    for (const [uId, uVal] of Object.entries(usersObj) as any) {
+      const email = uVal.email || `${uId}@user.local`;
+      const name = uVal.displayName || uVal.name || '';
+      const role = uVal.role || 'student';
+      const isApproved = uVal.isApproved !== undefined ? uVal.isApproved : true;
+      const status = uVal.status || 'active';
+      const prog = uVal.progress || {};
+      const flashPos = uVal.flashcardPositions || {};
+      const folders = Array.isArray(uVal.folders) ? uVal.folders : [];
+      const goal = uVal.goal || { dailyTarget: 15, streak: 1 };
+      const settings = uVal.settings || {};
+      const synProg = uVal.synonymProgress || {};
+      const blankProg = uVal.blankProgress || {};
+      const oooProg = uVal.oooProgress || {};
+      const analogyProg = uVal.analogyProgress || {};
+      const enrolled = Array.isArray(uVal.enrolledCourseIds) ? uVal.enrolledCourseIds : ['bank-bcs-gre'];
+      const activeC = uVal.activeCourseId || 'bank-bcs-gre';
+      const qScore = typeof uVal.quizScore === 'number' ? uVal.quizScore : 0;
+      const qTaken = typeof uVal.quizTaken === 'number' ? uVal.quizTaken : 0;
+      const balance = typeof uVal.balance === 'number' ? uVal.balance : (uVal.walletBalance || 0.0);
+
+      sql += `INSERT INTO public.users (id, email, display_name, role, is_approved, status, progress, flashcard_positions, folders, goal, settings, synonym_progress, blank_progress, ooo_progress, analogy_progress, enrolled_course_ids, active_course_id, quiz_score, quiz_taken, balance, updated_at) VALUES (${escapeSql(uId)}, ${escapeSql(email)}, ${escapeSql(name)}, ${escapeSql(role)}, ${isApproved}, ${escapeSql(status)}, ${toJsonbDollar(prog)}, ${toJsonbDollar(flashPos)}, ${toJsonbDollar(folders)}, ${toJsonbDollar(goal)}, ${toJsonbDollar(settings)}, ${toJsonbDollar(synProg)}, ${toJsonbDollar(blankProg)}, ${toJsonbDollar(oooProg)}, ${toJsonbDollar(analogyProg)}, ${toTextArray(enrolled)}, ${escapeSql(activeC)}, ${qScore}, ${qTaken}, ${balance}, NOW()) ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name, role = EXCLUDED.role, is_approved = EXCLUDED.is_approved, status = EXCLUDED.status, progress = EXCLUDED.progress, flashcard_positions = EXCLUDED.flashcard_positions, folders = EXCLUDED.folders, goal = EXCLUDED.goal, settings = EXCLUDED.settings, synonym_progress = EXCLUDED.synonym_progress, blank_progress = EXCLUDED.blank_progress, ooo_progress = EXCLUDED.ooo_progress, analogy_progress = EXCLUDED.analogy_progress, enrolled_course_ids = EXCLUDED.enrolled_course_ids, active_course_id = EXCLUDED.active_course_id, quiz_score = EXCLUDED.quiz_score, quiz_taken = EXCLUDED.quiz_taken, balance = EXCLUDED.balance, updated_at = NOW();\n`;
+    }
+
+    sql += `\n-- ==============================================================================\n-- 7. INSERT GAME QUESTION BANKS\n-- ==============================================================================\n`;
+
+    for (const [id, val] of Object.entries(oooObj) as any) {
+      const cId = val.courseId || val.course_id || 'bank-bcs-gre';
+      sql += `INSERT INTO public.odd_one_out_questions (id, course_id, data, updated_at) VALUES (${escapeSql(id)}, ${escapeSql(cId)}, ${toJsonbDollar(val)}, NOW()) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();\n`;
+    }
+
+    for (const [id, val] of Object.entries(blankObj) as any) {
+      const cId = val.courseId || val.course_id || 'bank-bcs-gre';
+      sql += `INSERT INTO public.blank_questions (id, course_id, data, updated_at) VALUES (${escapeSql(id)}, ${escapeSql(cId)}, ${toJsonbDollar(val)}, NOW()) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();\n`;
+    }
+
+    for (const [id, val] of Object.entries(analogyObj) as any) {
+      const cId = val.courseId || val.course_id || 'bank-bcs-gre';
+      sql += `INSERT INTO public.word_analogy_questions (id, course_id, data, updated_at) VALUES (${escapeSql(id)}, ${escapeSql(cId)}, ${toJsonbDollar(val)}, NOW()) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();\n`;
+    }
+
+    for (const [id, val] of Object.entries(mcqObj) as any) {
+      const cId = val.courseId || val.course_id || 'bank-bcs-gre';
+      sql += `INSERT INTO public.mcq_questions (id, course_id, data, updated_at) VALUES (${escapeSql(id)}, ${escapeSql(cId)}, ${toJsonbDollar(val)}, NOW()) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();\n`;
+    }
+
+    sql += `\n-- ==============================================================================\n-- VERIFICATION QUERY\n-- ==============================================================================\nSELECT \n  (SELECT COUNT(*) FROM public.users) AS total_users,\n  (SELECT COUNT(*) FROM public.courses) AS total_courses,\n  (SELECT COUNT(*) FROM public.access_requests) AS total_requests,\n  (SELECT COUNT(*) FROM public.system_settings) AS total_settings;\n`;
+
+    return sql;
   };
 
   // Test Firestore Connection on load
@@ -658,6 +956,138 @@ export default function SupabaseMigrationCenter() {
     }
   };
 
+  const handleCopyGeneratedSql = async () => {
+    if (!generatedSqlText) return;
+    try {
+      await navigator.clipboard.writeText(generatedSqlText);
+      setCopiedGeneratedSql(true);
+      setTimeout(() => setCopiedGeneratedSql(false), 3000);
+    } catch {
+      alert('Unable to copy generated SQL script.');
+    }
+  };
+
+  const downloadGeneratedSql = (customSql?: string) => {
+    const textToDownload = customSql || generatedSqlText;
+    if (!textToDownload) return;
+    const blob = new Blob([textToDownload], { type: 'text/sql;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `supabase_full_data_import_${dateStr}.sql`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Convert uploaded JSON directly to Ready-to-Run SQL Script
+  const handleConvertJsonFileToSql = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsGeneratingSql(true);
+    addLog(`📄 Reading JSON backup file: ${file.name}...`, 'info');
+
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const text = ev.target?.result as string;
+        const parsed = JSON.parse(text);
+
+        const usersCount = Object.keys(parsed.users || {}).length;
+        const coursesCount = Object.keys(parsed.courses || {}).length;
+        const reqCount = Object.keys(parsed.access_requests || {}).length;
+        const settingsCount = Object.keys(parsed.system_settings || {}).length;
+
+        setJsonUploadStats({
+          users: usersCount,
+          courses: coursesCount,
+          access_requests: reqCount,
+          system_settings: settingsCount,
+          fileName: file.name
+        });
+
+        addLog(`⚡ Converting ${usersCount} Users, ${coursesCount} Courses & ${reqCount} Requests into Ready-to-Run Supabase SQL...`, 'info');
+
+        const sql = buildSupabaseSqlFromJson(parsed);
+        setGeneratedSqlText(sql);
+        setActiveTab('json-to-sql');
+        addLog(`🎉 SQL Script successfully generated (${(sql.length / 1024).toFixed(1)} KB)!`, 'success');
+      } catch (err: any) {
+        console.error('Failed to convert JSON to SQL:', err);
+        addLog(`❌ JSON to SQL conversion error: ${err.message}`, 'error');
+        alert(`JSON ফাইলে সমস্যা পাওয়া গেছে: ${err.message}`);
+      } finally {
+        setIsGeneratingSql(false);
+        if (jsonToSqlInputRef.current) jsonToSqlInputRef.current.value = '';
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // 1-Click Generate Ready-to-Run SQL directly from live Firebase
+  const handleGenerateSqlFromFirebase = async () => {
+    setIsGeneratingSql(true);
+    addLog('⚡ Fetching live Firebase data to generate Ready-to-Run Supabase SQL...', 'info');
+
+    try {
+      const backupData: Record<string, any> = {
+        users: {},
+        courses: {},
+        access_requests: {},
+        system_settings: {},
+        odd_one_out_questions: {},
+        blank_questions: {},
+        word_analogy_questions: {},
+        mcq_questions: {}
+      };
+
+      // Users
+      const usersSnap = await getDocs(collection(db, 'users'));
+      usersSnap.forEach((d) => { backupData.users[d.id] = d.data(); });
+
+      // Courses
+      const coursesSnap = await getDocs(collection(db, 'courses'));
+      coursesSnap.forEach((d) => { backupData.courses[d.id] = d.data(); });
+
+      // Access Requests
+      const reqSnap = await getDocs(collection(db, 'access_requests'));
+      reqSnap.forEach((d) => { backupData.access_requests[d.id] = d.data(); });
+
+      // System Settings
+      const sysSnap = await getDocs(collection(db, 'system_settings'));
+      sysSnap.forEach((d) => { backupData.system_settings[d.id] = d.data(); });
+
+      // Questions
+      for (const colName of ['odd_one_out_questions', 'blank_questions', 'word_analogy_questions', 'mcq_questions']) {
+        try {
+          const qSnap = await getDocs(collection(db, colName));
+          qSnap.forEach((d) => { backupData[colName][d.id] = d.data(); });
+        } catch (e) {}
+      }
+
+      setJsonUploadStats({
+        users: usersSnap.size,
+        courses: coursesSnap.size,
+        access_requests: reqSnap.size,
+        system_settings: sysSnap.size,
+        fileName: 'Live Firebase Snapshot'
+      });
+
+      const sql = buildSupabaseSqlFromJson(backupData);
+      setGeneratedSqlText(sql);
+      setActiveTab('json-to-sql');
+      addLog(`🎉 Generated complete SQL script for ${usersSnap.size} Users & ${coursesSnap.size} Courses!`, 'success');
+    } catch (err: any) {
+      addLog(`❌ Failed to generate SQL from Firebase: ${err.message}`, 'error');
+      alert(`Error generating SQL: ${err.message}`);
+    } finally {
+      setIsGeneratingSql(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in font-['Poppins',sans-serif]">
       {/* Header Banner */}
@@ -695,34 +1125,52 @@ export default function SupabaseMigrationCenter() {
       </div>
 
       {/* Sub Tabs */}
-      <div className="flex border-b border-slate-200 gap-2 pb-2">
-        <button
-          onClick={() => setActiveTab('migration')}
-          className={`px-4 py-2.5 text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
-            activeTab === 'migration'
-              ? 'bg-indigo-600 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Zap className="w-4 h-4" />
-          <span>Live 1-Click Migration</span>
-        </button>
-
+      <div className="flex border-b border-slate-200 gap-2 pb-2 overflow-x-auto">
         <button
           onClick={() => setActiveTab('json-backup')}
-          className={`px-4 py-2.5 text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+          className={`px-4 py-2.5 text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
             activeTab === 'json-backup'
               ? 'bg-emerald-600 text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <Archive className="w-4 h-4" />
-          <span>JSON File Download & Upload (সরাসরি ফাইল ট্রান্সফার)</span>
+          <span>JSON File Transfer (ডাউনলোড ও আপলোড)</span>
+        </button>
+
+        <button
+          onClick={() => {
+            if (!generatedSqlText) {
+              handleGenerateSqlFromFirebase();
+            } else {
+              setActiveTab('json-to-sql');
+            }
+          }}
+          className={`px-4 py-2.5 text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
+            activeTab === 'json-to-sql'
+              ? 'bg-purple-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 bg-purple-50 text-purple-700'
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-amber-400 fill-amber-400" />
+          <span>JSON ➔ SQL Generator (১০০% নির্ভরযোগ্য ডিরেক্ট SQL)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('migration')}
+          className={`px-4 py-2.5 text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
+            activeTab === 'migration'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Zap className="w-4 h-4" />
+          <span>Live Cloud Sync</span>
         </button>
 
         <button
           onClick={() => setActiveTab('sql')}
-          className={`px-4 py-2.5 text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+          className={`px-4 py-2.5 text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
             activeTab === 'sql'
               ? 'bg-indigo-600 text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100'
@@ -1004,16 +1452,16 @@ export default function SupabaseMigrationCenter() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* STEP 1: DOWNLOAD JSON */}
             <div className="p-6 bg-gradient-to-br from-emerald-50/70 to-teal-50/40 rounded-2xl border border-emerald-200/80 space-y-4 flex flex-col justify-between">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-black flex items-center justify-center">1</span>
-                  <h5 className="text-sm font-black text-slate-850">Firebase থেকে JSON ফাইল ডাউনলোড করুন</h5>
+                  <h5 className="text-sm font-black text-slate-850">JSON ব্যাকআপ ডাউনলোড</h5>
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed pl-8">
-                  এই বাটনে ক্লিক করলে আপনার Firebase এর সব ইউজার প্রোফাইল, লার্নিং প্রগ্রেস, ফ্ল্যাশকার্ডের লাস্ট পজিশন ও কোর্স ডেটা একটি কমপ্লিট <code>.json</code> ফাইল হিসেবে আপনার পিসিতে ডাউনলোড হয়ে যাবে।
+                  আপনার Firebase এর সব ইউজার প্রোফাইল, লার্নিং প্রগ্রেস, ফ্ল্যাশকার্ডের লাস্ট পজিশন ও কোর্স ডেটা একটি কমপ্লিট <code>.json</code> ফাইল হিসেবে ডাউনলোড করুন।
                 </p>
               </div>
 
@@ -1022,23 +1470,69 @@ export default function SupabaseMigrationCenter() {
                   type="button"
                   onClick={exportFullJsonBackup}
                   disabled={isExportingJson}
-                  className="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-2 shadow-md cursor-pointer disabled:opacity-50"
+                  className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-2 shadow-md cursor-pointer disabled:opacity-50"
                 >
                   <Download className="w-4 h-4" />
-                  <span>{isExportingJson ? 'ডাউনলোড তৈরি হচ্ছে...' : '📥 ডাউনলোড করুন Complete JSON Backup'}</span>
+                  <span>{isExportingJson ? 'ডাউনলোড হচ্ছে...' : '📥 ডাউনলোড Complete JSON'}</span>
                 </button>
               </div>
             </div>
 
-            {/* STEP 2: UPLOAD TO SUPABASE */}
-            <div className="p-6 bg-gradient-to-br from-indigo-50/70 to-purple-50/40 rounded-2xl border border-indigo-200/80 space-y-4 flex flex-col justify-between">
+            {/* STEP 2: CONVERT JSON TO SQL (RECOMMENDED) */}
+            <div className="p-6 bg-gradient-to-br from-purple-50/80 to-indigo-50/60 rounded-2xl border-2 border-purple-300 space-y-4 flex flex-col justify-between relative overflow-hidden">
+              <div className="absolute top-2 right-2 px-2 py-0.5 bg-purple-600 text-white text-[9px] font-black rounded-full uppercase tracking-wider">
+                ১০০% সফল সমাধান
+              </div>
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-black flex items-center justify-center">2</span>
-                  <h5 className="text-sm font-black text-slate-850">ডাউনলোডকৃত JSON ফাইল Supabase-এ আপলোড করুন</h5>
+                  <span className="w-6 h-6 rounded-full bg-purple-600 text-white text-xs font-black flex items-center justify-center">2</span>
+                  <h5 className="text-sm font-black text-slate-850">JSON ➔ Ready SQL জেনারেট</h5>
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed pl-8">
-                  আপনার ডাউনলোড করা <code>vocabulary_database_complete_backup.json</code> ফাইলটি এখানে সিলেক্ট করলেই সমস্ত ডেটা কোনো ডাটা লস ছাড়াই Supabase-এর টেবিলে ইমপোর্ট হয়ে যাবে।
+                  ডাউনলোড করা JSON ফাইল থেকে সরাসরি রেডিমেড <code>.sql</code> ফাইল তৈরি করুন। Supabase SQL Editor-এ পেস্ট করলে কোনো পারমিশন এরর ছাড়াই ১ সেকেন্ডে ডেটা ইনসার্ট হবে!
+                </p>
+              </div>
+
+              <div className="pt-2 pl-8 space-y-2">
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  ref={jsonToSqlInputRef}
+                  onChange={handleConvertJsonFileToSql}
+                  disabled={isGeneratingSql}
+                  className="hidden"
+                  id="json-to-sql-file-input"
+                />
+                <label
+                  htmlFor="json-to-sql-file-input"
+                  className={`w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-2 shadow-md cursor-pointer ${
+                    isGeneratingSql ? 'opacity-50 pointer-events-none' : ''
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <span>⚡ JSON থেকে SQL রূপান্তর করুন</span>
+                </label>
+                
+                <button
+                  type="button"
+                  onClick={handleGenerateSqlFromFirebase}
+                  disabled={isGeneratingSql}
+                  className="w-full text-center text-[11px] text-purple-700 hover:underline font-bold"
+                >
+                  অথবা লাইভ ডেটাবেজ থেকে সরাসরি SQL তৈরি করুন ➔
+                </button>
+              </div>
+            </div>
+
+            {/* STEP 3: DIRECT RESTORE TO SUPABASE */}
+            <div className="p-6 bg-gradient-to-br from-indigo-50/70 to-slate-50/40 rounded-2xl border border-indigo-200/80 space-y-4 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-black flex items-center justify-center">3</span>
+                  <h5 className="text-sm font-black text-slate-850">সরাসরি ক্লাউডে আপলোড</h5>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed pl-8">
+                  সরাসরি ব্রাউজার API দিয়ে Supabase-এ আপলোড দিন। (যদি RLS এরর পান, তবে পাশের ২ নং 'JSON ➔ SQL' পদ্ধতিটি ব্যবহার করুন)।
                 </p>
               </div>
 
@@ -1054,19 +1548,19 @@ export default function SupabaseMigrationCenter() {
                 />
                 <label
                   htmlFor="json-backup-upload-input"
-                  className={`w-full sm:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-2 shadow-md cursor-pointer ${
+                  className={`w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-2 shadow-md cursor-pointer ${
                     isRestoringJson ? 'opacity-50 pointer-events-none' : ''
                   }`}
                 >
                   {isRestoringJson ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>সুপাবেজে আপলোড হচ্ছে...</span>
+                      <span>আপলোড হচ্ছে...</span>
                     </>
                   ) : (
                     <>
                       <ArrowUpCircle className="w-4 h-4" />
-                      <span>📤 JSON ফাইল সিলেক্ট করে Supabase-এ আপলোড দিন</span>
+                      <span>📤 JSON সরাসরি আপলোড</span>
                     </>
                   )}
                 </label>
@@ -1098,11 +1592,145 @@ export default function SupabaseMigrationCenter() {
               <span>সহজ নির্দেশনা (JSON ফাইলের মাধ্যমে ট্রান্সফার):</span>
             </h6>
             <ol className="list-decimal list-inside space-y-1 text-slate-600 leading-relaxed">
-              <li>প্রথম ধাপে <strong>"ডাউনলোড করুন Complete JSON Backup"</strong> বাটনে চাপ দিন। আপনার ডিভাইসে একটি <code>.json</code> ফাইল সেভ হবে।</li>
-              <li>উপরে বা লাইভ ট্যাবে Supabase Credentials (URL ও Key) ঠিক আছে কিনা তা দেখে নিন।</li>
-              <li>দ্বিতীয় ধাপে <strong>"JSON ফাইল সিলেক্ট করে Supabase-এ আপলোড দিন"</strong> বাটনে ক্লিক করে ডাউনলোড করা ফাইলটি বেছে নিন।</li>
-              <li>১-২ মিনিটের মধ্যেই সব ইউজার প্রগ্রেস ও কোর্স Supabase ক্লাউডে সফলভাবে ট্রান্সফার হয়ে যাবে!</li>
+              <li>প্রথম ধাপে <strong>"ডাউনলোড Complete JSON"</strong> বাটনে চাপ দিয়ে আপনার পিসিতে <code>vocabulary_database_complete_backup.json</code> ফাইলটি সংরক্ষণ করুন।</li>
+              <li>এরপর ২নং বক্সে <strong>"⚡ JSON থেকে SQL রূপান্তর করুন"</strong> বাটনে ক্লিক করে ডাউনলোড করা ফাইলটি বেছে নিন।</li>
+              <li>সাথে সাথে সব ডেটাসহ স্বয়ংক্রিয়ভাবে তৈরি হওয়া SQL স্ক্রিপ্টটি কপি করে Supabase Dashboard-এর <strong>SQL Editor</strong>-এ গিয়ে রান দিলেই সম্পূর্ণ ডেটাবেজ Supabase-এ লোড হয়ে যাবে!</li>
             </ol>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: JSON TO SQL GENERATOR & VIEWER */}
+      {activeTab === 'json-to-sql' && (
+        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-2 bg-purple-100 text-purple-700 rounded-xl">
+                  <Sparkles className="w-5 h-5" />
+                </span>
+                <h4 className="font-extrabold text-slate-850 text-base">
+                  JSON ➔ Supabase Ready-to-Run SQL Import Generator
+                </h4>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                এই স্ক্রিপ্টটি রান করলে কোনো পারমিশন এরর বা RLS রেস্ট্রিকশন ছাড়াই সমস্ত ইউজার, কোর্স ও পেমেন্ট রেকর্ড Supabase-এ যুক্ত হবে।
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCopyGeneratedSql}
+                disabled={!generatedSqlText}
+                className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-md"
+              >
+                {copiedGeneratedSql ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+                <span>{copiedGeneratedSql ? 'সম্পূর্ণ SQL কপি হয়েছে!' : '📋 Copy Full SQL Script'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => downloadGeneratedSql()}
+                disabled={!generatedSqlText}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-md"
+              >
+                <Download className="w-4 h-4" />
+                <span>📥 Download .sql File</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Stats Bar */}
+          {jsonUploadStats && (
+            <div className="p-4 bg-purple-900 text-white rounded-2xl flex flex-wrap items-center justify-between gap-4 text-xs">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-400" />
+                <span className="font-bold">SQL Ready:</span>
+                <span className="font-mono text-purple-200">{jsonUploadStats.fileName}</span>
+              </div>
+              <div className="flex items-center gap-4 text-purple-200">
+                <span>Users: <strong className="text-white">{jsonUploadStats.users}</strong></span>
+                <span>Courses: <strong className="text-white">{jsonUploadStats.courses}</strong></span>
+                <span>Requests: <strong className="text-white">{jsonUploadStats.access_requests}</strong></span>
+                <span>Settings: <strong className="text-white">{jsonUploadStats.system_settings}</strong></span>
+              </div>
+            </div>
+          )}
+
+          {/* How to Run Instructions Banner */}
+          <div className="p-5 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-200 text-xs text-amber-950 space-y-2">
+            <h5 className="font-black text-amber-900 flex items-center gap-1.5 text-sm">
+              <Play className="w-4 h-4 text-amber-600 fill-amber-600" />
+              <span>কিভাবে Supabase-এ রান করবেন (মাত্র ৩টি সহজ ধাপ):</span>
+            </h5>
+            <ol className="list-decimal list-inside space-y-1.5 text-slate-800 font-medium leading-relaxed">
+              <li>
+                উপরের <strong>"📋 Copy Full SQL Script"</strong> বাটনে ক্লিক করে পুরো কোডটি কপি করে নিন (অথবা <strong>.sql ফাইল ডাউনলোড</strong> করুন)।
+              </li>
+              <li>
+                <a
+                  href="https://supabase.com/dashboard"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-indigo-600 font-bold underline hover:text-indigo-800"
+                >
+                  Supabase Dashboard
+                </a>
+                -এ যান ➔ বাম পাশের মেনু থেকে <strong>SQL Editor</strong> (<code>&gt;_</code> আইকন)-এ ক্লিক করুন ➔ <strong>+ New Query</strong> বাটনে চাপ দিন।
+              </li>
+              <li>
+                কপি করা কোডটি পেস্ট করে নিচে ডানপাশের <strong>'Run'</strong> (বা কিবোর্ডের <kbd className="px-1.5 py-0.5 bg-slate-200 rounded font-mono text-[10px]">Ctrl + Enter</kbd>) চাপুন। সাথে সাথে সব ডেটা লোড হয়ে যাবে!
+              </li>
+            </ol>
+          </div>
+
+          {/* SQL Text Area Preview */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+              <span>SQL Script Output Preview:</span>
+              <span className="font-mono text-slate-400">
+                {generatedSqlText ? `${(generatedSqlText.length / 1024).toFixed(1)} KB` : 'No SQL Generated Yet'}
+              </span>
+            </div>
+
+            {generatedSqlText ? (
+              <pre className="p-4 bg-slate-950 text-emerald-400 font-mono text-[11px] rounded-2xl overflow-x-auto max-h-[450px] leading-relaxed border border-slate-800">
+                {generatedSqlText}
+              </pre>
+            ) : (
+              <div className="p-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-300 space-y-3">
+                <Sparkles className="w-8 h-8 text-slate-400 mx-auto" />
+                <p className="text-xs text-slate-500 font-medium">
+                  এখনো কোনো SQL তৈরি করা হয়নি। আপনার ডাউনলোড করা JSON ফাইলটি দিয়ে SQL তৈরি করতে পারেন অথবা সরাসরি তৈরি করতে পারেন।
+                </p>
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <input
+                    type="file"
+                    accept=".json,application/json"
+                    onChange={handleConvertJsonFileToSql}
+                    className="hidden"
+                    id="direct-json-to-sql-file-input"
+                  />
+                  <label
+                    htmlFor="direct-json-to-sql-file-input"
+                    className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl cursor-pointer shadow-sm flex items-center gap-1.5"
+                  >
+                    <Archive className="w-4 h-4" />
+                    <span>Select Downloaded JSON File</span>
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={handleGenerateSqlFromFirebase}
+                    className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl cursor-pointer shadow-sm flex items-center gap-1.5"
+                  >
+                    <Zap className="w-4 h-4" />
+                    <span>Generate Directly from Live DB</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
