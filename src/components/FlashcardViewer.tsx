@@ -247,8 +247,18 @@ export default function FlashcardViewer({
 
     const deltaX = touchEndX - touchStartX.current;
     const deltaY = touchEndY - touchStartY.current;
+    const totalMovement = Math.hypot(deltaX, deltaY);
 
-    if (touchDuration < 600 && Math.abs(deltaX) > 65 && Math.abs(deltaX) > Math.abs(deltaY) * 1.8) {
+    const isSwipe = touchDuration < 600 && Math.abs(deltaX) > 65 && Math.abs(deltaX) > Math.abs(deltaY) * 1.8;
+    // A deliberate tap-to-flip should barely move at all. Previously ANY
+    // touch that didn't qualify as a clean horizontal swipe fell through to
+    // the click handler and flipped the card — so scrolling past a card,
+    // a slow drag, or a mostly-vertical scroll (none of which are a "tap")
+    // would silently flip it. Only genuinely tiny movements count as a tap;
+    // anything bigger that also isn't a swipe gets suppressed instead.
+    const isTap = totalMovement < 12;
+
+    if (isSwipe) {
       touchHandled.current = true;
       e.stopPropagation();
       if (deltaX < 0) {
@@ -256,6 +266,8 @@ export default function FlashcardViewer({
       } else {
         handlePrev();
       }
+    } else if (!isTap) {
+      touchHandled.current = true;
     }
 
     touchStartX.current = null;

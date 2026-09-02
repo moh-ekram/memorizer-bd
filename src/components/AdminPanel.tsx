@@ -1980,9 +1980,16 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   };
 
   // Fetch custom courses with real-time listener and offline cache
-  const fetchCustomCourses = async () => {
-    // 1. Instant Cache Render (0ms)
-    let hasLocal = false;
+  const fetchCustomCourses = () => {
+    // Only handles the instant-cache render now — the actual network fetch
+    // used to happen here too AND in the onSnapshot listener below (which
+    // already does its own immediate fetch on mount before it starts
+    // polling), so every mount fired two separate full-collection requests
+    // in parallel, competing to set the same state and roughly doubling
+    // load time/bandwidth for admins with many courses (course docs embed
+    // their full word lists). onSnapshot's initial fetch now does this job
+    // alone; this function just paints the cached list instantly while that
+    // request is in flight, same as before.
     try {
       const cachedStr = safeGetLocalStorage('vocab_memorizer_cached_custom_courses', '[]');
       const cachedList: Course[] = JSON.parse(cachedStr);
@@ -1990,46 +1997,31 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         setCustomCourses(cachedList);
         setCoursesLoading(false);
         setHasFetchedCourses(true);
-        hasLocal = true;
+        return;
       }
     } catch (_) {}
-
-    if (!hasLocal) {
-      setCoursesLoading(true);
-    }
+    setCoursesLoading(true);
     setCoursesError(null);
-
-    try {
-      const fetchPromise = getDocs(collection(db, 'courses'));
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Courses fetch timeout')), 4500)
-      );
-
-      const qSnap = (await Promise.race([fetchPromise, timeoutPromise])) as any;
-      const list: Course[] = [];
-      if (qSnap && qSnap.forEach) {
-        qSnap.forEach((docSnap: any) => {
-          list.push({ ...docSnap.data(), id: docSnap.id } as Course);
-        });
-        setCustomCourses(list);
-        setHasFetchedCourses(true);
-        safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(list));
-      }
-    } catch (err) {
-      console.warn('Notice fetching custom courses in background:', err);
-      if (!hasLocal) {
-        setCoursesError('Failed to load courses list.');
-      }
-    } finally {
-      setCoursesLoading(false);
-    }
   };
 
-  // Real-time courses snapshot listener for Admin Panel
+  // Real-time courses snapshot listener for Admin Panel — this alone owns
+  // the network fetch for the courses list (see fetchCustomCourses above).
   useEffect(() => {
     let unsubscribe = () => {};
+    let settled = false;
+    // If neither the cache nor the live listener has produced anything
+    // within a few seconds (e.g. a genuinely broken connection), surface an
+    // error instead of leaving the loading state spinning forever.
+    const timeoutId = setTimeout(() => {
+      if (!settled) {
+        setCoursesLoading(false);
+        setCoursesError((prev) => prev ?? 'Failed to load courses list.');
+      }
+    }, 6000);
     try {
       unsubscribe = onSnapshot(collection(db, 'courses'), (snap) => {
+        settled = true;
+        clearTimeout(timeoutId);
         const list: Course[] = [];
         snap.forEach(docSnap => {
           list.push({ ...docSnap.data(), id: docSnap.id } as Course);
@@ -2037,17 +2029,30 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         setCustomCourses(list);
         setHasFetchedCourses(true);
         setCoursesLoading(false);
+        setCoursesError(null);
         safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(list));
         if (onCoursesUpdated) {
           onCoursesUpdated(list);
         }
       }, (err) => {
         console.warn("Notice in AdminPanel courses snapshot:", err);
+        if (!settled) {
+          settled = true;
+          clearTimeout(timeoutId);
+          setCoursesLoading(false);
+          setCoursesError('Failed to load courses list.');
+        }
       });
     } catch (err) {
       console.error("Error setting up AdminPanel courses snapshot:", err);
+      clearTimeout(timeoutId);
+      setCoursesLoading(false);
+      setCoursesError('Failed to load courses list.');
     }
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(timeoutId);
+      unsubscribe();
+    };
   }, [onCoursesUpdated]);
 
   // Real-time access requests snapshot listener for Admin Panel
@@ -2723,11 +2728,23 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     const orderB = itemA.order !== undefined ? itemA.order : idx;
 
     try {
+      // Immediate optimistic UI update — don't wait on a refetch (the
+      // onSnapshot listener will confirm/reconcile within its normal poll
+      // cycle regardless).
+      setCustomCourses(prev => {
+        const next = prev.map(c => {
+          if (c.id === itemA.id) return { ...c, order: orderA };
+          if (c.id === itemB.id) return { ...c, order: orderB };
+          return c;
+        });
+        safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(next));
+        if (onCoursesUpdated) onCoursesUpdated(next);
+        return next;
+      });
       const batch = writeBatch(db);
       batch.set(doc(db, 'courses', itemA.id), { order: orderA }, { merge: true });
       batch.set(doc(db, 'courses', itemB.id), { order: orderB }, { merge: true });
       await batch.commit();
-      fetchCustomCourses();
     } catch (e) {
       console.error("Error updating course order with writeBatch:", e);
     }
