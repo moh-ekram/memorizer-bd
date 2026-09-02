@@ -7896,7 +7896,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 )}
               </div>
 
-              {/* Parsed Words Summary & Preview */}
+              {/* Parsed Words Summary & Preview — full-column table so every
+                  parsed field can be checked before publishing, not just
+                  word/meaning/group. */}
               {uploadedWords.length > 0 && (
                 <div className="space-y-3 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100">
                   <div className="flex items-center justify-between">
@@ -7908,19 +7910,45 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     </span>
                   </div>
 
-                  <div className="max-h-40 overflow-y-auto space-y-1.5 scrollbar-thin pr-1">
-                    {uploadedWords.slice(0, 10).map((w, idx) => (
-                      <div key={idx} className="bg-white p-2.5 rounded-xl border border-slate-200 text-xs flex items-center justify-between shadow-2xs">
-                        <span className="font-extrabold text-slate-900">{w.word}</span>
-                        <span className="text-slate-600 font-medium">{w.meaning}</span>
-                        <span className="text-[10px] font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">G{w.group}</span>
-                      </div>
-                    ))}
-                    {uploadedWords.length > 10 && (
-                      <p className="text-[10px] font-extrabold text-slate-400 text-center pt-1">
-                        ...and {uploadedWords.length - 10} more words
-                      </p>
-                    )}
+                  <div className="max-h-64 overflow-y-auto overflow-x-auto border border-indigo-100 rounded-xl bg-white">
+                    <table className="w-full text-left border-collapse text-[11px] min-w-[920px]">
+                      <thead className="sticky top-0 bg-indigo-50 z-10">
+                        <tr>
+                          <th className="p-2 font-extrabold text-indigo-900 whitespace-nowrap">#</th>
+                          <th className="p-2 font-extrabold text-indigo-900 whitespace-nowrap">ID</th>
+                          <th className="p-2 font-extrabold text-indigo-900 whitespace-nowrap">Group</th>
+                          <th className="p-2 font-extrabold text-indigo-900 whitespace-nowrap">Word</th>
+                          <th className="p-2 font-extrabold text-indigo-900 whitespace-nowrap">Meaning</th>
+                          <th className="p-2 font-extrabold text-indigo-900 whitespace-nowrap">Synonyms</th>
+                          <th className="p-2 font-extrabold text-indigo-900 whitespace-nowrap">Extra Word</th>
+                          <th className="p-2 font-extrabold text-indigo-900 whitespace-nowrap">Extra Meaning</th>
+                          <th className="p-2 font-extrabold text-indigo-900 whitespace-nowrap">Example</th>
+                          <th className="p-2 font-extrabold text-indigo-900 whitespace-nowrap">Mnemonic</th>
+                          <th className="p-2 font-extrabold text-indigo-900 whitespace-nowrap">Pronunciation</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-indigo-50">
+                        {uploadedWords.map((w, idx) => (
+                          <tr key={idx} className="hover:bg-indigo-50/40 transition">
+                            <td className="p-2 text-slate-400 font-mono">{idx + 1}</td>
+                            <td className="p-2 font-mono text-slate-500">{w.id}</td>
+                            <td className="p-2">
+                              <span className="text-[10px] font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+                                G{w.group}
+                              </span>
+                            </td>
+                            <td className="p-2 font-extrabold text-slate-900 whitespace-nowrap">{w.word}</td>
+                            <td className="p-2 text-slate-700">{w.meaning}</td>
+                            <td className="p-2 text-slate-500">{w.synonyms || '—'}</td>
+                            <td className="p-2 text-slate-500">{w.extraWord || '—'}</td>
+                            <td className="p-2 text-slate-500">{w.extraMeaning || '—'}</td>
+                            <td className="p-2 text-slate-500 max-w-[220px] truncate" title={w.example || ''}>{w.example || '—'}</td>
+                            <td className="p-2 text-slate-500 max-w-[220px] truncate" title={w.mnemonic || ''}>{w.mnemonic || '—'}</td>
+                            <td className="p-2 text-slate-500 max-w-[160px] truncate" title={w.pronunciation || ''}>{w.pronunciation || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}

@@ -4118,7 +4118,7 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                 {/* Word list table */}
                 <div className="border border-slate-150 rounded-2xl overflow-hidden bg-white">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse min-w-[1180px]">
                       <thead>
                         <tr className="bg-slate-50 text-[10px] font-black text-slate-500 border-b border-slate-200/65 uppercase tracking-wider">
                           <th className="px-4 py-3 w-10 text-center">
@@ -4129,20 +4129,23 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                               className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
                             />
                           </th>
-                          <th className="px-3 py-3 font-mono">Unique ID</th>
-                          <th className="px-4 py-3">{localPlaceLabels.place1 || 'place1'}</th>
-                          <th className="px-4 py-3">{localPlaceLabels.place2 || 'place2'}</th>
-                          <th className="px-4 py-3 text-center">Group</th>
-                          <th className="px-4 py-3 hidden sm:table-cell">
-                            {[localPlaceLabels.place3, localPlaceLabels.place4, localPlaceLabels.place5, localPlaceLabels.place6].filter(Boolean).join(' / ') || 'Extra Details'}
-                          </th>
-                          <th className="px-4 py-3 w-24 text-center">Action</th>
+                          <th className="px-3 py-3 font-mono whitespace-nowrap">Unique ID</th>
+                          <th className="px-4 py-3 whitespace-nowrap">{localPlaceLabels.place1 || 'place1'}</th>
+                          <th className="px-4 py-3 whitespace-nowrap">{localPlaceLabels.place2 || 'place2'}</th>
+                          <th className="px-4 py-3 text-center whitespace-nowrap">Group</th>
+                          <th className="px-4 py-3 whitespace-nowrap">{localPlaceLabels.place3 || 'place3'}</th>
+                          <th className="px-4 py-3 whitespace-nowrap">{localPlaceLabels.place4 || 'place4'}</th>
+                          <th className="px-4 py-3 whitespace-nowrap">{localPlaceLabels.place5 || 'place5'}</th>
+                          <th className="px-4 py-3 whitespace-nowrap">{localPlaceLabels.place6 || 'place6'}</th>
+                          <th className="px-4 py-3 whitespace-nowrap">Extra Meaning</th>
+                          <th className="px-4 py-3 whitespace-nowrap">Pronunciation</th>
+                          <th className="px-4 py-3 w-24 text-center whitespace-nowrap">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
                         {paginatedWords.length === 0 ? (
                           <tr>
-                            <td colSpan={7} className="px-6 py-12 text-center text-slate-400 font-semibold bg-white">
+                            <td colSpan={12} className="px-6 py-12 text-center text-slate-400 font-semibold bg-white">
                               No words found. Try changing filters or adding some words.
                             </td>
                           </tr>
@@ -4161,16 +4164,16 @@ export const CourseSettings: React.FC<CourseSettingsProps> = ({
                                     className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
                                   />
                                 </td>
-                                <td className="px-3 py-2 font-mono text-[10px] text-slate-500 font-bold select-all">{w.id}</td>
-                                <td className="px-4 py-2 font-black text-slate-900 font-sans">{w.word}</td>
-                                <td className="px-4 py-2 text-slate-600 font-bold">{w.meaning}</td>
+                                <td className="px-3 py-2 font-mono text-[10px] text-slate-500 font-bold select-all whitespace-nowrap">{w.id}</td>
+                                <td className="px-4 py-2 font-black text-slate-900 font-sans whitespace-nowrap">{w.word}</td>
+                                <td className="px-4 py-2 text-slate-600 font-bold max-w-[160px] truncate" title={w.meaning}>{w.meaning}</td>
                                 <td className="px-4 py-2 text-center"><span className="font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-black text-[10px]">{w.group}</span></td>
-                                <td className="px-4 py-2 text-slate-500 text-[10px] hidden sm:table-cell truncate max-w-xs leading-relaxed">
-                                  {w.example && <span className="block truncate"><strong className="text-slate-700 font-bold">{localPlaceLabels.place3 || 'place3'}:</strong> {w.example}</span>}
-                                  {w.extraWord && <span className="block truncate mt-0.5"><strong className="text-slate-700 font-bold">{localPlaceLabels.place4 || 'place4'}:</strong> {w.extraWord}</span>}
-                                  {w.synonyms && <span className="block truncate mt-0.5"><strong className="text-slate-700 font-bold">{localPlaceLabels.place5 || 'place5'}:</strong> {w.synonyms}</span>}
-                                  {w.mnemonic && <span className="block truncate mt-0.5 text-indigo-600 font-semibold"><strong className="text-indigo-500 font-bold">{localPlaceLabels.place6 || 'place6'}:</strong> {w.mnemonic}</span>}
-                                </td>
+                                <td className="px-4 py-2 text-slate-500 text-[10px] max-w-[200px] truncate" title={w.example || ''}>{w.example || '—'}</td>
+                                <td className="px-4 py-2 text-slate-500 text-[10px] max-w-[160px] truncate" title={w.extraWord || ''}>{w.extraWord || '—'}</td>
+                                <td className="px-4 py-2 text-slate-500 text-[10px] max-w-[160px] truncate" title={w.synonyms || ''}>{w.synonyms || '—'}</td>
+                                <td className="px-4 py-2 text-indigo-600 font-semibold text-[10px] max-w-[200px] truncate" title={w.mnemonic || ''}>{w.mnemonic || '—'}</td>
+                                <td className="px-4 py-2 text-slate-500 text-[10px] max-w-[160px] truncate" title={w.extraMeaning || ''}>{w.extraMeaning || '—'}</td>
+                                <td className="px-4 py-2 text-slate-500 text-[10px] max-w-[140px] truncate" title={w.pronunciation || ''}>{w.pronunciation || '—'}</td>
                                 <td className="px-4 py-2 text-center">
                                   <div className="flex items-center justify-center gap-1.5">
                                     <button
