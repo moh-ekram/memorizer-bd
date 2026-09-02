@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { doc, getDoc, setDoc, onSnapshot, db } from '../lib/db';
 import { VocabularyWord, UserProgress, WordStatus } from '../types';
 import { 
   Database, 

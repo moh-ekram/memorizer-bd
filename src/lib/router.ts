@@ -1,11 +1,23 @@
 import { ActiveTab } from '../types';
 
+export type AdminTabId =
+  | 'users' | 'courses' | 'reports' | 'access-requests' | 'autoverify'
+  | 'system-settings' | 'landing-editor' | 'blank-questions' | 'activity-logs'
+  | 'transaction-debugger' | 'question-bank' | 'exam-summary' | 'migration';
+
+const ADMIN_TAB_IDS: AdminTabId[] = [
+  'users', 'courses', 'reports', 'access-requests', 'autoverify',
+  'system-settings', 'landing-editor', 'blank-questions', 'activity-logs',
+  'transaction-debugger', 'question-bank', 'exam-summary', 'migration',
+];
+
 export interface RouteState {
   tab: ActiveTab;
   profileSubTab?: 'flashcard' | 'dashboard' | 'my_courses';
   path: string;
   courseId?: string;
   openLoginModal?: boolean;
+  adminTab?: AdminTabId;
 }
 
 /**
@@ -14,9 +26,17 @@ export interface RouteState {
 export function parseRoute(pathname: string = window.location.pathname): RouteState {
   const cleanPath = pathname.toLowerCase().replace(/\/+$/, '') || '/';
 
-  // 1. Admin
+  // 1. Admin — each internal admin section gets its own sub-path
+  // (/admin/users, /admin/courses, ...) instead of everything living under
+  // a single opaque "/admin".
   if (cleanPath === '/admin' || cleanPath.startsWith('/admin/')) {
-    return { tab: 'admin', path: '/admin' };
+    const adminSubPath = cleanPath.slice('/admin'.length).replace(/^\/+/, '');
+    const adminTab = ADMIN_TAB_IDS.find((id) => id === adminSubPath);
+    return {
+      tab: 'admin',
+      path: adminTab ? `/admin/${adminTab}` : '/admin',
+      adminTab: adminTab || 'courses',
+    };
   }
 
   // 2. Settings
@@ -146,6 +166,30 @@ export function getRoutePath(
       return '/study-tools/story';
     default:
       return '/home';
+  }
+}
+
+/**
+ * Updates the browser address bar for the currently active Admin Panel
+ * section, e.g. /admin/users, /admin/system-settings. Separate from
+ * syncRouteUrl since admin tab changes happen inside AdminPanel itself,
+ * not App.tsx's top-level tab state.
+ */
+export function syncAdminRouteUrl(adminTab: AdminTabId, replace: boolean = false) {
+  try {
+    if (typeof window === 'undefined') return;
+    const targetPath = `/admin/${adminTab}`;
+    const currentPath = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
+
+    if (currentPath === targetPath) return;
+
+    if (replace) {
+      window.history.replaceState({ tab: 'admin', adminTab }, '', targetPath);
+    } else {
+      window.history.pushState({ tab: 'admin', adminTab }, '', targetPath);
+    }
+  } catch (err) {
+    console.warn('Admin URL pushState notice:', err);
   }
 }
 

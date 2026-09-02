@@ -103,8 +103,13 @@ export default function App() {
   const [selectedGroupFromDash, setSelectedGroupFromDash] = useState<number | string | null>(null);
   const [noCourseToast, setNoCourseToast] = useState<string | null>(null);
 
-  // Synchronize browser history and URL pathname with active tab and sub-tab
+  // Synchronize browser history and URL pathname with active tab and sub-tab.
+  // Skipped for 'admin': AdminPanel owns its own more granular /admin/:tab
+  // URL (see syncAdminRouteUrl) — if this ran too, it would immediately
+  // overwrite e.g. /admin/users back to plain /admin on every mount, since
+  // getRoutePath('admin') only ever knows about the bare path.
   useEffect(() => {
+    if (activeTab === 'admin') return;
     syncRouteUrl(activeTab, profileSubTab);
   }, [activeTab, profileSubTab]);
 

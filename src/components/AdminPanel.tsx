@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { parseRoute, syncAdminRouteUrl } from '../lib/router';
 import { 
   db, 
   auth,
@@ -360,8 +361,31 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const [activeUserTab, setActiveUserTab] = useState<'enrolled' | 'progress' | 'analytics' | 'settings'>('enrolled');
   const [activeWordFilter, setActiveWordFilter] = useState<'all' | 'know' | 'confusion' | 'dont_know'>('all');
 
-  // Course management and upload states
-  const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'courses' | 'reports' | 'access-requests' | 'autoverify' | 'system-settings' | 'landing-editor' | 'blank-questions' | 'activity-logs' | 'transaction-debugger' | 'question-bank' | 'exam-summary' | 'migration'>('courses');
+  // Course management and upload states — initialized from the URL
+  // (/admin/:tab) so each admin section is directly linkable/shareable
+  // and survives a refresh, instead of always resetting to 'courses'.
+  const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'courses' | 'reports' | 'access-requests' | 'autoverify' | 'system-settings' | 'landing-editor' | 'blank-questions' | 'activity-logs' | 'transaction-debugger' | 'question-bank' | 'exam-summary' | 'migration'>(
+    () => parseRoute().adminTab || 'courses'
+  );
+
+  // Keep the URL in sync with the active admin section, and vice versa for
+  // browser back/forward — self-contained here since activeAdminTab lives
+  // entirely inside this component, not in App.tsx's top-level route state.
+  useEffect(() => {
+    syncAdminRouteUrl(activeAdminTab);
+  }, [activeAdminTab]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const parsed = parseRoute(window.location.pathname);
+      if (parsed.tab === 'admin' && parsed.adminTab) {
+        setActiveAdminTab(parsed.adminTab);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   const [requestsSubTab, setRequestsSubTab] = useState<'pending' | 'autoverify' | 'history' | 'debugger'>('pending');
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [bulkCsvCourse, setBulkCsvCourse] = useState<Course | null>(null);
