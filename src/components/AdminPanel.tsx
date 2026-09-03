@@ -61,6 +61,7 @@ import {
   Users, 
   ShieldCheck, 
   Search, 
+  ChevronLeft,
   ChevronRight, 
   Calendar, 
   Flame, 
@@ -3466,7 +3467,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-amber-900 dark:text-amber-200 text-xs font-medium flex items-start gap-3 shadow-sm" id="admin-diagnostic-warning">
           <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <h4 className="font-bold text-amber-800 dark:text-amber-300 text-sm">Diagnostic Notice: Admin Email Verification</h4>
+            <h4 className="font-bold text-amber-800 dark:text-amber-300 text-sm">Admin Email Verification</h4>
             <p className="text-amber-700/90 dark:text-amber-200/90 leading-relaxed">
               Current authenticated email: <code className="bg-amber-200/50 dark:bg-amber-900/50 px-1.5 py-0.5 rounded font-mono font-bold text-amber-900 dark:text-amber-100">{currentAuthEmail || 'Not Authenticated / Anonymous'}</code>.
               {currentAuthEmail ? ' This account is not listed in the authorized admin list.' : ' Please sign in as an admin.'}
@@ -3551,9 +3552,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       <div className="bg-white p-1.5 rounded-2xl border border-slate-200 shadow-2xs flex items-center gap-1 overflow-x-auto scrollbar-none">
         {[
           { id: 'courses' as const, label: 'Courses', icon: FileSpreadsheet, badge: customCourses.length, onClick: () => setActiveAdminTab('courses') },
-          { id: 'question-bank' as const, label: 'Question Bank', icon: Database, onClick: () => setActiveAdminTab('question-bank') },
-          { id: 'blank-questions' as const, label: 'Game Upload', icon: Award, onClick: () => setActiveAdminTab('blank-questions') },
-          { id: 'exam-summary' as const, label: 'Exam Summary', icon: Calendar, onClick: () => setActiveAdminTab('exam-summary') },
+          { id: 'question-bank' as const, label: 'Q Bank', icon: Database, onClick: () => setActiveAdminTab('question-bank') },
+          { id: 'blank-questions' as const, label: 'Games', icon: Award, onClick: () => setActiveAdminTab('blank-questions') },
+          { id: 'exam-summary' as const, label: 'Exams', icon: Calendar, onClick: () => setActiveAdminTab('exam-summary') },
           { id: 'users' as const, label: 'Users', icon: Users, onClick: () => setActiveAdminTab('users') },
           { id: 'reports' as const, label: 'Reports', icon: AlertTriangle, badge: reports.length, onClick: () => { setActiveAdminTab('reports'); fetchReports(); } },
           {
@@ -3566,8 +3567,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           { id: 'activity-logs' as const, label: 'Logs', icon: History, onClick: () => setActiveAdminTab('activity-logs') },
           { id: 'system-settings' as const, label: 'Settings', icon: Sliders, onClick: () => setActiveAdminTab('system-settings') },
           { id: 'landing-editor' as const, label: 'Editor', icon: LayoutTemplate, onClick: () => setActiveAdminTab('landing-editor') },
-          { id: 'transaction-debugger' as const, label: 'Tx Debugger', icon: Bug, onClick: () => setActiveAdminTab('transaction-debugger') },
-          { id: 'migration' as const, label: 'Cloud Migration', icon: Cloud, onClick: () => setActiveAdminTab('migration') },
+          { id: 'transaction-debugger' as const, label: 'Debug', icon: Bug, onClick: () => setActiveAdminTab('transaction-debugger') },
+          { id: 'migration' as const, label: 'Migrate', icon: Cloud, onClick: () => setActiveAdminTab('migration') },
         ].map((item) => {
           const isActive = activeAdminTab === item.id;
           const Icon = item.icon;
@@ -3625,7 +3626,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden flex flex-col">
             <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h3 className="font-extrabold text-slate-800 text-base">User Directory</h3>
+                <h3 className="font-extrabold text-slate-800 text-base flex items-center gap-2"><Users className="w-4 h-4 text-indigo-600" />Users</h3>
               </div>
 
               {/* Filter controls */}
@@ -3648,10 +3649,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     onChange={(e) => setSortBy(e.target.value as any)}
                     className="bg-transparent border-none outline-none text-xs font-bold text-slate-600 cursor-pointer pr-1"
                   >
-                    <option value="lastActive">Recently Active</option>
-                    <option value="email">Alphabetical</option>
-                    <option value="streak">Streak (🔥)</option>
-                    <option value="progress">Progress (Learned)</option>
+                    <option value="lastActive">Recent</option>
+                    <option value="email">A–Z</option>
+                    <option value="streak">Streak</option>
+                    <option value="progress">Progress</option>
                   </select>
                 </div>
               </div>
@@ -3660,7 +3661,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             {loading ? (
               <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
                 <RefreshCw className="w-8 h-8 animate-spin text-indigo-500" />
-                <p className="text-xs font-bold">Fetching real-time data from Supabase Cloud DB...</p>
+                <p className="text-xs font-bold">Loading users…</p>
               </div>
             ) : error ? (
               <div className="p-8 text-center text-rose-500 flex flex-col items-center justify-center gap-3">
@@ -3676,18 +3677,18 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             ) : filteredUsers.length === 0 ? (
               <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center gap-2">
                 <Users className="w-8 h-8 text-slate-300" />
-                <p className="text-xs font-bold">No users matched your query.</p>
+                <p className="text-xs font-bold">No results</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50/75 border-b border-slate-100 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-                      <th className="py-4 px-6 text-left">Student Profile</th>
+                      <th className="py-4 px-6 text-left">User</th>
                       <th className="py-4 px-3 text-center">Streak</th>
-                      <th className="py-4 px-4 text-left">Progress Breakdown</th>
-                      <th className="py-4 px-4 text-right">Last Synced</th>
-                      <th className="py-4 px-4 text-center">Details</th>
+                      <th className="py-4 px-4 text-left">Progress</th>
+                      <th className="py-4 px-4 text-right">Synced</th>
+                      <th className="py-4 px-4 text-center">View</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs font-sans">
@@ -3749,7 +3750,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                                 ))}
                                 {enrolledCourses.length > 2 && (
                                   <span className="text-[9px] font-bold px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
-                                    +{enrolledCourses.length - 2} more
+                                    +{enrolledCourses.length - 2}
                                   </span>
                                 )}
                               </div>
@@ -3782,12 +3783,12 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             {filteredUsers.length > 0 && !loading && !error && (
               <div className="px-5 py-3.5 bg-slate-50/80 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
                 <div className="flex items-center gap-2 text-slate-600 font-medium">
-                  <span>
-                    Showing <strong>{((userPage - 1) * userPerPage) + 1}</strong> to <strong>{Math.min(userPage * userPerPage, filteredUsers.length)}</strong> of <strong>{filteredUsers.length}</strong> users
+                  <span className="font-mono">
+                    {((userPage - 1) * userPerPage) + 1}–{Math.min(userPage * userPerPage, filteredUsers.length)} / {filteredUsers.length}
                   </span>
                   <span className="text-slate-300">|</span>
                   <div className="flex items-center gap-1">
-                    <span className="text-[11px] text-slate-500">Per page:</span>
+                    <span className="text-[11px] text-slate-500">Rows:</span>
                     <select
                       value={userPerPage}
                       onChange={(e) => {
@@ -3810,11 +3811,11 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     disabled={userPage <= 1}
                     className="px-3 py-1.5 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white text-slate-700 font-bold border border-slate-200 rounded-lg transition cursor-pointer disabled:cursor-not-allowed text-xs"
                   >
-                    Previous
+                    <ChevronLeft className="w-4 h-4" />
                   </button>
 
-                  <span className="px-3 py-1.5 bg-indigo-50 text-indigo-700 font-extrabold border border-indigo-100 rounded-lg text-xs">
-                    Page {userPage} of {totalUserPages}
+                  <span className="px-3 py-1.5 bg-indigo-50 text-indigo-700 font-extrabold border border-indigo-100 rounded-lg text-xs font-mono">
+                    {userPage}/{totalUserPages}
                   </span>
 
                   <button
@@ -3822,7 +3823,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     disabled={userPage >= totalUserPages}
                     className="px-3 py-1.5 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white text-slate-700 font-bold border border-slate-200 rounded-lg transition cursor-pointer disabled:cursor-not-allowed text-xs"
                   >
-                    Next
+                    <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -4088,20 +4089,20 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       {activeAdminTab === 'reports' && (
         <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-sm space-y-6">
           <div>
-            <h3 className="font-extrabold text-slate-800 text-base">User Word Issue Reports</h3>
+            <h3 className="font-extrabold text-slate-800 text-base">Issue Reports</h3>
           </div>
 
           {reportsLoading ? (
             <div className="flex items-center justify-center py-12 text-slate-400">
               <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-              <span className="text-xs font-bold font-mono">Loading active issue logs...</span>
+              <span className="text-xs font-bold font-mono">Loading…</span>
             </div>
           ) : reports.length === 0 ? (
             <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-2xl space-y-2">
               <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto" />
               <div className="space-y-0.5">
                 <p className="text-xs font-bold text-slate-700">All Clear!</p>
-                <p className="text-[10px] text-slate-400 font-semibold">No issues or incorrect vocabulary translations have been reported yet.</p>
+                <p className="text-[10px] text-slate-400 font-semibold">No reported issues yet</p>
               </div>
             </div>
           ) : (
@@ -4109,11 +4110,11 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               <table className="w-full text-left border-collapse min-w-[650px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-400 font-mono uppercase h-10">
-                    <th className="px-4 py-2">Word Details</th>
-                    <th className="px-4 py-2">Issue Category</th>
-                    <th className="px-4 py-2">Report Description</th>
-                    <th className="px-4 py-2">Reported By</th>
-                    <th className="px-4 py-2 text-right">Actions</th>
+                    <th className="px-4 py-2">Word</th>
+                    <th className="px-4 py-2">Issue</th>
+                    <th className="px-4 py-2">Description</th>
+                    <th className="px-4 py-2">From</th>
+                    <th className="px-4 py-2 text-right"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-150 font-sans text-xs">
@@ -4146,7 +4147,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                           <Edit className="w-3.5 h-3.5 opacity-60 inline" />
                         </button>
                         <div className="text-[10px] text-slate-400 font-bold font-mono uppercase tracking-wide mt-0.5">
-                          Course ID: {rep.courseId || 'unknown'}
+                          Course: {rep.courseId || 'unknown'}
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -4179,7 +4180,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                             onClick={() => handleResolveReport(rep.id)}
                             className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-extrabold rounded-lg text-[10px] transition cursor-pointer"
                           >
-                            Resolve
+                            <CheckCircle className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
@@ -4210,7 +4211,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 }`}
               >
                 <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                <span>📋 Pending Requests ({accessRequests.filter(r => r.status === 'pending').length})</span>
+                <span>Pending ({accessRequests.filter(r => r.status === 'pending').length})</span>
                 {accessRequests.filter(r => r.status === 'pending').length > 0 && (
                   <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
                 )}
@@ -4229,7 +4230,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 }`}
               >
                 <Zap className="w-4 h-4 fill-slate-950 text-slate-950" />
-                <span>⚡ bKash Gateway ({globalVerifiedPayments.length})</span>
+                <span>Gateway ({globalVerifiedPayments.length})</span>
               </button>
 
               <button
@@ -4245,7 +4246,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 }`}
               >
                 <History className="w-4 h-4 text-emerald-600" />
-                <span>📜 Transaction History ({accessRequests.length})</span>
+                <span>History ({accessRequests.length})</span>
               </button>
 
               <button
@@ -4258,7 +4259,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 }`}
               >
                 <Bug className="w-4 h-4 text-amber-300" />
-                <span>🛠️ Tx Debugger ({transactionLogs.length})</span>
+                <span>Debug ({transactionLogs.length})</span>
               </button>
             </div>
 
@@ -4270,7 +4271,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-xl text-xs transition shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <Zap className={`w-3.5 h-3.5 fill-slate-950 ${isAutoVerifyingAll ? 'animate-spin' : ''}`} />
-                <span>{isAutoVerifyingAll ? 'Verifying...' : '⚡ Auto-Verify All'}</span>
+                <span>{isAutoVerifyingAll ? '…' : 'Auto-Verify'}</span>
               </button>
             </div>
           </div>
@@ -4279,29 +4280,29 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-sm space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <h3 className="font-extrabold text-slate-800 text-base">Course Access & Balance Requests</h3>
-                  <p className="text-xs text-slate-400 font-medium">Verify bKash transactions, approve course access, and manage wallet balance recharges.</p>
+                  <h3 className="font-extrabold text-slate-800 text-base">Requests</h3>
+                  <p className="text-xs text-slate-400 font-medium">Verify · approve · wallets</p>
                 </div>
                 <button
                   onClick={fetchAccessRequests}
                   className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer self-start sm:self-center"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${accessRequestsLoading ? 'animate-spin' : ''}`} />
-                  <span>Refresh</span>
+                  <span className="sr-only">Refresh</span>
                 </button>
               </div>
 
             {accessRequestsLoading ? (
               <div className="flex items-center justify-center py-12 text-slate-400">
                 <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-                <span className="text-xs font-bold font-mono">Loading access requests...</span>
+                <span className="text-xs font-bold font-mono">Loading…</span>
               </div>
             ) : accessRequests.filter(r => r.status === 'pending').length === 0 ? (
               <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-2xl space-y-2">
                 <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto" />
                 <div className="space-y-0.5">
-                  <p className="text-xs font-bold text-slate-700">No pending requests found</p>
-                  <p className="text-[10px] text-slate-400 font-semibold">All student access & wallet recharge requests have been processed!</p>
+                  <p className="text-xs font-bold text-slate-700">All clear</p>
+                  <p className="text-[10px] text-slate-400 font-semibold">All requests processed</p>
                 </div>
               </div>
             ) : (
@@ -4309,11 +4310,11 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 <table className="w-full text-left border-collapse min-w-[800px]">
                   <thead>
                     <tr className="bg-slate-50/80 border-b border-slate-200 text-[10px] font-bold text-slate-400 font-mono uppercase h-9">
-                      <th className="px-3 py-2">Course Details</th>
+                      <th className="px-3 py-2">Course</th>
                       <th className="px-3 py-2">Code</th>
-                      <th className="px-3 py-2">Student Email</th>
-                      <th className="px-3 py-2">bKash Number</th>
-                      <th className="px-3 py-2">Trx ID</th>
+                      <th className="px-3 py-2">Email</th>
+                      <th className="px-3 py-2">Number</th>
+                      <th className="px-3 py-2">TrxID</th>
                       <th className="px-3 py-2">Access</th>
                       <th className="px-3 py-2">Status</th>
                       <th className="px-3 py-2 text-right">Action</th>
@@ -4326,7 +4327,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                           {req.courseIds && req.courseIds.length > 1 ? (
                             <div className="space-y-0.5">
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 font-bold text-[10px] rounded-md border border-indigo-200/60">
-                                🛒 Bundle ({req.courseIds.length})
+                                Bundle {req.courseIds.length}
                               </span>
                               <div className="text-[11px] font-bold text-slate-800 space-y-0.5">
                                 {req.courseTitles && req.courseTitles.length > 0 ? (
@@ -4340,14 +4341,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                                 )}
                               </div>
                               <div className="text-[10px] text-emerald-700 font-bold font-mono">
-                                ৳{(req as any).amount || req.totalPrice || req.price || 30} BDT
+                                ৳{(req as any).amount || req.totalPrice || req.price || 30}
                               </div>
                             </div>
                           ) : (
                             <div>
                               <div className="font-extrabold text-slate-800 text-xs truncate max-w-[180px]" title={req.courseTitle}>{req.courseTitle}</div>
                               <div className="text-[10px] text-indigo-600 font-bold font-mono mt-0.5">
-                                ৳{(req as any).amount || req.totalPrice || req.price || (req.courseId === 'wallet_recharge' ? 50 : 30)} BDT
+                                ৳{(req as any).amount || req.totalPrice || req.price || (req.courseId === 'wallet_recharge' ? 50 : 30)}
                               </div>
                             </div>
                           )}
@@ -4390,7 +4391,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50/80 text-indigo-700 font-bold rounded text-[10px] border border-indigo-100/80">
                               <Clock className="w-2.5 h-2.5 text-indigo-500" />
-                              1 Yr Access
+                              1 Yr
                             </span>
                           )}
                         </td>
@@ -4432,7 +4433,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                                 className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-lg text-xs transition cursor-pointer flex items-center gap-1 shadow-2xs whitespace-nowrap"
                               >
                                 <ShieldCheck className="w-3.5 h-3.5" />
-                                <span>Action</span>
+                                <span>Go</span>
                               </button>
                             ) : (
                               <span className="text-slate-400 font-bold text-[10px] bg-slate-100 px-2 py-0.5 rounded">
@@ -4671,7 +4672,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     placeholder="e.g. 75"
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 focus:bg-white outline-none text-xs font-mono font-bold transition text-slate-800"
                   />
-                  <p className="text-[10px] text-slate-400 font-medium">Auto-grants course access based on this paid amount.</p>
+                  <p className="text-[10px] text-slate-400 font-medium">Grants access by amount</p>
                 </div>
 
                 <button
@@ -4694,7 +4695,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">Format: Mobile, TrxID, Amount (1 per line)</label>
+                  <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block" title="One per line: Mobile, TrxID, Amount">Mobile, TrxID, Amount / line</label>
                   <textarea
                     rows={4}
                     value={globalVpPasteInput}
@@ -4721,7 +4722,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="font-extrabold text-slate-800 text-sm">Verified Transactions</h3>
-                <p className="text-xs text-slate-400 font-medium">All verified bKash payment records stored in system settings.</p>
+                <p className="text-xs text-slate-400 font-medium">Stored in system settings</p>
               </div>
 
               <div className="flex items-center gap-2">
@@ -4902,8 +4903,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               <Sliders className="w-5 h-5 text-indigo-600" />
               <span>System Settings</span>
             </h3>
-            <p className="text-xs text-slate-500 font-medium mt-1">
-              Configure item ordering, support contact info, and platform defaults across the platform.
+            <p className="text-xs text-slate-500 font-medium mt-1" title="Item ordering, support links & platform defaults.">
+              Ordering · support · defaults
             </p>
           </div>
 
@@ -4915,13 +4916,13 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h4 className="text-sm font-black text-white">Direct Firebase to Supabase Cloud Migration</h4>
+                  <h4 className="text-sm font-black text-white">Firebase → Supabase</h4>
                   <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] font-black rounded-md uppercase border border-emerald-500/30">
                     Zero Data Loss
                   </span>
                 </div>
                 <p className="text-xs text-slate-300 font-medium mt-0.5">
-                  1-ক্লিকে সমস্ত ইউজার প্রগ্রেস, ফ্ল্যাশকার্ড হিস্ট্রি, শব্দ তালিকা ও পেমেন্ট রেকর্ড Supabase ক্লাউডে সিঙ্ক করুন।
+                  Sync users, progress, words & payments (1-click)
                 </p>
               </div>
             </div>
@@ -4932,7 +4933,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl transition shadow-lg flex items-center justify-center gap-2 cursor-pointer shrink-0"
             >
               <Zap className="w-4 h-4 fill-slate-950" />
-              <span>ওপেন মাইগ্রেশন সেন্টার (Open Migration Center)</span>
+              <span>Open Migrator</span>
             </button>
           </div>
 
@@ -4943,10 +4944,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 <div>
                   <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                     <Gamepad2 className="w-4 h-4 text-purple-600" />
-                    <span>Practice & Games Item Ordering</span>
+                    <span>Game Order</span>
                   </h4>
-                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                    Control the order and display position of items on the user's Practice & Games page
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5" title="Order of items on the student Practice & Games page">
+                    Practice page
                   </p>
                 </div>
                 <button
@@ -4959,7 +4960,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   }}
                   className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] rounded-lg transition"
                 >
-                  Reset Default Order
+                  Reset
                 </button>
               </div>
 
@@ -5002,8 +5003,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                           </span>
                           <span className="text-lg">{itemInfo.icon}</span>
                           <div>
-                            <span className="font-extrabold text-xs text-slate-800 block">{itemInfo.label}</span>
-                            <span className="text-[10px] font-medium text-slate-500">{itemInfo.desc}</span>
+                            <span className="font-extrabold text-xs text-slate-800 block" title={itemInfo.desc}>{itemInfo.label}</span>
                           </div>
                         </div>
 
@@ -5044,10 +5044,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 <div>
                   <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                     <BookOpen className="w-4 h-4 text-emerald-600" />
-                    <span>Study Tools Item Ordering</span>
+                    <span>Tool Order</span>
                   </h4>
-                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                    Determine the order and display position of tools on the user's Study Tools page
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5" title="Order of items on the student Study Tools page">
+                    Tools page
                   </p>
                 </div>
                 <button
@@ -5060,7 +5060,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   }}
                   className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] rounded-lg transition"
                 >
-                  Reset Default Order
+                  Reset
                 </button>
               </div>
 
@@ -5100,8 +5100,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                           </span>
                           <span className="text-lg">{itemInfo.icon}</span>
                           <div>
-                            <span className="font-extrabold text-xs text-slate-800 block">{itemInfo.label}</span>
-                            <span className="text-[10px] font-medium text-slate-500">{itemInfo.desc}</span>
+                            <span className="font-extrabold text-xs text-slate-800 block" title={itemInfo.desc}>{itemInfo.label}</span>
                           </div>
                         </div>
 
@@ -5142,10 +5141,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 <div>
                   <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                     <Headphones className="w-4 h-4 text-emerald-600" />
-                    <span>Contact & Support Information Controls</span>
+                    <span>Support Links</span>
                   </h4>
-                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                    Configure official contact links (WhatsApp, 2 Facebook links, Telegram, and Support Email) visible to all users in User Settings.
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5" title="Contact links shown in User Settings">
+                    User Settings contacts
                   </p>
                 </div>
                 <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 font-extrabold text-[10px] rounded-lg uppercase">
@@ -5158,7 +5157,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 <div className="space-y-1.5">
                   <label className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5">
                     <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>WhatsApp Number / Direct Chat Link:</span>
+                    <span>WhatsApp</span>
                   </label>
                   <input
                     type="text"
@@ -5171,14 +5170,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     }}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-800 focus:bg-white focus:border-emerald-500 transition"
                   />
-                  <p className="text-[10px] text-slate-400 font-medium">Shown on WhatsApp button in User Settings</p>
+                  <p className="text-[10px] text-slate-400 font-medium">User Settings → WhatsApp</p>
                 </div>
 
                 {/* Facebook Link 1 (Official Page / Main) */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5">
                     <Globe className="w-3.5 h-3.5 text-sky-600" />
-                    <span>Facebook Link 1 (Official Page / Main Link):</span>
+                    <span>Facebook 1</span>
                   </label>
                   <input
                     type="text"
@@ -5191,14 +5190,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     }}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-800 focus:bg-white focus:border-sky-500 transition"
                   />
-                  <p className="text-[10px] text-slate-400 font-medium">Link 1: Facebook Page / Main profile</p>
+                  <p className="text-[10px] text-slate-400 font-medium">FB page</p>
                 </div>
 
                 {/* Facebook Link 2 (Community Group) */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5">
                     <Share2 className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>Facebook Link 2 (Community / Group Link):</span>
+                    <span>Facebook 2</span>
                   </label>
                   <input
                     type="text"
@@ -5211,14 +5210,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     }}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-500 transition"
                   />
-                  <p className="text-[10px] text-slate-400 font-medium">Link 2: Facebook Community Group / Secondary Link</p>
+                  <p className="text-[10px] text-slate-400 font-medium">FB group</p>
                 </div>
 
                 {/* Telegram Channel / Chat Link */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5">
                     <Send className="w-3.5 h-3.5 text-blue-500" />
-                    <span>Telegram Link / Channel Username:</span>
+                    <span>Telegram</span>
                   </label>
                   <input
                     type="text"
@@ -5231,14 +5230,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     }}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 transition"
                   />
-                  <p className="text-[10px] text-slate-400 font-medium">Telegram channel or support bot link</p>
+                  <p className="text-[10px] text-slate-400 font-medium">Telegram</p>
                 </div>
 
                 {/* Support Email */}
                 <div className="space-y-1.5 md:col-span-2">
                   <label className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5">
                     <Mail className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Official Support Email Address:</span>
+                    <span>Support Email</span>
                   </label>
                   <input
                     type="text"
@@ -5251,7 +5250,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     }}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-800 focus:bg-white focus:border-amber-500 transition"
                   />
-                  <p className="text-[10px] text-slate-400 font-medium">Official support email for direct inquiries</p>
+                  <p className="text-[10px] text-slate-400 font-medium">Support</p>
                 </div>
               </div>
             </div>
@@ -5263,14 +5262,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         <div className="space-y-8 animate-fade-in">
           {/* Header */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs">
-            <h3 className="font-extrabold text-slate-800 text-lg">গেম ডাটা আপলোড অ্যান্ড এক্সেল ম্যানেজমেন্ট (Game Upload Center)</h3>
+            <h3 className="font-extrabold text-slate-800 text-lg flex items-center gap-2"><Award className="w-5 h-5 text-indigo-600" />Game Upload</h3>
             <p className="text-xs text-slate-500 font-medium mt-1">
-              একই সাথে সকল গেমের ডেটা এক্সেল ফাইলের একাধিক শীট (Multi-Sheet) অথবা নির্দিষ্ট গেম ট্যাবে গিয়ে এককভাবে আপলোড ও পরিচালনা করুন। (অনলাইন এক্সাম এখন 'Question Bank' মেনু থেকে সরাসরি তৈরি করা হয়)।
+              Upload via multi-sheet Excel or per-game tabs
             </p>
 
             {/* Template Download Buttons */}
             <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center gap-2">
-              <span className="text-xs font-bold text-slate-700 mr-1">টেমপ্লেট ডাউনলোড করুন:</span>
+              <span className="text-xs font-bold text-slate-700 mr-1">Templates:</span>
 
               <button
                 type="button"
@@ -5278,7 +5277,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <FileSpreadsheet className="w-4 h-4" />
-                <span>মাল্টি-শীট গেম টেমপ্লেট (All-in-One)</span>
+                <span>All-in-One</span>
               </button>
 
               <button
@@ -5320,7 +5319,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             <label className="text-xs font-extrabold text-indigo-950 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <span className="text-rose-600 font-extrabold text-sm">*</span>
-                <span>টার্গেট কোর্স নির্ধারণ করুন (Mandatory Target Course Selection)</span>
+                <span>Target Course *</span>
               </span>
               {selectedGameCourseId && (
                 <span className="text-[10px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-md uppercase">
@@ -5344,15 +5343,15 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               }}
               className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-extrabold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs"
             >
-              <option value="">-- অনুগ্রহ করে কন্টেন্টের জন্য একটি নির্দিষ্ট কোর্স সিলেক্ট করুন (Required) --</option>
+              <option value="">-- Select course * --</option>
               {customCourses.map(c => (
                 <option key={c.id} value={c.id}>
                   {c.title} ({c.id.toUpperCase()})
                 </option>
               ))}
             </select>
-            <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-              ⚠️ গেমের ডেটা বা কন্টেন্ট শুধুমাত্র আপনার সিলেক্ট করা নির্দিষ্ট কোর্সের সাথেই যুক্ত থাকবে (সকল কোর্সে স্বয়ংক্রিয়ভাবে গ্লোবালি যাবে না)।
+            <p className="text-[11px] text-slate-500 font-medium leading-relaxed" title="Game data is linked only to the selected course, not all courses.">
+              ⚠ Data links to the selected course only
             </p>
           </div>
 
@@ -5368,7 +5367,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               }`}
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-              <span>Multi-Sheet (All-in-One)</span>
+              <span>All-in-One</span>
             </button>
             <button
               type="button"
@@ -5437,7 +5436,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               }`}
             >
               <GraduationCap className="w-4 h-4 text-indigo-600" />
-              <span>MCQ Quiz Qs</span>
+              <span>MCQ</span>
               <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-100 text-slate-600 font-mono">
                 {mcqQuestions.length}
               </span>
@@ -5454,7 +5453,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               }`}
             >
               <BookOpen className="w-4 h-4 text-pink-600" />
-              <span>Vocabulary Stories</span>
+              <span>Stories</span>
               <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-100 text-slate-600 font-mono">
                 {customCourses.find(c => c.id === selectedGameCourseId)?.stories?.length || 0}
               </span>
@@ -5471,7 +5470,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               }`}
             >
               <Newspaper className="w-4 h-4 text-indigo-600" />
-              <span>Read Article</span>
+              <span>Articles</span>
               <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-100 text-slate-600 font-mono">
                 {customCourses.find(c => c.id === selectedGameCourseId)?.articles?.length || 0}
               </span>
@@ -5485,30 +5484,29 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               <div className="bg-amber-50/70 border border-amber-200 p-5 rounded-2xl text-xs space-y-3">
                 <h4 className="font-extrabold text-amber-900 text-sm flex items-center gap-2">
                   <Info className="w-4 h-4 text-amber-600" />
-                  <span>এক্সেল কলামের নাম ও লজিকের নিয়মাবলী (Excel Column Logic Rules)</span>
+                  <span>Excel Columns</span>
                 </h4>
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse bg-white rounded-xl border border-amber-200/80">
                     <thead>
                       <tr className="bg-amber-100/50 text-amber-900 font-bold text-[11px] border-b border-amber-200">
-                        <th className="p-2.5">কলাম ১: প্রশ্ন (Question)</th>
-                        <th className="p-2.5">কলাম ২-৫: অপশনসমূহ (Options)</th>
-                        <th className="p-2.5">কলাম ৬: উত্তর (Answer - ঐচ্ছিক)</th>
-                        <th className="p-2.5">কলাম ৭: ব্যাখ্যা (Explanation - ঐচ্ছিক)</th>
+                        <th className="p-2.5">Col 1 · Question</th>
+                        <th className="p-2.5">Col 2–5 · Options</th>
+                        <th className="p-2.5">Col 6 · Answer</th>
+                        <th className="p-2.5">Col 7 · Explanation</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-amber-100 text-[11px] text-slate-700">
                       <tr>
-                        <td className="p-2.5 font-bold">কলামের নাম: <span className="font-mono text-indigo-700">Question / Sentence / Stem / প্রশ্ন</span></td>
-                        <td className="p-2.5 font-bold">কলামের নাম: <span className="font-mono text-indigo-700">Option 1, Option 2, Option 3, Option 4 / অপশন ১-৪</span></td>
-                        <td className="p-2.5">কলামের নাম: <span className="font-mono text-indigo-700">Answer / Correct Option / উত্তর</span></td>
-                        <td className="p-2.5">কলামের নাম: <span className="font-mono text-indigo-700">Explanation / Reason / ব্যাখ্যা</span></td>
+                        <td className="p-2.5 font-bold"><span className="font-mono text-indigo-700">Question / Sentence / Stem</span></td>
+                        <td className="p-2.5 font-bold"><span className="font-mono text-indigo-700">Option 1–4</span></td>
+                        <td className="p-2.5"><span className="font-mono text-indigo-700">Answer / Correct Option</span></td>
+                        <td className="p-2.5"><span className="font-mono text-indigo-700">Explanation / Reason</span></td>
                       </tr>
                       <tr>
-                        <td className="p-2.5 text-slate-600" colSpan={4}>
-                          💡 <strong>লজিক নিয়ম ১ (উত্তরের কলাম না থাকলে):</strong> অপশনের যেকোনো চার কলামের একটি উত্তরের শেষে বা শুরুতে <strong>#</strong> চিহ্ন থাকলে (যেমন: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-rose-600">ঢাকা#</code>) সেটিকে স্বয়ংক্রিয়ভাবে সঠিক উত্তর হিসেবে নির্বাচন করা হবে।<br/>
-                          💡 <strong>লজিক নিয়ম ২ (ব্যাখ্যার কলাম না থাকলে):</strong> ব্যাখ্যার জায়গায় স্বয়ংক্রিয়ভাবে ডিফল্ট লেখা বসবে (যেমন: <em>"সঠিক উত্তরের ব্যাখ্যা শীঘ্রই সংযুক্ত করা হবে।"</em>)।
+                        <td className="p-2.5 text-slate-600" colSpan={4} title="No answer column? Mark the correct option with # (e.g. ঢাকা#). No explanation column? A default explanation is used.">
+                          💡 <strong>#</strong> = correct option &nbsp;•&nbsp; default explanation fallback
                         </td>
                       </tr>
                     </tbody>
@@ -5521,10 +5519,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 <div>
                   <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                     <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
-                    <span>মাল্টি-শীট এক্সেল আপলোড (Multi-Sheet Excel Uploader)</span>
+                    <span>Multi-Sheet Excel</span>
                   </h4>
                   <p className="text-[11px] text-slate-400 mt-1 font-medium">
-                    একই ফাইলে 'Blank Filling', 'Odd One Out', 'Word Analogy', 'MCQ Quiz' নামের শীট থাকলে সবকটি গেম একসাথে আপডেট হবে।
+                    Sheets: Blank · OOO · Analogy · MCQ
                   </p>
                 </div>
 
@@ -5552,7 +5550,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         setMultiSheetSuccessMessage(null);
                         setIsUploadingMultiSheet(true);
                         setMultiSheetUploadProgress(20);
-                        setMultiSheetStatusMessage('এক্সেল ফাইল প্রসেস করা হচ্ছে এবং প্রশ্নাবলী এক্সট্র্যাক্ট করা হচ্ছে...');
+                        setMultiSheetStatusMessage('Processing file…');
 
                         try {
                           const res = await parseMultiSheetGamesExcel(file, selectedGameCourseId);
@@ -5663,7 +5661,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     ) : (
                       <>
                         <UploadCloud className="w-8 h-8 text-indigo-500 mx-auto mb-2" />
-                        <p className="text-xs font-bold text-slate-700">মাল্টি-শীট এক্সেল ফাইলটি এখানে ক্লিক করে বা ড্রপ করে আপলোড করুন</p>
+                        <p className="text-xs font-bold text-slate-700">Click or drop multi-sheet Excel here</p>
                         <p className="text-[10px] text-slate-400 font-semibold mt-0.5">সহায়ক ফাইলের ধরন: .xlsx, .xls</p>
                       </>
                     )}
@@ -5712,11 +5710,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   <div>
                     <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                       <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
-                      <span>Blank Filling Excel Upload</span>
+                      <span>Upload Excel</span>
                     </h4>
-                    <p className="text-[11px] text-slate-400 mt-1 font-medium">
-                      Upload blank filling questions specifically for the selected course.
-                    </p>
+                    
                   </div>
 
                   <div className="border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-2xl p-6 text-center transition cursor-pointer relative bg-slate-50/50">
@@ -5727,7 +5723,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     />
                     <UploadCloud className="w-8 h-8 text-indigo-500 mx-auto mb-2" />
-                    <p className="text-xs font-bold text-slate-700">Click or drag Blank Filling Excel/CSV file here</p>
+                    <p className="text-xs font-bold text-slate-700">Click or drop Blank Filling file</p>
                     <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Supports .xlsx, .xls, .csv</p>
                   </div>
 
@@ -5752,7 +5748,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                             excelSaveStatus === 'saving' ? 'bg-slate-400' : 'bg-emerald-600 hover:bg-emerald-500'
                           }`}
                         >
-                          {excelSaveStatus === 'saving' ? 'Saving...' : 'Save to Cloud'}
+                          {excelSaveStatus === 'saving' ? 'Save…' : 'Save'}
                         </button>
                       </div>
 
@@ -5787,14 +5783,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   <div>
                     <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                       <PlusCircle className="w-4 h-4 text-indigo-500" />
-                      <span>Add Blank Question Manually</span>
+                      <span>Add</span>
                     </h4>
-                    <p className="text-[11px] text-slate-400 mt-1 font-medium">Fill out the form below to add a new question directly to the database.</p>
+                    
                   </div>
 
                   <form onSubmit={handleManualAddBlankQuestion} className="space-y-4">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Sentence with blank</label>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Sentence</label>
                       <input
                         type="text"
                         required
@@ -5807,7 +5803,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
                     <div className="grid grid-cols-2 gap-3.5">
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Option 1</label>
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Opt 1</label>
                         <input
                           type="text"
                           required
@@ -5818,7 +5814,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Option 2</label>
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Opt 2</label>
                         <input
                           type="text"
                           required
@@ -5829,7 +5825,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Option 3</label>
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Opt 3</label>
                         <input
                           type="text"
                           required
@@ -5840,7 +5836,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Option 4</label>
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Opt 4</label>
                         <input
                           type="text"
                           required
@@ -5853,7 +5849,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Correct Option</label>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Answer</label>
                       <select
                         value={newCorrectIndex}
                         onChange={(e) => setNewCorrectIndex(Number(e.target.value))}
@@ -5880,8 +5876,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <h4 className="font-extrabold text-slate-800 text-sm">Existing Blank Questions ({blankQuestions.length})</h4>
-                    <p className="text-[11px] text-slate-400 font-medium">Questions stored in database for the selected course context.</p>
+                    <h4 className="font-extrabold text-slate-800 text-sm">Questions ({blankQuestions.length})</h4>
+                    
                   </div>
                   <div className="flex items-center gap-2">
                     {blankQuestions.length > 0 && (
@@ -5890,7 +5886,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 text-xs font-black rounded-xl transition cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        <span>Bulk Delete All</span>
+                        <span>Delete All</span>
                       </button>
                     )}
                     <button
@@ -5898,7 +5894,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${blankQuestionsLoading ? 'animate-spin' : ''}`} />
-                      <span>Refresh</span>
+                      <span className="sr-only">Refresh</span>
                     </button>
                   </div>
                 </div>
@@ -5906,23 +5902,23 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 {blankQuestionsLoading ? (
                   <div className="flex items-center justify-center py-12 text-slate-400">
                     <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-                    <span className="text-xs font-bold font-mono">Loading blank questions...</span>
+                    <span className="text-xs font-bold font-mono">Loading…</span>
                   </div>
                 ) : blankQuestions.length === 0 ? (
                   <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-2xl">
                     <Info className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p className="text-xs font-bold text-slate-600">No questions found</p>
-                    <p className="text-[10px] text-slate-400 font-semibold">Please upload an Excel sheet or add questions manually.</p>
+                    <p className="text-xs font-bold text-slate-600">No items</p>
+                    <p className="text-[10px] text-slate-400 font-semibold">Upload Excel or add manually.</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-xs">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-slate-50 text-[10px] font-extrabold text-slate-450 uppercase tracking-wider border-b border-slate-100 font-sans">
-                          <th className="px-4 py-3">Sentence</th>
-                          <th className="px-4 py-3">Options</th>
-                          <th className="px-4 py-3">Answer</th>
-                          <th className="px-4 py-3 text-right">Action</th>
+                          <th className="px-4 py-3">Q</th>
+                          <th className="px-4 py-3">Opts</th>
+                          <th className="px-4 py-3">Ans</th>
+                          <th className="px-4 py-3 text-right"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-xs">
@@ -5967,11 +5963,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   <div>
                     <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                       <HelpCircle className="w-4 h-4 text-amber-500" />
-                      <span>Odd One Out Excel Upload</span>
+                      <span>Upload Excel</span>
                     </h4>
-                    <p className="text-[11px] text-slate-400 mt-1 font-medium">
-                      Upload Odd One Out sets (4 words, with 1 marked odd).
-                    </p>
+                    
                   </div>
 
                   <div className="border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-2xl p-6 text-center transition cursor-pointer relative bg-slate-50/50">
@@ -5982,7 +5976,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     />
                     <UploadCloud className="w-8 h-8 text-amber-500 mx-auto mb-2" />
-                    <p className="text-xs font-bold text-slate-700">Click or drag Odd One Out Excel/CSV file here</p>
+                    <p className="text-xs font-bold text-slate-700">Click or drop Odd One Out file</p>
                     <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Supports .xlsx, .xls, .csv</p>
                   </div>
 
@@ -6007,7 +6001,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                             excelOooSaveStatus === 'saving' ? 'bg-slate-400' : 'bg-amber-600 hover:bg-amber-500'
                           }`}
                         >
-                          {excelOooSaveStatus === 'saving' ? 'Saving...' : 'Save to Cloud'}
+                          {excelOooSaveStatus === 'saving' ? 'Save…' : 'Save'}
                         </button>
                       </div>
 
@@ -6036,9 +6030,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   <div>
                     <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                       <PlusCircle className="w-4 h-4 text-amber-500" />
-                      <span>Add Odd One Out Manually</span>
+                      <span>Add Question</span>
                     </h4>
-                    <p className="text-[11px] text-slate-400 mt-1 font-medium">Specify 4 words and select the one that does not belong.</p>
+                    
                   </div>
 
                   <form onSubmit={handleManualAddOooQuestion} className="space-y-4">
@@ -6063,7 +6057,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Odd Word (Correct Answer)</label>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Answer</label>
                       <select
                         value={newOooCorrectIndex}
                         onChange={(e) => setNewOooCorrectIndex(Number(e.target.value))}
@@ -6077,7 +6071,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Reason / Explanation (Optional)</label>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Reason</label>
                       <input
                         type="text"
                         placeholder="e.g. All others are synonyms for happy."
@@ -6091,7 +6085,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       type="submit"
                       className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs rounded-xl transition cursor-pointer shadow-xs"
                     >
-                      Add Odd One Out
+                      Add
                     </button>
                   </form>
                 </div>
@@ -6101,8 +6095,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <h4 className="font-extrabold text-slate-800 text-sm">Existing Odd One Out Questions ({oooQuestions.length})</h4>
-                    <p className="text-[11px] text-slate-400 font-medium">Stored questions for the current course.</p>
+                    <h4 className="font-extrabold text-slate-800 text-sm">Questions ({oooQuestions.length})</h4>
+                    
                   </div>
                   <div className="flex items-center gap-2">
                     {oooQuestions.length > 0 && (
@@ -6111,7 +6105,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 text-xs font-black rounded-xl transition cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        <span>Bulk Delete All</span>
+                        <span>Delete All</span>
                       </button>
                     )}
                     <button
@@ -6119,7 +6113,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${oooQuestionsLoading ? 'animate-spin' : ''}`} />
-                      <span>Refresh</span>
+                      <span className="sr-only">Refresh</span>
                     </button>
                   </div>
                 </div>
@@ -6127,23 +6121,23 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 {oooQuestionsLoading ? (
                   <div className="flex items-center justify-center py-12 text-slate-400">
                     <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-                    <span className="text-xs font-bold font-mono">Loading questions...</span>
+                    <span className="text-xs font-bold font-mono">Loading…</span>
                   </div>
                 ) : oooQuestions.length === 0 ? (
                   <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-2xl">
                     <Info className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p className="text-xs font-bold text-slate-600">No Odd One Out questions found</p>
-                    <p className="text-[10px] text-slate-400 font-semibold">Please upload an Excel sheet or add questions manually.</p>
+                    <p className="text-xs font-bold text-slate-600">No items</p>
+                    <p className="text-[10px] text-slate-400 font-semibold">Upload Excel or add manually.</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-xs">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-slate-50 text-[10px] font-extrabold text-slate-450 uppercase tracking-wider border-b border-slate-100 font-sans">
-                          <th className="px-4 py-3">Words</th>
-                          <th className="px-4 py-3">Odd One (Answer)</th>
-                          <th className="px-4 py-3">Reason</th>
-                          <th className="px-4 py-3 text-right">Action</th>
+                          <th className="px-4 py-3">Set</th>
+                          <th className="px-4 py-3">Odd</th>
+                          <th className="px-4 py-3">Why</th>
+                          <th className="px-4 py-3 text-right"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-xs">
@@ -6188,11 +6182,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   <div>
                     <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                       <Shuffle className="w-4 h-4 text-purple-500" />
-                      <span>Word Analogy Excel Upload</span>
+                      <span>Upload Excel</span>
                     </h4>
-                    <p className="text-[11px] text-slate-400 mt-1 font-medium">
-                      Upload word analogy questions (e.g. Light : Dark :: Day : Night).
-                    </p>
+                    
                   </div>
 
                   <div className="border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-2xl p-6 text-center transition cursor-pointer relative bg-slate-50/50">
@@ -6203,7 +6195,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     />
                     <UploadCloud className="w-8 h-8 text-purple-500 mx-auto mb-2" />
-                    <p className="text-xs font-bold text-slate-700">Click or drag Word Analogy Excel/CSV file here</p>
+                    <p className="text-xs font-bold text-slate-700">Click or drop Analogy file</p>
                     <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Supports .xlsx, .xls, .csv</p>
                   </div>
 
@@ -6228,7 +6220,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                             excelAnalogySaveStatus === 'saving' ? 'bg-slate-400' : 'bg-purple-600 hover:bg-purple-500'
                           }`}
                         >
-                          {excelAnalogySaveStatus === 'saving' ? 'Saving...' : 'Save to Cloud'}
+                          {excelAnalogySaveStatus === 'saving' ? 'Save…' : 'Save'}
                         </button>
                       </div>
 
@@ -6257,14 +6249,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   <div>
                     <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                       <PlusCircle className="w-4 h-4 text-purple-500" />
-                      <span>Add Word Analogy Manually</span>
+                      <span>Add Question</span>
                     </h4>
-                    <p className="text-[11px] text-slate-400 mt-1 font-medium">Enter base analogy and 4 answer options.</p>
+                    
                   </div>
 
                   <form onSubmit={handleManualAddAnalogyQuestion} className="space-y-4">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Base Analogy</label>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Pair</label>
                       <input
                         type="text"
                         required
@@ -6296,7 +6288,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Correct Analogy Option</label>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Answer</label>
                       <select
                         value={newAnalogyCorrectIndex}
                         onChange={(e) => setNewAnalogyCorrectIndex(Number(e.target.value))}
@@ -6310,7 +6302,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Explanation (Optional)</label>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Why</label>
                       <input
                         type="text"
                         placeholder="e.g. Antonym relationship."
@@ -6324,7 +6316,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       type="submit"
                       className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs rounded-xl transition cursor-pointer shadow-xs"
                     >
-                      Add Analogy
+                      Add
                     </button>
                   </form>
                 </div>
@@ -6334,8 +6326,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <h4 className="font-extrabold text-slate-800 text-sm">Existing Word Analogy Questions ({analogyQuestions.length})</h4>
-                    <p className="text-[11px] text-slate-400 font-medium">Stored analogy questions for the current course.</p>
+                    <h4 className="font-extrabold text-slate-800 text-sm">Questions ({analogyQuestions.length})</h4>
+                    
                   </div>
                   <div className="flex items-center gap-2">
                     {analogyQuestions.length > 0 && (
@@ -6344,7 +6336,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 text-xs font-black rounded-xl transition cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        <span>Bulk Delete All</span>
+                        <span>Delete All</span>
                       </button>
                     )}
                     <button
@@ -6352,7 +6344,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${analogyQuestionsLoading ? 'animate-spin' : ''}`} />
-                      <span>Refresh</span>
+                      <span className="sr-only">Refresh</span>
                     </button>
                   </div>
                 </div>
@@ -6360,23 +6352,23 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 {analogyQuestionsLoading ? (
                   <div className="flex items-center justify-center py-12 text-slate-400">
                     <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-                    <span className="text-xs font-bold font-mono">Loading questions...</span>
+                    <span className="text-xs font-bold font-mono">Loading…</span>
                   </div>
                 ) : analogyQuestions.length === 0 ? (
                   <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-2xl">
                     <Info className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p className="text-xs font-bold text-slate-600">No Word Analogy questions found</p>
-                    <p className="text-[10px] text-slate-400 font-semibold">Please upload an Excel sheet or add questions manually.</p>
+                    <p className="text-xs font-bold text-slate-600">No items</p>
+                    <p className="text-[10px] text-slate-400 font-semibold">Upload Excel or add manually.</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-xs">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-slate-50 text-[10px] font-extrabold text-slate-450 uppercase tracking-wider border-b border-slate-100 font-sans">
-                          <th className="px-4 py-3">Base Analogy</th>
-                          <th className="px-4 py-3">Options</th>
-                          <th className="px-4 py-3">Answer</th>
-                          <th className="px-4 py-3 text-right">Action</th>
+                          <th className="px-4 py-3">Pair</th>
+                          <th className="px-4 py-3">Opts</th>
+                          <th className="px-4 py-3">Ans</th>
+                          <th className="px-4 py-3 text-right"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-xs">
@@ -6421,11 +6413,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   <div>
                     <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                       <GraduationCap className="w-4 h-4 text-indigo-500" />
-                      <span>Custom MCQ Quiz Excel Upload</span>
+                      <span>Upload Excel</span>
                     </h4>
-                    <p className="text-[11px] text-slate-400 mt-1 font-medium">
-                      Upload custom MCQ questions. When present, they serve as primary MCQ quiz questions for the selected course.
-                    </p>
+                    
                   </div>
 
                   <div className="border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-2xl p-6 text-center transition cursor-pointer relative bg-slate-50/50">
@@ -6436,7 +6426,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     />
                     <UploadCloud className="w-8 h-8 text-indigo-500 mx-auto mb-2" />
-                    <p className="text-xs font-bold text-slate-700">Click or drag MCQ Quiz Excel/CSV file here</p>
+                    <p className="text-xs font-bold text-slate-700">Click or drop MCQ file</p>
                     <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Supports .xlsx, .xls, .csv</p>
                   </div>
 
@@ -6478,7 +6468,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                             excelMcqSaveStatus === 'saving' ? 'bg-slate-400' : 'bg-indigo-600 hover:bg-indigo-500'
                           }`}
                         >
-                          {excelMcqSaveStatus === 'saving' ? 'Saving...' : 'Save to Cloud'}
+                          {excelMcqSaveStatus === 'saving' ? 'Save…' : 'Save'}
                         </button>
                       </div>
 
@@ -6513,9 +6503,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   <div>
                     <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                       <PlusCircle className="w-4 h-4 text-indigo-500" />
-                      <span>Add MCQ Question Manually</span>
+                      <span>Add Question</span>
                     </h4>
-                    <p className="text-[11px] text-slate-400 mt-1 font-medium">Enter question, 4 options, and select the correct answer.</p>
+                    
                   </div>
 
                   <form onSubmit={handleManualAddMcqQuestion} className="space-y-4">
@@ -6552,7 +6542,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Correct Answer Option</label>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Answer</label>
                       <select
                         value={newMcqCorrectIndex}
                         onChange={(e) => setNewMcqCorrectIndex(Number(e.target.value))}
@@ -6566,7 +6556,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Reason / Explanation (Optional)</label>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Reason</label>
                       <input
                         type="text"
                         placeholder="e.g. Detrimental means causing harm or damage."
@@ -6590,8 +6580,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <h4 className="font-extrabold text-slate-800 text-sm">Existing Course MCQ Questions ({mcqQuestions.length})</h4>
-                    <p className="text-[11px] text-slate-400 font-medium">Stored custom questions for the current course.</p>
+                    <h4 className="font-extrabold text-slate-800 text-sm">Questions ({mcqQuestions.length})</h4>
+                    
                   </div>
                   <div className="flex items-center gap-2">
                     {mcqQuestions.length > 0 && (
@@ -6600,7 +6590,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 text-xs font-black rounded-xl transition cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        <span>Bulk Delete All</span>
+                        <span>Delete All</span>
                       </button>
                     )}
                     <button
@@ -6608,7 +6598,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${mcqQuestionsLoading ? 'animate-spin' : ''}`} />
-                      <span>Refresh</span>
+                      <span className="sr-only">Refresh</span>
                     </button>
                   </div>
                 </div>
@@ -6616,23 +6606,23 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 {mcqQuestionsLoading ? (
                   <div className="flex items-center justify-center py-12 text-slate-400">
                     <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-                    <span className="text-xs font-bold font-mono">Loading questions...</span>
+                    <span className="text-xs font-bold font-mono">Loading…</span>
                   </div>
                 ) : mcqQuestions.length === 0 ? (
                   <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-2xl">
                     <Info className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p className="text-xs font-bold text-slate-600">No MCQ questions found</p>
-                    <p className="text-[10px] text-slate-400 font-semibold">Please upload an Excel sheet or add questions manually.</p>
+                    <p className="text-xs font-bold text-slate-600">No items</p>
+                    <p className="text-[10px] text-slate-400 font-semibold">Upload Excel or add manually.</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-xs">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-slate-50 text-[10px] font-extrabold text-slate-450 uppercase tracking-wider border-b border-slate-100 font-sans">
-                          <th className="px-4 py-3">Question</th>
-                          <th className="px-4 py-3">Options</th>
-                          <th className="px-4 py-3">Answer</th>
-                          <th className="px-4 py-3 text-right">Action</th>
+                          <th className="px-4 py-3">Q</th>
+                          <th className="px-4 py-3">Opts</th>
+                          <th className="px-4 py-3">Ans</th>
+                          <th className="px-4 py-3 text-right"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-xs">
@@ -6674,7 +6664,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               {!selectedGameCourseId && (
                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3 text-xs font-bold text-amber-900">
                   <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
-                  <span>কোর্স স্টোরি আপলোড বা ম্যানেজ করার জন্য অনুগ্রহ করে উপরে ড্রপডাউন থেকে একটি নির্দিষ্ট কোর্স সিলেক্ট করুন।</span>
+                  <span>Select a course to upload stories</span>
                 </div>
               )}
 
@@ -6684,10 +6674,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   <div>
                     <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                       <BookOpen className="w-4 h-4 text-pink-500" />
-                      <span>Upload Course Stories (File / Text)</span>
+                      <span>Upload</span>
                     </h4>
                     <p className="text-[11px] text-slate-400 mt-1 font-medium">
-                      Upload stories from .txt, .docx, .pdf, .csv, or .json files, or paste raw text.
+                      .txt · .docx · .pdf · .csv · .json · paste
                     </p>
                   </div>
 
@@ -6702,13 +6692,13 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     />
                     <UploadCloud className="w-8 h-8 text-pink-500 mx-auto mb-2" />
                     <p className="text-xs font-bold text-slate-700">Click or drag Story file here</p>
-                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Supports .txt, .docx, .pdf, .csv, .json, .md</p>
+                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">.txt .docx .pdf .csv .json .md</p>
                   </div>
 
                   {/* Paste Raw Text Box */}
                   <div className="space-y-2 pt-2 border-t border-slate-100">
                     <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                      Or Paste Raw Story Text
+                      Or Paste
                     </label>
                     <p className="text-[10px] text-slate-400">
                       Format: <code className="bg-slate-100 px-1 py-0.5 rounded text-pink-600 font-mono">Title: My Story ... Story: Story text goes here...</code>
@@ -6731,7 +6721,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       ) : (
                         <UploadCloud className="w-4 h-4" />
                       )}
-                      <span>Parse &amp; Upload Pasted Stories</span>
+                      <span>Upload</span>
                     </button>
                   </div>
 
@@ -6755,14 +6745,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   <div>
                     <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                       <PlusCircle className="w-4 h-4 text-pink-500" />
-                      <span>Add Single Story Manually</span>
+                      <span>Add</span>
                     </h4>
-                    <p className="text-[11px] text-slate-400 mt-1 font-medium">Create a single new vocabulary story for this course.</p>
+                    
                   </div>
 
                   <form onSubmit={handleManualAddStory} className="space-y-4">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Story Title</label>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Title</label>
                       <input
                         type="text"
                         required
@@ -6774,7 +6764,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Story Content</label>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Content</label>
                       <textarea
                         rows={8}
                         required
@@ -6791,7 +6781,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5"
                     >
                       <Plus className="w-4 h-4" />
-                      <span>Add Story to Course</span>
+                      <span>Add</span>
                     </button>
                   </form>
                 </div>
@@ -6804,7 +6794,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                       <BookOpen className="w-4 h-4 text-pink-600" />
                       <span>
-                        Published Course Stories (
+                        Stories (
                         {customCourses.find(c => c.id === selectedGameCourseId)?.stories?.length || 0}
                         )
                       </span>
@@ -6824,7 +6814,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 text-xs font-black rounded-xl transition cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        <span>Delete All Stories</span>
+                        <span>Delete All</span>
                       </button>
                     )}
                   </div>
@@ -6834,8 +6824,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   customCourses.find(c => c.id === selectedGameCourseId)?.stories?.length === 0) ? (
                   <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-2xl">
                     <BookOpen className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p className="text-xs font-bold text-slate-600">No stories found for this course</p>
-                    <p className="text-[10px] text-slate-400 font-semibold">Upload a story file or add a story manually using the forms above.</p>
+                    <p className="text-xs font-bold text-slate-600">No stories</p>
+                    <p className="text-[10px] text-slate-400 font-semibold">Upload or add manually.</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -6876,7 +6866,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               {!selectedGameCourseId && (
                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3 text-xs font-bold text-amber-900">
                   <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
-                  <span>কোর্স আর্টিকেল আপলোড বা ম্যানেজ করার জন্য অনুগ্রহ করে উপরে ড্রপডাউন থেকে একটি নির্দিষ্ট কোর্স সিলেক্ট করুন।</span>
+                  <span>Select a course to upload articles</span>
                 </div>
               )}
 
@@ -6886,10 +6876,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   <div>
                     <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                       <Newspaper className="w-4 h-4 text-indigo-500" />
-                      <span>Upload Course Articles (File / Text)</span>
+                      <span>Upload</span>
                     </h4>
                     <p className="text-[11px] text-slate-400 mt-1 font-medium">
-                      Upload articles from .txt, .docx, .pdf, .csv, or .json files, or paste raw text.
+                      .txt · .docx · .pdf · .csv · .json · paste
                     </p>
                   </div>
 
@@ -6904,13 +6894,13 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     />
                     <UploadCloud className="w-8 h-8 text-indigo-500 mx-auto mb-2" />
                     <p className="text-xs font-bold text-slate-700">Click or drag Article file here</p>
-                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Supports .txt, .docx, .pdf, .csv, .json, .md</p>
+                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">.txt .docx .pdf .csv .json .md</p>
                   </div>
 
                   {/* Paste Raw Text Box */}
                   <div className="space-y-2 pt-2 border-t border-slate-100">
                     <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                      Or Paste Raw Article Text
+                      Or Paste
                     </label>
                     <p className="text-[10px] text-slate-400">
                       Format: <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600 font-mono">Title: My Article ... Article: Article text goes here...</code>
@@ -6933,7 +6923,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       ) : (
                         <UploadCloud className="w-4 h-4" />
                       )}
-                      <span>Parse &amp; Upload Pasted Articles</span>
+                      <span>Upload</span>
                     </button>
                   </div>
 
@@ -6957,14 +6947,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   <div>
                     <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                       <PlusCircle className="w-4 h-4 text-indigo-500" />
-                      <span>Add Single Article Manually</span>
+                      <span>Add</span>
                     </h4>
-                    <p className="text-[11px] text-slate-400 mt-1 font-medium">Create a single new article for this course.</p>
+                    
                   </div>
 
                   <form onSubmit={handleManualAddArticle} className="space-y-3">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Article Title</label>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Title</label>
                       <input
                         type="text"
                         required
@@ -7006,7 +6996,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Excerpt / Brief Summary</label>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Excerpt</label>
                       <input
                         type="text"
                         placeholder="Brief summary shown on card..."
@@ -7017,7 +7007,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Full Article Content</label>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Content</label>
                       <textarea
                         rows={5}
                         required
@@ -7034,7 +7024,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5"
                     >
                       <Plus className="w-4 h-4" />
-                      <span>Add Article to Course</span>
+                      <span>Add</span>
                     </button>
                   </form>
                 </div>
@@ -7047,7 +7037,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                       <Newspaper className="w-4 h-4 text-indigo-600" />
                       <span>
-                        Published Course Articles (
+                        Articles (
                         {customCourses.find(c => c.id === selectedGameCourseId)?.articles?.length || 0}
                         )
                       </span>
@@ -7067,7 +7057,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 text-xs font-black rounded-xl transition cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        <span>Delete All Articles</span>
+                        <span>Delete All</span>
                       </button>
                     )}
                   </div>
@@ -7077,8 +7067,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   customCourses.find(c => c.id === selectedGameCourseId)?.articles?.length === 0) ? (
                   <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-2xl">
                     <Newspaper className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p className="text-xs font-bold text-slate-600">No articles found for this course</p>
-                    <p className="text-[10px] text-slate-400 font-semibold">Upload an article file or add an article manually using the forms above.</p>
+                    <p className="text-xs font-bold text-slate-600">No articles</p>
+                    <p className="text-[10px] text-slate-400 font-semibold">Upload or add manually.</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -7193,7 +7183,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   }`}
                 >
                   <BookOpen className="w-3.5 h-3.5" />
-                  <span>Enrolled Courses & Rank</span>
+                  <span>Courses</span>
                 </button>
                 <button 
                   onClick={() => setActiveUserTab('progress')}
@@ -7201,7 +7191,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     activeUserTab === 'progress' ? 'border-indigo-600 text-indigo-600' : 'border-transparent hover:text-slate-800'
                   }`}
                 >
-                  Vocabulary Progress
+                  Progress
                 </button>
                 <button 
                   onClick={() => setActiveUserTab('analytics')}
@@ -7209,7 +7199,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     activeUserTab === 'analytics' ? 'border-indigo-600 text-indigo-600' : 'border-transparent hover:text-slate-800'
                   }`}
                 >
-                  Targets & Goals
+                  Goals
                 </button>
                 <button 
                   onClick={() => setActiveUserTab('settings')}
@@ -7217,7 +7207,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     activeUserTab === 'settings' ? 'border-indigo-600 text-indigo-600' : 'border-transparent hover:text-slate-800'
                   }`}
                 >
-                  User Settings
+                  Settings
                 </button>
               </div>
 
@@ -7230,7 +7220,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center divide-x divide-indigo-800/50">
                         
                         <div className="px-2">
-                          <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider block">Global Rank</span>
+                          <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider block">Rank</span>
                           <div className="mt-1 flex items-center justify-center gap-1">
                             <Trophy className="w-4 h-4 text-amber-400 fill-amber-400" />
                             <span className="text-xl font-black text-amber-300 font-mono">#{selectedUserStats.rank}</span>
@@ -7239,14 +7229,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         </div>
 
                         <div className="px-2">
-                          <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider block">Overall Progress</span>
+                          <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider block">Progress</span>
                           <div className="mt-1 flex items-center justify-center gap-1">
                             <span className="text-xl font-black text-emerald-400 font-mono">{selectedUserStats.overallPercent}%</span>
                           </div>
                         </div>
 
                         <div className="px-2">
-                          <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider block">Words Mastered</span>
+                          <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider block">Words</span>
                           <div className="mt-1 flex items-center justify-center gap-1">
                             <span className="text-xl font-black text-white font-mono">{selectedUserStats.totalKnow}</span>
                             <span className="text-[10px] text-indigo-300">/ {selectedUserStats.totalTargetWords}</span>
@@ -7254,7 +7244,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         </div>
 
                         <div className="px-2">
-                          <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider block">Enrolled Courses</span>
+                          <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider block">Courses</span>
                           <div className="mt-1 flex items-center justify-center gap-1">
                             <BookOpen className="w-4 h-4 text-indigo-400" />
                             <span className="text-xl font-black text-white font-mono">{selectedUserStats.enrolledCourses.length}</span>
@@ -7269,7 +7259,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       <div className="flex items-center justify-between">
                         <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                           <BookOpen className="w-4 h-4 text-indigo-600" />
-                          <span>Enrolled Courses Statistics ({selectedUserStats.enrolledCourses.length})</span>
+                          <span>Courses ({selectedUserStats.enrolledCourses.length})</span>
                         </h4>
                       </div>
 
@@ -7286,12 +7276,12 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                                     <h5 className="font-extrabold text-slate-900 text-sm">{course.title}</h5>
                                     {course.isDefault && (
                                       <span className="text-[9px] font-extrabold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">
-                                        Default Free
+                                        Free
                                       </span>
                                     )}
                                     {!course.isDefault && (
                                       <span className="text-[9px] font-extrabold px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full">
-                                        ৳{course.price || 0} BDT
+                                        ৳{course.price || 0}
                                       </span>
                                     )}
                                   </div>
@@ -7311,10 +7301,10 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                               <div className="space-y-1.5">
                                 <div className="flex items-center justify-between text-[10px] font-bold text-slate-600">
                                   <span>
-                                    {cStats.knowCount} / {cStats.totalWords} words mastered ({cStats.progressPercent}%)
+                                    {cStats.knowCount}/{cStats.totalWords} ({cStats.progressPercent}%)
                                   </span>
                                   <span className="text-slate-400">
-                                    {cStats.confusionCount} Confused • {cStats.dontKnowCount} Needs Work • {cStats.unstudiedCount} Unstudied
+                                    {cStats.confusionCount} Mix • {cStats.dontKnowCount} New • {cStats.unstudiedCount} Left
                                   </span>
                                 </div>
 
@@ -7328,19 +7318,19 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                               {/* Sub-metrics breakdown pills */}
                               <div className="grid grid-cols-4 gap-2 pt-1 text-center">
                                 <div className="bg-slate-50 rounded-xl p-2 border border-slate-100">
-                                  <span className="text-[9px] text-slate-400 font-bold block">Target</span>
+                                  <span className="text-[9px] text-slate-400 font-bold block">Goal</span>
                                   <span className="text-xs font-black text-slate-800 font-mono">{cStats.totalWords}</span>
                                 </div>
                                 <div className="bg-emerald-50/70 rounded-xl p-2 border border-emerald-100">
-                                  <span className="text-[9px] text-emerald-700 font-bold block">Known</span>
+                                  <span className="text-[9px] text-emerald-700 font-bold block">Know</span>
                                   <span className="text-xs font-black text-emerald-800 font-mono">{cStats.knowCount}</span>
                                 </div>
                                 <div className="bg-amber-50/70 rounded-xl p-2 border border-amber-100">
-                                  <span className="text-[9px] text-amber-700 font-bold block">Confusion</span>
+                                  <span className="text-[9px] text-amber-700 font-bold block">Mix</span>
                                   <span className="text-xs font-black text-amber-800 font-mono">{cStats.confusionCount}</span>
                                 </div>
                                 <div className="bg-rose-50/70 rounded-xl p-2 border border-rose-100">
-                                  <span className="text-[9px] text-rose-700 font-bold block">Needs Work</span>
+                                  <span className="text-[9px] text-rose-700 font-bold block">New</span>
                                   <span className="text-xs font-black text-rose-800 font-mono">{cStats.dontKnowCount}</span>
                                 </div>
                               </div>
@@ -7362,13 +7352,13 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       </span>
                     </div>
                     <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl text-center">
-                      <span className="text-xs text-amber-800/80 font-bold block">Confusion</span>
+                      <span className="text-xs text-amber-800/80 font-bold block">Mix</span>
                       <span className="text-xl font-black text-amber-800 font-mono">
                         {getProgressValues(selectedUser.progress).filter(p => p.status === 'confusion').length}
                       </span>
                     </div>
                     <div className="bg-rose-50 border border-rose-100 p-4 rounded-2xl text-center">
-                      <span className="text-xs text-rose-800/80 font-bold block">Don't Know</span>
+                      <span className="text-xs text-rose-800/80 font-bold block">New</span>
                       <span className="text-xl font-black text-rose-800 font-mono">
                         {getProgressValues(selectedUser.progress).filter(p => p.status === 'dont_know').length}
                       </span>
@@ -7378,14 +7368,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   {/* Word Filter Tabs */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-extrabold text-slate-800 text-sm">Evaluation List</h4>
+                      <h4 className="font-extrabold text-slate-800 text-sm">Words</h4>
                       
                       <div className="flex bg-slate-100 p-1 rounded-xl text-[10px] font-bold text-slate-500 gap-1">
                         {[
                           { key: 'all' as const, label: 'All' },
                           { key: 'know' as const, label: 'Know' },
-                          { key: 'confusion' as const, label: 'Confusion' },
-                          { key: 'dont_know' as const, label: 'Don\'t Know' }
+                          { key: 'confusion' as const, label: 'Mix' },
+                          { key: 'dont_know' as const, label: 'New' }
                         ].map(f => (
                           <button
                             key={f.key}
@@ -7419,7 +7409,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                                   <div>
                                     <div className="flex items-center gap-2">
                                       <span className="font-extrabold text-slate-800">{w.word}</span>
-                                      <span className="text-[9px] text-slate-400 font-bold">Group {w.group}</span>
+                                      <span className="text-[9px] text-slate-400 font-bold">G{w.group}</span>
                                     </div>
                                     <p className="text-[11px] text-slate-500 font-semibold mt-0.5">{w.meaning}</p>
                                     {p.notes && (
@@ -7437,7 +7427,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                                     {p.status === 'know' && <CheckCircle className="w-3 h-3" />}
                                     {p.status === 'confusion' && <AlertTriangle className="w-3 h-3" />}
                                     {p.status === 'dont_know' && <XCircle className="w-3 h-3" />}
-                                    {p.status === 'know' ? 'Know' : p.status === 'confusion' ? 'Confusion' : 'Don\'t Know'}
+                                    {p.status === 'know' ? 'Know' : p.status === 'confusion' ? 'Mix' : 'New'}
                                   </span>
                                 </div>
                               );
@@ -7453,15 +7443,15 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   {/* Study Streak & Target */}
                   <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex items-center justify-between">
                     <div>
-                      <span className="text-xs text-slate-400 font-bold uppercase tracking-wide block">Daily Study Target</span>
-                      <span className="text-xl font-black text-slate-800 font-mono">{selectedUser.goal?.dailyTarget || 15} words</span>
+                      <span className="text-xs text-slate-400 font-bold uppercase tracking-wide block">Target</span>
+                      <span className="text-xl font-black text-slate-800 font-mono">{selectedUser.goal?.dailyTarget || 15}w</span>
                     </div>
 
                     <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 px-4 py-2.5 rounded-2xl text-amber-800">
                       <Flame className="w-5 h-5 text-amber-500 animate-bounce" />
                       <div>
-                        <span className="text-[10px] text-amber-700 font-bold block">Current Streak</span>
-                        <span className="text-base font-black font-mono">{selectedUser.goal?.streak || 0} days</span>
+                        <span className="text-[10px] text-amber-700 font-bold block">Streak</span>
+                        <span className="text-base font-black font-mono">{selectedUser.goal?.streak || 0}d</span>
                       </div>
                     </div>
                   </div>
@@ -7470,7 +7460,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   <div className="space-y-3">
                     <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-1.5">
                       <Calendar className="w-4 h-4 text-indigo-500" />
-                      <span>Study History Log</span>
+                      <span>History</span>
                     </h4>
 
                     {!selectedUser.goal?.history || Object.keys(selectedUser.goal.history).length === 0 ? (
@@ -7485,7 +7475,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                             <div key={dateStr} className="p-3 bg-white border border-slate-100 rounded-xl flex items-center justify-between">
                               <span className="text-slate-600 font-bold text-xs">{dateStr}</span>
                               <span className="text-xs bg-emerald-50 text-emerald-700 font-mono px-2 py-0.5 rounded-lg font-black">
-                                +{Number(count)} words
+                                +{Number(count)}w
                               </span>
                             </div>
                           ))}
@@ -7497,7 +7487,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
               {activeUserTab === 'settings' && (
                 <div className="space-y-4">
-                  <h4 className="font-extrabold text-slate-800 text-sm">App Configuration Settings</h4>
+                  <h4 className="font-extrabold text-slate-800 text-sm">App Settings</h4>
                   
                   <div className="border border-slate-100 rounded-2xl divide-y divide-slate-100 text-xs font-semibold text-slate-600">
                     <div className="p-4 flex items-center justify-between">
@@ -7545,14 +7535,14 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                       <div className="flex items-center justify-between">
                         <span className="font-extrabold text-slate-800 flex items-center gap-1.5">
                           <Wallet className="w-4 h-4 text-indigo-600" />
-                          Wallet Balance Management
+                          Wallet
                         </span>
                         <span className="font-bold font-mono text-indigo-700 bg-white px-2.5 py-1 rounded-lg border border-indigo-200">
                           ৳{selectedUser.walletBalance ?? selectedUser.balance ?? 0} BDT
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-500 font-normal">
-                        Executes atomic Firestore transactions on <code className="font-mono text-indigo-600">user_wallets</code> and <code className="font-mono text-indigo-600">users</code> documents.
+                      <p className="text-[11px] text-slate-500 font-normal" title="Atomic Firestore transactions on user_wallets & users docs.">
+                        Firestore tx · wallet ↔ user
                       </p>
                       <div className="flex flex-wrap items-center gap-2 pt-1">
                         <button
@@ -7565,7 +7555,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                           }}
                           className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-2xs transition cursor-pointer"
                         >
-                          +৳50 BDT
+                          +50
                         </button>
                         <button
                           type="button"
@@ -7577,7 +7567,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                           }}
                           className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-2xs transition cursor-pointer"
                         >
-                          +৳100 BDT
+                          +100
                         </button>
                         <button
                           type="button"
@@ -7594,7 +7584,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                           }}
                           className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs rounded-xl transition cursor-pointer"
                         >
-                          Custom...
+                          Set
                         </button>
                       </div>
                     </div>
@@ -7659,7 +7649,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 </div>
                 <div>
                   <h3 className="font-extrabold text-slate-900 text-base">Create & Publish New Course</h3>
-                  <p className="text-xs text-slate-400 font-medium">Upload Excel spreadsheet or paste word list to create a new course</p>
+                  <p className="text-xs text-slate-400 font-medium">Upload .xlsx or paste word list</p>
                 </div>
               </div>
               <button
@@ -7675,7 +7665,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               {/* Title, Slug & Order */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="text-xs font-extrabold text-slate-700 block mb-1">Course Title *</label>
+                  <label className="text-xs font-extrabold text-slate-700 block mb-1">Title *</label>
                   <input
                     type="text"
                     value={newCourseTitle}
@@ -7686,7 +7676,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 </div>
 
                 <div>
-                  <label className="text-xs font-extrabold text-slate-700 block mb-1">Course ID / Slug *</label>
+                  <label className="text-xs font-extrabold text-slate-700 block mb-1">ID *</label>
                   <input
                     type="text"
                     value={newCourseId}
@@ -7700,7 +7690,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 </div>
 
                 <div>
-                  <label className="text-xs font-extrabold text-slate-700 block mb-1">Order Index (Sort Position)</label>
+                  <label className="text-xs font-extrabold text-slate-700 block mb-1">Order</label>
                   <input
                     type="number"
                     value={newCourseOrder}
@@ -7712,7 +7702,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               </div>
 
               <div>
-                <label className="text-xs font-extrabold text-slate-700 block mb-1">Course Description</label>
+                <label className="text-xs font-extrabold text-slate-700 block mb-1">Description</label>
                 <input
                   type="text"
                   value={newCourseDesc}
@@ -7731,7 +7721,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     onChange={(e) => setNewCourseIsDefault(e.target.checked)}
                     className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
                   />
-                  <span className="text-xs font-bold text-slate-800">Set as Default Course</span>
+                  <span className="text-xs font-bold text-slate-800">Default</span>
                 </label>
 
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -7741,13 +7731,13 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     onChange={(e) => setNewCourseIsRestricted(e.target.checked)}
                     className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
                   />
-                  <span className="text-xs font-bold text-slate-800">Restricted Course (Specific Emails Only)</span>
+                  <span className="text-xs font-bold text-slate-800">Restricted</span>
                 </label>
               </div>
 
               {newCourseIsRestricted && (
                 <div>
-                  <label className="text-xs font-extrabold text-slate-700 block mb-1">Allowed Student Emails (One email per line)</label>
+                  <label className="text-xs font-extrabold text-slate-700 block mb-1">Allowed Emails</label>
                   <textarea
                     rows={3}
                     value={newCourseAllowedUsersText}
@@ -7770,7 +7760,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         : 'text-slate-500 hover:bg-slate-100'
                     }`}
                   >
-                    Excel File (.xlsx / .xls)
+                    Excel
                   </button>
                   <button
                     type="button"
@@ -7781,7 +7771,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                         : 'text-slate-500 hover:bg-slate-100'
                     }`}
                   >
-                    Paste Text / TSV
+                    Paste
                   </button>
                 </div>
 
@@ -7795,7 +7785,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     />
                     <UploadCloud className="w-8 h-8 text-indigo-500 mx-auto mb-2 group-hover:scale-110 transition-transform" />
                     <span className="text-xs font-bold text-slate-800 block">Click or Drag & Drop Excel File</span>
-                    <span className="text-[10px] text-slate-400 block mt-0.5">Supports .xlsx and .xls files with columns: id, word, meaning, group, etc.</span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Columns: id, word, meaning, group</span>
                   </label>
                 ) : (
                   <div className="space-y-2">
@@ -7899,7 +7889,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 transition shadow-md cursor-pointer disabled:opacity-50"
               >
                 {saveStatus === 'saving' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                <span>{saveStatus === 'saving' ? 'Publishing Course...' : 'Save & Publish Course'}</span>
+                <span>{saveStatus === 'saving' ? 'Saving…' : 'Publish'}</span>
               </button>
             </div>
           </div>
