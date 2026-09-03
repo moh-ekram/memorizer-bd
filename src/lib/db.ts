@@ -122,7 +122,11 @@ export async function incrementCourseClickCount(courseId: string): Promise<void>
   }
 }
 
-export async function saveBulkDocs(collectionName: string, items: any[]): Promise<void> {
+export async function saveBulkDocs(
+  collectionName: string, 
+  items: any[], 
+  onProgress?: (current: number, total: number) => void
+): Promise<void> {
   if (!items || items.length === 0) return;
   const batchSize = 450;
   for (let i = 0; i < items.length; i += batchSize) {
@@ -134,6 +138,9 @@ export async function saveBulkDocs(collectionName: string, items: any[]): Promis
       batch.set(ref, item, { merge: true });
     }
     await batch.commit();
+    if (onProgress) {
+      onProgress(Math.min(i + batchSize, items.length), items.length);
+    }
   }
 }
 
@@ -189,5 +196,3 @@ export {
   matchesCourseId,
   clearQuestionsCache
 };
-
-export type { AppUser };

@@ -65,9 +65,10 @@ import {
   onSnapshot,
   getDocs,
   query,
-  where
+  where,
+  normalizeSupabaseUser
 } from './lib/db';
-import type { AppUser as DbUser } from './lib/supabaseAuth';
+import type { AppUser as DbUser } from './lib/db';
 import { Course } from './types';
 import { isCourseEnrolled, isCourseAccessible } from './lib/courseAccess';
 import AuthModal from './components/AuthModal';
@@ -1229,6 +1230,13 @@ export default function App() {
       setIsAuthInitializing(false);
 
       if (currentUser) {
+        setIsAuthModalOpen(false);
+        if (typeof window !== 'undefined') {
+          const currentP = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
+          if (currentP === '/login' || currentP === '/signin' || currentP === '/signup') {
+            window.history.replaceState({ tab: 'profile', profileSubTab: 'my_courses' }, '', '/courses');
+          }
+        }
         try {
           safeSetLocalStorage('vocab_memorizer_cached_user', JSON.stringify({
             uid: currentUser.uid,
@@ -2114,7 +2122,16 @@ const getActiveCourse = (
       <>
         <LandingHomePage 
           onAuthSuccess={() => {
+            if (auth.currentUser) {
+              setUser(normalizeSupabaseUser(auth.currentUser));
+            }
             setIsAuthModalOpen(false);
+            if (typeof window !== 'undefined') {
+              const currentP = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
+              if (currentP === '/login' || currentP === '/signin' || currentP === '/signup') {
+                window.history.replaceState({ tab: 'profile', profileSubTab: 'my_courses' }, '', '/courses');
+              }
+            }
           }} 
           courses={allAvailableCourses} 
           onImportCourse={handleImportCourse}
@@ -2126,7 +2143,16 @@ const getActiveCourse = (
             setIsAuthModalOpen(false);
           }} 
           onAuthSuccess={() => {
+            if (auth.currentUser) {
+              setUser(normalizeSupabaseUser(auth.currentUser));
+            }
             setIsAuthModalOpen(false);
+            if (typeof window !== 'undefined') {
+              const currentP = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
+              if (currentP === '/login' || currentP === '/signin' || currentP === '/signup') {
+                window.history.replaceState({ tab: 'profile', profileSubTab: 'my_courses' }, '', '/courses');
+              }
+            }
           }}
         />
       </>
@@ -2774,7 +2800,12 @@ const getActiveCourse = (
       <AuthModal 
         isOpen={isAuthModalOpen} 
         onClose={() => setIsAuthModalOpen(false)} 
-        onAuthSuccess={() => {}}
+        onAuthSuccess={() => {
+          if (auth.currentUser) {
+            setUser(normalizeSupabaseUser(auth.currentUser));
+          }
+          setIsAuthModalOpen(false);
+        }}
       />
 
       <SyncConflictModal
