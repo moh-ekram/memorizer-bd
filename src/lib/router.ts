@@ -1,12 +1,12 @@
 import { ActiveTab } from '../types';
 
 export type AdminTabId =
-  | 'users' | 'courses' | 'reports' | 'access-requests' | 'autoverify'
+  | 'users' | 'courses' | 'reports' | 'access-requests'
   | 'system-settings' | 'landing-editor' | 'blank-questions' | 'activity-logs'
   | 'transaction-debugger' | 'question-bank' | 'exam-summary' | 'migration';
 
 const ADMIN_TAB_IDS: AdminTabId[] = [
-  'users', 'courses', 'reports', 'access-requests', 'autoverify',
+  'users', 'courses', 'reports', 'access-requests',
   'system-settings', 'landing-editor', 'blank-questions', 'activity-logs',
   'transaction-debugger', 'question-bank', 'exam-summary', 'migration',
 ];

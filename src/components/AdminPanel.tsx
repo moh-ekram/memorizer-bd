@@ -364,7 +364,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   // Course management and upload states — initialized from the URL
   // (/admin/:tab) so each admin section is directly linkable/shareable
   // and survives a refresh, instead of always resetting to 'courses'.
-  const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'courses' | 'reports' | 'access-requests' | 'autoverify' | 'system-settings' | 'landing-editor' | 'blank-questions' | 'activity-logs' | 'transaction-debugger' | 'question-bank' | 'exam-summary' | 'migration'>(
+  const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'courses' | 'reports' | 'access-requests' | 'system-settings' | 'landing-editor' | 'blank-questions' | 'activity-logs' | 'transaction-debugger' | 'question-bank' | 'exam-summary' | 'migration'>(
     () => parseRoute().adminTab || 'courses'
   );
 
@@ -2175,7 +2175,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       fetchUsersData();
     } else if (activeAdminTab === 'reports') {
       fetchReports();
-    } else if (activeAdminTab === 'access-requests' || activeAdminTab === 'autoverify') {
+    } else if (activeAdminTab === 'access-requests') {
       fetchAccessRequests();
       fetchGlobalVerifiedPayments();
       // Poll every 6 seconds to keep backend API sync instant
@@ -3542,180 +3542,62 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       {/* Real-time Backend Ping & Connection Diagnostic Banner */}
       <SupabaseStatusBanner className="shadow-sm" />
 
-      {/* Admin Tab Navigation - Single Line Icon & Label Bar */}
-      <div className="bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-1 sm:gap-1.5 overflow-x-auto scrollbar-none">
-        <button
-          onClick={() => setActiveAdminTab('question-bank')}
-          title="Question Bank"
-          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
-            activeAdminTab === 'question-bank'
-              ? 'bg-indigo-600 text-white shadow-md font-black border border-indigo-700'
-              : 'bg-indigo-50/80 text-indigo-900 hover:bg-indigo-100 border border-indigo-200/80'
-          }`}
-        >
-          <Database className="w-4 h-4 text-indigo-400 shrink-0" />
-          <span className="hidden sm:inline whitespace-nowrap">Question Bank</span>
-        </button>
-
-        <button
-          onClick={() => setActiveAdminTab('exam-summary')}
-          title="Exam Summary"
-          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
-            activeAdminTab === 'exam-summary'
-              ? 'bg-emerald-600 text-white shadow-md font-black border border-emerald-700'
-              : 'bg-emerald-50/80 text-emerald-900 hover:bg-emerald-100 border border-emerald-200/80'
-          }`}
-        >
-          <Calendar className="w-4 h-4 text-emerald-500 shrink-0" />
-          <span className="hidden sm:inline whitespace-nowrap">Exam Summary</span>
-        </button>
-
-        <button
-          onClick={() => setActiveAdminTab('courses')}
-          title={`Courses (${customCourses.length})`}
-          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
-            activeAdminTab === 'courses'
-              ? 'bg-white text-indigo-700 shadow-xs font-black border border-indigo-200/60'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-          }`}
-        >
-          <FileSpreadsheet className="w-4 h-4 text-indigo-600 shrink-0" />
-          <span className="hidden sm:inline whitespace-nowrap">Courses</span>
-          <span className="hidden sm:inline-block px-1.5 py-0.2 bg-slate-200/80 text-slate-700 rounded-md text-[10px] font-extrabold">
-            {customCourses.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveAdminTab('blank-questions')}
-          title="Game Upload"
-          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
-            activeAdminTab === 'blank-questions'
-              ? 'bg-emerald-600 text-white shadow-xs font-black border border-emerald-700'
-              : 'bg-emerald-50/80 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/80'
-          }`}
-        >
-          <Award className="w-4 h-4 text-emerald-500 shrink-0" />
-          <span className="hidden sm:inline whitespace-nowrap">Game Upload</span>
-        </button>
-
-        <button
-          onClick={() => setActiveAdminTab('users')}
-          title="Users & Stats"
-          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
-            activeAdminTab === 'users'
-              ? 'bg-white text-indigo-700 shadow-xs font-black border border-indigo-200/60'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-          }`}
-        >
-          <Users className="w-4 h-4 text-indigo-600 shrink-0" />
-          <span className="hidden sm:inline whitespace-nowrap">Users</span>
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveAdminTab('reports');
-            fetchReports();
-          }}
-          title={`Reports (${reports.length})`}
-          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
-            activeAdminTab === 'reports'
-              ? 'bg-white text-indigo-700 shadow-xs font-black border border-indigo-200/60'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-          }`}
-        >
-          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-          <span className="hidden sm:inline whitespace-nowrap">Reports</span>
-          <span className="hidden sm:inline-block px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded-md text-[10px] font-extrabold">
-            {reports.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveAdminTab('access-requests');
-            fetchAccessRequests();
-            fetchGlobalVerifiedPayments();
-          }}
-          title={`bKash Gateway (${accessRequests.filter(r => r.status === 'pending').length})`}
-          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 relative ${
-            activeAdminTab === 'access-requests' || activeAdminTab === 'autoverify'
-              ? 'bg-amber-400 text-slate-950 font-black shadow-xs border border-amber-300'
-              : 'bg-white text-slate-700 hover:text-slate-900 hover:bg-white/50 border border-slate-200/60'
-          }`}
-        >
-          <Zap className="w-4 h-4 fill-slate-950 text-slate-950 shrink-0" />
-          <span className="hidden sm:inline whitespace-nowrap">bKash</span>
-          {accessRequests.filter(r => r.status === 'pending').length > 0 && (
-            <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0 animate-pulse" />
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveAdminTab('activity-logs')}
-          title="Activity Logs"
-          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
-            activeAdminTab === 'activity-logs'
-              ? 'bg-white text-indigo-700 shadow-xs font-black border border-indigo-200/60'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-          }`}
-        >
-          <History className="w-4 h-4 text-indigo-600 shrink-0" />
-          <span className="hidden sm:inline whitespace-nowrap">Logs</span>
-        </button>
-
-        <button
-          onClick={() => setActiveAdminTab('system-settings')}
-          title="System Settings"
-          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
-            activeAdminTab === 'system-settings'
-              ? 'bg-white text-indigo-700 shadow-xs font-black border border-indigo-200/60'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-          }`}
-        >
-          <Sliders className="w-4 h-4 text-indigo-600 shrink-0" />
-          <span className="hidden sm:inline whitespace-nowrap">Settings</span>
-        </button>
-
-        <button
-          onClick={() => setActiveAdminTab('landing-editor')}
-          title="Landing Page Editor"
-          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
-            activeAdminTab === 'landing-editor'
-              ? 'bg-purple-600 text-white shadow-md font-black border border-purple-700'
-              : 'bg-purple-50/80 text-purple-900 hover:bg-purple-100 border border-purple-200/80'
-          }`}
-        >
-          <LayoutTemplate className="w-4 h-4 text-purple-400 shrink-0" />
-          <span className="hidden sm:inline whitespace-nowrap">Editor</span>
-        </button>
-
-        <button
-          onClick={() => setActiveAdminTab('transaction-debugger')}
-          title="Transaction Debugger"
-          className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
-            activeAdminTab === 'transaction-debugger'
-              ? 'bg-indigo-600 text-white shadow-xs font-black border border-indigo-700'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-          }`}
-        >
-          <Bug className="w-4 h-4 text-amber-500 shrink-0" />
-          <span className="hidden sm:inline whitespace-nowrap">Tx Debugger</span>
-        </button>
-
-        <button
-          onClick={() => setActiveAdminTab('migration')}
-          title="Firebase to Supabase Cloud Migration"
-          className={`px-2.5 sm:px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
-            activeAdminTab === 'migration'
-              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md font-black border border-emerald-700'
-              : 'bg-emerald-50/80 text-emerald-900 hover:bg-emerald-100 border border-emerald-200/80'
-          }`}
-        >
-          <Cloud className="w-4 h-4 text-emerald-500 shrink-0" />
-          <span className="hidden sm:inline whitespace-nowrap font-extrabold">Cloud Migration</span>
-          <span className="px-1.5 py-0.2 text-[9px] bg-emerald-600 text-white rounded font-bold uppercase">New</span>
-        </button>
+      {/* Admin Tab Navigation — single consistent style for every tab
+          (previously each tab had its own ad-hoc color: indigo, emerald,
+          purple, amber... with no consistent meaning behind the choice).
+          Active = solid dark; inactive = quiet gray; badges are a single
+          neutral pill style, with a red dot reserved for "needs attention"
+          counts specifically. */}
+      <div className="bg-white p-1.5 rounded-2xl border border-slate-200 shadow-2xs flex items-center gap-1 overflow-x-auto scrollbar-none">
+        {[
+          { id: 'courses' as const, label: 'Courses', icon: FileSpreadsheet, badge: customCourses.length, onClick: () => setActiveAdminTab('courses') },
+          { id: 'question-bank' as const, label: 'Question Bank', icon: Database, onClick: () => setActiveAdminTab('question-bank') },
+          { id: 'blank-questions' as const, label: 'Game Upload', icon: Award, onClick: () => setActiveAdminTab('blank-questions') },
+          { id: 'exam-summary' as const, label: 'Exam Summary', icon: Calendar, onClick: () => setActiveAdminTab('exam-summary') },
+          { id: 'users' as const, label: 'Users', icon: Users, onClick: () => setActiveAdminTab('users') },
+          { id: 'reports' as const, label: 'Reports', icon: AlertTriangle, badge: reports.length, onClick: () => { setActiveAdminTab('reports'); fetchReports(); } },
+          {
+            id: 'access-requests' as const,
+            label: 'bKash',
+            icon: Zap,
+            alert: accessRequests.filter(r => r.status === 'pending').length > 0,
+            onClick: () => { setActiveAdminTab('access-requests'); fetchAccessRequests(); fetchGlobalVerifiedPayments(); },
+          },
+          { id: 'activity-logs' as const, label: 'Logs', icon: History, onClick: () => setActiveAdminTab('activity-logs') },
+          { id: 'system-settings' as const, label: 'Settings', icon: Sliders, onClick: () => setActiveAdminTab('system-settings') },
+          { id: 'landing-editor' as const, label: 'Editor', icon: LayoutTemplate, onClick: () => setActiveAdminTab('landing-editor') },
+          { id: 'transaction-debugger' as const, label: 'Tx Debugger', icon: Bug, onClick: () => setActiveAdminTab('transaction-debugger') },
+          { id: 'migration' as const, label: 'Cloud Migration', icon: Cloud, onClick: () => setActiveAdminTab('migration') },
+        ].map((item) => {
+          const isActive = activeAdminTab === item.id;
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={item.onClick}
+              title={item.badge !== undefined ? `${item.label} (${item.badge})` : item.label}
+              className={`px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 flex-1 ${
+                isActive
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+              <span className="hidden sm:inline whitespace-nowrap">{item.label}</span>
+              {item.badge !== undefined && (
+                <span className={`hidden sm:inline-block px-1.5 py-0.2 rounded-md text-[10px] font-extrabold ${
+                  isActive ? 'bg-white/20 text-white' : 'bg-slate-200/80 text-slate-700'
+                }`}>
+                  {item.badge}
+                </span>
+              )}
+              {item.alert && (
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0 animate-pulse" />
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Cloud Migration Tab View */}
@@ -4310,7 +4192,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         </div>
       )}
 
-      {(activeAdminTab === 'access-requests' || activeAdminTab === 'autoverify') && (
+      {activeAdminTab === 'access-requests' && (
         <div className="space-y-6 font-sans" style={{ fontFamily: "'Poppins', sans-serif" }}>
           {/* Sub-Tab Navigation Header */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs">
