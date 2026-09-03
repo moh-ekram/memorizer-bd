@@ -45,26 +45,22 @@ export function collection(...args: any[]): CollectionRef {
   };
 }
 
-export function doc(_db: any, collectionName: string, id: string): DocRef;
-export function doc(collectionName: string, id: string): DocRef;
+export function doc(_db: any, collectionName: string, id: string, ...rest: string[]): DocRef;
+export function doc(collectionName: string, id: string, ...rest: string[]): DocRef;
 export function doc(...args: any[]): DocRef {
   let collectionName = '';
   let id = '';
-  if (args.length === 3) {
-    collectionName = args[1];
-    id = args[2];
-  } else if (args.length === 2) {
-    if (typeof args[0] === 'string') {
-      collectionName = args[0];
-      id = args[1];
-    } else {
-      collectionName = args[0]?.collection || 'default';
-      id = args[1];
-    }
-  } else if (args.length === 1 && typeof args[0] === 'string') {
-    const parts = args[0].split('/');
+  const stringArgs = args.filter(a => typeof a === 'string');
+  if (stringArgs.length >= 2) {
+    collectionName = stringArgs[0];
+    id = stringArgs.slice(1).join('_');
+  } else if (stringArgs.length === 1) {
+    const parts = stringArgs[0].split('/');
     collectionName = parts[0];
-    id = parts[1] || '';
+    id = parts.slice(1).join('_');
+  } else if (args[0] && typeof args[0] === 'object' && args[0]._isCollectionRef) {
+    collectionName = args[0].collection || 'default';
+    id = args.slice(1).join('_');
   }
   return {
     _isDocRef: true,

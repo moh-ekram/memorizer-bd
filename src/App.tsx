@@ -849,6 +849,12 @@ export default function App() {
 
   // Ref to prevent local saves from colliding with incoming snapshots
   const isSyncingToCloud = useRef(false);
+  const lastPushedTimestamp = useRef<string | null>(null);
+  const lastProcessedCloudTimestamp = useRef<string | null>(null);
+  const lastSyncedProgressSignature = useRef<string>('');
+  const lastSyncedGoalSignature = useRef<string>('');
+  const lastSyncedEnrolledIdsSignature = useRef<string>('');
+  const lastSyncedGameSignatures = useRef<Record<string, string>>({});
 
   // Background cloud data synchronization helper function
   const fetchUserDataFromCloud = async (currentUser: DbUser) => {
@@ -1259,14 +1265,47 @@ export default function App() {
     };
   }, []);
 
-  // Real-time Firestore snapshot listener for instant multi-device sync
+  // Real-time Firestore snapshot listener with granular delta updates
   useEffect(() => {
     if (!user) return;
 
     const handleCloudSnapshot = (docSnap: any) => {
-      if (docSnap.exists() && !isSyncingToCloud.current && !isSyncingFromCloud.current) {
-        const cloudData = docSnap.data();
-        if (cloudData.progress && typeof cloudData.progress === 'object') {
+      // 1. Guard against uncommitted local write echo loops
+      if (docSnap.metadata && docSnap.metadata.hasPendingWrites) {
+        return;
+      }
+
+      if (!docSnap.exists() || isSyncingToCloud.current || isSyncingFromCloud.current) {
+        return;
+      }
+
+      const cloudData = docSnap.data();
+      if (!cloudData) return;
+
+      // 2. Guard against incoming data that is older than or equal to our last local push
+      if (cloudData.updatedAt && lastPushedTimestamp.current) {
+        const incomingTime = new Date(cloudData.updatedAt).getTime();
+        const lastPushTime = new Date(lastPushedTimestamp.current).getTime();
+        if (!isNaN(incomingTime) && !isNaN(lastPushTime) && incomingTime <= lastPushTime) {
+          return;
+        }
+      }
+
+      // Skip if this exact cloud timestamp was already processed
+      if (cloudData.updatedAt && lastProcessedCloudTimestamp.current === cloudData.updatedAt) {
+        return;
+      }
+      if (cloudData.updatedAt) {
+        lastProcessedCloudTimestamp.current = cloudData.updatedAt;
+      }
+
+      // 3. Granular Field Diffing: Only trigger state setters & disk I/O for fields that genuinely changed
+      if (cloudData.progress && typeof cloudData.progress === 'object') {
+        const keys = Object.keys(cloudData.progress);
+        const sampleKey = keys.length > 0 ? keys[0] : '';
+        const sig = `${keys.length}_${sampleKey}_${cloudData.progress[sampleKey]?.status || ''}_${cloudData.progress[sampleKey]?.lastReviewed || ''}`;
+        if (sig !== lastSyncedProgressSignature.current) {
+          lastSyncedProgressSignature.current = sig;
           setProgress(prev => {
             const merged = mergeProgressRecords(prev, cloudData.progress);
             safeSetLocalStorage(LOCAL_STORAGE_PROGRESS_KEY, JSON.stringify(merged));
@@ -1274,51 +1313,87 @@ export default function App() {
             return merged;
           });
         }
-        if (cloudData.goal && typeof cloudData.goal === 'object') {
+      }
+
+      if (cloudData.goal && typeof cloudData.goal === 'object') {
+        const goalSig = `${cloudData.goal.targetWords || 0}_${cloudData.goal.dailyGoal || 0}_${cloudData.goal.targetDate || ''}`;
+        if (goalSig !== lastSyncedGoalSignature.current) {
+          lastSyncedGoalSignature.current = goalSig;
           setGoal(prev => mergeStudyGoal(prev, cloudData.goal));
         }
-        if (cloudData.synonymProgress && typeof cloudData.synonymProgress === 'object') {
-          setSynonymProgress(prev => mergeGameProgressRecords(prev, cloudData.synonymProgress));
+      }
+
+      // Granular game progress diffing
+      const checkAndApplyGameProgress = (
+        fieldKey: 'synonymProgress' | 'blankProgress' | 'oooProgress' | 'analogyProgress',
+        setter: React.Dispatch<React.SetStateAction<any>>
+      ) => {
+        if (cloudData[fieldKey] && typeof cloudData[fieldKey] === 'object') {
+          const keys = Object.keys(cloudData[fieldKey]);
+          const sig = `${keys.length}_${keys.slice(0, 3).join(',')}`;
+          if (lastSyncedGameSignatures.current[fieldKey] !== sig) {
+            lastSyncedGameSignatures.current[fieldKey] = sig;
+            setter((prev: any) => mergeGameProgressRecords(prev, cloudData[fieldKey]));
+          }
         }
-        if (cloudData.blankProgress && typeof cloudData.blankProgress === 'object') {
-          setBlankProgress(prev => mergeGameProgressRecords(prev, cloudData.blankProgress));
-        }
-        if (cloudData.oooProgress && typeof cloudData.oooProgress === 'object') {
-          setOooProgress(prev => mergeGameProgressRecords(prev, cloudData.oooProgress));
-        }
-        if (cloudData.analogyProgress && typeof cloudData.analogyProgress === 'object') {
-          setAnalogyProgress(prev => mergeGameProgressRecords(prev, cloudData.analogyProgress));
-        }
-        if (cloudData.flashcardPositions && typeof cloudData.flashcardPositions === 'object') {
+      };
+
+      checkAndApplyGameProgress('synonymProgress', setSynonymProgress);
+      checkAndApplyGameProgress('blankProgress', setBlankProgress);
+      checkAndApplyGameProgress('oooProgress', setOooProgress);
+      checkAndApplyGameProgress('analogyProgress', setAnalogyProgress);
+
+      if (cloudData.flashcardPositions && typeof cloudData.flashcardPositions === 'object') {
+        const keys = Object.keys(cloudData.flashcardPositions);
+        const sig = `${keys.length}_${keys.slice(0, 3).join(',')}`;
+        if (lastSyncedGameSignatures.current['flashcardPositions'] !== sig) {
+          lastSyncedGameSignatures.current['flashcardPositions'] = sig;
           setFlashcardPositions(prev => {
             const next = mergeGameProgressRecords(prev, cloudData.flashcardPositions);
             safeSetLocalStorage('vocab_memorizer_flashcard_positions', JSON.stringify(next));
             return next;
           });
         }
-        if (Array.isArray(cloudData.enrolledCourseIds) && cloudData.enrolledCourseIds.length > 0) {
+      }
+
+      if (Array.isArray(cloudData.enrolledCourseIds) && cloudData.enrolledCourseIds.length > 0) {
+        const enrolledSig = cloudData.enrolledCourseIds.slice().sort().join(',');
+        if (enrolledSig !== lastSyncedEnrolledIdsSignature.current) {
+          lastSyncedEnrolledIdsSignature.current = enrolledSig;
           setEnrolledCourseIds(prev => Array.from(new Set([...prev, ...cloudData.enrolledCourseIds])));
         }
-        setSyncStatus('synced');
       }
+
+      setSyncStatus('synced');
     };
 
+    // 4. Granular Subscription: Subscribe only to authoritative UID doc and lightweight sub-collection signal
     const userDocRef = doc(db, 'users', user.uid);
     const unsubscribeSnapshot = onSnapshot(userDocRef, handleCloudSnapshot, (snapErr) => {
       console.warn("Realtime user UID snapshot notice:", snapErr);
     });
 
-    let unsubscribeEmailSnapshot: (() => void) | null = null;
-    const cleanEmail = (user.email || '').trim().toLowerCase();
-    if (cleanEmail && cleanEmail !== user.uid.toLowerCase()) {
-      unsubscribeEmailSnapshot = onSnapshot(doc(db, 'users', cleanEmail), handleCloudSnapshot, (eErr) => {
-        console.warn("Realtime user Email snapshot notice:", eErr);
-      });
-    }
+    // Optional lightweight sub-collection meta listener for multi-tab sync
+    let unsubscribeMetaSnapshot = () => {};
+    try {
+      const metaDocRef = doc(db, 'users', user.uid, 'meta', 'sync_state');
+      unsubscribeMetaSnapshot = onSnapshot(metaDocRef, (metaSnap) => {
+        if (metaSnap.exists() && !isSyncingToCloud.current) {
+          const metaData = metaSnap.data();
+          if (metaData?.updatedAt && lastPushedTimestamp.current) {
+            const incomingMeta = new Date(metaData.updatedAt).getTime();
+            const lastPush = new Date(lastPushedTimestamp.current).getTime();
+            if (incomingMeta > lastPush) {
+              setSyncStatus('synced');
+            }
+          }
+        }
+      }, () => {});
+    } catch (_) {}
 
     return () => {
       unsubscribeSnapshot();
-      if (unsubscribeEmailSnapshot) unsubscribeEmailSnapshot();
+      unsubscribeMetaSnapshot();
     };
   }, [user]);
 
@@ -1354,7 +1429,20 @@ export default function App() {
           email: user.email,
           updatedAt: new Date().toISOString()
         };
+        lastPushedTimestamp.current = payload.updatedAt;
         await setDoc(doc(db, 'users', user.uid), payload, { merge: true });
+
+        // Also write a lightweight sub-collection sync state for granular low-bandwidth listeners
+        try {
+          const itemCount = Object.keys(progress || {}).length;
+          await setDoc(doc(db, 'users', user.uid, 'meta', 'sync_state'), {
+            updatedAt: payload.updatedAt,
+            itemCount,
+            activeCourseId,
+            enrolledCount: enrolledCourseIds.length
+          }, { merge: true });
+        } catch (_) {}
+
         if (user.email) {
           const cleanEmail = user.email.trim().toLowerCase();
           if (cleanEmail && cleanEmail !== user.uid.toLowerCase()) {
