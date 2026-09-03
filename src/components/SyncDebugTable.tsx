@@ -240,9 +240,13 @@ export default function SyncDebugTable({
     if (!targetUid) return;
     try {
       const updatedCloud = { ...(cloudProgress || {}), [wordId]: localItem };
-      await setDoc(doc(db, 'users', targetUid), { progress: { [wordId]: localItem }, updatedAt: new Date().toISOString() }, { merge: true });
+      await setDoc(doc(db, 'users', targetUid), { progress: updatedCloud, updatedAt: new Date().toISOString() }, { merge: true });
+      if (cleanEmail && cleanEmail !== targetUid) {
+        await setDoc(doc(db, 'users', cleanEmail), { progress: updatedCloud, updatedAt: new Date().toISOString() }, { merge: true });
+      }
       setCloudProgress(updatedCloud);
-      setActionMessage({ text: `Word ${wordId} pushed to Cloud!`, type: 'success' });
+      setActionMessage({ text: `Word "${localItem.id || wordId}" successfully pushed to Cloud!`, type: 'success' });
+      if (onTriggerSync) onTriggerSync();
     } catch (e: any) {
       setActionMessage({ text: `Failed to push word: ${e.message}`, type: 'error' });
     }
@@ -257,7 +261,8 @@ export default function SyncDebugTable({
       onUpdateLocalProgress(updatedLocal);
     }
     safeSetLocalStorage('vocab_memorizer_progress_v2', JSON.stringify(updatedLocal));
-    setActionMessage({ text: `Word ${wordId} pulled from Cloud to Local!`, type: 'success' });
+    setActionMessage({ text: `Word "${cloudItem.id || wordId}" pulled from Cloud to Local!`, type: 'success' });
+    if (onTriggerSync) onTriggerSync();
   };
 
   // Format dates cleanly
@@ -636,6 +641,19 @@ export default function SyncDebugTable({
         </div>
       </div>
 
+      {/* Cloud Backend Notice & Quick Fix Banner */}
+      <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-[11px] text-slate-600 flex items-start gap-2.5">
+        <Database className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <span className="font-bold text-slate-800">ক্লাউড ডাটাবেজ স্থিতি:</span> এই লাইভ সিঙ্ক ইন্সপেক্টরটি সরাসরি আপনার <strong className="text-indigo-600">Google Cloud Firestore</strong> এর সাথে ব্রাউজারের লোকাল মেমরির তুলনা করছে।
+          {summaryMetrics.mismatches > 0 && (
+            <span className="block mt-1 text-rose-600 font-semibold">
+              ⚠️ বর্তমানে {summaryMetrics.mismatches}টি শব্দে অমিল (Mismatch) পাওয়া গেছে। নিচে <strong className="underline">"Push Local → Cloud"</strong> বা <strong className="underline">"Smart 2-Way Merge"</strong> বাটনে ক্লিক করে সাথে সাথে ক্লাউডে সিঙ্ক করে নিন।
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* Action Notification Message */}
       {actionMessage && (
         <div className={`p-3 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 transition-all ${
@@ -960,7 +978,7 @@ export default function SyncDebugTable({
                         <td className="p-3">
                           <div className="space-y-1">
                             <div>{getSyncDiffBadge(item.matchType, item.timeDeltaMs)}</div>
-                            {item.timeDeltaMs !== 0 && (
+                            {item.timeDeltaMs !== 0 && item.local && item.cloud && (
                               <span className="text-[9px] font-mono text-slate-400 block">
                                 Δ {Math.abs(Math.round(item.timeDeltaMs / 1000))}s {item.timeDeltaMs > 0 ? 'local lead' : 'cloud lead'}
                               </span>
