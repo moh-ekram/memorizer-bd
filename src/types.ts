@@ -100,6 +100,13 @@ export interface AppSettings {
   landingStat3Label?: string;
   landingDisplayCourses?: string[];
 
+  // Question Bank Dynamic Filter Labels
+  questionBankFilterLabels?: {
+    filter1?: string;
+    filter2?: string;
+    filter3?: string;
+  };
+
   // Contact & Support Info
   contactWhatsApp?: string;
   contactFacebook1?: string;
@@ -296,6 +303,7 @@ export interface QuestionBankItem {
   optionB: string;
   optionC: string;
   optionD: string;
+  options?: string[];
   correctAnswer: string; // 'A', 'B', 'C', 'D' or option text
   explanation?: string;
   group1?: string; // e.g. Subject (Bangla, English, Math, GK)

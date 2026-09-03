@@ -27,7 +27,7 @@ import {
   Cloud,
   UploadCloud
 } from 'lucide-react';
-import { db, doc, setDoc, deleteDoc, writeBatch, collection, getDocs, saveBulkDocs } from '../lib/db';
+import { db, doc, getDoc, setDoc, deleteDoc, writeBatch, collection, getDocs, saveBulkDocs } from '../lib/db';
 import { QuestionBankItem, QuestionBankRule, Course, Exam, ExamQuestion } from '../types';
 import { downloadQuestionBankExcelTemplate, parseQuestionBankExcel, exportQuestionBankToExcel } from '../lib/gameExcelUtils';
 import { safeGetLocalStorage, safeSetLocalStorage, setLargeStorage, getLargeStorage } from '../lib/storage';
@@ -39,6 +39,41 @@ interface QuestionBankViewProps {
 
 export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewProps) {
   const [activeTab, setActiveTab] = useState<'repository' | 'scheduler' | 'scheduled_exams'>('repository');
+
+  // Dynamic Filter Labels State
+  const [filterLabels, setFilterLabels] = useState<{ filter1: string; filter2: string; filter3: string }>(() => {
+    try {
+      const saved = safeGetLocalStorage('qb_filter_labels', '');
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return {
+      filter1: 'Suitable Course',
+      filter2: 'Q.Type',
+      filter3: 'Others'
+    };
+  });
+  const [showFilterSettingsModal, setShowFilterSettingsModal] = useState(false);
+  const [tempFilterLabels, setTempFilterLabels] = useState(filterLabels);
+
+  // Sync filter labels from central system_settings
+  useEffect(() => {
+    const loadLabels = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'system_settings', 'global'));
+        if (snap.exists() && snap.data()?.questionBankFilterLabels) {
+          const cloud = snap.data().questionBankFilterLabels;
+          const merged = {
+            filter1: cloud.filter1?.trim() || 'Suitable Course',
+            filter2: cloud.filter2?.trim() || 'Q.Type',
+            filter3: cloud.filter3?.trim() || 'Others'
+          };
+          setFilterLabels(merged);
+          safeSetLocalStorage('qb_filter_labels', JSON.stringify(merged));
+        }
+      } catch (_) {}
+    };
+    loadLabels();
+  }, []);
 
   // Question Bank State
   const [questions, setQuestions] = useState<QuestionBankItem[]>([]);
@@ -94,7 +129,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
 
     const todayStr = new Date().toISOString().split('T')[0];
     const fileName = `Question_Bank_Export${fileSuffix}_${todayStr}.xlsx`;
-    exportQuestionBankToExcel(listToExport, fileName);
+    exportQuestionBankToExcel(listToExport, fileName, filterLabels);
     setShowExportModal(false);
   };
 
@@ -615,6 +650,22 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
         setIsUploading(false);
         setUploadStatus(null);
         return;
+      }
+
+      // Auto-detect dynamic filter headers from parsed Excel
+      if (parsed.filterLabels && (parsed.filterLabels.filter1 || parsed.filterLabels.filter2 || parsed.filterLabels.filter3)) {
+        setFilterLabels(prev => {
+          const updated = {
+            filter1: parsed.filterLabels?.filter1 || prev.filter1,
+            filter2: parsed.filterLabels?.filter2 || prev.filter2,
+            filter3: parsed.filterLabels?.filter3 || prev.filter3
+          };
+          safeSetLocalStorage('qb_filter_labels', JSON.stringify(updated));
+          try {
+            setDoc(doc(db, 'system_settings', 'global'), { questionBankFilterLabels: updated }, { merge: true });
+          } catch (_) {}
+          return updated;
+        });
       }
 
       setPendingUploadQuestions(parsed);
@@ -1207,7 +1258,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 }}
                 className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500"
               >
-                <option value="all">All Suitable Courses</option>
+                <option value="all">All {filterLabels.filter1 || 'Suitable Courses'}</option>
                 {uniqueGroups1.map(g => (
                   <option key={g} value={g}>{g}</option>
                 ))}
@@ -1222,7 +1273,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 }}
                 className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500"
               >
-                <option value="all">All Question Types</option>
+                <option value="all">All {filterLabels.filter2 || 'Question Types'}</option>
                 {uniqueGroups2.map(g => (
                   <option key={g} value={g}>{g}</option>
                 ))}
@@ -1234,7 +1285,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 onChange={(e) => setFilterGroup3(e.target.value)}
                 className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500"
               >
-                <option value="all">All Other Categories</option>
+                <option value="all">All {filterLabels.filter3 || 'Other Categories'}</option>
                 {uniqueGroups3.map(g => (
                   <option key={g} value={g}>{g}</option>
                 ))}
@@ -1244,12 +1295,25 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
             {/* Action Buttons */}
             <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={downloadQuestionBankExcelTemplate}
+                onClick={() => downloadQuestionBankExcelTemplate(filterLabels)}
                 className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                 title="Download Excel Format Sample"
               >
                 <Download className="w-3.5 h-3.5 text-indigo-600" />
                 <span>Download Sample</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTempFilterLabels(filterLabels);
+                  setShowFilterSettingsModal(true);
+                }}
+                className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-indigo-200/80 shadow-xs"
+                title="Customize Filter 1, Filter 2, and Filter 3 column names"
+              >
+                <Sliders className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Filter Names</span>
               </button>
 
               <button
@@ -1377,15 +1441,15 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               <span className="text-xl font-black text-indigo-600">{questions.length}</span>
             </div>
             <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-sm space-y-1">
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">Suitable Courses</span>
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">{filterLabels.filter1 || 'Suitable Courses'}</span>
               <span className="text-xl font-black text-slate-800">{uniqueGroups1.length}</span>
             </div>
             <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-sm space-y-1">
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">Q.Types</span>
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">{filterLabels.filter2 || 'Q.Types'}</span>
               <span className="text-xl font-black text-slate-800">{uniqueGroups2.length}</span>
             </div>
             <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-sm space-y-1">
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">Other Categories</span>
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block">{filterLabels.filter3 || 'Other Categories'}</span>
               <span className="text-xl font-black text-slate-800">{uniqueGroups3.length}</span>
             </div>
           </div>
@@ -1457,9 +1521,9 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                     </th>
                     <th className="p-3 min-w-[240px]">Question Text</th>
                     <th className="p-3 min-w-[200px]">Options & Answer</th>
-                    <th className="p-3 w-36">Suitable Course</th>
-                    <th className="p-3 w-36">Q.Type</th>
-                    <th className="p-3 w-32">Others</th>
+                    <th className="p-3 w-36">{filterLabels.filter1 || 'Suitable Course'}</th>
+                    <th className="p-3 w-36">{filterLabels.filter2 || 'Q.Type'}</th>
+                    <th className="p-3 w-32">{filterLabels.filter3 || 'Others'}</th>
                     <th className="p-3 w-20 text-center">Action</th>
                   </tr>
                 </thead>
@@ -1798,7 +1862,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                         {/* Suitable Course */}
                         <div>
                           <div className="flex items-center justify-between mb-1">
-                            <label className="text-[10px] font-extrabold text-slate-400 uppercase block">Suitable Course</label>
+                            <label className="text-[10px] font-extrabold text-slate-400 uppercase block">{filterLabels.filter1 || 'Suitable Course'}</label>
                             {filterGroup1 !== 'all' && (
                               <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1 rounded">Locked</span>
                             )}
@@ -1813,7 +1877,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                               onChange={(e) => handleRuleChange(rule.id, 'group1', e.target.value)}
                               className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
                             >
-                              <option value="all">All Suitable Courses</option>
+                              <option value="all">All {filterLabels.filter1 || 'Suitable Courses'}</option>
                               {uniqueGroups1.map(g => (
                                 <option key={g} value={g}>{g}</option>
                               ))}
@@ -1824,7 +1888,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                         {/* Q.Type */}
                         <div>
                           <div className="flex items-center justify-between mb-1">
-                            <label className="text-[10px] font-extrabold text-slate-400 uppercase block">Q.Type</label>
+                            <label className="text-[10px] font-extrabold text-slate-400 uppercase block">{filterLabels.filter2 || 'Q.Type'}</label>
                             {filterGroup2 !== 'all' && (
                               <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1 rounded">Locked</span>
                             )}
@@ -1839,7 +1903,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                               onChange={(e) => handleRuleChange(rule.id, 'group2', e.target.value)}
                               className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
                             >
-                              <option value="all">All Question Types</option>
+                              <option value="all">All {filterLabels.filter2 || 'Question Types'}</option>
                               {uniqueGroups2.map(g => (
                                 <option key={g} value={g}>{g}</option>
                               ))}
@@ -1850,7 +1914,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                         {/* Others */}
                         <div>
                           <div className="flex items-center justify-between mb-1">
-                            <label className="text-[10px] font-extrabold text-slate-400 uppercase block">Others</label>
+                            <label className="text-[10px] font-extrabold text-slate-400 uppercase block">{filterLabels.filter3 || 'Others'}</label>
                             {filterGroup3 !== 'all' && (
                               <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1 rounded">Locked</span>
                             )}
@@ -1865,7 +1929,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                               onChange={(e) => handleRuleChange(rule.id, 'group3', e.target.value)}
                               className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
                             >
-                              <option value="all">All Other Categories</option>
+                              <option value="all">All {filterLabels.filter3 || 'Other Categories'}</option>
                               {uniqueGroups3.map(g => (
                                 <option key={g} value={g}>{g}</option>
                               ))}
@@ -2331,7 +2395,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               {/* Group Metadata */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-extrabold text-slate-600 block">Suitable Course</label>
+                  <label className="text-[11px] font-extrabold text-slate-600 block">{filterLabels.filter1 || 'Suitable Course'}</label>
                   <input
                     type="text"
                     value={formData.group1}
@@ -2341,7 +2405,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] font-extrabold text-slate-600 block">Q.Type</label>
+                  <label className="text-[11px] font-extrabold text-slate-600 block">{filterLabels.filter2 || 'Q.Type'}</label>
                   <input
                     type="text"
                     value={formData.group2}
@@ -2351,7 +2415,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] font-extrabold text-slate-600 block">Others</label>
+                  <label className="text-[11px] font-extrabold text-slate-600 block">{filterLabels.filter3 || 'Others'}</label>
                   <input
                     type="text"
                     value={formData.group3}
@@ -2501,6 +2565,20 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                       <strong className="text-slate-900">Others / Other / Subject / Year / Category / Tag:</strong> (Optional) Other metadata like year or notes (e.g. <span className="text-indigo-700 font-bold">2024</span>, <span className="text-indigo-700 font-bold">38th BCS</span>, etc.).
                     </div>
                   </li>
+
+                  <li className="flex items-start gap-2 bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200/80">
+                    <span className="text-emerald-600 font-bold shrink-0">✨</span>
+                    <div>
+                      <strong className="text-emerald-950">Dynamic Column Headers (Filter1, Filter2, Filter3):</strong> You can customize the 3 category headers in your Excel file using the syntax <code className="bg-emerald-100/90 text-emerald-900 px-1 py-0.5 rounded text-[10px] font-bold">Filter1: Subject</code>, <code className="bg-emerald-100/90 text-emerald-900 px-1 py-0.5 rounded text-[10px] font-bold">Filter2: Chapter</code>, and <code className="bg-emerald-100/90 text-emerald-900 px-1 py-0.5 rounded text-[10px] font-bold">Filter3: Year</code>. The system will automatically rename your filters on upload!
+                    </div>
+                  </li>
+
+                  <li className="flex items-start gap-2 bg-indigo-50/80 p-2.5 rounded-xl border border-indigo-200/80">
+                    <span className="text-indigo-600 font-bold shrink-0">💡</span>
+                    <div>
+                      <strong className="text-indigo-950">Automatic Answer Marking via Hash (#):</strong> You can place a <code className="bg-indigo-100 text-indigo-900 px-1.5 py-0.5 rounded font-mono font-black text-xs">#</code> directly inside the correct option (e.g. <span className="font-semibold italic">Dhaka#</span>). The system will automatically mark it as the correct answer and strip the # symbol — making the <code className="text-[10px] font-mono">Ans</code> column optional!
+                    </div>
+                  </li>
                 </ul>
               </div>
             </div>
@@ -2508,7 +2586,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
             <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
               <button
                 type="button"
-                onClick={downloadQuestionBankExcelTemplate}
+                onClick={() => downloadQuestionBankExcelTemplate(filterLabels)}
                 className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" />
@@ -2522,6 +2600,122 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               >
                 Got It
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOMIZE FILTER NAMES MODAL */}
+      {showFilterSettingsModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 space-y-5 shadow-2xl relative animate-scaleUp border border-slate-100">
+            <button
+              onClick={() => setShowFilterSettingsModal(false)}
+              className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-600 rounded-full transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600">
+                <Sliders className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">Customize Question Bank Filters</h3>
+                <p className="text-xs text-slate-500 font-medium">Rename the 3 classification categories for your organization</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 text-xs font-semibold text-slate-700">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black uppercase text-indigo-600 block">
+                  Filter 1 Label (Default: Suitable Course)
+                </label>
+                <input
+                  type="text"
+                  value={tempFilterLabels.filter1}
+                  onChange={(e) => setTempFilterLabels(prev => ({ ...prev, filter1: e.target.value }))}
+                  placeholder="e.g. Suitable Course, Subject, Track, Stream"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black uppercase text-indigo-600 block">
+                  Filter 2 Label (Default: Q.Type)
+                </label>
+                <input
+                  type="text"
+                  value={tempFilterLabels.filter2}
+                  onChange={(e) => setTempFilterLabels(prev => ({ ...prev, filter2: e.target.value }))}
+                  placeholder="e.g. Q.Type, Topic, Chapter, Difficulty"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black uppercase text-indigo-600 block">
+                  Filter 3 Label (Default: Others)
+                </label>
+                <input
+                  type="text"
+                  value={tempFilterLabels.filter3}
+                  onChange={(e) => setTempFilterLabels(prev => ({ ...prev, filter3: e.target.value }))}
+                  placeholder="e.g. Others, Year, Exam Source, Tag"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                />
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-[11px] text-slate-500 leading-relaxed">
+                💡 <strong>Tip:</strong> These names appear across your filters, statistics, question tables, scheduler rules, and downloaded Excel samples.
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const defaultLabels = { filter1: 'Suitable Course', filter2: 'Q.Type', filter3: 'Others' };
+                  setTempFilterLabels(defaultLabels);
+                }}
+                className="px-3 py-2 text-slate-500 hover:text-slate-800 text-xs font-bold transition cursor-pointer"
+              >
+                Reset Defaults
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowFilterSettingsModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const cleanLabels = {
+                      filter1: tempFilterLabels.filter1.trim() || 'Suitable Course',
+                      filter2: tempFilterLabels.filter2.trim() || 'Q.Type',
+                      filter3: tempFilterLabels.filter3.trim() || 'Others'
+                    };
+                    setFilterLabels(cleanLabels);
+                    safeSetLocalStorage('qb_filter_labels', JSON.stringify(cleanLabels));
+                    setShowFilterSettingsModal(false);
+                    try {
+                      await setDoc(doc(db, 'system_settings', 'global'), {
+                        questionBankFilterLabels: cleanLabels
+                      }, { merge: true });
+                    } catch (e) {
+                      console.warn('Notice saving custom labels to Firestore:', e);
+                    }
+                  }}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-md cursor-pointer"
+                >
+                  Save & Apply
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2748,13 +2942,13 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                   Total Parsed: <strong className="text-indigo-600 font-black">{pendingUploadQuestions.length}</strong>
                 </span>
                 <span className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-600 shadow-2xs">
-                  Suitable Courses: <strong className="text-slate-900">{new Set(pendingUploadQuestions.map(q => q.group1 || 'General')).size}</strong>
+                  {filterLabels.filter1 || 'Suitable Courses'}: <strong className="text-slate-900">{new Set(pendingUploadQuestions.map(q => q.group1 || 'General')).size}</strong>
                 </span>
                 <span className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-600 shadow-2xs">
-                  Q.Types: <strong className="text-slate-900">{new Set(pendingUploadQuestions.map(q => q.group2 || 'General')).size}</strong>
+                  {filterLabels.filter2 || 'Q.Types'}: <strong className="text-slate-900">{new Set(pendingUploadQuestions.map(q => q.group2 || 'General')).size}</strong>
                 </span>
                 <span className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-600 shadow-2xs">
-                  Categories: <strong className="text-slate-900">{new Set(pendingUploadQuestions.map(q => q.group3 || 'General')).size}</strong>
+                  {filterLabels.filter3 || 'Other Categories'}: <strong className="text-slate-900">{new Set(pendingUploadQuestions.map(q => q.group3 || 'General')).size}</strong>
                 </span>
               </div>
 
@@ -2786,9 +2980,9 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                       <tr className="bg-slate-100/80 text-[11px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-200">
                         <th className="p-3 w-12 text-center">#</th>
                         <th className="p-3">Question & Options</th>
-                        <th className="p-3 w-32">Suitable Course</th>
-                        <th className="p-3 w-32">Q.Type</th>
-                        <th className="p-3 w-32">Others</th>
+                        <th className="p-3 w-32">{filterLabels.filter1 || 'Suitable Course'}</th>
+                        <th className="p-3 w-32">{filterLabels.filter2 || 'Q.Type'}</th>
+                        <th className="p-3 w-32">{filterLabels.filter3 || 'Others'}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs">

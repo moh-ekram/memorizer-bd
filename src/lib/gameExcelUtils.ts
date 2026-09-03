@@ -1,5 +1,5 @@
 import { read, utils, writeFile } from 'xlsx';
-import { BlankQuestion, OddOneOutQuestion, WordAnalogyQuestion, CustomMcqQuestion, ExamQuestion, QuestionBankItem } from '../types';
+import { BlankQuestion, OddOneOutQuestion, WordAnalogyQuestion, CustomMcqQuestion, ExamQuestion, QuestionBankItem, VocabularyWord } from '../types';
 
 /**
  * Normalizes text for matching (lowercase, trims whitespace, removes hidden unicode)
@@ -836,33 +836,48 @@ export async function parseMultiSheetGamesExcel(file: File, courseId: string): P
 // QUESTION BANK EXCEL UTILS
 // ==========================================
 
-export function downloadQuestionBankExcelTemplate() {
+export interface QuestionBankDynamicFilterLabels {
+  filter1?: string;
+  filter2?: string;
+  filter3?: string;
+}
+
+export interface QuestionBankParseResultArray extends Array<QuestionBankItem> {
+  filterLabels?: QuestionBankDynamicFilterLabels;
+  notices?: string[];
+}
+
+export function downloadQuestionBankExcelTemplate(customLabels?: QuestionBankDynamicFilterLabels) {
+  const f1Label = customLabels?.filter1?.trim() || 'Suitable Course';
+  const f2Label = customLabels?.filter2?.trim() || 'Q.Type';
+  const f3Label = customLabels?.filter3?.trim() || 'Others';
+
   const sampleData = [
     [
-      'Question ID',
-      'Question (প্রশ্ন)',
-      'Option A (অপশন ক)',
-      'Option B (অপশন খ)',
-      'Option C (অপশন গ)',
-      'Option D (অপশন ঘ)',
-      'Correct Answer (সঠিক উত্তর A/B/C/D)',
-      'Explanation (ব্যাখ্যা)',
-      'Suitable Course',
-      'Q.Type',
-      'Others'
+      'Id',
+      'Question',
+      'Opt1',
+      'Opt2',
+      'Opt3',
+      'Opt4',
+      'Ans (Optional if # used in option)',
+      'Explanation (Optional)',
+      `Filter1: ${f1Label}`,
+      `Filter2: ${f2Label}`,
+      `Filter3: ${f3Label}`
     ],
     [
       'qb-101',
       'An explicit order was given to the team. What does "explicit" mean?',
-      'Clear and direct',
+      'Clear and direct#',
       'Vague and hidden',
       'Complicated',
       'Optional',
-      'A',
+      '', // Answer left blank because # is placed in Option 1
       'Explicit means clear, precise, and leaving no room for doubt.',
-      'BCS',
-      'MCQ',
-      'English'
+      'BCS English',
+      'Vocabulary',
+      '2026'
     ],
     [
       'qb-102',
@@ -871,58 +886,82 @@ export function downloadQuestionBankExcelTemplate() {
       'সোনার তরী',
       'গীতাঞ্জলি',
       'কবর',
-      'A',
-      'অগ্নিবীণা কাজী নজরুল ইসলামের প্রথম কাব্যগ্রন্থ (১৯২২)।',
-      'সমাস',
-      'Blank filling',
-      'বাংলা সাহিত্য (২০২৪)'
+      'A', // Or option text 'অগ্নিবীণা'
+      'অগ্নিবীণা কাজী নজরুল ইসলামের প্রথম প্রকাশিত কাব্যগ্রন্থ (১৯২২)।',
+      'বাংলা সাহিত্য',
+      'কাব্যগ্রন্থ',
+      'বিসিএস প্রিলিমিনারি'
     ],
     [
       'qb-103',
       'Analogy: LIGHT : BLIND :: SOUND : ?',
-      'Deaf',
+      'Deaf#',
       'Silence',
       'Quiet',
       'Noise',
-      'A',
+      '',
       'Deaf lacks hearing sound, just as blind lacks seeing light.',
       'IELTS',
       'Analogy',
-      '2025'
+      'Important'
     ],
     [
       'qb-104',
       'কোন বানানটি সঠিক?',
-      'স্বায়ত্তশাসন',
+      'স্বায়ত্তশাসন#',
       'স্বায়ত্বশাসন',
       'সায়ত্বশাসন',
       'স্বায়ত্ব শাসন',
-      'A',
+      '',
       'সঠিক বানান হলো "স্বায়ত্তশাসন"।',
-      'বানান',
-      'MCQ',
-      'বাংলা ব্যাকরণ'
+      'বাংলা ব্যাকরণ',
+      'শুদ্ধ বানান',
+      'সাধারণ'
     ]
   ];
+
   const ws = utils.aoa_to_sheet(sampleData);
+  // Set column widths
+  ws['!cols'] = [
+    { wch: 12 }, // Id
+    { wch: 50 }, // Question
+    { wch: 22 }, // Opt1
+    { wch: 22 }, // Opt2
+    { wch: 22 }, // Opt3
+    { wch: 22 }, // Opt4
+    { wch: 28 }, // Ans
+    { wch: 45 }, // Explanation
+    { wch: 24 }, // Filter1
+    { wch: 24 }, // Filter2
+    { wch: 24 }  // Filter3
+  ];
+
   const wb = utils.book_new();
   utils.book_append_sheet(wb, ws, "Question Bank");
   writeFile(wb, "Question_Bank_Template.xlsx");
 }
 
-export function exportQuestionBankToExcel(questions: QuestionBankItem[], fileName = 'Question_Bank_Export.xlsx') {
+export function exportQuestionBankToExcel(
+  questions: QuestionBankItem[], 
+  fileName = 'Question_Bank_Export.xlsx',
+  customLabels?: QuestionBankDynamicFilterLabels
+) {
+  const f1Label = customLabels?.filter1?.trim() || 'Suitable Course';
+  const f2Label = customLabels?.filter2?.trim() || 'Q.Type';
+  const f3Label = customLabels?.filter3?.trim() || 'Others';
+
   const headers = [
-    'Question ID',
-    'Question (প্রশ্ন)',
-    'Option A (অপশন ক)',
-    'Option B (অপশন খ)',
-    'Option C (অপশন গ)',
-    'Option D (অপশন ঘ)',
-    'Correct Answer (সঠিক উত্তর A/B/C/D)',
-    'Explanation (ব্যাখ্যা)',
-    'Suitable Course',
-    'Q.Type',
-    'Others'
+    'Id',
+    'Question',
+    'Opt1',
+    'Opt2',
+    'Opt3',
+    'Opt4',
+    'Ans',
+    'Explanation',
+    `Filter1: ${f1Label}`,
+    `Filter2: ${f2Label}`,
+    `Filter3: ${f3Label}`
   ];
 
   const rows = questions.map((q, idx) => {
@@ -953,17 +992,17 @@ export function exportQuestionBankToExcel(questions: QuestionBankItem[], fileNam
 
   // Set column widths
   ws['!cols'] = [
-    { wch: 14 }, // ID
-    { wch: 50 }, // Question
-    { wch: 22 }, // Option A
-    { wch: 22 }, // Option B
-    { wch: 22 }, // Option C
-    { wch: 22 }, // Option D
-    { wch: 16 }, // Answer
-    { wch: 40 }, // Explanation
-    { wch: 20 }, // Suitable Course
-    { wch: 20 }, // Q.Type
-    { wch: 20 }  // Others
+    { wch: 14 },
+    { wch: 50 },
+    { wch: 22 },
+    { wch: 22 },
+    { wch: 22 },
+    { wch: 22 },
+    { wch: 18 },
+    { wch: 45 },
+    { wch: 24 },
+    { wch: 24 },
+    { wch: 24 }
   ];
 
   const wb = utils.book_new();
@@ -971,38 +1010,69 @@ export function exportQuestionBankToExcel(questions: QuestionBankItem[], fileNam
   writeFile(wb, fileName);
 }
 
-export async function parseQuestionBankExcel(file: File): Promise<QuestionBankItem[]> {
+export async function parseQuestionBankExcel(file: File): Promise<QuestionBankParseResultArray> {
   const data = await file.arrayBuffer();
   const workbook = read(data);
   const sheetName = workbook.SheetNames[0];
   const sheet = workbook.Sheets[sheetName];
   const rows: any[][] = utils.sheet_to_json(sheet, { header: 1 });
 
-  if (!rows || rows.length < 2) return [];
+  if (!rows || rows.length < 2) {
+    const emptyResult: QuestionBankParseResultArray = [];
+    return emptyResult;
+  }
 
   const questions: QuestionBankItem[] = [];
-  const headerRow = rows[0].map(c => cleanText(c).toLowerCase());
+  const rawHeaders = rows[0].map(c => cleanText(c));
+  const lowerHeaders = rawHeaders.map(c => c.toLowerCase());
 
   // Precise column match helper
   const findColExact = (keywords: string[]) => {
-    return headerRow.findIndex(h => keywords.some(k => {
+    return lowerHeaders.findIndex(h => keywords.some(k => {
       const cleanK = k.toLowerCase().trim();
       return h === cleanK || h.includes(cleanK);
     }));
   };
 
-  // 1. Identify ID column first (e.g. "Question ID", "ID", "SL")
-  let idCol = findColExact(['question id', 'question_id', 'q_id', 'qid', 'serial', 'sl', 'id']);
+  // 1. Check for dynamic Filter1:label, Filter2:label, Filter3:label
+  const detectedFilterLabels: QuestionBankDynamicFilterLabels = {};
+  let g1Col = -1;
+  let g2Col = -1;
+  let g3Col = -1;
 
-  // 2. Identify Question Text column (must NOT be the ID column)
-  let questionCol = headerRow.findIndex((h, idx) => {
+  rawHeaders.forEach((rawH, idx) => {
+    const f1Match = rawH.match(/^filter\s*#?\s*1\s*[:=\-]\s*(.*)$/i) || rawH.match(/^filter\s*1$/i);
+    if (f1Match) {
+      g1Col = idx;
+      if (f1Match[1]?.trim()) detectedFilterLabels.filter1 = f1Match[1].trim();
+    }
+    const f2Match = rawH.match(/^filter\s*#?\s*2\s*[:=\-]\s*(.*)$/i) || rawH.match(/^filter\s*2$/i);
+    if (f2Match) {
+      g2Col = idx;
+      if (f2Match[1]?.trim()) detectedFilterLabels.filter2 = f2Match[1].trim();
+    }
+    const f3Match = rawH.match(/^filter\s*#?\s*3\s*[:=\-]\s*(.*)$/i) || rawH.match(/^filter\s*3$/i);
+    if (f3Match) {
+      g3Col = idx;
+      if (f3Match[1]?.trim()) detectedFilterLabels.filter3 = f3Match[1].trim();
+    }
+  });
+
+  if (g1Col < 0) g1Col = findColExact(['suitable course', 'suitable_course', 'suitablecourse', 'suitable', 'course', 'group 1', 'group1', 'subject', 'বিষয়', 'গ্রুপ ১', 'গ্রুপ১']);
+  if (g2Col < 0) g2Col = findColExact(['q.type', 'q type', 'qtype', 'q_type', 'question type', 'q-type', 'type', 'group 2', 'group2', 'topic', 'অধ্যায়', 'টপিক', 'গ্রুপ ২', 'গ্রুপ২']);
+  if (g3Col < 0) g3Col = findColExact(['others', 'other', 'group 3', 'group3', 'difficulty', 'category', 'tag', 'ক্যাটাগরি', 'গ্রুপ ৩', 'গ্রুপ৩', 'সাল', 'year']);
+
+  // 2. Identify ID column (e.g. "Id", "Question ID", "SL")
+  let idCol = findColExact(['id', 'question id', 'question_id', 'q_id', 'qid', 'serial', 'sl']);
+
+  // 3. Identify Question Text column
+  let questionCol = lowerHeaders.findIndex((h, idx) => {
     if (idx === idCol) return false;
     return h.includes('question') || h.includes('প্রশ্ন') || h.includes('sentence') || h.includes('title');
   });
 
-  // Fallback for Question Column
   if (questionCol < 0) {
-    if (idCol === 0 && headerRow.length > 1) {
+    if (idCol === 0 && lowerHeaders.length > 1) {
       questionCol = 1;
     } else {
       questionCol = findColExact(['question', 'প্রশ্ন']);
@@ -1010,29 +1080,24 @@ export async function parseQuestionBankExcel(file: File): Promise<QuestionBankIt
     }
   }
 
-  // 3. Precise Option Column Mapping (avoiding dangerous single-character includes)
-  let optACol = findColExact(['option a', 'option 1', 'অপশন ক', 'অপশন ১', 'opt a', 'opt 1', 'option_a', 'option1']);
-  let optBCol = findColExact(['option b', 'option 2', 'অপশন খ', 'অপশন ২', 'opt b', 'opt 2', 'option_b', 'option2']);
-  let optCCol = findColExact(['option c', 'option 3', 'অপশন গ', 'অপশন ৩', 'opt c', 'opt 3', 'option_c', 'option3']);
-  let optDCol = findColExact(['option d', 'option 4', 'অপশন ঘ', 'অপশন ৪', 'opt d', 'opt 4', 'option_d', 'option4']);
+  // 4. Option columns
+  let optACol = findColExact(['opt1', 'opt 1', 'option a', 'option 1', 'অপশন ক', 'অপশন ১', 'opt a', 'option_a', 'option1']);
+  let optBCol = findColExact(['opt2', 'opt 2', 'option b', 'option 2', 'অপশন খ', 'অপশন ২', 'opt b', 'option_b', 'option2']);
+  let optCCol = findColExact(['opt3', 'opt 3', 'option c', 'option 3', 'অপশন গ', 'অপশন ৩', 'opt c', 'option_c', 'option3']);
+  let optDCol = findColExact(['opt4', 'opt 4', 'option d', 'option 4', 'অপশন ঘ', 'অপশন ৪', 'opt d', 'option_d', 'option4']);
 
-  // If option headers are simple "A", "B", "C", "D"
-  if (optACol < 0) optACol = headerRow.findIndex(h => /^opt(ion)?\s*a$/i.test(h) || /^a$/i.test(h) || h === 'ক');
-  if (optBCol < 0) optBCol = headerRow.findIndex(h => /^opt(ion)?\s*b$/i.test(h) || /^b$/i.test(h) || h === 'খ');
-  if (optCCol < 0) optCCol = headerRow.findIndex(h => /^opt(ion)?\s*c$/i.test(h) || /^c$/i.test(h) || h === 'গ');
-  if (optDCol < 0) optDCol = headerRow.findIndex(h => /^opt(ion)?\s*d$/i.test(h) || /^d$/i.test(h) || h === 'ঘ');
+  if (optACol < 0) optACol = lowerHeaders.findIndex(h => /^opt(ion)?\s*(1|a)$/i.test(h) || /^a$/i.test(h) || h === 'ক');
+  if (optBCol < 0) optBCol = lowerHeaders.findIndex(h => /^opt(ion)?\s*(2|b)$/i.test(h) || /^b$/i.test(h) || h === 'খ');
+  if (optCCol < 0) optCCol = lowerHeaders.findIndex(h => /^opt(ion)?\s*(3|c)$/i.test(h) || /^c$/i.test(h) || h === 'গ');
+  if (optDCol < 0) optDCol = lowerHeaders.findIndex(h => /^opt(ion)?\s*(4|d)$/i.test(h) || /^d$/i.test(h) || h === 'ঘ');
 
-  // Fallback index positioning if options could not be matched by headers
   if (optACol < 0) optACol = Math.max(idCol, questionCol) + 1;
   if (optBCol < 0) optBCol = optACol + 1;
   if (optCCol < 0) optCCol = optBCol + 1;
   if (optDCol < 0) optDCol = optCCol + 1;
 
-  const ansCol = findColExact(['correct answer', 'correct_answer', 'correct', 'answer', 'সঠিক উত্তর', 'সঠিক', 'উত্তর', 'ans']);
+  const ansCol = findColExact(['ans', 'correct answer', 'correct_answer', 'correct', 'answer', 'সঠিক উত্তর', 'সঠিক', 'উত্তর']);
   const expCol = findColExact(['explanation', 'ব্যাখ্যা', 'exp']);
-  const g1Col = findColExact(['suitable course', 'suitable_course', 'suitablecourse', 'suitable', 'course', 'group 1', 'group1', 'subject', 'বিষয়', 'গ্রুপ ১', 'গ্রুপ১']);
-  const g2Col = findColExact(['q.type', 'q type', 'qtype', 'q_type', 'question type', 'q-type', 'type', 'group 2', 'group2', 'topic', 'অধ্যায়', 'টপিক', 'গ্রুপ ২', 'গ্রুপ২']);
-  const g3Col = findColExact(['others', 'other', 'group 3', 'group3', 'difficulty', 'category', 'tag', 'ক্যাটাগরি', 'গ্রুপ ৩', 'গ্রুপ৩', 'সাল', 'year']);
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
@@ -1044,10 +1109,26 @@ export async function parseQuestionBankExcel(file: File): Promise<QuestionBankIt
     }
     if (!qText) continue;
 
-    const optA = optACol >= 0 ? cleanText(row[optACol]) : '';
-    const optB = optBCol >= 0 ? cleanText(row[optBCol]) : '';
-    const optC = optCCol >= 0 ? cleanText(row[optCCol]) : '';
-    const optD = optDCol >= 0 ? cleanText(row[optDCol]) : '';
+    let rawOptA = optACol >= 0 ? cleanText(row[optACol]) : '';
+    let rawOptB = optBCol >= 0 ? cleanText(row[optBCol]) : '';
+    let rawOptC = optCCol >= 0 ? cleanText(row[optCCol]) : '';
+    let rawOptD = optDCol >= 0 ? cleanText(row[optDCol]) : '';
+
+    // Support # in options to designate correct answer automatically
+    let hashAns = '';
+    const cleanOpt = (opt: string) => {
+      if (opt.includes('#')) {
+        const cleaned = opt.replace(/#/g, '').trim();
+        hashAns = cleaned;
+        return cleaned;
+      }
+      return opt;
+    };
+
+    const optA = cleanOpt(rawOptA);
+    const optB = cleanOpt(rawOptB);
+    const optC = cleanOpt(rawOptC);
+    const optD = cleanOpt(rawOptD);
 
     if (!optA || !optB) continue;
 
@@ -1057,19 +1138,21 @@ export async function parseQuestionBankExcel(file: File): Promise<QuestionBankIt
     }
 
     let rawAns = ansCol >= 0 ? cleanText(row[ansCol]) : '';
-    let finalAns = rawAns || optA;
+    let finalAns = hashAns || rawAns || optA;
 
-    if (/^[a-dA-D]$/.test(rawAns)) {
-      const idx = rawAns.toUpperCase().charCodeAt(0) - 65;
-      const optionsArr = [optA, optB, optC, optD];
-      if (optionsArr[idx]) {
-        finalAns = optionsArr[idx];
-      }
-    } else if (/^[1-4]$/.test(rawAns)) {
-      const idx = parseInt(rawAns, 10) - 1;
-      const optionsArr = [optA, optB, optC, optD];
-      if (optionsArr[idx]) {
-        finalAns = optionsArr[idx];
+    if (!hashAns && rawAns) {
+      if (/^[a-dA-D]$/.test(rawAns)) {
+        const idx = rawAns.toUpperCase().charCodeAt(0) - 65;
+        const optionsArr = [optA, optB, optC, optD];
+        if (optionsArr[idx]) {
+          finalAns = optionsArr[idx];
+        }
+      } else if (/^[1-4]$/.test(rawAns)) {
+        const idx = parseInt(rawAns, 10) - 1;
+        const optionsArr = [optA, optB, optC, optD];
+        if (optionsArr[idx]) {
+          finalAns = optionsArr[idx];
+        }
       }
     }
 
@@ -1085,6 +1168,7 @@ export async function parseQuestionBankExcel(file: File): Promise<QuestionBankIt
       optionB: optB,
       optionC: optC || 'N/A',
       optionD: optD || 'N/A',
+      options: [optA, optB, optC || 'N/A', optD || 'N/A'],
       correctAnswer: finalAns,
       explanation: expText || DEFAULT_EXPLANATION,
       group1: group1 || 'General',
@@ -1094,5 +1178,398 @@ export async function parseQuestionBankExcel(file: File): Promise<QuestionBankIt
     });
   }
 
-  return questions;
+  const result: QuestionBankParseResultArray = questions;
+  result.filterLabels = detectedFilterLabels;
+  return result;
 }
+
+// ==========================================
+// COURSE VOCABULARY EXCEL UTILS (Place#: label, id, group)
+// ==========================================
+
+export interface CourseExcelParseResult {
+  words: VocabularyWord[];
+  placeLabels: Record<string, string>;
+  totalGroups: number;
+  groupsList: (string | number)[];
+  notices: string[];
+  sheetSummary: Record<string, number>;
+  suggestedTitle?: string;
+  gameData?: {
+    blankQs?: BlankQuestion[];
+    oooQs?: OddOneOutQuestion[];
+    analogyQs?: WordAnalogyQuestion[];
+    mcqQs?: CustomMcqQuestion[];
+    examQs?: ExamQuestion[];
+  };
+}
+
+export function downloadCourseExcelTemplate(customLabels?: Record<string, string>) {
+  const p1 = customLabels?.place1?.trim() || 'Word';
+  const p2 = customLabels?.place2?.trim() || 'Meaning';
+  const p3 = customLabels?.place3?.trim() || 'Example Sentence';
+  const p4 = customLabels?.place4?.trim() || 'Derivatives';
+  const p5 = customLabels?.place5?.trim() || 'Synonyms';
+  const p6 = customLabels?.place6?.trim() || 'Mnemonic / Notes';
+
+  const wb = utils.book_new();
+
+  // 1. Vocabulary Words Sheet
+  const wordsData = [
+    [
+      'id',
+      'group',
+      `Place1: ${p1}`,
+      `Place2: ${p2}`,
+      `Place3: ${p3}`,
+      `Place4: ${p4}`,
+      `Place5: ${p5}`,
+      `Place6: ${p6}`
+    ],
+    [
+      'w-101',
+      1,
+      'Benevolent',
+      'দয়ালু / হিতৈষী',
+      'He was a benevolent gentleman who donated his wealth to charity.',
+      'Benevolence (noun)',
+      'kind, generous, philanthropic, compassionate',
+      'Bene = Good, Volent = Wish'
+    ],
+    [
+      'w-102',
+      1,
+      'Pragmatic',
+      'বাস্তবধর্মী / প্রয়োগিক',
+      'She took a pragmatic approach to resolve the complex dilemma.',
+      'Pragmatism (noun)',
+      'practical, realistic, sensible, down-to-earth',
+      'Pragmatic = Practical'
+    ],
+    [
+      'w-103',
+      1,
+      'Lucid',
+      'স্পষ্ট / সহজে বোধগম্য',
+      'The teacher gave a lucid explanation that cleared all confusion.',
+      'Lucidity (noun)',
+      'clear, articulate, crystal-clear, intelligible',
+      'Lucid = Light / Clarity'
+    ],
+    [
+      'w-201',
+      2,
+      'Ephemeral',
+      'ক্ষণস্থায়ী',
+      'Fame in modern digital culture is often ephemeral.',
+      'Ephemerality (noun)',
+      'transient, fleeting, brief, short-lived',
+      'E-phenomenon lasts only a moment'
+    ],
+    [
+      'w-202',
+      2,
+      'Meticulous',
+      'খুঁতখুঁতে / অত্যন্ত সতর্ক',
+      'He conducted a meticulous audit of all financial records.',
+      'Meticulously (adverb)',
+      'diligent, scrupulous, thorough, precise',
+      'Met-tic = pays attention to every tick'
+    ]
+  ];
+
+  const wsWords = utils.aoa_to_sheet(wordsData);
+  wsWords['!cols'] = [
+    { wch: 10 }, // id
+    { wch: 8 },  // group
+    { wch: 22 }, // Place1
+    { wch: 28 }, // Place2
+    { wch: 45 }, // Place3
+    { wch: 24 }, // Place4
+    { wch: 35 }, // Place5
+    { wch: 30 }  // Place6
+  ];
+  utils.book_append_sheet(wb, wsWords, 'Vocabulary Words');
+
+  // 2. Blank Filling Sheet
+  const blankSheetData = [
+    ['Id', 'Sentence / Question', 'Opt1', 'Opt2', 'Opt3', 'Opt4', 'Ans (Optional if # used)', 'Explanation (Optional)'],
+    ['bq-101', 'He is _____ in conversational English.', 'proficient#', 'weak', 'ignorant', 'foolish', '', 'Proficient means highly skilled.']
+  ];
+  utils.book_append_sheet(wb, utils.aoa_to_sheet(blankSheetData), 'Blank Filling');
+
+  // 3. Odd One Out Sheet
+  const oooSheetData = [
+    ['Id', 'Opt1', 'Opt2', 'Opt3', 'Opt4', 'Ans (Optional if # used)', 'Explanation (Optional)'],
+    ['ooo-101', 'Apple', 'Banana', 'Carrot#', 'Mango', '', 'Carrot is a vegetable, while others are fruits.']
+  ];
+  utils.book_append_sheet(wb, utils.aoa_to_sheet(oooSheetData), 'Odd One Out');
+
+  // 4. Word Analogy Sheet
+  const analogySheetData = [
+    ['Id', 'Question / Pair', 'Opt1', 'Opt2', 'Opt3', 'Opt4', 'Ans (Optional if # used)', 'Explanation (Optional)'],
+    ['ana-101', 'LIGHT : BLIND', 'speech : deaf#', 'tongue : sound', 'language : mute', 'hearing : loud', '', 'Deaf lacks perception of speech.']
+  ];
+  utils.book_append_sheet(wb, utils.aoa_to_sheet(analogySheetData), 'Word Analogy');
+
+  // 5. MCQ Quiz Sheet
+  const mcqSheetData = [
+    ['Id', 'Question', 'Opt1', 'Opt2', 'Opt3', 'Opt4', 'Ans (Optional if # used)', 'Explanation (Optional)'],
+    ['mcq-101', 'What is the synonym of Pragmatic?', 'Practical#', 'Idealistic', 'Impractical', 'Theoretical', '', 'Pragmatic means practical.']
+  ];
+  utils.book_append_sheet(wb, utils.aoa_to_sheet(mcqSheetData), 'MCQ Quiz');
+
+  writeFile(wb, 'Course_Upload_Template.xlsx');
+}
+
+export async function parseCourseExcel(
+  file: File | ArrayBuffer, 
+  fallbackCourseId?: string,
+  fileName = ''
+): Promise<CourseExcelParseResult> {
+  const data = file instanceof File ? await file.arrayBuffer() : file;
+  const workbook = read(data, { type: 'array' });
+
+  const result: CourseExcelParseResult = {
+    words: [],
+    placeLabels: {},
+    totalGroups: 1,
+    groupsList: [],
+    notices: [],
+    sheetSummary: {},
+    gameData: {
+      blankQs: [],
+      oooQs: [],
+      analogyQs: [],
+      mcqQs: [],
+      examQs: []
+    }
+  };
+
+  if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+    result.notices.push('The Excel workbook contains no sheets.');
+    return result;
+  }
+
+  // Derive suggested title from file name or first sheet name
+  if (fileName) {
+    result.suggestedTitle = fileName.replace(/\.[^/.]+$/, '').replace(/[_\\-]+/g, ' ').trim();
+  }
+
+  // Find wordlist sheet: Look for "Words", "Vocabulary", "Course", or first sheet
+  let wordSheetName = workbook.SheetNames.find(s => /word|vocab|course|শব্দ/i.test(s)) || workbook.SheetNames[0];
+  const ws = workbook.Sheets[wordSheetName];
+  if (!ws) {
+    result.notices.push('Could not read words sheet.');
+    return result;
+  }
+
+  const rawRows = utils.sheet_to_json(ws) as any[];
+  if (!rawRows || rawRows.length === 0) {
+    result.notices.push('The words sheet is empty.');
+    return result;
+  }
+
+  // 1. Detect Place#: label and columns from header row
+  const detectedPlaceLabels: Record<string, string> = {};
+  const firstRowKeys = Object.keys(rawRows[0] || {});
+
+  firstRowKeys.forEach(k => {
+    const match = k.match(/^place\s*#?\s*([1-9][0-9]?)\s*[:=\-]\s*(.*)$/i) || k.match(/^place\s*#?\s*([1-9][0-9]?)$/i);
+    if (match) {
+      const num = match[1];
+      const label = match[2]?.trim() || '';
+      detectedPlaceLabels[`place${num}`] = label;
+    }
+  });
+
+  // Assign defaults if label was blank
+  if (!detectedPlaceLabels.place1) detectedPlaceLabels.place1 = 'Word';
+  if (!detectedPlaceLabels.place2) detectedPlaceLabels.place2 = 'Meaning';
+  if (!detectedPlaceLabels.place3) detectedPlaceLabels.place3 = 'Example Sentence';
+  if (!detectedPlaceLabels.place4) detectedPlaceLabels.place4 = 'Derivatives';
+  if (!detectedPlaceLabels.place5) detectedPlaceLabels.place5 = 'Synonyms';
+  if (!detectedPlaceLabels.place6) detectedPlaceLabels.place6 = 'Mnemonic / Notes';
+
+  result.placeLabels = detectedPlaceLabels;
+
+  // Helper to find column keys
+  const findRowKey = (rowKeys: string[], candidates: string[], placeNum?: number) => {
+    if (placeNum) {
+      const placeMatch = rowKeys.find(k => {
+        return new RegExp(`^place\\s*#?\\s*${placeNum}(\\s*[:=\\-]|$|\\s)`, 'i').test(k);
+      });
+      if (placeMatch) return placeMatch;
+    }
+    return rowKeys.find(k => {
+      const cleanK = cleanText(k).toLowerCase();
+      return candidates.some(c => cleanK === c || cleanK.includes(c));
+    });
+  };
+
+  const wordsList: VocabularyWord[] = [];
+  const groupsSet = new Set<string | number>();
+
+  for (let idx = 0; idx < rawRows.length; idx++) {
+    const row = rawRows[idx];
+    if (!row) continue;
+    const rowKeys = Object.keys(row);
+
+    const idKey = findRowKey(rowKeys, ['id', 'unique id', 'word id', 'sl', 'serial']);
+    const groupKey = findRowKey(rowKeys, ['group', 'level', 'grp']);
+
+    const wordKey = findRowKey(rowKeys, ['word', 'main word', 'english word', 'term'], 1);
+    const meaningKey = findRowKey(rowKeys, ['meaning', 'bangla meaning', 'bengali meaning', 'definition'], 2);
+    const exampleKey = findRowKey(rowKeys, ['example', 'example sentence', 'sentence'], 3);
+    const extraWordKey = findRowKey(rowKeys, ['derivative', 'extra word', 'sub-header', 'derivatives'], 4);
+    const synonymsKey = findRowKey(rowKeys, ['synonyms', 'synonym', 'similar words'], 5);
+    const mnemonicKey = findRowKey(rowKeys, ['mnemonic', 'mnemonics', 'notes', 'note', 'personal note', 'trick'], 6);
+
+    const baseWord = wordKey ? cleanText(row[wordKey]) : '';
+    const meaning = meaningKey ? cleanText(row[meaningKey]) : '';
+
+    if (!baseWord) continue;
+
+    // Parse group: identify each row with its group number
+    let group: string | number = 1;
+    if (groupKey && row[groupKey] !== undefined && row[groupKey] !== null) {
+      const rawGrp = cleanText(row[groupKey]);
+      if (rawGrp) {
+        const num = parseInt(rawGrp, 10);
+        if (!isNaN(num) && String(num) === rawGrp) {
+          group = num;
+        } else {
+          group = rawGrp;
+        }
+      }
+    }
+
+    groupsSet.add(group);
+
+    let rawId = idKey ? cleanText(row[idKey]) : '';
+    if (!rawId) {
+      rawId = `w-${group}-${idx + 1}`;
+    }
+
+    wordsList.push({
+      id: rawId,
+      group,
+      word: baseWord,
+      meaning: meaning || 'N/A',
+      example: exampleKey ? cleanText(row[exampleKey]) : '',
+      extraWord: extraWordKey ? cleanText(row[extraWordKey]) : '',
+      extraMeaning: '',
+      synonyms: synonymsKey ? cleanText(row[synonymsKey]) : '',
+      mnemonic: mnemonicKey ? cleanText(row[mnemonicKey]) : ''
+    });
+  }
+
+  result.words = wordsList;
+  result.totalGroups = Math.max(1, groupsSet.size);
+  result.groupsList = Array.from(groupsSet);
+  result.sheetSummary[`Words ('${wordSheetName}')`] = wordsList.length;
+
+  // 2. Also parse any game sheets if present
+  const cId = fallbackCourseId || 'course';
+  workbook.SheetNames.forEach(sheetName => {
+    if (sheetName === wordSheetName) return;
+    const gws = workbook.Sheets[sheetName];
+    if (!gws) return;
+    const gRows = utils.sheet_to_json(gws, { header: 1 }) as any[][];
+    if (!gRows || gRows.length === 0) return;
+
+    const lowerName = sheetName.toLowerCase().trim();
+    const hasHeader = gRows.length > 1;
+    const startIdx = hasHeader ? 1 : 0;
+    let count = 0;
+
+    if (/blank|fill|শূন্যস্থান/i.test(lowerName)) {
+      for (let i = startIdx; i < gRows.length; i++) {
+        const parsed = parseGenericQuestionRow(gRows[i], i, hasHeader, 'blank');
+        if (parsed) {
+          result.gameData?.blankQs?.push({
+            id: parsed.id,
+            sentence: parsed.question,
+            options: parsed.options,
+            answer: parsed.answer,
+            explanation: parsed.explanation,
+            courseId: cId,
+            createdAt: new Date().toISOString()
+          });
+          count++;
+        }
+      }
+      result.sheetSummary[`${sheetName} (Blank)`] = count;
+    } else if (/odd|ooo|ভিন্ন/i.test(lowerName)) {
+      for (let i = startIdx; i < gRows.length; i++) {
+        const r = gRows[i];
+        if (!r || r.length < 4) continue;
+        const wordsArr: string[] = [];
+        let hashAns = '';
+        let startCol = cleanText(r[0]).length > 15 ? 0 : 1;
+        for (let c = startCol; c < startCol + 4; c++) {
+          const v = cleanText(r[c]);
+          if (v) {
+            if (v.includes('#')) {
+              const cl = v.replace(/#/g, '').trim();
+              wordsArr.push(cl);
+              hashAns = cl;
+            } else {
+              wordsArr.push(v);
+            }
+          }
+        }
+        if (wordsArr.length >= 4) {
+          const ansCol = cleanText(r[startCol + 4]);
+          result.gameData?.oooQs?.push({
+            id: cleanText(r[0]) || `ooo-${Date.now()}-${i}`,
+            words: wordsArr.slice(0, 4),
+            answer: hashAns || ansCol || wordsArr[0],
+            reason: cleanText(r[startCol + 5]) || DEFAULT_EXPLANATION,
+            courseId: cId,
+            createdAt: new Date().toISOString()
+          });
+          count++;
+        }
+      }
+      result.sheetSummary[`${sheetName} (Odd One Out)`] = count;
+    } else if (/analogy|analogies|এনালজি/i.test(lowerName)) {
+      for (let i = startIdx; i < gRows.length; i++) {
+        const parsed = parseGenericQuestionRow(gRows[i], i, hasHeader, 'analogy');
+        if (parsed) {
+          result.gameData?.analogyQs?.push({
+            id: parsed.id,
+            analogy: parsed.question,
+            options: parsed.options,
+            answer: parsed.answer,
+            explanation: parsed.explanation,
+            courseId: cId,
+            createdAt: new Date().toISOString()
+          });
+          count++;
+        }
+      }
+      result.sheetSummary[`${sheetName} (Analogy)`] = count;
+    } else if (/mcq|quiz|প্রশ্ন/i.test(lowerName)) {
+      for (let i = startIdx; i < gRows.length; i++) {
+        const parsed = parseGenericQuestionRow(gRows[i], i, hasHeader, 'mcq');
+        if (parsed) {
+          result.gameData?.mcqQs?.push({
+            id: parsed.id,
+            question: parsed.question,
+            options: parsed.options,
+            answer: parsed.answer,
+            explanation: parsed.explanation,
+            courseId: cId,
+            createdAt: new Date().toISOString()
+          });
+          count++;
+        }
+      }
+      result.sheetSummary[`${sheetName} (MCQ)`] = count;
+    }
+  });
+
+  return result;
+}
+

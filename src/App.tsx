@@ -1234,8 +1234,14 @@ export default function App() {
           console.warn('Error saving uid to IDB:', e);
         }
 
-        // Run cloud sync in background
-        fetchUserDataFromCloud(currentUser);
+        // Run cloud sync in background with explicit error diagnostics
+        fetchUserDataFromCloud(currentUser).catch((syncErr) => {
+          const classified = classifySyncError(syncErr);
+          logSyncErrorToConsole('Auth onAuthStateChanged Background Cloud Sync Handshake', classified);
+          setLastSyncError(classified);
+          setSyncStatus('error');
+          addSyncLog('cloud_fetch', `[${classified.category}] ${classified.title}: ${classified.description}`, 'error', 0);
+        });
       } else {
         try {
           localStorage.removeItem('vocab_memorizer_cached_user');
