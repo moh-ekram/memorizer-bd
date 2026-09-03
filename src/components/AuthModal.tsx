@@ -42,12 +42,18 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
     } catch (err: any) {
       console.error('Auth Error:', err);
       let errMsg = 'Authentication failed. Please try again.';
-      if (err.code === 'auth/wrong-password' || err.message?.includes('Invalid login credentials')) {
-        errMsg = 'Incorrect email or password. Please verify your credentials.';
+      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential' || err.message?.includes('Invalid login credentials') || err.message?.includes('invalid-credential')) {
+        errMsg = 'ভুল ইমেইল অথবা পাসওয়ার্ড। অনুগ্রহ করে যাচাই করে পুনরায় চেষ্টা করুন।';
       } else if (err.code === 'auth/user-not-found' || err.message?.includes('User not found')) {
-        errMsg = 'No account found with this email address.';
+        errMsg = 'এই ইমেইল দিয়ে কোনো অ্যাকাউন্ট পাওয়া যায়নি।';
       } else if (err.code === 'auth/email-already-in-use' || err.message?.includes('already registered') || err.message?.includes('User already registered')) {
-        errMsg = 'This email is already registered. Please log in instead.';
+        errMsg = 'এই ইমেইল দিয়ে ইতিমধ্যে অ্যাকাউন্ট তৈরি করা আছে। অনুগ্রহ করে লগইন করুন।';
+      } else if (err.code === 'auth/weak-password') {
+        errMsg = 'পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে।';
+      } else if (err.code === 'auth/invalid-email') {
+        errMsg = 'অনুগ্রহ করে একটি সঠিক ইমেইল এড্রেস প্রদান করুন।';
+      } else if (err.code === 'auth/too-many-requests') {
+        errMsg = 'অতিরিক্ত ভুল চেষ্টার কারণে সাময়িকভাবে ব্লক করা হয়েছে। কিছুক্ষণ পর চেষ্টা করুন।';
       } else if (err.message) {
         errMsg = err.message;
       }
@@ -62,14 +68,18 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
     setLoading(true);
 
     try {
-      await signInWithGoogle();
-      if (onAuthSuccess) onAuthSuccess();
-      onClose();
+      const userRes = await signInWithGoogle();
+      if (userRes) {
+        if (onAuthSuccess) onAuthSuccess();
+        onClose();
+      }
     } catch (err: any) {
-      console.error('Supabase Google Sign-In Error:', err);
-      let errMsg = 'Could not complete Google Sign-In.';
-      if (err.message?.includes('provider is not enabled') || err.message?.includes('Unsupported provider')) {
-        errMsg = 'Supabase-এ Google Provider চালু করতে Supabase Dashboard ➔ Authentication ➔ Providers ➔ Google এনাবল করুন।';
+      console.error('Google Sign-In Error:', err);
+      let errMsg = 'গুগল সাইন-ইন সম্পন্ন করা যায়নি। পুনরায় চেষ্টা করুন।';
+      if (err.code === 'auth/popup-closed-by-user') {
+        errMsg = 'গুগল সাইন-ইন উইন্ডো বন্ধ করা হয়েছে। পুনরায় চেষ্টা করুন।';
+      } else if (err.code === 'auth/popup-blocked') {
+        errMsg = 'ব্রাউজারে পপ-আপ ব্লক করা আছে। অনুগ্রহ করে পপ-আপ অ্যালাউ করুন।';
       } else if (err.message) {
         errMsg = err.message;
       }

@@ -82,17 +82,21 @@ export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse
       onAuthSuccess();
     } catch (err: any) {
       console.error(err);
-      let errMsg = 'An error occurred. Please try again.';
-      if (err.code === 'auth/wrong-password') {
-        errMsg = 'Incorrect password! Please try again.';
+      let errMsg = 'লগইন সম্পন্ন করা যায়নি। অনুগ্রহ করে পুনরায় চেষ্টা করুন।';
+      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential' || err.message?.includes('invalid-credential') || err.message?.includes('Invalid login credentials')) {
+        errMsg = 'ভুল ইমেইল অথবা পাসওয়ার্ড! দয়া করে যাচাই করে পুনরায় চেষ্টা করুন।';
       } else if (err.code === 'auth/user-not-found') {
-        errMsg = 'No account found with this email address.';
+        errMsg = 'এই ইমেইল দিয়ে কোনো অ্যাকাউন্ট পাওয়া যায়নি। Create Account বাটনে ক্লিক করে নতুন অ্যাকাউন্ট খুলুন।';
       } else if (err.code === 'auth/email-already-in-use') {
-        errMsg = 'An account already exists with this email address.';
+        errMsg = 'এই ইমেইল দিয়ে ইতিমধ্যে একটি অ্যাকাউন্ট তৈরি আছে। অনুগ্রহ করে Log In করুন।';
       } else if (err.code === 'auth/invalid-email') {
-        errMsg = 'Please provide a valid email address.';
+        errMsg = 'অনুগ্রহ করে একটি সঠিক ইমেইল এড্রেস প্রদান করুন।';
+      } else if (err.code === 'auth/weak-password') {
+        errMsg = 'পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে।';
+      } else if (err.code === 'auth/too-many-requests') {
+        errMsg = 'অতিরিক্ত ভুল চেষ্টার কারণে সাময়িকভাবে ব্লক করা হয়েছে। কিছুক্ষণ পর চেষ্টা করুন।';
       } else if (err.code === 'auth/operation-not-allowed') {
-        errMsg = 'Email/password login is temporarily disabled. Please use Google Sign-In.';
+        errMsg = 'ইমেইল/পাসওয়ার্ড লগইন সাময়িকভাবে নিষ্ক্রিয় আছে। গুগল সাইন-ইন ব্যবহার করুন।';
       } else if (err.message) {
         errMsg = err.message;
       }
@@ -106,13 +110,17 @@ export default function LandingHomePage({ onAuthSuccess, courses, onImportCourse
     setError('');
     setLoading(true);
     try {
-      await signInWithGoogle();
-      onAuthSuccess();
+      const userRes = await signInWithGoogle();
+      if (userRes) {
+        onAuthSuccess();
+      }
     } catch (err: any) {
       console.error('Google Sign-In Error:', err);
-      let errMsg = 'গুগল সাইন-ইন সম্পন্ন করা যায়নি।';
-      if (err.message?.includes('provider is not enabled') || err.message?.includes('Unsupported provider')) {
-        errMsg = 'Supabase-এ Google Provider চালু করতে Supabase Dashboard ➔ Authentication ➔ Providers ➔ Google এনাবল করুন।';
+      let errMsg = 'গুগল সাইন-ইন সম্পন্ন করা যায়নি। পুনরায় চেষ্টা করুন।';
+      if (err.code === 'auth/popup-closed-by-user') {
+        errMsg = 'গুগল সাইন-ইন উইন্ডো বন্ধ করা হয়েছে। পুনরায় চেষ্টা করুন।';
+      } else if (err.code === 'auth/popup-blocked') {
+        errMsg = 'ব্রাউজারে পপ-আপ ব্লক করা আছে। অনুগ্রহ করে পপ-আপ অ্যালাউ করুন।';
       } else if (err.message) {
         errMsg = err.message;
       }
