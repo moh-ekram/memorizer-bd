@@ -828,6 +828,16 @@ export default function FlashcardViewer({
   const dontKnowCount = words.filter(w => progress[w.id]?.status === 'dont_know').length;
   const unratedCount = totalWordsCount - (knowCount + confusionCount + dontKnowCount);
 
+  // Flashcard overview appearance controls (see Settings → Flashcard Overview)
+  const overviewSettings: Partial<AppSettings> = settings || {};
+  const compactOverview = overviewSettings.compactFlashcardOverview === true;
+  const showTotalWords = overviewSettings.showTotalWordsStat !== false;
+  const showNotStudied = overviewSettings.showNotStudiedStat !== false;
+  const showKnow = overviewSettings.showKnowStat !== false;
+  const showConfused = overviewSettings.showConfusedStat !== false;
+  const showDontKnow = overviewSettings.showDontKnowStat !== false;
+  const overviewVisible = showTotalWords || showNotStudied || showKnow || showConfused || showDontKnow;
+
   // =========================================================================
   // RENDER STAGE 1: INTERMEDIATE FILTER & SETUP SCREEN (isSessionActive = false)
   // =========================================================================
@@ -1212,121 +1222,175 @@ export default function FlashcardViewer({
           </div>
         )}
 
-        {/* 3. Statistics Donut Chart Card */}
-        <div className="w-full max-w-3xl lg:max-w-4xl mx-auto bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-5 shadow-xs text-center space-y-4 my-3">
-          {/* Top Row: Total Words & Not Studied */}
-          <div className="flex items-center justify-center gap-2 text-center">
-            <div className="inline-flex flex-col items-center">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                Total words
-              </span>
-              <span className="text-2xl font-black text-[#3a82f6] leading-tight font-sans">
-                {totalWordsCount}
-              </span>
+        {/* 3. Statistics Overview Card — Compact vs Donut, per-item visibility is
+            configured in Settings → Flashcard Overview */}
+        {overviewVisible && (
+          compactOverview ? (
+            <div className="w-full max-w-3xl lg:max-w-4xl mx-auto bg-white border border-slate-200/90 rounded-2xl px-4 py-2.5 shadow-xs text-center my-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-1">
+              {showTotalWords && (
+                <span className="inline-flex items-baseline gap-1.5 text-[11px]">
+                  <span className="font-bold text-slate-400 uppercase tracking-wider">Total</span>
+                  <span className="text-lg font-black text-[#3a82f6] leading-tight">{totalWordsCount}</span>
+                </span>
+              )}
+              {showNotStudied && (
+                <span className="inline-flex items-baseline gap-1.5 text-[11px]">
+                  <span className="font-bold text-slate-400 uppercase tracking-wider">Not studied</span>
+                  <span className="text-lg font-black text-[#3a82f6] leading-tight">{unratedCount}</span>
+                </span>
+              )}
+              {showKnow && (
+                <span className="inline-flex items-baseline gap-1.5 text-[11px]">
+                  <span className="font-bold text-emerald-600 uppercase tracking-wider">Know</span>
+                  <span className="text-lg font-black text-emerald-600 leading-tight">{knowCount}</span>
+                  <span className="text-xs font-black text-slate-500">({totalWordsCount > 0 ? Math.round((knowCount / totalWordsCount) * 100) : 0}%)</span>
+                </span>
+              )}
+              {showConfused && (
+                <span className="inline-flex items-baseline gap-1.5 text-[11px]">
+                  <span className="font-bold text-amber-600 uppercase tracking-wider">Confused</span>
+                  <span className="text-lg font-black text-amber-600 leading-tight">{confusionCount}</span>
+                  <span className="text-xs font-black text-slate-500">({totalWordsCount > 0 ? Math.round((confusionCount / totalWordsCount) * 100) : 0}%)</span>
+                </span>
+              )}
+              {showDontKnow && (
+                <span className="inline-flex items-baseline gap-1.5 text-[11px]">
+                  <span className="font-bold text-rose-500 uppercase tracking-wider">Don't Know</span>
+                  <span className="text-lg font-black text-rose-500 leading-tight">{dontKnowCount}</span>
+                  <span className="text-xs font-black text-slate-500">({totalWordsCount > 0 ? Math.round((dontKnowCount / totalWordsCount) * 100) : 0}%)</span>
+                </span>
+              )}
             </div>
+          ) : (
+            <div className="w-full max-w-3xl lg:max-w-4xl mx-auto bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-5 shadow-xs text-center space-y-4 my-3">
+              {/* Top Row: Total Words & Not Studied */}
+              {(showTotalWords || showNotStudied) && (
+                <div className="flex items-center justify-center gap-2 text-center">
+                  {showTotalWords && (
+                    <div className="inline-flex flex-col items-center">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Total words
+                      </span>
+                      <span className="text-2xl font-black text-[#3a82f6] leading-tight font-sans">
+                        {totalWordsCount}
+                      </span>
+                    </div>
+                  )}
 
-            <span className="text-slate-300 font-light text-xl mx-3">|</span>
+                  {showTotalWords && showNotStudied && (
+                    <span className="text-slate-300 font-light text-xl mx-3">|</span>
+                  )}
 
-            <div className="inline-flex flex-col items-center">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                Not studied
-              </span>
-              <span className="text-2xl font-black text-[#3a82f6] leading-tight font-sans">
-                {unratedCount}
-              </span>
-            </div>
-          </div>
-
-          {/* Bottom Row: 3 Donut Gauge Charts */}
-          <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
-            {/* Know Donut Chart */}
-            <div className="flex flex-col items-center justify-center">
-              <div className="relative w-16 h-16 sm:w-18 sm:h-18">
-                <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
-                  <circle cx="50" cy="50" r="38" className="stroke-slate-100" strokeWidth="12" fill="transparent" />
-                  <circle 
-                    cx="50" 
-                    cy="50" 
-                    r="38" 
-                    className="text-[#0d9488]" 
-                    strokeWidth="12" 
-                    strokeDasharray="238.76" 
-                    strokeDashoffset={238.76 - (238.76 * (totalWordsCount > 0 ? (knowCount / totalWordsCount) * 100 : 0)) / 100}
-                    strokeLinecap="round" 
-                    stroke="currentColor" 
-                    fill="transparent" 
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-xs sm:text-sm font-black text-slate-900 font-sans">
-                    {totalWordsCount > 0 ? Math.round((knowCount / totalWordsCount) * 100) : 0}%
-                  </span>
+                  {showNotStudied && (
+                    <div className="inline-flex flex-col items-center">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Not studied
+                      </span>
+                      <span className="text-2xl font-black text-[#3a82f6] leading-tight font-sans">
+                        {unratedCount}
+                      </span>
+                    </div>
+                  )}
                 </div>
-              </div>
-              <span className="text-xs font-black text-slate-800 mt-1 font-sans">
-                Know
-              </span>
-            </div>
+              )}
 
-            {/* Confused Donut Chart */}
-            <div className="flex flex-col items-center justify-center">
-              <div className="relative w-16 h-16 sm:w-18 sm:h-18">
-                <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
-                  <circle cx="50" cy="50" r="38" className="stroke-slate-100" strokeWidth="12" fill="transparent" />
-                  <circle 
-                    cx="50" 
-                    cy="50" 
-                    r="38" 
-                    className="text-[#f97316]" 
-                    strokeWidth="12" 
-                    strokeDasharray="238.76" 
-                    strokeDashoffset={238.76 - (238.76 * (totalWordsCount > 0 ? (confusionCount / totalWordsCount) * 100 : 0)) / 100}
-                    strokeLinecap="round" 
-                    stroke="currentColor" 
-                    fill="transparent" 
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-xs sm:text-sm font-black text-slate-900 font-sans">
-                    {totalWordsCount > 0 ? Math.round((confusionCount / totalWordsCount) * 100) : 0}%
-                  </span>
-                </div>
-              </div>
-              <span className="text-xs font-black text-slate-800 mt-1 font-sans">
-                Confused
-              </span>
-            </div>
+              {/* Bottom Row: Donut Gauge Charts */}
+              {(showKnow || showConfused || showDontKnow) && (
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+                  {showKnow && (
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="relative w-16 h-16 sm:w-18 sm:h-18">
+                        <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                          <circle cx="50" cy="50" r="38" className="stroke-slate-100" strokeWidth="12" fill="transparent" />
+                          <circle
+                            cx="50"
+                            cy="50"
+                            r="38"
+                            className="text-[#0d9488]"
+                            strokeWidth="12"
+                            strokeDasharray="238.76"
+                            strokeDashoffset={238.76 - (238.76 * (totalWordsCount > 0 ? (knowCount / totalWordsCount) * 100 : 0)) / 100}
+                            strokeLinecap="round"
+                            stroke="currentColor"
+                            fill="transparent"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-xs sm:text-sm font-black text-slate-900 font-sans">
+                            {totalWordsCount > 0 ? Math.round((knowCount / totalWordsCount) * 100) : 0}%
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-xs font-black text-slate-800 mt-1 font-sans">
+                        Know
+                      </span>
+                    </div>
+                  )}
 
-            {/* Don't Know Donut Chart */}
-            <div className="flex flex-col items-center justify-center">
-              <div className="relative w-16 h-16 sm:w-18 sm:h-18">
-                <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
-                  <circle cx="50" cy="50" r="38" className="stroke-slate-100" strokeWidth="12" fill="transparent" />
-                  <circle 
-                    cx="50" 
-                    cy="50" 
-                    r="38" 
-                    className="text-[#ef4444]" 
-                    strokeWidth="12" 
-                    strokeDasharray="238.76" 
-                    strokeDashoffset={238.76 - (238.76 * (totalWordsCount > 0 ? (dontKnowCount / totalWordsCount) * 100 : 0)) / 100}
-                    strokeLinecap="round" 
-                    stroke="currentColor" 
-                    fill="transparent" 
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-xs sm:text-sm font-black text-slate-900 font-sans">
-                    {totalWordsCount > 0 ? Math.round((dontKnowCount / totalWordsCount) * 100) : 0}%
-                  </span>
+                  {showConfused && (
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="relative w-16 h-16 sm:w-18 sm:h-18">
+                        <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                          <circle cx="50" cy="50" r="38" className="stroke-slate-100" strokeWidth="12" fill="transparent" />
+                          <circle
+                            cx="50"
+                            cy="50"
+                            r="38"
+                            className="text-[#f97316]"
+                            strokeWidth="12"
+                            strokeDasharray="238.76"
+                            strokeDashoffset={238.76 - (238.76 * (totalWordsCount > 0 ? (confusionCount / totalWordsCount) * 100 : 0)) / 100}
+                            strokeLinecap="round"
+                            stroke="currentColor"
+                            fill="transparent"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-xs sm:text-sm font-black text-slate-900 font-sans">
+                            {totalWordsCount > 0 ? Math.round((confusionCount / totalWordsCount) * 100) : 0}%
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-xs font-black text-slate-800 mt-1 font-sans">
+                        Confused
+                      </span>
+                    </div>
+                  )}
+
+                  {showDontKnow && (
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="relative w-16 h-16 sm:w-18 sm:h-18">
+                        <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                          <circle cx="50" cy="50" r="38" className="stroke-slate-100" strokeWidth="12" fill="transparent" />
+                          <circle
+                            cx="50"
+                            cy="50"
+                            r="38"
+                            className="text-[#ef4444]"
+                            strokeWidth="12"
+                            strokeDasharray="238.76"
+                            strokeDashoffset={238.76 - (238.76 * (totalWordsCount > 0 ? (dontKnowCount / totalWordsCount) * 100 : 0)) / 100}
+                            strokeLinecap="round"
+                            stroke="currentColor"
+                            fill="transparent"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-xs sm:text-sm font-black text-slate-900 font-sans">
+                            {totalWordsCount > 0 ? Math.round((dontKnowCount / totalWordsCount) * 100) : 0}%
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-xs font-black text-slate-800 mt-1 font-sans">
+                        Don't Know
+                      </span>
+                    </div>
+                  )}
                 </div>
-              </div>
-              <span className="text-xs font-black text-slate-800 mt-1 font-sans">
-                Don't Know
-              </span>
+              )}
             </div>
-          </div>
-        </div>
+          )
+        )}
 
 
       </div>

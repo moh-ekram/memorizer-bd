@@ -80,6 +80,17 @@ export interface AppSettings {
   dailyGoalWordCount?: number;
   freeFlashcardsCount?: number; // Free sample flashcards count for restricted courses (default 10)
 
+  // Cloud Backup & Cross-Device Sync (auto-backup toggle, default ON)
+  autoCloudBackup?: boolean;
+
+  // Flashcard Overview (start page) appearance
+  compactFlashcardOverview?: boolean;      // single-line compact summary instead of the donut chart card
+  showTotalWordsStat?: boolean;            // show "Total words"
+  showNotStudiedStat?: boolean;            // show "Not studied"
+  showKnowStat?: boolean;                  // show "Know" donut
+  showConfusedStat?: boolean;              // show "Confused" donut
+  showDontKnowStat?: boolean;              // show "Don't Know" donut
+
   // Item Position & Ordering Settings
   practiceItemsOrder?: string[];
   studyToolsItemsOrder?: string[];
