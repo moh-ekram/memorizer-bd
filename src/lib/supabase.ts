@@ -81,6 +81,19 @@ export function getStoredSupabaseKey(): string {
   return DEFAULT_SUPABASE_ANON_KEY;
 }
 
+export function setStoredSupabaseCredentials(url?: string, key?: string): void {
+  if (typeof window === 'undefined') return;
+  if (url && url.trim()) {
+    localStorage.setItem('vocab_supabase_url', url.trim());
+  }
+  if (key && key.trim()) {
+    localStorage.setItem('vocab_supabase_anon_key', key.trim());
+  }
+  cachedClient = null;
+  currentClientUrl = '';
+  currentClientKey = '';
+}
+
 /**
  * Returns diagnostic metadata about the current Supabase connection configuration and source
  */
@@ -111,6 +124,9 @@ export function getDatabaseEndpointInfo(): DatabaseEndpointInfo {
   } else if (readEnvVar('SUPABASE_ANON_KEY') || readEnvVar('SUPABASE_SERVICE_ROLE_KEY')) {
     key = readEnvVar('SUPABASE_ANON_KEY') || readEnvVar('SUPABASE_SERVICE_ROLE_KEY');
     keySource = 'process.env';
+  } else if (DEFAULT_SUPABASE_ANON_KEY) {
+    key = DEFAULT_SUPABASE_ANON_KEY;
+    keySource = 'default' as any;
   }
 
   let keyType: DatabaseEndpointInfo['keyType'] = 'none';

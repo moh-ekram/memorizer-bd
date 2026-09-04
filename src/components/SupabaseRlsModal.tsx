@@ -126,7 +126,68 @@ CREATE TABLE IF NOT EXISTS public.mcq_questions (
 );
 CREATE INDEX IF NOT EXISTS idx_mcq_course ON public.mcq_questions(course_id);
 
--- 7. Announcements & Activity Logs
+-- 7. Master Question Bank (Questions uploaded via Excel / Manual)
+CREATE TABLE IF NOT EXISTS public.question_bank (
+  id TEXT PRIMARY KEY,
+  course_id TEXT,
+  data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_question_bank_course ON public.question_bank(course_id);
+
+-- 8. Exams & Exam Submissions / Results
+CREATE TABLE IF NOT EXISTS public.exams (
+  id TEXT PRIMARY KEY,
+  course_id TEXT,
+  data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_exams_course ON public.exams(course_id);
+
+CREATE TABLE IF NOT EXISTS public.exam_results (
+  id TEXT PRIMARY KEY,
+  course_id TEXT,
+  data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_exam_results_course ON public.exam_results(course_id);
+
+-- 9. Transactions, Activity Logs, User Wallets & Reports
+CREATE TABLE IF NOT EXISTS public.transactions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT,
+  data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.activity_logs (
+  id TEXT PRIMARY KEY,
+  user_id TEXT,
+  data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.user_wallets (
+  id TEXT PRIMARY KEY,
+  user_id TEXT,
+  data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.reports (
+  id TEXT PRIMARY KEY,
+  data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 10. Announcements
 CREATE TABLE IF NOT EXISTS public.announcements (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -138,7 +199,7 @@ CREATE TABLE IF NOT EXISTS public.announcements (
 );
 
 -- ==============================================================================
--- 8. ROW LEVEL SECURITY (RLS) POLICIES & PERMISSIONS
+-- 11. ROW LEVEL SECURITY (RLS) POLICIES & PERMISSIONS
 -- ==============================================================================
 -- Enable RLS on all tables
 ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
@@ -149,6 +210,13 @@ ALTER TABLE public.odd_one_out_questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.blank_questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.word_analogy_questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mcq_questions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.question_bank ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.exams ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.exam_results ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_wallets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies to prevent conflict
@@ -168,6 +236,20 @@ DROP POLICY IF EXISTS "Public Read word_analogy_questions" ON public.word_analog
 DROP POLICY IF EXISTS "Public Write word_analogy_questions" ON public.word_analogy_questions;
 DROP POLICY IF EXISTS "Public Read mcq_questions" ON public.mcq_questions;
 DROP POLICY IF EXISTS "Public Write mcq_questions" ON public.mcq_questions;
+DROP POLICY IF EXISTS "Public Read question_bank" ON public.question_bank;
+DROP POLICY IF EXISTS "Public Write question_bank" ON public.question_bank;
+DROP POLICY IF EXISTS "Public Read exams" ON public.exams;
+DROP POLICY IF EXISTS "Public Write exams" ON public.exams;
+DROP POLICY IF EXISTS "Public Read exam_results" ON public.exam_results;
+DROP POLICY IF EXISTS "Public Write exam_results" ON public.exam_results;
+DROP POLICY IF EXISTS "Public Read transactions" ON public.transactions;
+DROP POLICY IF EXISTS "Public Write transactions" ON public.transactions;
+DROP POLICY IF EXISTS "Public Read activity_logs" ON public.activity_logs;
+DROP POLICY IF EXISTS "Public Write activity_logs" ON public.activity_logs;
+DROP POLICY IF EXISTS "Public Read user_wallets" ON public.user_wallets;
+DROP POLICY IF EXISTS "Public Write user_wallets" ON public.user_wallets;
+DROP POLICY IF EXISTS "Public Read reports" ON public.reports;
+DROP POLICY IF EXISTS "Public Write reports" ON public.reports;
 DROP POLICY IF EXISTS "Public Read announcements" ON public.announcements;
 DROP POLICY IF EXISTS "Public Write announcements" ON public.announcements;
 
@@ -195,6 +277,27 @@ CREATE POLICY "Public Write word_analogy_questions" ON public.word_analogy_quest
 
 CREATE POLICY "Public Read mcq_questions" ON public.mcq_questions FOR SELECT USING (true);
 CREATE POLICY "Public Write mcq_questions" ON public.mcq_questions FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Public Read question_bank" ON public.question_bank FOR SELECT USING (true);
+CREATE POLICY "Public Write question_bank" ON public.question_bank FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Public Read exams" ON public.exams FOR SELECT USING (true);
+CREATE POLICY "Public Write exams" ON public.exams FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Public Read exam_results" ON public.exam_results FOR SELECT USING (true);
+CREATE POLICY "Public Write exam_results" ON public.exam_results FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Public Read transactions" ON public.transactions FOR SELECT USING (true);
+CREATE POLICY "Public Write transactions" ON public.transactions FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Public Read activity_logs" ON public.activity_logs FOR SELECT USING (true);
+CREATE POLICY "Public Write activity_logs" ON public.activity_logs FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Public Read user_wallets" ON public.user_wallets FOR SELECT USING (true);
+CREATE POLICY "Public Write user_wallets" ON public.user_wallets FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Public Read reports" ON public.reports FOR SELECT USING (true);
+CREATE POLICY "Public Write reports" ON public.reports FOR ALL USING (true) WITH CHECK (true);
 
 CREATE POLICY "Public Read announcements" ON public.announcements FOR SELECT USING (true);
 CREATE POLICY "Public Write announcements" ON public.announcements FOR ALL USING (true) WITH CHECK (true);

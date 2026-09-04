@@ -11,9 +11,12 @@ import {
   Key, 
   ShieldAlert,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Settings,
+  X,
+  Save
 } from 'lucide-react';
-import { pingSupabaseInstance, getDatabaseEndpointInfo, SupabasePingResult, DatabaseEndpointInfo } from '../lib/supabase';
+import { pingSupabaseInstance, getDatabaseEndpointInfo, setStoredSupabaseCredentials, getStoredSupabaseKey, getStoredSupabaseUrl, SupabasePingResult, DatabaseEndpointInfo } from '../lib/supabase';
 import { DetailedSyncError } from '../lib/syncErrorHandler';
 
 interface SupabaseStatusBannerProps {
@@ -35,6 +38,10 @@ export default function SupabaseStatusBanner({
   const [isPinging, setIsPinging] = useState(false);
   const [endpointInfo, setEndpointInfo] = useState<DatabaseEndpointInfo>(() => getDatabaseEndpointInfo());
   const [showDetails, setShowDetails] = useState(showDetailsDefault);
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [inputUrl, setInputUrl] = useState('');
+  const [inputKey, setInputKey] = useState('');
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const performPing = async () => {
     setIsPinging(true);
@@ -61,6 +68,25 @@ export default function SupabaseStatusBanner({
   useEffect(() => {
     performPing();
   }, []);
+
+  const handleOpenConfig = () => {
+    setInputUrl(getStoredSupabaseUrl());
+    const currentKey = getStoredSupabaseKey();
+    setInputKey(currentKey && !currentKey.startsWith('sb_publishable_placeholder') ? currentKey : '');
+    setShowConfigModal(true);
+    setSaveSuccess(false);
+  };
+
+  const handleSaveCredentials = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputUrl.trim()) return;
+    setStoredSupabaseCredentials(inputUrl.trim(), inputKey.trim());
+    setSaveSuccess(true);
+    setTimeout(() => {
+      setShowConfigModal(false);
+      performPing();
+    }, 800);
+  };
 
   // Format status badge styles
   const isConnected = pingResult?.status === 'connected';
@@ -155,6 +181,16 @@ export default function SupabaseStatusBanner({
         {/* Action controls */}
         <div className="flex items-center gap-2 ml-auto">
           <button
+            onClick={handleOpenConfig}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold transition cursor-pointer shadow-xs"
+            title="Configure Supabase API Key & URL"
+          >
+            <Settings className="w-3 h-3 text-indigo-400" />
+            <span className="hidden sm:inline">কী / URL পরিবর্তন</span>
+            <span className="sm:hidden">কী</span>
+          </button>
+
+          <button
             onClick={performPing}
             disabled={isPinging}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition cursor-pointer shadow-sm shadow-indigo-900/30"
@@ -225,6 +261,99 @@ export default function SupabaseStatusBanner({
             <div className="mt-1 text-[10px] bg-rose-950/80 p-1.5 rounded border border-rose-500/20 text-rose-300 font-medium">
               💡 <strong>Remedy:</strong> {lastSyncError.remedy}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Supabase Credentials Configuration Modal */}
+      {showConfigModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-slate-800 text-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl border border-indigo-500/30">
+                  <Key className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Supabase Cloud Connection Credentials</h3>
+                  <p className="text-[11px] text-slate-400">আপনার Supabase প্রজেক্টের URL ও Anon Key যুক্ত করুন</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowConfigModal(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCredentials} className="p-4 space-y-3.5">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-300 block">
+                  Supabase Project URL <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="url"
+                  required
+                  placeholder="https://xyzcompany.supabase.co"
+                  value={inputUrl}
+                  onChange={e => setInputUrl(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-300 block">
+                    Supabase Anon / Public API Key <span className="text-rose-400">*</span>
+                  </label>
+                  <a
+                    href="https://supabase.com/dashboard/project/_/settings/api"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] text-indigo-400 hover:underline flex items-center gap-0.5"
+                  >
+                    <span>Dashboard-এ খুঁজুন</span>
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                </div>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  value={inputKey}
+                  onChange={e => setInputKey(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 resize-none"
+                />
+                <p className="text-[10px] text-slate-500">
+                  Supabase ড্যাশবোর্ডে গিয়ে <strong>Project Settings (⚙️) &gt; API</strong> থেকে <strong>Project URL</strong> এবং <strong>anon (public)</strong> কী কপি করুন।
+                </p>
+              </div>
+
+              {saveSuccess && (
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>সফলভাবে সেভ হয়েছে! সংযোগ পরীক্ষা করা হচ্ছে...</span>
+                </div>
+              )}
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowConfigModal(false)}
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition cursor-pointer"
+                >
+                  বাতিল
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>সেভ ও পিং করুন (Save &amp; Ping)</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
