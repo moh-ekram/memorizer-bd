@@ -119,39 +119,9 @@ async function startServer() {
 
   app.use(express.json({ limit: '50mb' }));
 
-  // Proxy Firebase Auth handler requests to prevent cross-origin sessionStorage partitioning in mobile WebViews
-  app.all('/__/auth/*', async (req, res) => {
-    try {
-      const targetUrl = `https://memorizerbd-75fc8.firebaseapp.com${req.originalUrl}`;
-      const headers: Record<string, string> = {
-        'host': 'memorizerbd-75fc8.firebaseapp.com',
-        'accept': req.headers.accept || '*/*',
-        'user-agent': req.headers['user-agent'] || '',
-      };
-      if (req.headers['content-type']) {
-        headers['content-type'] = req.headers['content-type'];
-      }
-
-      const response = await fetch(targetUrl, {
-        method: req.method,
-        headers,
-        body: ['POST', 'PUT', 'PATCH'].includes(req.method) ? JSON.stringify(req.body) : undefined
-      });
-
-      res.status(response.status);
-      response.headers.forEach((value, key) => {
-        if (key.toLowerCase() !== 'content-encoding' && key.toLowerCase() !== 'transfer-encoding') {
-          res.setHeader(key, value);
-        }
-      });
-
-      const buffer = await response.arrayBuffer();
-      res.send(Buffer.from(buffer));
-    } catch (err: any) {
-      console.error('Firebase Auth proxy error:', err);
-      res.status(500).send('Auth proxy error');
-    }
-  });
+  // NOTE: The old Firebase Auth handler proxy (`/__/auth/*` →
+  // memorizerbd-75fc8.firebaseapp.com) was removed together with the rest of
+  // the Firebase backend — authentication is fully Supabase-backed now.
 
   // Generic DB API endpoints for persistent multi-user data storage
   app.get("/api/db/:colName", async (req, res) => {

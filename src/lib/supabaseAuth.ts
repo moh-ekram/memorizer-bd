@@ -13,6 +13,31 @@ export interface AppUser {
 }
 
 /**
+ * Live auth object — `auth.currentUser` reflects the current Supabase session
+ * user (parity with the old Firebase `auth` object, where currentUser was a
+ * synchronous live reference). Kept in sync below via getSession + the global
+ * onAuthStateChange subscription.
+ */
+let currentAuthUser: AppUser | null = null;
+
+function trackSessionUser(session: any) {
+  currentAuthUser = normalizeSupabaseUser(session?.user);
+}
+
+// Seed immediately from any persisted session, then follow every change.
+supabase.auth.getSession().then(({ data }) => trackSessionUser(data?.session)).catch(() => {});
+supabase.auth.onAuthStateChange((_event, session) => trackSessionUser(session));
+
+export const auth = {
+  get currentUser(): AppUser | null {
+    return currentAuthUser;
+  },
+  set currentUser(user: AppUser | null) {
+    currentAuthUser = user;
+  }
+};
+
+/**
  * Normalizes Supabase User object to be 100% compatible with existing App components
  */
 export function normalizeSupabaseUser(user: any): AppUser | null {

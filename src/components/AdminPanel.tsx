@@ -1,26 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { parseRoute, syncAdminRouteUrl } from '../lib/router';
-import { 
-  db, 
-  auth,
-  doc,
-  setDoc,
-  collection,
-  getDocs,
-  deleteDoc,
-  updateDoc,
-  getDoc,
-  query,
-  where,
+import { supabase } from '../lib/supabase';
+import { auth } from '../lib/supabaseAuth';
+import {
+  mapUserToDb,
+  mapUserFromDb,
+  mapCourseToDb,
+  mapCourseFromDb,
+  mapAccessRequestToDb,
+  mapAccessRequestFromDb,
   saveBulkDocs,
-  incrementCourseClickCount,
-  onSnapshot,
+  deleteBulkDocs,
   clearCollectionDocs,
-  runTransaction,
-  writeBatch,
-  clearQuestionsCache,
-  deleteBulkDocs
-} from '../lib/db';
+  incrementCourseClickCount
+} from '../lib/supabaseDb';
+import { clearQuestionsCache } from '../lib/courseUtils';
 import { VocabularyWord, UserProgress, Course, AccessRequest, BlankQuestion, OddOneOutQuestion, WordAnalogyQuestion, CustomMcqQuestion, AppSettings, VerifiedPayment, ExamQuestion, Exam, StoryItem, ArticleItem } from '../types';
 import { safeGetLocalStorage, safeSetLocalStorage } from '../lib/storage';
 import { read, utils } from 'xlsx';
@@ -54,9 +48,8 @@ import { QuestionBankView } from './QuestionBankView';
 import { CourseExamsSummaryView } from './CourseExamsSummaryView';
 import { SupabaseRlsModal } from './SupabaseRlsModal';
 import { TransactionDebugger, TransactionLogItem } from './TransactionDebugger';
-import SupabaseMigrationCenter from './SupabaseMigrationCenter';
 import SupabaseStatusBanner from './SupabaseStatusBanner';
-import { Code, Bug, TerminalSquare, AlertCircle, Cloud } from 'lucide-react';
+import { Code, Bug, TerminalSquare, AlertCircle } from 'lucide-react';
 import { 
   Users, 
   ShieldCheck, 
@@ -121,7 +114,7 @@ import {
   Newspaper
 } from 'lucide-react';
 
-interface FirestoreUserDoc {
+interface DbUserDoc {
   id: string;
   email: string;
   createdAt?: string;
@@ -139,9 +132,181 @@ interface FirestoreUserDoc {
   walletBalance?: number;
 }
 
+// ---------------- Native Supabase data access ----------------
+// AdminPanel talks to Supabase (PostgREST) directly — no Firestore-compat
+// layer, no Firebase. Field/column mapping matches src/lib/supabaseDb.ts so
+// rows written here stay compatible with the rest of the app.
+
+interface SbDocSnap {
+  id: string;
+  exists: () => boolean;
+  data: () => any;
+}
+
+function sbNotFound(id: string): SbDocSnap {
+  return { id: id || '', exists: () => false, data: () => null };
+}
+
+function sbMapRow(table: string, row: any): SbDocSnap {
+  let mapped = row;
+  if (table === 'users') mapped = mapUserFromDb(row);
+  else if (table === 'courses') mapped = mapCourseFromDb(row);
+  else if (table === 'access_requests') mapped = mapAccessRequestFromDb(row);
+  else if (table === 'system_settings') mapped = row.value || row;
+  else if (row && row.data && typeof row.data === 'object') mapped = { ...row.data, id: row.id };
+  return { id: row.id || row.key || '', exists: () => true, data: () => mapped };
+}
+
+// Native equivalent of getDoc(doc(db, table, id))
+async function sbGetDoc(table: string, id: string): Promise<SbDocSnap> {
+  if (!table || !id) return sbNotFound(id);
+  try {
+    if (table === 'system_settings' || table === 'settings') {
+      const { data, error } = await supabase.from('system_settings').select('key, value').eq('key', id).maybeSingle();
+      if (!error && data) return { id, exists: () => true, data: () => data.value || {} };
+      if (error) console.warn(`Supabase getDoc notice for ${table}/${id}:`, error);
+      return sbNotFound(id);
+    }
+    if (table === 'users') {
+      // User docs are keyed by uid OR email — match either (parity with the
+      // shared-email sync docs used for cross-device sign-ins).
+      let qb = supabase.from('users').select('*');
+      qb = id.includes('@')
+        ? qb.or(`id.eq.${id},email.eq.${id.toLowerCase()}`)
+        : qb.or(`id.eq.${id},email.eq.${id}`);
+      const { data, error } = await qb.maybeSingle();
+      if (!error && data) return { id: data.id || id, exists: () => true, data: () => mapUserFromDb(data) };
+      if (error) console.warn(`Supabase getDoc notice for ${table}/${id}:`, error);
+      return sbNotFound(id);
+    }
+    if (table === 'courses') {
+      const { data, error } = await supabase.from('courses').select('*').eq('id', id).maybeSingle();
+      if (!error && data) return { id, exists: () => true, data: () => mapCourseFromDb(data) };
+      if (error) console.warn(`Supabase getDoc notice for ${table}/${id}:`, error);
+      return sbNotFound(id);
+    }
+    if (table === 'access_requests') {
+      const { data, error } = await supabase.from('access_requests').select('*').eq('id', id).maybeSingle();
+      if (!error && data) return { id, exists: () => true, data: () => mapAccessRequestFromDb(data) };
+      if (error) console.warn(`Supabase getDoc notice for ${table}/${id}:`, error);
+      return sbNotFound(id);
+    }
+    // Generic JSON-backed tables (question banks, user_wallets, used_transactions, reports, ...)
+    const { data, error } = await supabase.from(table).select('*').eq('id', id).maybeSingle();
+    if (!error && data) return { id, exists: () => true, data: () => (data.data ?? data) };
+    if (error) console.warn(`Supabase getDoc notice for ${table}/${id}:`, error);
+  } catch (e) {
+    console.warn(`Supabase getDoc error for ${table}/${id}:`, e);
+  }
+  return sbNotFound(id);
+}
+
+// Native equivalent of getDocs(collection(db, table))
+async function sbGetAllDocs(table: string): Promise<SbDocSnap[]> {
+  try {
+    const { data, error } = await supabase.from(table).select('*');
+    if (error) throw error;
+    return (data || []).map((r: any) => sbMapRow(table, r));
+  } catch (err) {
+    console.warn(`Supabase fetch notice for ${table}:`, err);
+    return [];
+  }
+}
+
+// Native equivalent of query(collection(db, 'users'), where('email', '==', email))
+async function sbGetUsersByEmail(email: string): Promise<SbDocSnap[]> {
+  try {
+    const { data, error } = await supabase.from('users').select('*').eq('email', email);
+    if (error) throw error;
+    return (data || []).map((r: any) => sbMapRow('users', r));
+  } catch (err) {
+    console.warn('Supabase users-by-email fetch notice:', err);
+    return [];
+  }
+}
+
+// Native equivalent of setDoc(doc(db, table, id), data) — column-mapped upsert
+async function sbUpsertDoc(table: string, id: string, data: any): Promise<void> {
+  if (!table || !id) return;
+  try {
+    if (table === 'system_settings' || table === 'settings') {
+      const { error } = await supabase.from('system_settings').upsert({
+        key: id,
+        value: data,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+      if (error) throw error;
+      return;
+    }
+    if (table === 'users') {
+      const { error } = await supabase.from('users').upsert(mapUserToDb({ ...data, id }), { onConflict: 'id' });
+      if (error) throw error;
+      return;
+    }
+    if (table === 'courses') {
+      const { error } = await supabase.from('courses').upsert(mapCourseToDb({ ...data, id }), { onConflict: 'id' });
+      if (error) throw error;
+      return;
+    }
+    if (table === 'access_requests') {
+      const { error } = await supabase.from('access_requests').upsert(mapAccessRequestToDb({ ...data, id }), { onConflict: 'id' });
+      if (error) throw error;
+      return;
+    }
+    const payload: any = { id, data, updated_at: new Date().toISOString() };
+    if (data?.courseId || data?.course_id) {
+      payload.course_id = data.courseId || data.course_id;
+    }
+    const { error } = await supabase.from(table).upsert(payload, { onConflict: 'id' });
+    if (error) throw error;
+  } catch (err) {
+    console.error(`Supabase write error for ${table}/${id}:`, err);
+    throw err;
+  }
+}
+
+// Native equivalent of updateDoc(docRef, data) — partial column update
+async function sbUpdateDoc(table: string, id: string, data: any): Promise<void> {
+  return sbUpsertDoc(table, id, data);
+}
+
+// Native equivalent of deleteDoc(doc(db, table, id))
+async function sbDeleteDoc(table: string, id: string): Promise<void> {
+  if (!table || !id) return;
+  try {
+    if (table === 'system_settings' || table === 'settings') {
+      const { error } = await supabase.from('system_settings').delete().eq('key', id);
+      if (error) throw error;
+      return;
+    }
+    const { error } = await supabase.from(table).delete().eq('id', id);
+    if (error) throw error;
+  } catch (err) {
+    console.error(`Supabase delete error for ${table}/${id}:`, err);
+    throw err;
+  }
+}
+
+// Native equivalent of onSnapshot(collection(db, table), cb) — immediate
+// fetch + periodic refresh (3.5s), same cadence the app used previously.
+function sbSubscribeTable(table: string, callback: (docs: SbDocSnap[]) => void, onError?: (err: any) => void): () => void {
+  let subscribed = true;
+  const tick = () => {
+    sbGetAllDocs(table)
+      .then(docs => { if (subscribed) callback(docs); })
+      .catch(err => { if (subscribed && onError) onError(err); });
+  };
+  tick();
+  const intervalId = setInterval(tick, 3500);
+  return () => {
+    subscribed = false;
+    clearInterval(intervalId);
+  };
+}
+
 // Helper to calculate enrolled courses for a given user doc
 function getUserEnrolledCoursesList(
-  u: FirestoreUserDoc,
+  u: DbUserDoc,
   allCourses: Course[],
   accessRequestsList: AccessRequest[]
 ): Course[] {
@@ -155,7 +320,7 @@ function getUserEnrolledCoursesList(
     }
   });
 
-  // 2. User's enrolledCourseIds from Firestore doc
+  // 2. User's enrolledCourseIds from their cloud user doc
   if (Array.isArray(u.enrolledCourseIds)) {
     u.enrolledCourseIds.forEach(id => {
       const match = allCourses.find(c => c.id.trim().toLowerCase() === id.trim().toLowerCase());
@@ -203,7 +368,7 @@ function getUserEnrolledCoursesList(
 
 // Helper to calculate course specific progress stats for a user
 function getUserCourseProgressStats(
-  u: FirestoreUserDoc,
+  u: DbUserDoc,
   course: Course,
   allWords: VocabularyWord[]
 ) {
@@ -248,13 +413,13 @@ function getUserCourseProgressStats(
 
 // Helper to calculate overall user stats and rank across all users
 function getUserOverallStatsAndRank(
-  u: FirestoreUserDoc,
-  allUsersList: FirestoreUserDoc[],
+  u: DbUserDoc,
+  allUsersList: DbUserDoc[],
   allCourses: Course[],
   accessRequestsList: AccessRequest[],
   allWords: VocabularyWord[]
 ) {
-  const getRankScore = (userDoc: FirestoreUserDoc) => {
+  const getRankScore = (userDoc: DbUserDoc) => {
     const progValues = Object.values(userDoc.progress || {});
     const know = progValues.filter(p => p.status === 'know').length;
     const streak = userDoc.goal?.streak || 0;
@@ -318,7 +483,7 @@ enum OperationType {
   GET = 'get',
 }
 
-interface FirestoreErrorInfo {
+interface DbErrorInfo {
   error: string;
   operationType: OperationType;
   path: string | null;
@@ -329,8 +494,8 @@ interface FirestoreErrorInfo {
   }
 }
 
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
+function handleDbError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: DbErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
       userId: auth.currentUser?.uid,
@@ -340,7 +505,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  console.error('Database Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
 
@@ -353,19 +518,19 @@ function getProgressEntries(progObj: Record<string, UserProgress> | undefined): 
 }
 
 export default function AdminPanel({ words, settings, onUpdateSettings, onCoursesUpdated }: AdminPanelProps) {
-  const [users, setUsers] = useState<FirestoreUserDoc[]>([]);
+  const [users, setUsers] = useState<DbUserDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'email' | 'streak' | 'progress' | 'lastActive'>('lastActive');
-  const [selectedUser, setSelectedUser] = useState<FirestoreUserDoc | null>(null);
+  const [selectedUser, setSelectedUser] = useState<DbUserDoc | null>(null);
   const [activeUserTab, setActiveUserTab] = useState<'enrolled' | 'progress' | 'analytics' | 'settings'>('enrolled');
   const [activeWordFilter, setActiveWordFilter] = useState<'all' | 'know' | 'confusion' | 'dont_know'>('all');
 
   // Course management and upload states — initialized from the URL
   // (/admin/:tab) so each admin section is directly linkable/shareable
   // and survives a refresh, instead of always resetting to 'courses'.
-  const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'courses' | 'reports' | 'access-requests' | 'system-settings' | 'landing-editor' | 'blank-questions' | 'activity-logs' | 'transaction-debugger' | 'question-bank' | 'exam-summary' | 'migration'>(
+  const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'courses' | 'reports' | 'access-requests' | 'system-settings' | 'landing-editor' | 'blank-questions' | 'activity-logs' | 'transaction-debugger' | 'question-bank' | 'exam-summary'>(
     () => parseRoute().adminTab || 'courses'
   );
 
@@ -604,7 +769,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     setBlankQuestionsLoading(true);
     setBlankQuestionsError(null);
     try {
-      const qSnap = await getDocs(collection(db, 'blank_questions'));
+      const qSnap = await sbGetAllDocs('blank_questions');
       const list: BlankQuestion[] = [];
       const targetId = courseId !== undefined ? courseId : selectedGameCourseId;
       qSnap.forEach(docSnap => {
@@ -625,7 +790,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const fetchOooQuestions = async (courseId?: string) => {
     setOooQuestionsLoading(true);
     try {
-      const qSnap = await getDocs(collection(db, 'odd_one_out_questions'));
+      const qSnap = await sbGetAllDocs('odd_one_out_questions');
       const list: OddOneOutQuestion[] = [];
       const targetId = courseId !== undefined ? courseId : selectedGameCourseId;
       qSnap.forEach(docSnap => {
@@ -645,7 +810,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const fetchAnalogyQuestions = async (courseId?: string) => {
     setAnalogyQuestionsLoading(true);
     try {
-      const qSnap = await getDocs(collection(db, 'word_analogy_questions'));
+      const qSnap = await sbGetAllDocs('word_analogy_questions');
       const list: WordAnalogyQuestion[] = [];
       const targetId = courseId !== undefined ? courseId : selectedGameCourseId;
       qSnap.forEach(docSnap => {
@@ -665,7 +830,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const fetchMcqQuestions = async (courseId?: string) => {
     setMcqQuestionsLoading(true);
     try {
-      const qSnap = await getDocs(collection(db, 'mcq_questions'));
+      const qSnap = await sbGetAllDocs('mcq_questions');
       const list: CustomMcqQuestion[] = [];
       const targetId = courseId !== undefined ? courseId : selectedGameCourseId;
       qSnap.forEach(docSnap => {
@@ -740,7 +905,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     };
 
     try {
-      await setDoc(doc(db, 'blank_questions', newQ.id), newQ);
+      await sbUpsertDoc('blank_questions', newQ.id, newQ);
       clearQuestionsCache('blank_questions', selectedGameCourseId);
       setNewSentence('');
       setNewOpt1('');
@@ -759,7 +924,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const handleDeleteBlankQuestion = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this question?')) return;
     try {
-      await deleteDoc(doc(db, 'blank_questions', id));
+      await sbDeleteDoc('blank_questions', id);
       clearQuestionsCache('blank_questions', selectedGameCourseId);
       setBlankQuestions(prev => prev.filter(q => q.id !== id));
     } catch (err) {
@@ -850,7 +1015,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     };
 
     try {
-      await setDoc(doc(db, 'odd_one_out_questions', newQ.id), newQ);
+      await sbUpsertDoc('odd_one_out_questions', newQ.id, newQ);
       clearQuestionsCache('odd_one_out_questions', selectedGameCourseId);
       setNewOooWords(['', '', '', '']);
       setNewOooCorrectIndex(0);
@@ -866,7 +1031,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const handleDeleteOooQuestion = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this question?')) return;
     try {
-      await deleteDoc(doc(db, 'odd_one_out_questions', id));
+      await sbDeleteDoc('odd_one_out_questions', id);
       clearQuestionsCache('odd_one_out_questions', selectedGameCourseId);
       setOooQuestions(prev => prev.filter(q => q.id !== id));
     } catch (err) {
@@ -958,7 +1123,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     };
 
     try {
-      await setDoc(doc(db, 'word_analogy_questions', newQ.id), newQ);
+      await sbUpsertDoc('word_analogy_questions', newQ.id, newQ);
       clearQuestionsCache('word_analogy_questions', selectedGameCourseId);
       setNewAnalogy('');
       setNewAnalogyOpts(['', '', '', '']);
@@ -975,7 +1140,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const handleDeleteAnalogyQuestion = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this question?')) return;
     try {
-      await deleteDoc(doc(db, 'word_analogy_questions', id));
+      await sbDeleteDoc('word_analogy_questions', id);
       clearQuestionsCache('word_analogy_questions', selectedGameCourseId);
       setAnalogyQuestions(prev => prev.filter(q => q.id !== id));
     } catch (err) {
@@ -1074,7 +1239,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     };
 
     try {
-      await setDoc(doc(db, 'mcq_questions', newQ.id), newQ);
+      await sbUpsertDoc('mcq_questions', newQ.id, newQ);
       clearQuestionsCache('mcq_questions', selectedGameCourseId);
       setNewMcqQuestion('');
       setNewMcqOpts(['', '', '', '']);
@@ -1091,7 +1256,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const handleDeleteMcqQuestion = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this question?')) return;
     try {
-      await deleteDoc(doc(db, 'mcq_questions', id));
+      await sbDeleteDoc('mcq_questions', id);
       clearQuestionsCache('mcq_questions', selectedGameCourseId);
       setMcqQuestions(prev => prev.filter(q => q.id !== id));
     } catch (err) {
@@ -1135,8 +1300,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       const existingStories = mode === 'replace' ? [] : (currentTargetCourse?.stories || []);
       const mergedStories = [...existingStories, ...newStories];
 
-      const courseRef = doc(db, 'courses', selectedGameCourseId);
-      await setDoc(courseRef, { stories: mergedStories }, { merge: true });
+      await sbUpsertDoc('courses', selectedGameCourseId, { stories: mergedStories });
 
       setCustomCourses(prev => prev.map(c => c.id === selectedGameCourseId ? { ...c, stories: mergedStories } : c));
       
@@ -1268,8 +1432,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       const existingArticles = mode === 'replace' ? [] : (currentTargetCourse?.articles || []);
       const mergedArticles = [...existingArticles, ...newArticles];
 
-      const courseRef = doc(db, 'courses', selectedGameCourseId);
-      await setDoc(courseRef, { articles: mergedArticles }, { merge: true });
+      await sbUpsertDoc('courses', selectedGameCourseId, { articles: mergedArticles });
 
       setCustomCourses(prev => prev.map(c => c.id === selectedGameCourseId ? { ...c, articles: mergedArticles } : c));
       
@@ -1415,11 +1578,11 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
     const reqMap = new Map<string, AccessRequest>();
 
-    // 2. Query Firestore and Server API in parallel
+    // 2. Query Supabase and Server API in parallel
     try {
-      const [firestoreRes, apiRes] = await Promise.allSettled([
+      const [dbRes, apiRes] = await Promise.allSettled([
         (async () => {
-          const fetchPromise = getDocs(collection(db, 'access_requests'));
+          const fetchPromise = sbGetAllDocs('access_requests');
           const timeoutPromise = new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error('Access requests fetch timeout')), 4000)
           );
@@ -1435,9 +1598,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         })()
       ]);
 
-      // Process Firestore docs
-      if (firestoreRes.status === 'fulfilled' && firestoreRes.value?.forEach) {
-        firestoreRes.value.forEach((docSnap: any) => {
+      // Process Supabase docs
+      if (dbRes.status === 'fulfilled' && dbRes.value) {
+        dbRes.value.forEach((docSnap: any) => {
           reqMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as AccessRequest);
         });
       }
@@ -1483,11 +1646,11 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     let newBalance = 0;
 
     try {
-      await runTransaction(db, async (transaction) => {
-        const walletRef = doc(db, 'user_wallets', emailLower);
-        const userRef = doc(db, 'users', emailLower);
-
-        const walletSnap = await transaction.get(walletRef);
+      // Atomic-style read → merge → write on the wallet + user rows.
+      // (Supabase has no client transaction primitive; sequential awaited
+      // writes surface errors instead of silently swallowing them.)
+      {
+        const walletSnap = await sbGetDoc('user_wallets', emailLower);
         const currentBal = walletSnap.exists()
           ? (walletSnap.data().balance ?? walletSnap.data().walletBalance ?? 0)
           : 0;
@@ -1497,20 +1660,20 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           throw new Error(`Insufficient balance. Resulting wallet balance would be ৳${newBalance}`);
         }
 
-        transaction.set(walletRef, {
+        await sbUpsertDoc('user_wallets', emailLower, {
           email: emailLower,
           balance: newBalance,
           walletBalance: newBalance,
           updatedAt: nowISO
-        }, { merge: true });
+        });
 
-        transaction.set(userRef, {
+        await sbUpsertDoc('users', emailLower, {
           email: emailLower,
           balance: newBalance,
           walletBalance: newBalance,
           updatedAt: nowISO
-        }, { merge: true });
-      });
+        });
+      }
 
       addTransactionLog({
         id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -1526,8 +1689,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     } catch (err: any) {
       console.error('Error in updateUserWallet transaction:', err);
       let errMsg = err.message || String(err);
-      if (err?.code === 'permission-denied') {
-        errMsg = 'Permission Denied: Your account lacks Firestore write privileges for user_wallets or users.';
+      if (err?.code === 'permission-denied' || err?.code === '42501' || String(err?.message || '').includes('row-level security')) {
+        errMsg = 'Permission Denied: Your account lacks write privileges for user_wallets or users (check Supabase RLS policies).';
       } else if (err?.code === 'aborted' || err?.code === 'failed-precondition') {
         errMsg = 'Concurrent Modification Error: Wallet document was updated concurrently by another operation. Please retry.';
       }
@@ -1578,10 +1741,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
       showToast(`Request rejected for ${userEmail}`, 'info');
 
-      // 2. Background Firestore & API sync
+      // 2. Background Supabase & API sync
       try {
-        const reqRef = doc(db, 'access_requests', req.id);
-        await updateDoc(reqRef, { status: 'rejected', updatedAt: nowISO });
+        await sbUpdateDoc('access_requests', req.id, { status: 'rejected', updatedAt: nowISO });
       } catch (err: any) {
         console.warn('Background reject sync notice:', err);
       }
@@ -1623,135 +1785,39 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       'success'
     );
 
-    // 2. Background Transaction & Sync with timeout race protection
+    // 2. Background write & sync with timeout race protection
     (async () => {
       try {
         const syncPromise = (async () => {
           try {
-            await runTransaction(db, async (transaction) => {
-              const reqRef = doc(db, 'access_requests', req.id);
-              const walletRef = doc(db, 'user_wallets', userEmail);
-              const userRef = doc(db, 'users', userEmail);
-
-              const walletSnap = await transaction.get(walletRef);
-              const currentWalletBal = walletSnap.exists() ? (walletSnap.data().balance ?? walletSnap.data().walletBalance ?? 0) : 0;
-
-                if (isRecharge) {
-                  const newBal = currentWalletBal + finalPrice;
-                  transaction.set(walletRef, {
-                    email: userEmail,
-                    balance: newBal,
-                    walletBalance: newBal,
-                    updatedAt: nowISO
-                  }, { merge: true });
-
-                  transaction.set(userRef, {
-                    email: userEmail,
-                    balance: newBal,
-                    walletBalance: newBal,
-                    updatedAt: nowISO
-                  }, { merge: true });
-                } else {
-                const targetCourseIds = (req.courseIds && req.courseIds.length > 0) ? req.courseIds : [req.courseId];
-                const userSnap = await transaction.get(userRef);
-                let existingEnrolled: string[] = [];
-                if (userSnap.exists()) {
-                  existingEnrolled = Array.isArray(userSnap.data().enrolledCourseIds) ? userSnap.data().enrolledCourseIds : [];
-                }
-
-                const existingSet = new Set(existingEnrolled.map(id => typeof id === 'string' ? id.trim().toLowerCase() : ''));
-                const updatedEnrolled = [...existingEnrolled];
-                for (const cid of targetCourseIds) {
-                  if (cid && cid !== 'wallet_recharge' && !existingSet.has(cid.trim().toLowerCase())) {
-                    updatedEnrolled.push(cid);
-                    existingSet.add(cid.trim().toLowerCase());
-                  }
-                }
-
-                transaction.set(userRef, {
-                  email: userEmail,
-                  enrolledCourseIds: updatedEnrolled,
-                  updatedAt: nowISO
-                }, { merge: true });
-              }
-
-              transaction.set(reqRef, {
-                status: 'approved',
-                spent: true,
-                spentAt: nowISO,
-                price: finalPrice,
-                totalPrice: finalPrice,
-                updatedAt: nowISO
-              }, { merge: true });
-
-              if (req.trxId) {
-                const reqTrx = req.trxId.toLowerCase().trim();
-                const trxRef = doc(db, 'used_transactions', reqTrx);
-                transaction.set(trxRef, {
-                  trxId: reqTrx,
-                  spent: true,
-                  status: 'spent',
-                  email: userEmail,
-                  usedBy: userEmail,
-                  bkashNumber: req.bkashNumber || '',
-                  amount: finalPrice,
-                  createdAt: nowISO,
-                  usedAt: nowISO
-                }, { merge: true });
-              }
-            });
-          } catch (txnErr) {
-            console.warn('runTransaction failed, fallback to setDoc:', txnErr);
-            const reqRef = doc(db, 'access_requests', req.id);
-            const walletRef = doc(db, 'user_wallets', userEmail);
-            const userRef = doc(db, 'users', userEmail);
+            // Sequential native writes (Supabase has no client transactions;
+            // a failure here throws and is logged by the outer catch — it is
+            // never silently swallowed).
+            const walletSnap = await sbGetDoc('user_wallets', userEmail);
+            const currentWalletBal = walletSnap.exists() ? (walletSnap.data().balance ?? walletSnap.data().walletBalance ?? 0) : 0;
 
             if (isRecharge) {
-              let currentWalletBal = 0;
-              try {
-                const walletSnap = await getDoc(walletRef);
-                if (walletSnap.exists()) {
-                  currentWalletBal = walletSnap.data().balance ?? walletSnap.data().walletBalance ?? 0;
-                }
-              } catch (_) {}
-
               const newBal = currentWalletBal + finalPrice;
-              await setDoc(walletRef, {
+              await sbUpsertDoc('user_wallets', userEmail, {
                 email: userEmail,
                 balance: newBal,
                 walletBalance: newBal,
                 updatedAt: nowISO
-              }, { merge: true });
+              });
 
-              try {
-                const uQuery = query(collection(db, 'users'), where('email', '==', userEmail));
-                const uSnap = await getDocs(uQuery);
-                if (!uSnap.empty) {
-                  for (const uDoc of uSnap.docs) {
-                    await setDoc(doc(db, 'users', uDoc.id), {
-                      walletBalance: newBal,
-                      balance: newBal,
-                      updatedAt: nowISO
-                    }, { merge: true });
-                  }
-                }
-              } catch (_) {}
-
-              await setDoc(userRef, {
+              await sbUpsertDoc('users', userEmail, {
                 email: userEmail,
                 balance: newBal,
                 walletBalance: newBal,
                 updatedAt: nowISO
-              }, { merge: true });
+              });
             } else {
               const targetCourseIds = (req.courseIds && req.courseIds.length > 0) ? req.courseIds : [req.courseId];
+              const userSnap = await sbGetDoc('users', userEmail);
               let existingEnrolled: string[] = [];
-              try {
-                const userSnap = await getDoc(userRef);
-                if (userSnap.exists()) {
-                  existingEnrolled = Array.isArray(userSnap.data().enrolledCourseIds) ? userSnap.data().enrolledCourseIds : [];
-                }
-              } catch (_) {}
+              if (userSnap.exists()) {
+                existingEnrolled = Array.isArray(userSnap.data().enrolledCourseIds) ? userSnap.data().enrolledCourseIds : [];
+              }
 
               const existingSet = new Set(existingEnrolled.map(id => typeof id === 'string' ? id.trim().toLowerCase() : ''));
               const updatedEnrolled = [...existingEnrolled];
@@ -1762,26 +1828,25 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 }
               }
 
-              await setDoc(userRef, {
+              await sbUpsertDoc('users', userEmail, {
                 email: userEmail,
                 enrolledCourseIds: updatedEnrolled,
                 updatedAt: nowISO
-              }, { merge: true });
+              });
             }
 
-            await setDoc(reqRef, {
+            await sbUpsertDoc('access_requests', req.id, {
               status: 'approved',
               spent: true,
               spentAt: nowISO,
               price: finalPrice,
               totalPrice: finalPrice,
               updatedAt: nowISO
-            }, { merge: true });
+            });
 
             if (req.trxId) {
               const reqTrx = req.trxId.toLowerCase().trim();
-              const trxRef = doc(db, 'used_transactions', reqTrx);
-              await setDoc(trxRef, {
+              await sbUpsertDoc('used_transactions', reqTrx, {
                 trxId: reqTrx,
                 spent: true,
                 status: 'spent',
@@ -1791,8 +1856,11 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 amount: finalPrice,
                 createdAt: nowISO,
                 usedAt: nowISO
-              }, { merge: true });
+              });
             }
+          } catch (writeErr) {
+            console.warn('Background approval write failed:', writeErr);
+            throw writeErr;
           }
 
           // Course allowedUsers synchronization
@@ -1801,13 +1869,12 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             for (const cid of targetCourseIds) {
               if (!cid || cid === 'wallet_recharge') continue;
               try {
-                const courseRef = doc(db, 'courses', cid);
-                const courseDoc = await getDoc(courseRef);
+                const courseDoc = await sbGetDoc('courses', cid);
                 if (courseDoc.exists()) {
                   const cData = courseDoc.data() as Course;
                   const allowed = cData.allowedUsers || [];
                   if (!allowed.includes(userEmail)) {
-                    await updateDoc(courseRef, { allowedUsers: [...allowed, userEmail] });
+                    await sbUpdateDoc('courses', cid, { allowedUsers: [...allowed, userEmail] });
                   }
                 }
               } catch (cErr) {
@@ -1837,7 +1904,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             if (isRecharge) {
               let currentBal = 0;
               try {
-                const wSnap = await getDoc(doc(db, 'user_wallets', userEmail));
+                const wSnap = await sbGetDoc('user_wallets', userEmail);
                 if (wSnap.exists()) currentBal = wSnap.data().balance ?? wSnap.data().walletBalance ?? 0;
               } catch (_) {}
               const calculatedNewBal = currentBal > 0 ? currentBal : finalPrice;
@@ -1887,8 +1954,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       return processAccessRequest(foundReq, 'reject');
     }
     try {
-      const reqRef = doc(db, 'access_requests', reqId);
-      await updateDoc(reqRef, { status: 'rejected' });
+      await sbUpdateDoc('access_requests', reqId, { status: 'rejected' });
       setAccessRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: 'rejected' } : r));
       showToast('✅ Server Confirmed: Request status set to Rejected.', 'info');
     } catch (err: any) {
@@ -1901,34 +1967,33 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     const adminEmail = auth.currentUser?.email?.toLowerCase().trim() || 'admin_test@domain.com';
     const testDocId = `test_health_check`;
     const nowISO = new Date().toISOString();
-    showToast('Running diagnostic Firestore write transaction...', 'info');
+    showToast('Running diagnostic database write test...', 'info');
 
     try {
-      await runTransaction(db, async (transaction) => {
-        const testRef = doc(db, 'user_wallets', testDocId);
-        const snap = await transaction.get(testRef);
-        const count = snap.exists() ? (snap.data().testCount || 0) + 1 : 1;
-        transaction.set(testRef, {
+      {
+        const testSnap = await sbGetDoc('user_wallets', testDocId);
+        const count = testSnap.exists() ? (testSnap.data().testCount || 0) + 1 : 1;
+        await sbUpsertDoc('user_wallets', testDocId, {
           testCount: count,
           lastTestedBy: adminEmail,
           updatedAt: nowISO
-        }, { merge: true });
-      });
+        });
+      }
 
       addTransactionLog({
         id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         timestamp: nowISO,
         type: 'test_write',
         userEmail: adminEmail,
-        details: `Test transaction succeeded on user_wallets/${testDocId}`,
+        details: `Test write succeeded on user_wallets/${testDocId}`,
         status: 'success'
       });
 
-      showToast('✅ Firestore Transaction Health Check: SUCCESS! Write privileges verified.', 'success');
+      showToast('✅ Database Health Check: SUCCESS! Write privileges verified.', 'success');
     } catch (err: any) {
-      console.error('Test transaction error:', err);
-      const errMsg = err?.code === 'permission-denied' 
-        ? 'Permission Denied: Current user is not authorized to write to user_wallets in Firestore.' 
+      console.error('Test write error:', err);
+      const errMsg = (err?.code === 'permission-denied' || String(err?.message || '').includes('row-level security'))
+        ? 'Permission Denied: Current user is not authorized to write to user_wallets in Supabase (check RLS policies).'
         : (err.message || String(err));
 
       addTransactionLog({
@@ -1936,12 +2001,12 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         timestamp: nowISO,
         type: 'test_write',
         userEmail: adminEmail,
-        details: `Test transaction failed: ${errMsg}`,
+        details: `Test write failed: ${errMsg}`,
         status: 'failed',
         error: errMsg
       });
 
-      showToast(`❌ Firestore Transaction Health Check FAILED: ${errMsg}`, 'error');
+      showToast(`❌ Database Health Check FAILED: ${errMsg}`, 'error');
     }
   };
 
@@ -1952,7 +2017,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const fetchReports = async () => {
     setReportsLoading(true);
     try {
-      const qSnap = await getDocs(collection(db, 'reports'));
+      const qSnap = await sbGetAllDocs('reports');
       const list: any[] = [];
       qSnap.forEach(docSnap => {
         list.push({ id: docSnap.id, ...docSnap.data() });
@@ -1971,7 +2036,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       return;
     }
     try {
-      await deleteDoc(doc(db, 'reports', reportId));
+      await sbDeleteDoc('reports', reportId);
       setReports(prev => prev.filter(r => r.id !== reportId));
       alert('Report marked as resolved!');
     } catch (err) {
@@ -2020,11 +2085,11 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
       }
     }, 6000);
     try {
-      unsubscribe = onSnapshot(collection(db, 'courses'), (snap) => {
+      unsubscribe = sbSubscribeTable('courses', (docs) => {
         settled = true;
         clearTimeout(timeoutId);
         const list: Course[] = [];
-        snap.forEach(docSnap => {
+        docs.forEach(docSnap => {
           list.push({ ...docSnap.data(), id: docSnap.id } as Course);
         });
         setCustomCourses(list);
@@ -2060,9 +2125,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   useEffect(() => {
     let unsubscribe = () => {};
     try {
-      unsubscribe = onSnapshot(collection(db, 'access_requests'), (snap) => {
+      unsubscribe = sbSubscribeTable('access_requests', (docs) => {
         const snapList: AccessRequest[] = [];
-        snap.forEach(docSnap => {
+        docs.forEach(docSnap => {
           snapList.push({ id: docSnap.id, ...docSnap.data() } as AccessRequest);
         });
         
@@ -2107,10 +2172,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
   const fetchUsersData = async () => {
     setLoading(true);
     setError(null);
-    const path = 'users';
     try {
-      const querySnapshot = await getDocs(collection(db, path));
-      const fetchedUsersMap = new Map<string, FirestoreUserDoc>();
+      const querySnapshot = await sbGetAllDocs('users');
+      const fetchedUsersMap = new Map<string, DbUserDoc>();
 
       querySnapshot.forEach((doc) => {
         const data = doc.data();
@@ -2133,7 +2197,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
       // Also check access_requests for any users who submitted requests
       try {
-        const reqsSnap = await getDocs(collection(db, 'access_requests'));
+        const reqsSnap = await sbGetAllDocs('access_requests');
         reqsSnap.forEach((rDoc) => {
           const rData = rDoc.data();
           const rEmail = (rData.email || rData.userEmail || '').trim().toLowerCase();
@@ -2595,11 +2659,11 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         placeLabels: parsedPlaceLabels || {}
       };
 
-      // Sanitize data to remove any undefined fields that cause Firestore errors
+      // Sanitize data to remove any undefined fields that the DB rejects
       const cleanData: Course = JSON.parse(JSON.stringify(rawCourseData));
 
-      // 1. Save directly to Firestore Cloud Database
-      await setDoc(doc(db, 'courses', cleanData.id), cleanData);
+      // 1. Save directly to the Supabase cloud database
+      await sbUpsertDoc('courses', cleanData.id, cleanData);
 
       // 2. Update React state and local cache immediately
       const updatedList = [...customCourses.filter(c => c.id !== cleanData.id), cleanData];
@@ -2639,11 +2703,11 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     try {
       const cleanCourseId = courseId.trim();
 
-      // 1. Delete from Firestore cloud
-      await deleteDoc(doc(db, 'courses', cleanCourseId));
+      // 1. Delete from the cloud database
+      await sbDeleteDoc('courses', cleanCourseId);
       if (cleanCourseId.toLowerCase() !== cleanCourseId) {
         try {
-          await deleteDoc(doc(db, 'courses', cleanCourseId.toLowerCase()));
+          await sbDeleteDoc('courses', cleanCourseId.toLowerCase());
         } catch (_) {}
       }
 
@@ -2685,7 +2749,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
   const handleUpdateSingleCourseOrder = async (courseId: string, newOrder: number) => {
     try {
-      await setDoc(doc(db, 'courses', courseId), { order: newOrder }, { merge: true });
+      await sbUpsertDoc('courses', courseId, { order: newOrder });
       setCustomCourses(prev => {
         const next = prev.map(c => c.id === courseId ? { ...c, order: newOrder } : c);
         safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(next));
@@ -2707,8 +2771,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         if (onCoursesUpdated) onCoursesUpdated(next);
         return next;
       });
-      // 2. Persist directly to Firestore
-      await setDoc(doc(db, 'courses', courseId), { hidden: newHidden }, { merge: true });
+      // 2. Persist directly to the cloud database
+      await sbUpsertDoc('courses', courseId, { hidden: newHidden });
     } catch (e) {
       console.error("Error toggling course visibility:", e);
       alert('Failed to update course visibility.');
@@ -2742,19 +2806,17 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         if (onCoursesUpdated) onCoursesUpdated(next);
         return next;
       });
-      const batch = writeBatch(db);
-      batch.set(doc(db, 'courses', itemA.id), { order: orderA }, { merge: true });
-      batch.set(doc(db, 'courses', itemB.id), { order: orderB }, { merge: true });
-      await batch.commit();
+      await sbUpsertDoc('courses', itemA.id, { order: orderA });
+      await sbUpsertDoc('courses', itemB.id, { order: orderB });
     } catch (e) {
-      console.error("Error updating course order with writeBatch:", e);
+      console.error("Error updating course order:", e);
     }
   };
 
   const fetchGlobalVerifiedPayments = async () => {
     setGlobalVpLoading(true);
     try {
-      const snap = await getDoc(doc(db, 'system_settings', 'global_verified_payments'));
+      const snap = await sbGetDoc('system_settings', 'global_verified_payments');
       if (snap.exists()) {
         setGlobalVerifiedPayments(snap.data().verifiedPayments || []);
       } else {
@@ -2797,7 +2859,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     const updated = [newRecord, ...globalVerifiedPayments.filter(vp => !(vp.bkashNumber === num && vp.trxId.toLowerCase() === trx.toLowerCase()))].map(cleanVpRecord);
 
     try {
-      await setDoc(doc(db, 'system_settings', 'global_verified_payments'), { verifiedPayments: updated }, { merge: true });
+      await sbUpsertDoc('system_settings', 'global_verified_payments', { verifiedPayments: updated });
       setGlobalVerifiedPayments(updated);
       setNewGlobalVpNumber('');
       setNewGlobalVpTrxId('');
@@ -2820,7 +2882,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     const updated = globalVerifiedPayments.filter(vp => !(vp.bkashNumber === num && vp.trxId.toLowerCase() === trx.toLowerCase())).map(cleanVpRecord);
     setGlobalVerifiedPayments(updated);
     try {
-      await setDoc(doc(db, 'system_settings', 'global_verified_payments'), { verifiedPayments: updated }, { merge: true });
+      await sbUpsertDoc('system_settings', 'global_verified_payments', { verifiedPayments: updated });
     } catch (err) {
       console.error("Error deleting global verified payment:", err);
     }
@@ -2862,7 +2924,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     const updated = [...newItems, ...globalVerifiedPayments].map(cleanVpRecord);
 
     try {
-      await setDoc(doc(db, 'system_settings', 'global_verified_payments'), { verifiedPayments: updated }, { merge: true });
+      await sbUpsertDoc('system_settings', 'global_verified_payments', { verifiedPayments: updated });
       setGlobalVerifiedPayments(updated);
       setGlobalVpPasteInput('');
     } catch (e) {
@@ -2885,13 +2947,13 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     try {
       const cleanPhone = (p?: any) => typeof p === 'string' ? p.replace(/\D/g, '').slice(-10) : '';
 
-      const globalDocRef = doc(db, 'system_settings', 'global_verified_payments');
-      const snap = await getDoc(globalDocRef);
+      const globalDocRef = 'global_verified_payments';
+      const snap = await sbGetDoc('system_settings', globalDocRef);
       let vpsToUse: VerifiedPayment[] = (currentVpsList && Array.isArray(currentVpsList) && currentVpsList.length > 0)
         ? [...currentVpsList]
         : (snap.exists() ? (snap.data().verifiedPayments || []) : []);
 
-      const coursesSnap = await getDocs(collection(db, 'courses'));
+      const coursesSnap = await sbGetAllDocs('courses');
       const coursesMap: Record<string, Course> = {};
       coursesSnap.forEach(d => {
         const cData = { id: d.id, ...d.data() } as Course;
@@ -2905,7 +2967,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         }
       });
 
-      // Gather all pending access & recharge requests from state, Firestore and Server API
+      // Gather all pending access & recharge requests from state, Supabase and Server API
       const pendingReqMap = new Map<string, AccessRequest>();
       
       // 1. From local loaded state
@@ -2915,9 +2977,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         }
       });
 
-      // 2. From Firestore directly
+      // 2. From Supabase directly
       try {
-        const requestsSnap = await getDocs(collection(db, 'access_requests'));
+        const requestsSnap = await sbGetAllDocs('access_requests');
         requestsSnap.forEach(d => {
           const data = { id: d.id, ...d.data() } as AccessRequest;
           if (data.status === 'pending' || !data.status || (data.status as string) === 'unverified') {
@@ -2925,7 +2987,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           }
         });
       } catch (e) {
-        console.warn("Firestore pending requests fetch notice:", e);
+        console.warn("Supabase pending requests fetch notice:", e);
       }
 
       // 3. From Server API
@@ -2964,7 +3026,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
         // Check if reqTrx is already locked by someone else in used_transactions
         try {
-          const usedTxSnap = await getDoc(doc(db, 'used_transactions', reqTrx));
+          const usedTxSnap = await sbGetDoc('used_transactions', reqTrx);
           if (usedTxSnap.exists() && (usedTxSnap.data().spent === true || usedTxSnap.data().status === 'spent')) {
             const usedByEmail = (usedTxSnap.data().email || usedTxSnap.data().usedBy || '').toLowerCase().trim();
             if (usedByEmail && usedByEmail !== reqEmail) {
@@ -2988,10 +3050,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
         const matchedVp = matchedVpIdx !== -1 ? updatedVpList[matchedVpIdx] : null;
 
-        let walletRef = doc(db, 'user_wallets', reqEmail);
         let existingWalletBalance = 0;
         try {
-          const walletSnap = await getDoc(walletRef);
+          const walletSnap = await sbGetDoc('user_wallets', reqEmail);
           if (walletSnap.exists()) {
             existingWalletBalance = walletSnap.data().balance ?? walletSnap.data().walletBalance ?? 0;
           }
@@ -3009,7 +3070,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             
             // 1. Lock in used_transactions
             try {
-              await setDoc(doc(db, 'used_transactions', reqTrx), {
+              await sbUpsertDoc('used_transactions', reqTrx, {
                 trxId: reqTrx,
                 spent: true,
                 status: 'spent',
@@ -3019,7 +3080,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 amount: rechargeAmt,
                 createdAt: nowISO,
                 usedAt: nowISO
-              }, { merge: true });
+              });
             } catch (_) {}
 
             // 2. Mark payment as claimed and spent in verified list
@@ -3032,44 +3093,43 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
               spentAt: nowISO
             };
 
-            // 3. Update user_wallets collection in Firestore
+            // 3. Update user_wallets table in Supabase
             try {
-              await setDoc(walletRef, {
+              await sbUpsertDoc('user_wallets', reqEmail, {
                 email: reqEmail,
                 bkashNumber: req.bkashNumber || matchedVp.bkashNumber || '',
                 balance: newBal,
                 walletBalance: newBal,
                 updatedAt: nowISO
-              }, { merge: true });
+              });
             } catch (_) {}
 
-            // 4. Sync balance to users collection (by query and by doc ID)
+            // 4. Sync balance to users table (by email query and by email-keyed doc)
             try {
-              const uQuery = query(collection(db, 'users'), where('email', '==', reqEmail));
-              const uSnap = await getDocs(uQuery);
-              if (!uSnap.empty) {
-                for (const uDoc of uSnap.docs) {
-                  await setDoc(doc(db, 'users', uDoc.id), {
+              const uDocs = await sbGetUsersByEmail(reqEmail);
+              if (uDocs.length > 0) {
+                for (const uDoc of uDocs) {
+                  await sbUpsertDoc('users', uDoc.id, {
                     walletBalance: newBal,
                     balance: newBal,
                     updatedAt: nowISO
-                  }, { merge: true });
+                  });
                 }
               }
             } catch (_) {}
 
             try {
-              await setDoc(doc(db, 'users', reqEmail), {
+              await sbUpsertDoc('users', reqEmail, {
                 email: reqEmail,
                 walletBalance: newBal,
                 balance: newBal,
                 updatedAt: nowISO
-              }, { merge: true });
+              });
             } catch (_) {}
 
             // 5. Update access request status
             try {
-              await setDoc(doc(db, 'access_requests', req.id), {
+              await sbUpsertDoc('access_requests', req.id, {
                 status: 'approved',
                 verificationMethod: 'auto',
                 spent: true,
@@ -3078,7 +3138,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 totalPrice: rechargeAmt,
                 remainingWalletBalance: newBal,
                 updatedAt: nowISO
-              }, { merge: true });
+              });
             } catch (_) {}
 
             // 6. Update Server API backup storage
@@ -3154,7 +3214,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   const updatedAllowed = [...currentAllowed, reqEmail];
                   courseObj.allowedUsers = updatedAllowed;
                   try {
-                    await setDoc(doc(db, 'courses', cid), { allowedUsers: updatedAllowed }, { merge: true });
+                    await sbUpsertDoc('courses', cid, { allowedUsers: updatedAllowed });
                   } catch (_) {}
                 }
               }
@@ -3169,7 +3229,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             if (matchedVp) {
               // Lock in used_transactions
               try {
-                await setDoc(doc(db, 'used_transactions', reqTrx), {
+                await sbUpsertDoc('used_transactions', reqTrx, {
                   trxId: reqTrx,
                   spent: true,
                   status: 'spent',
@@ -3179,7 +3239,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                   amount: req.totalPrice || req.price || 0,
                   createdAt: nowISO,
                   usedAt: nowISO
-                }, { merge: true });
+                });
               } catch (_) {}
 
               updatedVpList[matchedVpIdx] = {
@@ -3193,41 +3253,40 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             }
 
             try {
-              await setDoc(walletRef, {
+              await sbUpsertDoc('user_wallets', reqEmail, {
                 email: reqEmail,
                 bkashNumber: req.bkashNumber || '',
                 balance: remainingBalance,
                 walletBalance: remainingBalance,
                 updatedAt: nowISO
-              }, { merge: true });
+              });
             } catch (_) {}
 
-            // Sync remaining balance to users collection
+            // Sync remaining balance to users table
             try {
-              const uQuery = query(collection(db, 'users'), where('email', '==', reqEmail));
-              const uSnap = await getDocs(uQuery);
-              if (!uSnap.empty) {
-                for (const uDoc of uSnap.docs) {
-                  await setDoc(doc(db, 'users', uDoc.id), {
+              const uDocs = await sbGetUsersByEmail(reqEmail);
+              if (uDocs.length > 0) {
+                for (const uDoc of uDocs) {
+                  await sbUpsertDoc('users', uDoc.id, {
                     walletBalance: remainingBalance,
                     balance: remainingBalance,
                     updatedAt: nowISO
-                  }, { merge: true });
+                  });
                 }
               }
             } catch (_) {}
 
             try {
-              await setDoc(doc(db, 'users', reqEmail), {
+              await sbUpsertDoc('users', reqEmail, {
                 email: reqEmail,
                 walletBalance: remainingBalance,
                 balance: remainingBalance,
                 updatedAt: nowISO
-              }, { merge: true });
+              });
             } catch (_) {}
 
             try {
-              await setDoc(doc(db, 'access_requests', req.id), {
+              await sbUpsertDoc('access_requests', req.id, {
                 status: 'approved',
                 verificationMethod: matchedVp ? 'auto' : 'wallet_balance',
                 spent: matchedVp ? true : false,
@@ -3235,7 +3294,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                 approvedCoursesCount: approvedTargetIds.length,
                 remainingWalletBalance: remainingBalance,
                 updatedAt: nowISO
-              }, { merge: true });
+              });
             } catch (_) {}
 
             setAccessRequests(prev => prev.map(r => r.id === req.id ? { 
@@ -3251,9 +3310,9 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         }
       }
 
-      // Save updated VP claim status list back to Firestore
+      // Save updated VP claim status list back to the cloud database
       try {
-        await setDoc(globalDocRef, { verifiedPayments: updatedVpList }, { merge: true });
+        await sbUpsertDoc('system_settings', globalDocRef, { verifiedPayments: updatedVpList });
       } catch (_) {}
       setGlobalVerifiedPayments(updatedVpList);
 
@@ -3320,7 +3379,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
     return filteredUsers.slice(start, start + userPerPage);
   }, [filteredUsers, userPage, userPerPage]);
 
-  // Default course with potential Firestore updates
+  // Default course with potential cloud updates
   const dbGreCourse = customCourses.find(c => c.id.trim().toLowerCase() === 'gre');
   const defaultGreCourse: Course = {
     ...(dbGreCourse || {}),
@@ -3471,7 +3530,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             <p className="text-amber-700/90 dark:text-amber-200/90 leading-relaxed">
               Current authenticated email: <code className="bg-amber-200/50 dark:bg-amber-900/50 px-1.5 py-0.5 rounded font-mono font-bold text-amber-900 dark:text-amber-100">{currentAuthEmail || 'Not Authenticated / Anonymous'}</code>.
               {currentAuthEmail ? ' This account is not listed in the authorized admin list.' : ' Please sign in as an admin.'}
-              Write operations to Firestore collections are safeguarded to prevent permissions buffering.
+              Write operations to cloud tables are safeguarded to prevent permissions buffering.
             </p>
           </div>
         </div>
@@ -3568,7 +3627,6 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           { id: 'system-settings' as const, label: 'Settings', icon: Sliders, onClick: () => setActiveAdminTab('system-settings') },
           { id: 'landing-editor' as const, label: 'Editor', icon: LayoutTemplate, onClick: () => setActiveAdminTab('landing-editor') },
           { id: 'transaction-debugger' as const, label: 'Debug', icon: Bug, onClick: () => setActiveAdminTab('transaction-debugger') },
-          { id: 'migration' as const, label: 'Migrate', icon: Cloud, onClick: () => setActiveAdminTab('migration') },
         ].map((item) => {
           const isActive = activeAdminTab === item.id;
           const Icon = item.icon;
@@ -3600,11 +3658,6 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
           );
         })}
       </div>
-
-      {/* Cloud Migration Tab View */}
-      {activeAdminTab === 'migration' && (
-        <SupabaseMigrationCenter />
-      )}
 
       {/* Question Bank Tab View */}
       {activeAdminTab === 'question-bank' && (
@@ -4908,35 +4961,6 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             </p>
           </div>
 
-          {/* Direct Firebase to Supabase Migration Card */}
-          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 rounded-2xl border border-indigo-700/60 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5">
-              <div className="p-3 bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-emerald-400">
-                <Cloud className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h4 className="text-sm font-black text-white">Firebase → Supabase</h4>
-                  <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] font-black rounded-md uppercase border border-emerald-500/30">
-                    Zero Data Loss
-                  </span>
-                </div>
-                <p className="text-xs text-slate-300 font-medium mt-0.5">
-                  Sync users, progress, words & payments (1-click)
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setActiveAdminTab('migration')}
-              className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl transition shadow-lg flex items-center justify-center gap-2 cursor-pointer shrink-0"
-            >
-              <Zap className="w-4 h-4 fill-slate-950" />
-              <span>Open Migrator</span>
-            </button>
-          </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Practice & Games Item Positioning Setting */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-4 col-span-1 md:col-span-2">
@@ -4956,7 +4980,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     const defaultOrder = ['quiz', 'match', 'synonym', 'blank', 'odd_one_out', 'analogy'];
                     const updated = { ...settings, practiceItemsOrder: defaultOrder };
                     if (onUpdateSettings) onUpdateSettings(updated);
-                    try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (e) {}
+                    sbUpsertDoc('system_settings', 'global', updated).catch(() => {});
                   }}
                   className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] rounded-lg transition"
                 >
@@ -4990,7 +5014,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
                     const updated = { ...settings, practiceItemsOrder: newOrder };
                     if (onUpdateSettings) onUpdateSettings(updated);
-                    try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (e) {}
+                    sbUpsertDoc('system_settings', 'global', updated).catch(() => {});
                   };
 
                   return currentOrder.map((key, idx) => {
@@ -5056,7 +5080,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     const defaultOrder = ['lists', 'dictionary', 'planner', 'story'];
                     const updated = { ...settings, studyToolsItemsOrder: defaultOrder };
                     if (onUpdateSettings) onUpdateSettings(updated);
-                    try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (e) {}
+                    sbUpsertDoc('system_settings', 'global', updated).catch(() => {});
                   }}
                   className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] rounded-lg transition"
                 >
@@ -5087,7 +5111,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
 
                     const updated = { ...settings, studyToolsItemsOrder: newOrder };
                     if (onUpdateSettings) onUpdateSettings(updated);
-                    try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (e) {}
+                    sbUpsertDoc('system_settings', 'global', updated).catch(() => {});
                   };
 
                   return currentOrder.map((key, idx) => {
@@ -5166,7 +5190,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     onChange={(e) => {
                       const updated = { ...settings, contactWhatsApp: e.target.value };
                       if (onUpdateSettings) onUpdateSettings(updated);
-                      try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (err) {}
+                      sbUpsertDoc('system_settings', 'global', updated).catch(() => {});
                     }}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-800 focus:bg-white focus:border-emerald-500 transition"
                   />
@@ -5186,7 +5210,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     onChange={(e) => {
                       const updated = { ...settings, contactFacebook1: e.target.value };
                       if (onUpdateSettings) onUpdateSettings(updated);
-                      try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (err) {}
+                      sbUpsertDoc('system_settings', 'global', updated).catch(() => {});
                     }}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-800 focus:bg-white focus:border-sky-500 transition"
                   />
@@ -5206,7 +5230,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     onChange={(e) => {
                       const updated = { ...settings, contactFacebook2: e.target.value };
                       if (onUpdateSettings) onUpdateSettings(updated);
-                      try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (err) {}
+                      sbUpsertDoc('system_settings', 'global', updated).catch(() => {});
                     }}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-500 transition"
                   />
@@ -5226,7 +5250,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     onChange={(e) => {
                       const updated = { ...settings, contactTelegram: e.target.value };
                       if (onUpdateSettings) onUpdateSettings(updated);
-                      try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (err) {}
+                      sbUpsertDoc('system_settings', 'global', updated).catch(() => {});
                     }}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 transition"
                   />
@@ -5246,7 +5270,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                     onChange={(e) => {
                       const updated = { ...settings, contactEmail: e.target.value };
                       if (onUpdateSettings) onUpdateSettings(updated);
-                      try { setDoc(doc(db, 'system_settings', 'global'), updated, { merge: true }); } catch (err) {}
+                      sbUpsertDoc('system_settings', 'global', updated).catch(() => {});
                     }}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-800 focus:bg-white focus:border-amber-500 transition"
                   />
@@ -7123,7 +7147,7 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
             if (onUpdateSettings) {
               onUpdateSettings(updatedSettings);
             }
-            showToast('Landing page content & badges saved globally to Firestore system settings!', 'success');
+            showToast('Landing page content & badges saved globally to cloud system settings!', 'success');
           }}
           courses={customCourses}
         />
@@ -7541,8 +7565,8 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
                           ৳{selectedUser.walletBalance ?? selectedUser.balance ?? 0} BDT
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-500 font-normal" title="Atomic Firestore transactions on user_wallets & users docs.">
-                        Firestore tx · wallet ↔ user
+                      <p className="text-[11px] text-slate-500 font-normal" title="Atomic cloud updates on user_wallets & users rows.">
+                        Cloud tx · wallet ↔ user
                       </p>
                       <div className="flex flex-wrap items-center gap-2 pt-1">
                         <button
@@ -7904,11 +7928,11 @@ export default function AdminPanel({ words, settings, onUpdateSettings, onCourse
         onApply={async (courseId, updatedAllowedUsers, updatedExpiries, mode) => {
           try {
             // Update DB
-            await setDoc(doc(db, 'courses', courseId), {
+            await sbUpsertDoc('courses', courseId, {
               allowedUsers: updatedAllowedUsers,
               allowedUsersExpiry: updatedExpiries,
               updatedAt: new Date().toISOString()
-            }, { merge: true });
+            });
 
             // Update local courses state
             setCustomCourses(prev => prev.map(c => c.id === courseId ? {
