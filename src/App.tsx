@@ -1456,7 +1456,7 @@ export default function App() {
     };
   }, []);
 
-  // Real-time Firestore snapshot listener — applies EVERY remote change made on
+  // Real-time cloud snapshot listener — applies EVERY remote change made on
   // another device (UID doc + shared email doc), merging per-word by timestamp.
   // It uses canonical content comparison instead of brittle "first word only"
   // signatures, so updates to ANY word/setting are never dropped.
