@@ -14,9 +14,8 @@ export interface AppUser {
 
 /**
  * Live auth object — `auth.currentUser` reflects the current Supabase session
- * user (parity with the old Firebase `auth` object, where currentUser was a
- * synchronous live reference). Kept in sync below via getSession + the global
- * onAuthStateChange subscription.
+ * user (where currentUser is a synchronous live reference). Kept in sync below
+ * via getSession + the global onAuthStateChange subscription.
  */
 let currentAuthUser: AppUser | null = null;
 

@@ -119,9 +119,7 @@ async function startServer() {
 
   app.use(express.json({ limit: '50mb' }));
 
-  // NOTE: The old Firebase Auth handler proxy (`/__/auth/*` →
-  // memorizerbd-75fc8.firebaseapp.com) was removed together with the rest of
-  // the Firebase backend — authentication is fully Supabase-backed now.
+  // Authentication and database operations are fully Supabase-backed.
 
   // Generic DB API endpoints for persistent multi-user data storage
   app.get("/api/db/:colName", async (req, res) => {

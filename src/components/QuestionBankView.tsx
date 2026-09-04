@@ -1365,7 +1365,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 onClick={handleSyncAllToCloud}
                 disabled={isSyncingCloud || questions.length === 0}
                 className="px-3.5 py-2 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold shadow-sm transition flex items-center gap-1.5 cursor-pointer shrink-0"
-                title="Sync all current questions to Firebase Firestore Cloud so other devices can access them"
+                title="Sync all current questions to Supabase Cloud so other devices can access them"
               >
                 {isSyncingCloud ? (
                   <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
@@ -1379,7 +1379,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                 onClick={() => fetchQuestions(true)}
                 disabled={loading}
                 className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs"
-                title="Fetch latest questions directly from Firebase Cloud database"
+                title="Fetch latest questions directly from Cloud database"
               >
                 <RefreshCw className={`w-3.5 h-3.5 text-white ${loading ? 'animate-spin' : ''}`} />
                 <span>{loading ? 'Refreshing...' : 'Refresh from Cloud'}</span>

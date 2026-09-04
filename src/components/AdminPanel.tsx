@@ -133,9 +133,8 @@ interface DbUserDoc {
 }
 
 // ---------------- Native Supabase data access ----------------
-// AdminPanel talks to Supabase (PostgREST) directly — no Firestore-compat
-// layer, no Firebase. Field/column mapping matches src/lib/supabaseDb.ts so
-// rows written here stay compatible with the rest of the app.
+// AdminPanel talks to Supabase (PostgREST) directly. Field/column mapping
+// matches src/lib/supabaseDb.ts so rows written here stay compatible with the rest of the app.
 
 interface SbDocSnap {
   id: string;
