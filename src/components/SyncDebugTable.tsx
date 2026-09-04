@@ -245,7 +245,7 @@ export default function SyncDebugTable({
         await setDoc(doc(db, 'users', cleanEmail), { progress: updatedCloud, updatedAt: new Date().toISOString() }, { merge: true });
       }
       setCloudProgress(updatedCloud);
-      setActionMessage({ text: `Word "${localItem.id || wordId}" successfully pushed to Cloud!`, type: 'success' });
+      setActionMessage({ text: `Word "${wordId}" successfully pushed to Cloud!`, type: 'success' });
       if (onTriggerSync) onTriggerSync();
     } catch (e: any) {
       setActionMessage({ text: `Failed to push word: ${e.message}`, type: 'error' });

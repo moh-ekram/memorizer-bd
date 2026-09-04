@@ -508,32 +508,36 @@ export async function setDoc(docRef: DocRef | any, data: any, options?: { merge?
   try {
     // 1. system_settings
     if (col === 'system_settings' || col === 'settings') {
-      await client.from('system_settings').upsert({
+      const { error } = await client.from('system_settings').upsert({
         key: id,
         value: data,
         updated_at: new Date().toISOString()
       }, { onConflict: 'key' });
+      if (error) throw error;
       return;
     }
 
     // 2. users
     if (col === 'users') {
       const userPayload = mapUserToDb({ ...data, id });
-      await client.from('users').upsert(userPayload, { onConflict: 'id' });
+      const { error } = await client.from('users').upsert(userPayload, { onConflict: 'id' });
+      if (error) throw error;
       return;
     }
 
     // 3. courses
     if (col === 'courses') {
       const coursePayload = mapCourseToDb({ ...data, id });
-      await client.from('courses').upsert(coursePayload, { onConflict: 'id' });
+      const { error } = await client.from('courses').upsert(coursePayload, { onConflict: 'id' });
+      if (error) throw error;
       return;
     }
 
     // 4. access_requests
     if (col === 'access_requests') {
       const reqPayload = mapAccessRequestToDb({ ...data, id });
-      await client.from('access_requests').upsert(reqPayload, { onConflict: 'id' });
+      const { error } = await client.from('access_requests').upsert(reqPayload, { onConflict: 'id' });
+      if (error) throw error;
       return;
     }
 
@@ -547,8 +551,18 @@ export async function setDoc(docRef: DocRef | any, data: any, options?: { merge?
       genericPayload.course_id = data.courseId || data.course_id;
     }
 
-    await client.from(col).upsert(genericPayload, { onConflict: 'id' });
+    const { error } = await client.from(col).upsert(genericPayload, { onConflict: 'id' });
+    if (error) throw error;
   } catch (err) {
+    // Supabase-js resolves with { data, error } instead of throwing for
+    // API-level failures (RLS rejections, constraint violations, malformed
+    // payloads) — every branch above used to `await` the upsert and discard
+    // that result entirely, so a rejected write looked EXACTLY like a
+    // successful one: no exception, setDoc returns normally, nothing ever
+    // reaches Postgres. That's how flashcard tags / progress could update
+    // instantly on-device (local state always applies immediately) while
+    // silently never syncing to Supabase — showing up forever in the Sync
+    // Debugger's Discrepancy list with no error anywhere to explain why.
     console.error(`Supabase setDoc error for ${col}/${id}:`, err);
     throw err;
   }
@@ -568,10 +582,12 @@ export async function deleteDoc(docRef: DocRef | any) {
 
   try {
     if (col === 'system_settings' || col === 'settings') {
-      await client.from('system_settings').delete().eq('key', id);
+      const { error } = await client.from('system_settings').delete().eq('key', id);
+      if (error) throw error;
       return;
     }
-    await client.from(col).delete().eq('id', id);
+    const { error } = await client.from(col).delete().eq('id', id);
+    if (error) throw error;
   } catch (err) {
     console.error(`Supabase deleteDoc error for ${col}/${id}:`, err);
     throw err;
