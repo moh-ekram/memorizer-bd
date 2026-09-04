@@ -584,11 +584,12 @@ export async function setDoc(docRef: DocRef | any, data: any, options?: { merge?
   try {
     // 1. system_settings
     if (col === 'system_settings' || col === 'settings') {
-      await client.from('system_settings').upsert({
+      const { error } = await client.from('system_settings').upsert({
         key: id,
         value: data,
         updated_at: new Date().toISOString()
       }, { onConflict: 'key' });
+      if (error) throw error;
       return;
     }
 
@@ -596,11 +597,12 @@ export async function setDoc(docRef: DocRef | any, data: any, options?: { merge?
     if (col === 'users') {
       // Handle subcollection like /meta/sync_state
       if (docRef?.path && docRef.path.includes('/meta/')) {
-        await client.from('system_settings').upsert({
+        const { error } = await client.from('system_settings').upsert({
           key: `meta_${id}`,
           value: data,
           updated_at: new Date().toISOString()
         }, { onConflict: 'key' });
+        if (error) throw error;
         return;
       }
 
@@ -608,19 +610,36 @@ export async function setDoc(docRef: DocRef | any, data: any, options?: { merge?
       const userPayload = mapUserToDb({ ...data, id });
       if (cleanEmail) userPayload.email = cleanEmail;
 
-      // Check if this user already exists in public.users by EMAIL OR by ID
+      // Check if this user already exists in public.users by EMAIL OR by ID.
+      // This reconciliation exists because different sign-in paths (e.g. a
+      // Google popup vs a redirect flow) can hand the SAME person two
+      // different auth UIDs — without it, a phone and a PC could each write
+      // their own separate row under a different id, and neither device
+      // would ever see the other's progress again.
+      //
+      // CRITICAL: if either lookup query itself fails (network blip, a
+      // transient Supabase error — NOT just "no row found", which
+      // .maybeSingle() reports as a clean null with no error), we must NOT
+      // fall through to "insert as new row". That was the actual bug here:
+      // a lookup failure was being swallowed as a warning, and execution
+      // continued to the insert branch below exactly as if no match had
+      // been found — silently creating a duplicate row under this device's
+      // id, permanently diverging it from the real row every other device
+      // writes to. A failed lookup now aborts the whole write instead, so
+      // it retries (with local data untouched) on the next sync cycle
+      // rather than fork the account.
       let existingRecord: any = null;
-      try {
-        if (cleanEmail) {
-          const { data: byEmail } = await client.from('users').select('id, email').eq('email', cleanEmail).maybeSingle();
-          if (byEmail?.id) existingRecord = byEmail;
-        }
-        if (!existingRecord && id) {
-          const { data: byId } = await client.from('users').select('id, email').eq('id', id.trim()).maybeSingle();
-          if (byId?.id) existingRecord = byId;
-        }
-      } catch (checkErr) {
-        console.warn('Checking existing user record notice:', checkErr);
+      if (cleanEmail) {
+        const { data: byEmail, error: emailErr } = await client
+          .from('users').select('id, email').eq('email', cleanEmail).maybeSingle();
+        if (emailErr) throw emailErr;
+        if (byEmail?.id) existingRecord = byEmail;
+      }
+      if (!existingRecord && id) {
+        const { data: byId, error: idErr } = await client
+          .from('users').select('id, email').eq('id', id.trim()).maybeSingle();
+        if (idErr) throw idErr;
+        if (byId?.id) existingRecord = byId;
       }
 
       if (existingRecord?.id) {
@@ -646,14 +665,16 @@ export async function setDoc(docRef: DocRef | any, data: any, options?: { merge?
     // 3. courses
     if (col === 'courses') {
       const coursePayload = mapCourseToDb({ ...data, id });
-      await client.from('courses').upsert(coursePayload, { onConflict: 'id' });
+      const { error } = await client.from('courses').upsert(coursePayload, { onConflict: 'id' });
+      if (error) throw error;
       return;
     }
 
     // 4. access_requests
     if (col === 'access_requests') {
       const reqPayload = mapAccessRequestToDb({ ...data, id });
-      await client.from('access_requests').upsert(reqPayload, { onConflict: 'id' });
+      const { error } = await client.from('access_requests').upsert(reqPayload, { onConflict: 'id' });
+      if (error) throw error;
       return;
     }
 
@@ -667,8 +688,18 @@ export async function setDoc(docRef: DocRef | any, data: any, options?: { merge?
       genericPayload.course_id = data.courseId || data.course_id;
     }
 
-    await client.from(col).upsert(genericPayload, { onConflict: 'id' });
+    const { error } = await client.from(col).upsert(genericPayload, { onConflict: 'id' });
+    if (error) throw error;
   } catch (err) {
+    // Every branch above now checks { error } instead of discarding it —
+    // Supabase-js resolves with { data, error } rather than throwing for
+    // API-level failures (RLS rejections, constraint violations, malformed
+    // payloads), so a discarded error previously meant a rejected write
+    // looked IDENTICAL to a successful one: no exception, setDoc returns
+    // normally, nothing reaches Postgres, and the caller's local state
+    // (which always applies optimistically) never finds out anything is
+    // wrong. That's how progress could update instantly on-device while
+    // silently never syncing to Supabase.
     console.error(`Supabase setDoc error for ${col}/${id}:`, err);
     throw err;
   }
@@ -688,10 +719,12 @@ export async function deleteDoc(docRef: DocRef | any) {
 
   try {
     if (col === 'system_settings' || col === 'settings') {
-      await client.from('system_settings').delete().eq('key', id);
+      const { error } = await client.from('system_settings').delete().eq('key', id);
+      if (error) throw error;
       return;
     }
-    await client.from(col).delete().eq('id', id);
+    const { error } = await client.from(col).delete().eq('id', id);
+    if (error) throw error;
   } catch (err) {
     console.error(`Supabase deleteDoc error for ${col}/${id}:`, err);
     throw err;
@@ -805,7 +838,8 @@ export async function deleteBulkDocs(collectionName: string, docIds: string[]) {
     const BATCH_SIZE = 200;
     for (let i = 0; i < docIds.length; i += BATCH_SIZE) {
       const chunk = docIds.slice(i, i + BATCH_SIZE);
-      await client.from(collectionName).delete().in('id', chunk);
+      const { error } = await client.from(collectionName).delete().in('id', chunk);
+      if (error) throw error;
     }
   } catch (err) {
     console.error(`deleteBulkDocs error for ${collectionName}:`, err);
@@ -817,9 +851,11 @@ export async function clearCollectionDocs(collectionName: string, courseId?: str
   const client = getSupabase();
   try {
     if (courseId) {
-      await client.from(collectionName).delete().eq('course_id', courseId);
+      const { error } = await client.from(collectionName).delete().eq('course_id', courseId);
+      if (error) throw error;
     } else {
-      await client.from(collectionName).delete().neq('id', '___non_existent_id___');
+      const { error } = await client.from(collectionName).delete().neq('id', '___non_existent_id___');
+      if (error) throw error;
     }
   } catch (err) {
     console.error(`clearCollectionDocs error for ${collectionName}:`, err);
