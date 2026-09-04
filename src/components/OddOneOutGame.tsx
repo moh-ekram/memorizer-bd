@@ -69,14 +69,35 @@ export default function OddOneOutGame({
         const loaded: OddOneOutQuestion[] = [];
         qSnap.forEach(docSnap => {
           const data = docSnap.data();
-          const qObj = { id: docSnap.id, ...data } as OddOneOutQuestion;
-          if (matchesCourseId(data.courseId, activeCourseId)) {
+          const qCourseId = data.courseId || data.course_id;
+          const qObj = { id: docSnap.id, ...data, courseId: qCourseId } as OddOneOutQuestion;
+          if (matchesCourseId(qCourseId, activeCourseId)) {
             loaded.push(qObj);
           }
         });
 
         if (loaded.length > 0) {
           setAllQuestions(loaded);
+        } else if (words && words.length >= 4) {
+          // Fallback: dynamically generate Odd One Out questions from vocabulary words
+          const generated: OddOneOutQuestion[] = [];
+          for (let i = 0; i < Math.min(30, words.length - 3); i++) {
+            const targetWord = words[i];
+            // Get 3 synonyms or same-category/meaning words if available, or 3 other words
+            const others = words.filter(w => w.id !== targetWord.id);
+            const distractors = others.slice(i, i + 3).map(w => w.word);
+            if (distractors.length === 3) {
+              const fourWords = [targetWord.word, ...distractors].sort(() => 0.5 - Math.random());
+              generated.push({
+                id: `gen_ooo_${targetWord.id || i}`,
+                words: fourWords,
+                answer: targetWord.word,
+                reason: `"${targetWord.word}" differs from the group (${distractors.join(', ')}). Meaning: ${targetWord.meaning}`,
+                courseId: activeCourseId
+              });
+            }
+          }
+          setAllQuestions(generated.length > 0 ? generated : loaded);
         } else {
           clearQuestionsCache('odd_one_out_questions', activeCourseId);
           setAllQuestions([]);
@@ -90,7 +111,7 @@ export default function OddOneOutGame({
       }
     };
     fetchQuestions();
-  }, [activeCourseId]);
+  }, [activeCourseId, words]);
 
   const applyFilter = (filterType: 'all' | 'yet_to_try' | 'incorrect' | 'done', pool = allQuestions) => {
     setActiveFilter(filterType);

@@ -312,19 +312,21 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
         qbResult.value.forEach((docSnap: any) => {
           if (!deletedSet.has(docSnap.id)) {
             const dData = docSnap.data();
+            const opts = Array.isArray(dData.options) ? dData.options : [];
             itemMap.set(docSnap.id, {
               id: docSnap.id,
               question: dData.question || '',
-              optionA: dData.optionA || '',
-              optionB: dData.optionB || '',
-              optionC: dData.optionC || '',
-              optionD: dData.optionD || '',
-              correctAnswer: dData.correctAnswer || 'A',
+              optionA: dData.optionA || dData.option_a || opts[0] || '',
+              optionB: dData.optionB || dData.option_b || opts[1] || '',
+              optionC: dData.optionC || dData.option_c || opts[2] || '',
+              optionD: dData.optionD || dData.option_d || opts[3] || '',
+              correctAnswer: dData.correctAnswer || dData.correct_answer || dData.answer || 'A',
               explanation: dData.explanation || '',
-              group1: dData.group1 || 'General',
+              group1: dData.group1 || dData.courseId || dData.course_id || 'General',
               group2: dData.group2 || 'General',
               group3: dData.group3 || 'General',
-              createdAt: dData.createdAt || new Date().toISOString(),
+              courseId: dData.courseId || dData.course_id || '',
+              createdAt: dData.createdAt || dData.created_at || new Date().toISOString(),
               ...dData
             } as QuestionBankItem);
           }
@@ -337,7 +339,7 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
           const d = docSnap.data();
           const qId = `mcq_${docSnap.id}`;
           if (!deletedSet.has(qId) && !itemMap.has(qId) && !itemMap.has(docSnap.id)) {
-            const opts = Array.isArray(d.options) ? d.options : [d.optionA || '', d.optionB || '', d.optionC || '', d.optionD || ''];
+            const opts = Array.isArray(d.options) ? d.options : [d.optionA || d.option_a || '', d.optionB || d.option_b || '', d.optionC || d.option_c || '', d.optionD || d.option_d || ''];
             itemMap.set(qId, {
               id: qId,
               question: d.question || '',
@@ -345,13 +347,13 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
               optionB: opts[1] || '',
               optionC: opts[2] || '',
               optionD: opts[3] || '',
-              correctAnswer: d.answer || opts[0] || 'A',
+              correctAnswer: d.correctAnswer || d.correct_answer || d.answer || opts[0] || 'A',
               explanation: d.explanation || 'MCQ Practice Question',
-              group1: d.courseId || 'MCQ',
-              group2: 'MCQ Question',
-              group3: 'Existing Database',
-              courseId: d.courseId,
-              createdAt: d.createdAt || new Date().toISOString()
+              group1: d.group1 || d.courseId || d.course_id || 'MCQ',
+              group2: d.group2 || 'MCQ Question',
+              group3: d.group3 || 'Existing Database',
+              courseId: d.courseId || d.course_id,
+              createdAt: d.createdAt || d.created_at || new Date().toISOString()
             });
           }
         });

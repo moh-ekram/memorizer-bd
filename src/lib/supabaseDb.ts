@@ -221,30 +221,58 @@ export function mapCourseToDb(data: any): any {
   if (data.words !== undefined) row.words = data.words;
   if (data.stories !== undefined) row.stories = data.stories;
   if (data.articles !== undefined) row.articles = data.articles;
-  if (data.metadata !== undefined) row.metadata = data.metadata;
+  
+  // Package extended course settings into metadata safely
+  const meta = {
+    ...(data.metadata || {}),
+    enabledGames: data.enabledGames,
+    placeLabels: data.placeLabels,
+    totalGroups: data.totalGroups,
+    bkashNumber: data.bkashNumber,
+    isRestricted: data.isRestricted,
+    allowedUsers: data.allowedUsers,
+    allowedUsersExpiry: data.allowedUsersExpiry,
+    googleSearchQuery: data.googleSearchQuery,
+    order: data.order,
+    hidden: data.hidden,
+    courseCode: data.courseCode,
+    isDefault: data.isDefault
+  };
+  row.metadata = meta;
   row.updated_at = new Date().toISOString();
   return row;
 }
 
 export function mapCourseFromDb(row: any): any {
   if (!row) return null;
+  const meta = (row.metadata && typeof row.metadata === 'object') ? row.metadata : {};
   return {
+    ...meta,
     id: row.id,
-    title: row.title || '',
-    description: row.description || '',
-    category: row.category || 'General',
-    level: row.level || 'All Levels',
-    price: typeof row.price === 'number' ? row.price : Number(row.price || 0),
-    isFree: row.is_free ?? false,
-    isPublished: row.is_published ?? true,
-    thumbnailUrl: row.thumbnail_url || '',
-    createdBy: row.created_by || '',
-    words: Array.isArray(row.words) ? row.words : [],
-    stories: Array.isArray(row.stories) ? row.stories : [],
-    articles: Array.isArray(row.articles) ? row.articles : [],
-    metadata: row.metadata || {},
-    allowedUsers: Array.isArray(row.metadata?.allowedUsers) ? row.metadata.allowedUsers : (row.allowed_users || []),
-    isDefault: row.metadata?.isDefault ?? (row.is_free ? true : false),
+    title: row.title || meta.title || '',
+    description: row.description || meta.description || '',
+    category: row.category || meta.category || 'General',
+    level: row.level || meta.level || 'All Levels',
+    price: typeof row.price === 'number' ? row.price : (meta.price !== undefined ? meta.price : Number(row.price || 0)),
+    isFree: row.is_free ?? meta.isFree ?? false,
+    isPublished: row.is_published ?? meta.isPublished ?? true,
+    thumbnailUrl: row.thumbnail_url || meta.thumbnailUrl || '',
+    createdBy: row.created_by || meta.createdBy || '',
+    words: (Array.isArray(row.words) && row.words.length > 0) ? row.words : (Array.isArray(meta.words) ? meta.words : []),
+    stories: Array.isArray(row.stories) ? row.stories : (Array.isArray(meta.stories) ? meta.stories : []),
+    articles: Array.isArray(row.articles) ? row.articles : (Array.isArray(meta.articles) ? meta.articles : []),
+    enabledGames: meta.enabledGames || { quiz: true, match: true, synonym: true, blank: true, story: true, article: true },
+    placeLabels: meta.placeLabels,
+    totalGroups: meta.totalGroups || (Array.isArray(row.words) && row.words.length > 0 ? new Set(row.words.map((w: any) => w.group)).size : undefined),
+    bkashNumber: row.bkash_number || meta.bkashNumber || '01581624202',
+    isRestricted: row.is_restricted ?? meta.isRestricted ?? false,
+    allowedUsers: Array.isArray(meta.allowedUsers) ? meta.allowedUsers : (row.allowed_users || []),
+    allowedUsersExpiry: meta.allowedUsersExpiry || {},
+    isDefault: meta.isDefault ?? (row.is_free ? true : false),
+    order: row.order ?? meta.order ?? 999,
+    hidden: row.hidden ?? meta.hidden ?? false,
+    googleSearchQuery: meta.googleSearchQuery || '',
+    metadata: meta,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -416,7 +444,7 @@ export async function getDoc(docRef: DocRef | any): Promise<{ id: string; exists
     }
   }
 
-  // 5. Generic collections (e.g. question banks)
+  // 5. Generic collections (e.g. question banks, games, exams)
   try {
     const { data, error } = await client
       .from(col)
@@ -425,10 +453,19 @@ export async function getDoc(docRef: DocRef | any): Promise<{ id: string; exists
       .maybeSingle();
 
     if (!error && data) {
+      const rowData = (data.data && typeof data.data === 'object') ? data.data : {};
+      const qCourseId = rowData.courseId || rowData.course_id || data.course_id || data.courseId || '';
+      const mapped = {
+        ...data,
+        ...rowData,
+        id: data.id || rowData.id || id,
+        courseId: qCourseId,
+        course_id: qCourseId
+      };
       return {
         id,
         exists: () => true,
-        data: () => data.data || data
+        data: () => mapped
       };
     }
   } catch (e) {
@@ -500,10 +537,20 @@ export async function getDocs(queryRef: CollectionRef | QueryRef | any): Promise
       else if (col === 'courses') mappedData = mapCourseFromDb(r);
       else if (col === 'access_requests') mappedData = mapAccessRequestFromDb(r);
       else if (col === 'system_settings') mappedData = r.value || r;
-      else if (r.data) mappedData = { ...r.data, id: r.id };
+      else if (r && typeof r === 'object') {
+        const rowData = (r.data && typeof r.data === 'object') ? r.data : {};
+        const qCourseId = rowData.courseId || rowData.course_id || r.course_id || r.courseId || '';
+        mappedData = {
+          ...r,
+          ...rowData,
+          id: r.id || rowData.id,
+          courseId: qCourseId,
+          course_id: qCourseId
+        };
+      }
 
       return {
-        id: r.id || r.key,
+        id: r.id || r.key || (mappedData as any)?.id,
         exists: () => true,
         data: () => mappedData
       };

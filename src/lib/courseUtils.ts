@@ -14,17 +14,23 @@ export function normalizeCourseId(id?: string | null): string {
 /**
  * Flexible Course ID matching:
  * Checks if two course IDs point to the same course after normalization.
+ * If either ID is empty, 'all', or 'general', matches true so questions are accessible.
  */
 export function matchesCourseId(qCourseId?: string | null, targetCourseId?: string | null): boolean {
-  if (!qCourseId || !targetCourseId) return false;
-  const n1 = normalizeCourseId(qCourseId);
-  const n2 = normalizeCourseId(targetCourseId);
+  if (!targetCourseId || targetCourseId.trim() === '' || targetCourseId === 'all') return true;
+  if (!qCourseId || qCourseId.trim() === '' || qCourseId === 'all' || qCourseId === 'general') return true;
   
-  if (!n1 || !n2) return false;
-  if (n1 === 'all' || n2 === 'all') return true;
+  const cleanTarget = targetCourseId.trim().toLowerCase();
+  const cleanQ = qCourseId.trim().toLowerCase();
+  if (cleanQ === cleanTarget || cleanTarget.includes(cleanQ) || cleanQ.includes(cleanTarget)) return true;
+
+  const normTarget = cleanTarget.replace(/[^a-z0-9]/g, '');
+  const normQ = cleanQ.replace(/[^a-z0-9]/g, '');
+  if (normQ === normTarget || normTarget.includes(normQ) || normQ.includes(normTarget)) return true;
   
-  return n1 === n2 || n1.includes(n2) || n2.includes(n1);
+  return false;
 }
+
 
 /**
  * Clears local cached questions for a given collection and course to prevent stale state.

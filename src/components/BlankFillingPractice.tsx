@@ -80,15 +80,43 @@ export default function BlankFillingPractice({
         const loaded: BlankQuestion[] = [];
         qSnap.forEach(docSnap => {
           const data = docSnap.data();
-          const qObj = { id: docSnap.id, ...data } as BlankQuestion;
+          const qCourseId = data.courseId || data.course_id;
+          const qObj = { id: docSnap.id, ...data, courseId: qCourseId } as BlankQuestion;
 
-          if (matchesCourseId(data.courseId, activeCourseId)) {
+          if (matchesCourseId(qCourseId, activeCourseId)) {
             loaded.push(qObj);
           }
         });
 
         if (loaded.length > 0) {
           setAllQuestions(loaded);
+        } else if (words && words.length > 0) {
+          // Fallback: generate high-quality practice questions from vocabulary words if no custom blank questions exist in DB
+          const wordsWithExamples = words.filter(w => (w.example || (w as any).sentence || '').trim().length > 10);
+          const sourceWords = wordsWithExamples.length >= 3 ? wordsWithExamples : words;
+          const generated: BlankQuestion[] = sourceWords.slice(0, 40).map((w, idx) => {
+            const rawSentence = (w.example || (w as any).sentence || '').trim();
+            const hasSentence = rawSentence.length > 0 && rawSentence.toLowerCase().includes(w.word.toLowerCase());
+            const sentence = hasSentence
+              ? rawSentence.replace(new RegExp(`\\b${w.word}\\b`, 'gi'), '__________')
+              : `Fill in the missing word: "${w.meaning}" describes __________.`;
+            
+            const distractors = words
+              .filter(other => other.id !== w.id && other.word.toLowerCase() !== w.word.toLowerCase())
+              .map(other => other.word)
+              .slice(0, 3);
+            
+            const options = [w.word, ...distractors].sort(() => 0.5 - Math.random());
+            return {
+              id: `vocab_blank_${w.id || idx}`,
+              sentence,
+              options,
+              answer: w.word,
+              explanation: `"${w.word}" (${w.pronunciation || ''}): ${w.meaning}. Example: ${rawSentence || 'N/A'}`,
+              courseId: activeCourseId
+            };
+          });
+          setAllQuestions(generated);
         } else {
           clearQuestionsCache('blank_questions', activeCourseId);
           setAllQuestions([]);

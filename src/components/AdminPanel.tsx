@@ -152,8 +152,18 @@ function sbMapRow(table: string, row: any): SbDocSnap {
   else if (table === 'courses') mapped = mapCourseFromDb(row);
   else if (table === 'access_requests') mapped = mapAccessRequestFromDb(row);
   else if (table === 'system_settings') mapped = row.value || row;
-  else if (row && row.data && typeof row.data === 'object') mapped = { ...row.data, id: row.id };
-  return { id: row.id || row.key || '', exists: () => true, data: () => mapped };
+  else if (row && typeof row === 'object') {
+    const rowData = (row.data && typeof row.data === 'object') ? row.data : {};
+    const qCourseId = rowData.courseId || rowData.course_id || row.course_id || row.courseId || '';
+    mapped = {
+      ...row,
+      ...rowData,
+      id: row.id || rowData.id,
+      courseId: qCourseId,
+      course_id: qCourseId
+    };
+  }
+  return { id: row.id || row.key || (mapped as any)?.id || '', exists: () => true, data: () => mapped };
 }
 
 // Native equivalent of getDoc(doc(db, table, id))

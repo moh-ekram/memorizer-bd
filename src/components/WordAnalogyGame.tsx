@@ -69,15 +69,55 @@ export default function WordAnalogyGame({
         const loaded: WordAnalogyQuestion[] = [];
         qSnap.forEach(docSnap => {
           const data = docSnap.data();
-          const qObj = { id: docSnap.id, ...data } as WordAnalogyQuestion;
+          const qCourseId = data.courseId || data.course_id;
+          const qObj = { id: docSnap.id, ...data, courseId: qCourseId } as WordAnalogyQuestion;
 
-          if (matchesCourseId(data.courseId, activeCourseId)) {
+          if (matchesCourseId(qCourseId, activeCourseId)) {
             loaded.push(qObj);
           }
         });
 
         if (loaded.length > 0) {
           setAllQuestions(loaded);
+        } else if (words && words.length >= 4) {
+          // Fallback: generate Word Analogy questions from vocabulary synonyms
+          const getSynList = (w: VocabularyWord): string[] => {
+            if (Array.isArray(w.synonyms)) return w.synonyms;
+            if (typeof w.synonyms === 'string' && w.synonyms.trim()) {
+              return w.synonyms.split(/[,;]/).map(s => s.trim()).filter(Boolean);
+            }
+            return [];
+          };
+
+          const wordsWithSyns = words.filter(w => getSynList(w).length > 0);
+          const sourcePool = wordsWithSyns.length >= 2 ? wordsWithSyns : words;
+          const generated: WordAnalogyQuestion[] = [];
+          
+          for (let i = 0; i < Math.min(25, sourcePool.length - 1); i++) {
+            const w1 = sourcePool[i];
+            const synList1 = getSynList(w1);
+            const syn1 = synList1[0] || w1.meaning.split(/[,;]/)[0].trim();
+            const w2 = sourcePool[(i + 1) % sourcePool.length];
+            const synList2 = getSynList(w2);
+            const syn2 = synList2[0] || w2.meaning.split(/[,;]/)[0].trim();
+            
+            const correctPair = `${w2.word} : ${syn2}`;
+            // generate 3 distractor pairs
+            const d1 = `${sourcePool[(i + 2) % sourcePool.length].word} : random`;
+            const d2 = `${sourcePool[(i + 3) % sourcePool.length].word} : opposite`;
+            const d3 = `begin : stop`;
+            const options = [correctPair, d1, d2, d3].sort(() => 0.5 - Math.random());
+
+            generated.push({
+              id: `gen_analogy_${w1.id || i}`,
+              analogy: `${w1.word} : ${syn1}`,
+              options,
+              answer: correctPair,
+              explanation: `Relationship is synonym: "${w1.word}" is synonymous with "${syn1}", just as "${w2.word}" is with "${syn2}".`,
+              courseId: activeCourseId
+            });
+          }
+          setAllQuestions(generated.length > 0 ? generated : loaded);
         } else {
           clearQuestionsCache('word_analogy_questions', activeCourseId);
           setAllQuestions([]);
@@ -91,7 +131,7 @@ export default function WordAnalogyGame({
       }
     };
     fetchQuestions();
-  }, [activeCourseId]);
+  }, [activeCourseId, words]);
 
   const applyFilter = (filterType: 'all' | 'yet_to_try' | 'incorrect' | 'done', pool = allQuestions) => {
     setActiveFilter(filterType);

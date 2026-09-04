@@ -181,6 +181,26 @@ CREATE TABLE IF NOT EXISTS public.mcq_questions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- কেন্দ্রীয় প্রশ্ন ব্যাংক টেবিল (MCQ & Question Bank Items)
+CREATE TABLE IF NOT EXISTS public.question_bank (
+  id TEXT PRIMARY KEY,
+  course_id TEXT,
+  question TEXT NOT NULL,
+  option_a TEXT,
+  option_b TEXT,
+  option_c TEXT,
+  option_d TEXT,
+  correct_answer TEXT,
+  explanation TEXT,
+  group1 TEXT DEFAULT 'General',
+  group2 TEXT DEFAULT 'General',
+  group3 TEXT DEFAULT 'General',
+  data JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_qb_course ON public.question_bank(course_id);
+
 CREATE TABLE IF NOT EXISTS public.exams (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -205,6 +225,18 @@ CREATE TABLE IF NOT EXISTS public.exam_submissions (
   submitted_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS public.exam_results (
+  id TEXT PRIMARY KEY,
+  exam_id TEXT,
+  user_id TEXT,
+  user_email TEXT,
+  score NUMERIC(5, 2) NOT NULL,
+  total_marks INTEGER NOT NULL,
+  answers JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  submitted_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ==============================================================================
 -- 5. AUTO-UPDATE TIMESTAMP FUNCTION & TRIGGERS
 -- ==============================================================================
@@ -226,6 +258,11 @@ CREATE TRIGGER trg_courses_updated
 BEFORE UPDATE ON public.courses
 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_qb_updated ON public.question_bank;
+CREATE TRIGGER trg_qb_updated
+BEFORE UPDATE ON public.question_bank
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- ==============================================================================
 -- 6. ROW LEVEL SECURITY (RLS) - নিরবচ্ছিন্ন সিঙ্কের জন্য উন্মুক্ত পারমিশন
 -- ==============================================================================
@@ -241,10 +278,12 @@ ALTER TABLE public.odd_one_out_questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.blank_questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.word_analogy_questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mcq_questions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.question_bank ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.exams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.exam_submissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.exam_results ENABLE ROW LEVEL SECURITY;
 
--- পুরাতন কনফ্লিক্ট সৃষ্টিকারী পলিসিগুলো বাতিল করা
+-- পুরাতন কনফликт সৃষ্টিকারী পলিসিগুলো বাতিল করা
 DROP POLICY IF EXISTS "Allow full access on users" ON public.users;
 DROP POLICY IF EXISTS "Allow all access on users table" ON public.users;
 DROP POLICY IF EXISTS "Allow all access on courses" ON public.courses;
@@ -258,8 +297,10 @@ DROP POLICY IF EXISTS "Allow all access on ooo" ON public.odd_one_out_questions;
 DROP POLICY IF EXISTS "Allow all access on blanks" ON public.blank_questions;
 DROP POLICY IF EXISTS "Allow all access on analogy" ON public.word_analogy_questions;
 DROP POLICY IF EXISTS "Allow all access on mcq" ON public.mcq_questions;
+DROP POLICY IF EXISTS "Allow all access on question_bank" ON public.question_bank;
 DROP POLICY IF EXISTS "Allow all access on exams" ON public.exams;
 DROP POLICY IF EXISTS "Allow all access on submissions" ON public.exam_submissions;
+DROP POLICY IF EXISTS "Allow all access on exam_results" ON public.exam_results;
 
 -- নতুন নিরবচ্ছিন্ন সিঙ্ক পলিসি তৈরি (Allow full read & write for sync)
 CREATE POLICY "Allow full access on users" ON public.users FOR ALL USING (true) WITH CHECK (true);
@@ -273,28 +314,64 @@ CREATE POLICY "Allow all access on ooo" ON public.odd_one_out_questions FOR ALL 
 CREATE POLICY "Allow all access on blanks" ON public.blank_questions FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all access on analogy" ON public.word_analogy_questions FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all access on mcq" ON public.mcq_questions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all access on question_bank" ON public.question_bank FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all access on exams" ON public.exams FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all access on submissions" ON public.exam_submissions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all access on exam_results" ON public.exam_results FOR ALL USING (true) WITH CHECK (true);
 
 -- ==============================================================================
--- 7. ভেরিফিকেশন কুয়েরি (পূর্বের সকল ইউজার অক্ষত আছে কিনা চেক করা)
+-- 7. ভেরিফিকেশন ও ডেটা কুয়েরি করার এসকিউএল কোড (DATA QUERY SCRIPTS)
 -- ==============================================================================
+
+-- 📌 ১. কোর্স ডেটা কুয়েরি (Course Data Queries)
+-- সকল কোর্স ও তাদের শব্দ সংখ্যা দেখা:
 SELECT 
-  'users' AS table_name,
-  COUNT(*) AS total_records,
-  '✅ পূর্বের সকল ইউজার অক্ষত আছে এবং প্রগ্রেস সিঙ্ক সক্রিয়!' AS status
-FROM public.users
+  id, 
+  title, 
+  category, 
+  price, 
+  is_free, 
+  is_published, 
+  jsonb_array_length(COALESCE(words, '[]'::jsonb)) AS total_words,
+  updated_at
+FROM public.courses
+ORDER BY updated_at DESC;
 
+-- 📌 ২. ইউজার ডেটা কুয়েরি (User Data Queries)
+-- সকল ইউজার, তাদের ইমেইল, রোল, স্কোর ও অনুমোদিত স্ট্যাটাস:
+SELECT 
+  id, 
+  email, 
+  display_name, 
+  role, 
+  is_approved, 
+  quiz_score, 
+  quiz_taken, 
+  enrolled_course_ids, 
+  active_course_id,
+  updated_at
+FROM public.users
+ORDER BY updated_at DESC;
+
+-- 📌 ৩. কুয়েশ্চন ব্যাংক কুয়েরি (Question Bank Queries)
+-- কোশ্চেন ব্যাংকে কয়টি প্রশ্ন আছে এবং তাদের তালিকা:
+SELECT 
+  id, 
+  course_id, 
+  question, 
+  correct_answer, 
+  group1, 
+  created_at
+FROM public.question_bank
+ORDER BY created_at DESC;
+
+-- 📌 ৪. গেমস ডেটা কুয়েরি (Games Data Queries)
+-- প্রতিটি গেমের মোট প্রশ্নের সংখ্যা ও তালিকা:
+SELECT 'Fill in the Blanks' AS game_type, COUNT(*) AS total_questions FROM public.blank_questions
 UNION ALL
+SELECT 'Odd One Out' AS game_type, COUNT(*) AS total_questions FROM public.odd_one_out_questions
+UNION ALL
+SELECT 'Word Analogy' AS game_type, COUNT(*) AS total_questions FROM public.word_analogy_questions
+UNION ALL
+SELECT 'Custom MCQ' AS game_type, COUNT(*) AS total_questions FROM public.mcq_questions;
 
-SELECT 
-  'courses' AS table_name,
-  COUNT(*) AS total_records,
-  '✅ কোর্স ডেটা প্রস্তুত' AS status
-FROM public.courses;
-
--- ইউজার তালিকা প্রিভিউ (প্রথম ১০ জন ইউজার)
-SELECT id, email, display_name, role, updated_at
-FROM public.users
-ORDER BY updated_at DESC
-LIMIT 10;
