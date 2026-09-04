@@ -1458,7 +1458,8 @@ export default function App() {
       setSyncStatus('syncing');
       isSyncingToCloud.current = true;
       try {
-        const payload = {
+        const isAdmin = user && user.email && ['mohammad.001ekram@gmail.com'].includes(user.email.trim().toLowerCase());
+        const payload: any = {
           progress,
           folders,
           goal,
@@ -1468,13 +1469,17 @@ export default function App() {
           analogyProgress,
           flashcardPositions,
           settings,
-          enrolledCourseIds,
           activeCourseId,
           quizScore,
           quizTaken,
           email: user.email,
           updatedAt: new Date().toISOString()
         };
+        // Only include enrolledCourseIds if admin to prevent 'You cannot change enrolled courses' rule violation
+        if (isAdmin) {
+          payload.enrolledCourseIds = enrolledCourseIds;
+        }
+
         lastPushedTimestamp.current = payload.updatedAt;
         await setDoc(doc(db, 'users', user.uid), payload, { merge: true });
 
@@ -1483,6 +1488,35 @@ export default function App() {
         const itemCount = Object.keys(progress || {}).length;
         addSyncLog('auto', `Saved ${itemCount} study item${itemCount === 1 ? '' : 's'} & preferences to Cloud`, 'success', itemCount);
       } catch (err: any) {
+        const errMsg = err?.message || String(err || '');
+        if (errMsg.includes('enrolled courses') || errMsg.includes('enrolled')) {
+          // If error was triggered due to enrolled courses restriction, retry cleanly without enrolledCourseIds
+          try {
+            const cleanPayload = {
+              progress,
+              folders,
+              goal,
+              synonymProgress,
+              blankProgress,
+              oooProgress,
+              analogyProgress,
+              flashcardPositions,
+              settings,
+              activeCourseId,
+              quizScore,
+              quizTaken,
+              email: user.email,
+              updatedAt: new Date().toISOString()
+            };
+            await setDoc(doc(db, 'users', user.uid), cleanPayload, { merge: true });
+            setSyncStatus('synced');
+            setLastSyncError(null);
+            return;
+          } catch (retryErr) {
+            console.warn('[Sync] Fallback sync notice:', retryErr);
+          }
+        }
+
         const classified = classifySyncError(err);
         logSyncErrorToConsole('Cloud Synchronization useEffect Handshake', classified);
         setLastSyncError(classified);
@@ -1510,7 +1544,8 @@ export default function App() {
         fetchUserDataFromCloud(user);
       } else if (document.visibilityState === 'hidden' && user && hasLoadedFromCloud) {
         // Tab backgrounded or phone locked: immediately flush to Firestore!
-        const payload = {
+        const isAdmin = user && user.email && ['mohammad.001ekram@gmail.com'].includes(user.email.trim().toLowerCase());
+        const payload: any = {
           progress,
           folders,
           goal,
@@ -1520,13 +1555,16 @@ export default function App() {
           analogyProgress,
           flashcardPositions,
           settings,
-          enrolledCourseIds,
           activeCourseId,
           quizScore,
           quizTaken,
           email: user.email,
           updatedAt: new Date().toISOString()
         };
+        if (isAdmin) {
+          payload.enrolledCourseIds = enrolledCourseIds;
+        }
+
         setDoc(doc(db, 'users', user.uid), payload, { merge: true }).catch(err => {
           const classified = classifySyncError(err);
           logSyncErrorToConsole('Visibility Change Flush Sync', classified);
@@ -1536,7 +1574,8 @@ export default function App() {
 
     const handleBeforeUnload = () => {
       if (user && hasLoadedFromCloud) {
-        const payload = {
+        const isAdmin = user && user.email && ['mohammad.001ekram@gmail.com'].includes(user.email.trim().toLowerCase());
+        const payload: any = {
           progress,
           folders,
           goal,
@@ -1546,14 +1585,17 @@ export default function App() {
           analogyProgress,
           flashcardPositions,
           settings,
-          enrolledCourseIds,
           activeCourseId,
           quizScore,
           quizTaken,
           email: user.email,
           updatedAt: new Date().toISOString()
         };
-        setDoc(doc(db, 'users', user.uid), payload, { merge: true }).catch(console.error);
+        if (isAdmin) {
+          payload.enrolledCourseIds = enrolledCourseIds;
+        }
+
+        setDoc(doc(db, 'users', user.uid), payload, { merge: true }).catch(console.warn);
       }
     };
 

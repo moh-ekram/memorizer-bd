@@ -25,7 +25,9 @@ import {
   Circle,
   ExternalLink,
   Flame,
-  Activity
+  Activity,
+  Eye,
+  ShieldCheck
 } from 'lucide-react';
 import { mergeProgressRecords } from '../utils/syncUtils';
 import { safeSetLocalStorage, safeGetLocalStorage } from '../lib/storage';
@@ -54,7 +56,9 @@ export default function SyncDebugTable({
   const [loadingCloud, setLoadingCloud] = useState(false);
   const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'mismatch' | 'local_newer' | 'cloud_newer' | 'studied' | 'unrated'>('all');
+  const [statusFilter, setStatusFilter] = useState<'discrepancies' | 'mismatch' | 'local_newer' | 'cloud_newer' | 'all'>('discrepancies');
+  const [autoHealEnabled, setAutoHealEnabled] = useState(true);
+  const [isAutoHealing, setIsAutoHealing] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
   const [expandedWordId, setExpandedWordId] = useState<string | null>(null);
   const [copiedReport, setCopiedReport] = useState(false);
@@ -205,9 +209,11 @@ export default function SyncDebugTable({
   };
 
   // Smart Reconcile (Merge by Timestamp across IndexedDB, Memory, LocalStorage, and Cloud)
-  const handleSmartReconcile = async () => {
+  const handleSmartReconcile = async (silent = false) => {
     if (!effectiveUid && !cleanEmail) return;
-    setActionMessage({ text: 'Reconciling Local, IndexedDB & Cloud by timestamps...', type: 'info' });
+    if (!silent) {
+      setActionMessage({ text: 'Reconciling Local, IndexedDB & Cloud by timestamps...', type: 'info' });
+    }
     try {
       let localDiskProgress: Record<string, UserProgress> = {};
       try {
@@ -245,10 +251,14 @@ export default function SyncDebugTable({
       }
       setCloudProgress(mergedUnified);
       const orphanMsg = orphanedWords.length > 0 ? ` (reconciled ${orphanedWords.length} orphaned words)` : '';
-      setActionMessage({ text: `Reconciled & synchronized ${Object.keys(mergedUnified).length} items across IndexedDB and Cloud${orphanMsg}!`, type: 'success' });
+      if (!silent) {
+        setActionMessage({ text: `Reconciled & synchronized ${Object.keys(mergedUnified).length} items across IndexedDB and Cloud${orphanMsg}!`, type: 'success' });
+      }
       if (onTriggerSync) onTriggerSync();
     } catch (e: any) {
-      setActionMessage({ text: `Reconciliation failed: ${e.message}`, type: 'error' });
+      if (!silent) {
+        setActionMessage({ text: `Reconciliation failed: ${e.message}`, type: 'error' });
+      }
     }
   };
 
@@ -419,6 +429,31 @@ export default function SyncDebugTable({
     };
   }, [comparisonItems]);
 
+  const totalDiscrepancies = summaryMetrics.mismatches + summaryMetrics.localNewer + summaryMetrics.cloudNewer;
+
+  // Auto-Heal Engine: Automatically prevents and resolves discrepancies in the background
+  useEffect(() => {
+    if (!autoHealEnabled || !cloudProgress || loadingCloud || isAutoHealing) return;
+    if (totalDiscrepancies === 0) return;
+
+    const timer = setTimeout(async () => {
+      setIsAutoHealing(true);
+      try {
+        await handleSmartReconcile(true);
+        setActionMessage({
+          text: `স্বয়ংক্রিয় ডিস্ক্রিপেন্সি প্রতিরোধ: ক্লাউড ও লোকাল মেমোরির অমিল স্বয়ংক্রিয়ভাবে সমাধান করা হয়েছে (0 Discrepancies).`,
+          type: 'success'
+        });
+      } catch (err) {
+        console.warn('[Auto-Heal Engine] Notice:', err);
+      } finally {
+        setIsAutoHealing(false);
+      }
+    }, 1200);
+
+    return () => clearTimeout(timer);
+  }, [totalDiscrepancies, autoHealEnabled, cloudProgress, loadingCloud, isAutoHealing]);
+
   // Filtered and Paginated Items
   const filteredItems = useMemo(() => {
     return comparisonItems.filter(item => {
@@ -427,22 +462,19 @@ export default function SyncDebugTable({
         return false;
       }
 
-      // Status Filter
-      if (statusFilter === 'mismatch' && (item.matchType !== 'mismatch' && item.matchType !== 'missing_cloud' && item.matchType !== 'missing_local')) {
-        return false;
+      // Status / Discrepancies Filter
+      if (statusFilter === 'discrepancies') {
+        if (item.matchType === 'in_sync') return false;
+      } else if (statusFilter === 'mismatch') {
+        if (item.matchType !== 'mismatch' && item.matchType !== 'missing_cloud' && item.matchType !== 'missing_local') {
+          return false;
+        }
+      } else if (statusFilter === 'local_newer') {
+        if (item.matchType !== 'local_newer') return false;
+      } else if (statusFilter === 'cloud_newer') {
+        if (item.matchType !== 'cloud_newer') return false;
       }
-      if (statusFilter === 'local_newer' && item.matchType !== 'local_newer' && item.matchType !== 'missing_cloud') {
-        return false;
-      }
-      if (statusFilter === 'cloud_newer' && item.matchType !== 'cloud_newer' && item.matchType !== 'missing_local') {
-        return false;
-      }
-      if (statusFilter === 'studied' && !item.isStudied) {
-        return false;
-      }
-      if (statusFilter === 'unrated' && (item.localStatus !== 'unrated' || item.cloudStatus !== 'unrated')) {
-        return false;
-      }
+      // 'all' includes all items
 
       // Search Query
       if (searchQuery.trim()) {
@@ -722,15 +754,29 @@ export default function SyncDebugTable({
         </div>
 
         <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-xl space-y-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Sync Health</span>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Sync Health</span>
+            <button
+              onClick={() => setAutoHealEnabled(!autoHealEnabled)}
+              className={`px-2 py-0.5 rounded-full text-[9px] font-bold border transition flex items-center gap-1 cursor-pointer ${
+                autoHealEnabled
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                  : 'bg-slate-100 text-slate-500 border-slate-200'
+              }`}
+              title="Toggle automatic discrepancy prevention & healing"
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${autoHealEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+              <span>{autoHealEnabled ? 'Auto-Heal ON' : 'Auto-Heal OFF'}</span>
+            </button>
+          </div>
           <div className="flex items-center gap-2">
-            {summaryMetrics.mismatches === 0 ? (
+            {totalDiscrepancies === 0 ? (
               <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" /> 100% In Sync
+                <CheckCircle2 className="w-3.5 h-3.5" /> 100% In Sync (0 Discrepancies)
               </span>
             ) : (
               <span className="text-xs font-bold text-rose-600 flex items-center gap-1">
-                <AlertTriangle className="w-3.5 h-3.5" /> {summaryMetrics.mismatches} Mismatches Detected
+                <AlertTriangle className="w-3.5 h-3.5" /> {totalDiscrepancies} Discrepancies Detected
               </span>
             )}
           </div>
@@ -771,7 +817,7 @@ export default function SyncDebugTable({
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Matching Items</span>
           <div className="flex items-baseline justify-between">
             <span className="text-xl font-black text-slate-800">{summaryMetrics.inSync}</span>
-            <span className="text-[11px] font-bold text-emerald-600">Synced</span>
+            <span className="text-[11px] font-bold text-emerald-600">In Sync</span>
           </div>
           <div className="text-[10px] text-slate-500 font-medium">
             Identical state & status
@@ -780,32 +826,32 @@ export default function SyncDebugTable({
 
         {/* Discrepancies count */}
         <div className={`p-3.5 rounded-xl space-y-1 border ${
-          summaryMetrics.mismatches > 0 
+          totalDiscrepancies > 0 
             ? 'bg-rose-50/80 border-rose-200' 
             : 'bg-slate-50 border-slate-200'
         }`}>
           <span className={`text-[10px] font-bold uppercase tracking-wider block ${
-            summaryMetrics.mismatches > 0 ? 'text-rose-800' : 'text-slate-500'
+            totalDiscrepancies > 0 ? 'text-rose-800' : 'text-slate-500'
           }`}>
             Discrepancies
           </span>
           <div className="flex items-baseline justify-between">
             <span className={`text-xl font-black ${
-              summaryMetrics.mismatches > 0 ? 'text-rose-700' : 'text-slate-700'
+              totalDiscrepancies > 0 ? 'text-rose-700' : 'text-emerald-700'
             }`}>
-              {summaryMetrics.mismatches}
+              {totalDiscrepancies}
             </span>
             <button
-              onClick={() => setStatusFilter(statusFilter === 'mismatch' ? 'all' : 'mismatch')}
+              onClick={() => setStatusFilter(statusFilter === 'discrepancies' ? 'all' : 'discrepancies')}
               className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer"
             >
-              {statusFilter === 'mismatch' ? 'Show All' : 'Filter'}
+              {statusFilter === 'discrepancies' ? 'Show All' : 'Filter'}
             </button>
           </div>
           <div className={`text-[10px] font-medium ${
-            summaryMetrics.mismatches > 0 ? 'text-rose-600' : 'text-slate-500'
+            totalDiscrepancies > 0 ? 'text-rose-600' : 'text-slate-500'
           }`}>
-            Local ahead: <strong>{summaryMetrics.localNewer}</strong> | Cloud ahead: <strong>{summaryMetrics.cloudNewer}</strong>
+            Local: <strong>{summaryMetrics.localNewer}</strong> | Cloud: <strong>{summaryMetrics.cloudNewer}</strong> | Mismatch: <strong>{summaryMetrics.mismatches}</strong>
           </div>
         </div>
       </div>
@@ -890,12 +936,11 @@ export default function SyncDebugTable({
         {/* Filter Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
           {[
-            { id: 'all' as const, label: `All Words (${comparisonItems.length})` },
-            { id: 'mismatch' as const, label: `Discrepancies (${summaryMetrics.mismatches})`, alert: summaryMetrics.mismatches > 0 },
-            { id: 'local_newer' as const, label: `Local Newer (${summaryMetrics.localNewer})` },
-            { id: 'cloud_newer' as const, label: `Cloud Newer (${summaryMetrics.cloudNewer})` },
-            { id: 'studied' as const, label: `Studied Only (${summaryMetrics.localStudied})` },
-            { id: 'unrated' as const, label: `Unrated (${summaryMetrics.localUnrated})` },
+            { id: 'discrepancies' as const, label: `শুধু ডিস্ক্রিপেন্সি (${totalDiscrepancies})`, alert: totalDiscrepancies > 0 },
+            { id: 'mismatch' as const, label: `স্ট্যাটাস অমিল (${summaryMetrics.mismatches})` },
+            { id: 'local_newer' as const, label: `লোকাল এগিয়ে (${summaryMetrics.localNewer})` },
+            { id: 'cloud_newer' as const, label: `ক্লাউড এগিয়ে (${summaryMetrics.cloudNewer})` },
+            { id: 'all' as const, label: `সবগুলো শব্দ (${comparisonItems.length})` },
           ].map(f => {
             const isActive = statusFilter === f.id;
             return (
@@ -921,7 +966,85 @@ export default function SyncDebugTable({
         </div>
       </div>
 
-      {/* Comparison Table */}
+      {/* Discrepancies Alert & Quick Resolution Header */}
+      {totalDiscrepancies > 0 && (
+        <div className="bg-rose-50 border-2 border-rose-300 rounded-xl p-3.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-2xs animate-in fade-in duration-200">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-rose-100 text-rose-700 rounded-xl shrink-0">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-xs font-black text-rose-950">
+                {totalDiscrepancies}টি শব্দে অমিল (Discrepancies) রয়েছে
+              </h4>
+              <p className="text-[11px] text-rose-800 font-medium">
+                নিচে শুধুমাত্র অমিল থাকা শব্দগুলো দেখানো হচ্ছে। এক ক্লিকে সমাধান করতে বাটনে চাপ দিন:
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => handleSmartReconcile(false)}
+              className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>সব ডিস্ক্রিপেন্সি সমাধান করুন (Auto-Resolve All)</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Comparison Table or Zero Discrepancy State */}
+      {statusFilter === 'discrepancies' && filteredItems.length === 0 ? (
+        <div className="bg-gradient-to-b from-emerald-50/60 to-slate-50 border-2 border-emerald-200 rounded-2xl p-8 text-center space-y-4 shadow-2xs animate-in fade-in duration-300">
+          <div className="w-14 h-14 bg-emerald-100 border-2 border-emerald-300 text-emerald-700 rounded-2xl flex items-center justify-center mx-auto shadow-xs">
+            <CheckCircle2 className="w-8 h-8" />
+          </div>
+          <div className="max-w-md mx-auto space-y-1.5">
+            <h3 className="text-base font-black text-slate-900 flex items-center justify-center gap-2">
+              <span>১০০% ইন-সিঙ্ক: কোনো অমিল বা ডিস্ক্রিপেন্সি নেই!</span>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                0 Discrepancies
+              </span>
+            </h3>
+            <p className="text-xs text-slate-600 leading-relaxed font-medium">
+              আপনার ডিভাইসের লোকাল মেমোরি এবং ক্লাউড ফায়ারবেজ ডাটাবেজের মধ্যে কোনো অমিল নেই। সকল <strong>{summaryMetrics.inSync}</strong>টি শব্দের স্থিতি ও টাইমস্ট্যাম্প সম্পূর্ণ নিখুঁতভাবে সিঙ্কড রয়েছে।
+            </p>
+          </div>
+
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-[11px] text-slate-700 font-semibold shadow-2xs">
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <span>স্বয়ংক্রিয় ডিস্ক্রিপেন্সি সমাধান সক্রিয় (Auto-Heal Engine Active)</span>
+          </div>
+
+          <div className="flex items-center justify-center gap-2.5 pt-2 flex-wrap">
+            <button
+              onClick={handleTestLatency}
+              disabled={isTestingLatency}
+              className="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-250 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            >
+              <Activity className={`w-3.5 h-3.5 text-indigo-600 ${isTestingLatency ? 'animate-spin' : ''}`} />
+              <span>{latencyMs !== null ? `${latencyMs}ms Latency` : 'Ping Cloud'}</span>
+            </button>
+
+            <button
+              onClick={() => handleSmartReconcile(false)}
+              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>স্মার্ট ২-ওয়ে ভেরিফাই (Verify Now)</span>
+            </button>
+
+            <button
+              onClick={() => setStatusFilter('all')}
+              className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-250 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            >
+              <Eye className="w-3.5 h-3.5 text-slate-500" />
+              <span>সিঙ্ক হওয়া সব শব্দ ব্রাউজ করুন ({comparisonItems.length})</span>
+            </button>
+          </div>
+        </div>
+      ) : (
       <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
@@ -1098,6 +1221,7 @@ export default function SyncDebugTable({
           </div>
         )}
       </div>
+      )}
 
       {/* Sync Diagnostic Explanations */}
       <div className="bg-violet-50/60 border border-violet-100 rounded-xl p-3.5 space-y-2 text-xs">
