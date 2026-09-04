@@ -229,7 +229,6 @@ FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 -- ==============================================================================
 -- 6. ROW LEVEL SECURITY (RLS) - নিরবচ্ছিন্ন সিঙ্কের জন্য উন্মুক্ত পারমিশন
 -- ==============================================================================
--- RLS সক্রিয় করা যাতে ডাটাবেস সুরক্ষিত থাকে
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.courses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.access_requests ENABLE ROW LEVEL SECURITY;

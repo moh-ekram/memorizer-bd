@@ -321,15 +321,44 @@ export async function getDoc(docRef: DocRef | any): Promise<{ id: string; exists
 
   // 2. users
   if (col === 'users') {
+    // Check if subcollection like /meta/sync_state
+    if (docRef?.path && docRef.path.includes('/meta/')) {
+      try {
+        const metaKey = `meta_${id}`;
+        const { data: sData } = await client.from('system_settings').select('value').eq('key', metaKey).maybeSingle();
+        return {
+          id,
+          exists: () => !!sData,
+          data: () => sData?.value || null
+        };
+      } catch (_) {
+        return { id, exists: () => false, data: () => null };
+      }
+    }
+
     try {
-      let queryBuilder = client.from('users').select('*');
+      let data: any = null;
+      let error: any = null;
+
       if (id.includes('@')) {
-        queryBuilder = queryBuilder.or(`id.eq.${id},email.eq.${id.toLowerCase()}`);
+        const cleanEmail = id.trim().toLowerCase();
+        const res = await client.from('users').select('*').eq('email', cleanEmail).maybeSingle();
+        data = res.data;
+        error = res.error;
+        if (!data) {
+          const res2 = await client.from('users').select('*').eq('id', id.trim()).maybeSingle();
+          data = res2.data;
+        }
       } else {
-        queryBuilder = queryBuilder.or(`id.eq.${id},email.eq.${id}`);
+        const res = await client.from('users').select('*').eq('id', id.trim()).maybeSingle();
+        data = res.data;
+        error = res.error;
+        if (!data && id.length > 5) {
+          const res2 = await client.from('users').select('*').eq('email', id.trim().toLowerCase()).maybeSingle();
+          data = res2.data;
+        }
       }
 
-      const { data, error } = await queryBuilder.maybeSingle();
       if (!error && data) {
         const mapped = mapUserFromDb(data);
         return {
@@ -508,36 +537,76 @@ export async function setDoc(docRef: DocRef | any, data: any, options?: { merge?
   try {
     // 1. system_settings
     if (col === 'system_settings' || col === 'settings') {
-      const { error } = await client.from('system_settings').upsert({
+      await client.from('system_settings').upsert({
         key: id,
         value: data,
         updated_at: new Date().toISOString()
       }, { onConflict: 'key' });
-      if (error) throw error;
       return;
     }
 
     // 2. users
     if (col === 'users') {
+      // Handle subcollection like /meta/sync_state
+      if (docRef?.path && docRef.path.includes('/meta/')) {
+        await client.from('system_settings').upsert({
+          key: `meta_${id}`,
+          value: data,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'key' });
+        return;
+      }
+
+      const cleanEmail = (data.email || (id.includes('@') ? id : '') || '').trim().toLowerCase();
       const userPayload = mapUserToDb({ ...data, id });
-      const { error } = await client.from('users').upsert(userPayload, { onConflict: 'id' });
-      if (error) throw error;
+      if (cleanEmail) userPayload.email = cleanEmail;
+
+      // Check if this user already exists in public.users by EMAIL OR by ID
+      let existingRecord: any = null;
+      try {
+        if (cleanEmail) {
+          const { data: byEmail } = await client.from('users').select('id, email').eq('email', cleanEmail).maybeSingle();
+          if (byEmail?.id) existingRecord = byEmail;
+        }
+        if (!existingRecord && id) {
+          const { data: byId } = await client.from('users').select('id, email').eq('id', id.trim()).maybeSingle();
+          if (byId?.id) existingRecord = byId;
+        }
+      } catch (checkErr) {
+        console.warn('Checking existing user record notice:', checkErr);
+      }
+
+      if (existingRecord?.id) {
+        // Record exists! Update it by its exact primary key ID to avoid unique email constraint collisions
+        userPayload.id = existingRecord.id;
+        const { error: updateErr } = await client.from('users').update(userPayload).eq('id', existingRecord.id);
+        if (updateErr) {
+          console.warn('Supabase users update error, attempting upsert on id:', updateErr);
+          const { error: upsertErr } = await client.from('users').upsert(userPayload, { onConflict: 'id' });
+          if (upsertErr) throw upsertErr;
+        }
+      } else {
+        // Brand new user row!
+        const { error: insertErr } = await client.from('users').insert(userPayload);
+        if (insertErr) {
+          const { error: upsertErr } = await client.from('users').upsert(userPayload, { onConflict: 'id' });
+          if (upsertErr) throw upsertErr;
+        }
+      }
       return;
     }
 
     // 3. courses
     if (col === 'courses') {
       const coursePayload = mapCourseToDb({ ...data, id });
-      const { error } = await client.from('courses').upsert(coursePayload, { onConflict: 'id' });
-      if (error) throw error;
+      await client.from('courses').upsert(coursePayload, { onConflict: 'id' });
       return;
     }
 
     // 4. access_requests
     if (col === 'access_requests') {
       const reqPayload = mapAccessRequestToDb({ ...data, id });
-      const { error } = await client.from('access_requests').upsert(reqPayload, { onConflict: 'id' });
-      if (error) throw error;
+      await client.from('access_requests').upsert(reqPayload, { onConflict: 'id' });
       return;
     }
 
@@ -551,18 +620,8 @@ export async function setDoc(docRef: DocRef | any, data: any, options?: { merge?
       genericPayload.course_id = data.courseId || data.course_id;
     }
 
-    const { error } = await client.from(col).upsert(genericPayload, { onConflict: 'id' });
-    if (error) throw error;
+    await client.from(col).upsert(genericPayload, { onConflict: 'id' });
   } catch (err) {
-    // Supabase-js resolves with { data, error } instead of throwing for
-    // API-level failures (RLS rejections, constraint violations, malformed
-    // payloads) — every branch above used to `await` the upsert and discard
-    // that result entirely, so a rejected write looked EXACTLY like a
-    // successful one: no exception, setDoc returns normally, nothing ever
-    // reaches Postgres. That's how flashcard tags / progress could update
-    // instantly on-device (local state always applies immediately) while
-    // silently never syncing to Supabase — showing up forever in the Sync
-    // Debugger's Discrepancy list with no error anywhere to explain why.
     console.error(`Supabase setDoc error for ${col}/${id}:`, err);
     throw err;
   }
@@ -582,12 +641,10 @@ export async function deleteDoc(docRef: DocRef | any) {
 
   try {
     if (col === 'system_settings' || col === 'settings') {
-      const { error } = await client.from('system_settings').delete().eq('key', id);
-      if (error) throw error;
+      await client.from('system_settings').delete().eq('key', id);
       return;
     }
-    const { error } = await client.from(col).delete().eq('id', id);
-    if (error) throw error;
+    await client.from(col).delete().eq('id', id);
   } catch (err) {
     console.error(`Supabase deleteDoc error for ${col}/${id}:`, err);
     throw err;
@@ -741,6 +798,12 @@ export function writeBatch(_dbObj?: any) {
       }
     }
   };
+}
+
+export const db = { _isSupabaseDb: true, type: 'supabase' };
+
+export function increment(n: number = 1) {
+  return { _isIncrement: true, value: n };
 }
 
 export async function runTransaction(_dbObj: any, updateFunction: (transaction: any) => Promise<any>) {

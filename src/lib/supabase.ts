@@ -2,6 +2,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Default project fallback
 const DEFAULT_SUPABASE_URL = 'https://haaxqfhkucuimyvyksrj.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhYXhxZmhrdWN1aW15dnlrc3JqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyMzM4NzksImV4cCI6MjEwMzgwOTg3OX0.CVwyDYh_XMwtSqG05KFjBIEXmo_m4r0SskOwpemOecs';
 
 export interface DatabaseEndpointInfo {
   url: string;
@@ -76,7 +77,8 @@ export function getStoredSupabaseKey(): string {
 
   if (envKey) return envKey;
 
-  return '';
+  // 3. Fallback to default project anon key
+  return DEFAULT_SUPABASE_ANON_KEY;
 }
 
 /**

@@ -13,8 +13,8 @@ import AnnouncementBanner from './components/AnnouncementBanner';
 import LandingHomePage from './components/LandingHomePage';
 import RevisionCenter from './components/RevisionCenter';
 import { SyncConflictModal, SyncConflictData } from './components/SyncConflictModal';
-import { safeSetLocalStorage, clearNonEssentialLocalStorageCache } from './lib/storage';
-import { mergeProgressRecords, mergeGameProgressRecords, mergeStudyGoal, canonicalJson, deepContentEqual, pickSyncFields, mergeCloudPayloads } from './utils/syncUtils';
+import { safeSetLocalStorage, safeGetLocalStorage, clearNonEssentialLocalStorageCache } from './lib/storage';
+import { mergeProgressRecords, mergeGameProgressRecords, mergeStudyGoal } from './utils/syncUtils';
 import { parseRoute, syncRouteUrl } from './lib/router';
 import SupabaseStatusBanner from './components/SupabaseStatusBanner';
 import { pingSupabaseInstance, getDatabaseEndpointInfo, SupabasePingResult } from './lib/supabase';
@@ -66,7 +66,6 @@ import {
   getDocs,
   query,
   where,
-  runTransaction,
   normalizeSupabaseUser
 } from './lib/db';
 import type { AppUser as DbUser } from './lib/db';
@@ -81,7 +80,8 @@ import {
   clearSyncQueue,
   saveMetaValue,
   getMetaValue,
-  clearIndexedDBCache
+  clearIndexedDBCache,
+  crossReferenceOrphanedWords
 } from './lib/offlineDb';
 
 const LOCAL_STORAGE_PROGRESS_KEY = 'vocab_memorizer_progress_v2';
@@ -414,15 +414,6 @@ export default function App() {
       showBengaliTranslations: parsed.showBengaliTranslations !== undefined ? !!parsed.showBengaliTranslations : true,
       dailyGoalWordCount: parsed.dailyGoalWordCount || 20,
 
-      // Cloud Backup & flashcard overview appearance defaults (all visible)
-      autoCloudBackup: parsed.autoCloudBackup !== undefined ? !!parsed.autoCloudBackup : true,
-      compactFlashcardOverview: parsed.compactFlashcardOverview !== undefined ? !!parsed.compactFlashcardOverview : false,
-      showTotalWordsStat: parsed.showTotalWordsStat !== undefined ? !!parsed.showTotalWordsStat : true,
-      showNotStudiedStat: parsed.showNotStudiedStat !== undefined ? !!parsed.showNotStudiedStat : true,
-      showKnowStat: parsed.showKnowStat !== undefined ? !!parsed.showKnowStat : true,
-      showConfusedStat: parsed.showConfusedStat !== undefined ? !!parsed.showConfusedStat : true,
-      showDontKnowStat: parsed.showDontKnowStat !== undefined ? !!parsed.showDontKnowStat : true,
-
       // Item Position & Order Defaults
       practiceItemsOrder: parsed.practiceItemsOrder || ['quiz', 'match', 'word_search', 'synonym', 'blank', 'odd_one_out', 'analogy'],
       studyToolsItemsOrder: parsed.studyToolsItemsOrder || ['lists', 'dictionary', 'planner', 'story'],
@@ -475,13 +466,6 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(() => !!initialRoute.current.openLoginModal);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
   const [lastSyncError, setLastSyncError] = useState<DetailedSyncError | null>(null);
-  const [lastCloudSyncAt, setLastCloudSyncAt] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem('memorizer_last_cloud_sync_at');
-    } catch (e) {
-      return null;
-    }
-  });
   const [supabasePingResult, setSupabasePingResult] = useState<SupabasePingResult | null>(null);
   const [isPingingSupabase, setIsPingingSupabase] = useState(false);
   const isSyncingFromCloud = useRef(false);
@@ -868,175 +852,38 @@ export default function App() {
   // Ref to prevent local saves from colliding with incoming snapshots
   const isSyncingToCloud = useRef(false);
   const lastPushedTimestamp = useRef<string | null>(null);
-  // Canonical JSON of the last payload actually written to the cloud (used to
-  // skip pointless no-op writes and to break echo ping-pong between devices).
-  const lastPushedContentRef = useRef<string>('');
-
-  const recordCloudSyncAt = () => {
-    const ts = new Date().toISOString();
-    setLastCloudSyncAt(ts);
-    try {
-      safeSetLocalStorage('memorizer_last_cloud_sync_at', ts);
-    } catch (e) {}
-  };
-
-  /**
-   * Atomically back the CURRENT local state up to the cloud (read → merge →
-   * write). This is the "auto backup, instantly" engine:
-   *  - reads the existing cloud doc so a stale device can NEVER clobber
-   *    another device's ratings (setDoc({merge:true}) alone only merges
-   *    top-level fields and would wipe whole nested progress maps),
-   *  - skips the write entirely when nothing actually changed (no no-op
-   *    writes → no echo ping-pong between devices).
-   */
-  const performCloudWrite = async (
-    kind: 'auto' | 'manual' | 'flush'
-  ): Promise<'written' | 'noop' | 'error'> => {
-    if (!user) return 'noop';
-
-    const updatedAt = new Date().toISOString();
-    const payload = {
-      progress,
-      folders,
-      goal,
-      synonymProgress,
-      blankProgress,
-      oooProgress,
-      analogyProgress,
-      flashcardPositions,
-      settings,
-      enrolledCourseIds: [...enrolledCourseIds].sort(),
-      activeCourseId,
-      quizScore,
-      quizTaken,
-      email: user.email,
-      updatedAt
-    };
-    const localFields = pickSyncFields(payload);
-    const localContent = canonicalJson(localFields);
-    if (localContent === lastPushedContentRef.current) {
-      // Local state is already fully backed up with identical content.
-      return 'noop';
-    }
-
-    const cleanEmail = (user.email || '').trim().toLowerCase();
-    const itemCount = Object.keys(progress || {}).length;
-    setSyncStatus('syncing');
-    isSyncingToCloud.current = true;
-    try {
-      // --- Authoritative UID doc: atomic read-merge-write ---
-      const uidRef = doc(db, 'users', user.uid);
-      let wroteUid = false;
-      try {
-        await runTransaction(db, async (tx) => {
-          const snap = await tx.get(uidRef);
-          const cloudData = snap.exists() ? snap.data() : null;
-          const cloudFields = pickSyncFields(cloudData);
-          const merged = mergeCloudPayloads(cloudFields, localFields);
-          const finalPayload = { ...payload, ...merged, email: user.email, updatedAt };
-          if (snap.exists() && deepContentEqual(cloudFields, pickSyncFields(finalPayload))) {
-            // identical content already stored — no write needed
-            lastPushedContentRef.current = canonicalJson(pickSyncFields(finalPayload));
-            lastPushedTimestamp.current = updatedAt;
-            return;
-          }
-          tx.set(uidRef, finalPayload, { merge: true });
-          lastPushedContentRef.current = canonicalJson(pickSyncFields(finalPayload));
-          lastPushedTimestamp.current = updatedAt;
-          wroteUid = true;
-        });
-      } catch (txErr: any) {
-        const classified = classifySyncError(txErr);
-        logSyncErrorToConsole('UID doc atomic backup (transaction)', classified);
-        throw txErr;
-      }
-
-      // Lightweight sub-collection sync state (used by multi-tab listeners)
-      try {
-        await setDoc(doc(db, 'users', user.uid, 'meta', 'sync_state'), {
-          updatedAt,
-          itemCount,
-          activeCourseId,
-          enrolledCount: enrolledCourseIds.length
-        }, { merge: true });
-      } catch (_) {}
-
-      // --- Shared email-doc mirror (bridges Google vs email/password UIDs) ---
-      let emailWrote = false;
-      if (cleanEmail && cleanEmail.toLowerCase() !== user.uid.toLowerCase()) {
-        try {
-          const emailRef = doc(db, 'users', cleanEmail);
-          const emailSnap = await getDoc(emailRef);
-          const emailCloud = emailSnap.exists() ? emailSnap.data() : null;
-          const emailMerged = mergeCloudPayloads(pickSyncFields(emailCloud), localFields);
-          const emailPayload = { ...payload, ...emailMerged, email: user.email, updatedAt };
-          if (!emailSnap.exists() || !deepContentEqual(pickSyncFields(emailCloud), pickSyncFields(emailPayload))) {
-            await setDoc(emailRef, emailPayload, { merge: true });
-            emailWrote = true;
-          }
-        } catch (e2: any) {
-          const secondaryClassified = classifySyncError(e2);
-          logSyncErrorToConsole('Secondary email doc auto-sync', secondaryClassified);
-        }
-      }
-
-      const wroteSomething = wroteUid || emailWrote;
-      setSyncStatus('synced');
-      setLastSyncError(null);
-      if (wroteSomething) recordCloudSyncAt();
-      if (wroteSomething && kind !== 'manual') {
-        addSyncLog('auto', `Saved ${itemCount} study item${itemCount === 1 ? '' : 's'} & preferences to Cloud`, 'success', itemCount);
-      }
-      return wroteSomething ? 'written' : 'noop';
-    } catch (err: any) {
-      const classified = classifySyncError(err);
-      logSyncErrorToConsole('Cloud Synchronization (auto-backup)', classified);
-      setLastSyncError(classified);
-      setSyncStatus('error');
-      addSyncLog('auto', `[${classified.category}] ${classified.title}: ${classified.description}`, 'error', 0);
-      return 'error';
-    } finally {
-      setTimeout(() => {
-        isSyncingToCloud.current = false;
-      }, 300);
-    }
-  };
+  const lastProcessedCloudTimestamp = useRef<string | null>(null);
+  const lastSyncedProgressSignature = useRef<string>('');
+  const lastSyncedGoalSignature = useRef<string>('');
+  const lastSyncedEnrolledIdsSignature = useRef<string>('');
+  const lastSyncedGameSignatures = useRef<Record<string, string>>({});
 
   // Background cloud data synchronization helper function
-  const fetchUserDataFromCloud = async (currentUser: DbUser, opts?: { silent?: boolean; source?: string }) => {
-    const silent = !!opts?.silent;
-    if (!silent) setSyncStatus('syncing');
+  const fetchUserDataFromCloud = async (currentUser: DbUser) => {
+    setSyncStatus('syncing');
     isSyncingFromCloud.current = true;
     const endpointInfo = getDatabaseEndpointInfo();
-    console.log(`[Cloud Data Sync] Handshake (${opts?.source || 'manual'}) → ${endpointInfo.url} (Key: ${endpointInfo.keyType})`);
+    console.log(`[Cloud Data Sync] Handshake initiated to: ${endpointInfo.url} (Source: ${endpointInfo.urlSource}, Key: ${endpointInfo.keyType})`);
 
     try {
       const cleanUserEmail = (currentUser.email || '').trim().toLowerCase();
       const docsToMerge: any[] = [];
       const userDocRef = doc(db, 'users', currentUser.uid);
 
-      // 1. Fetch by UID (raw doc kept for no-op write detection)
-      let uidDocData: any = null;
+      // 1. Fetch by UID
       try {
         const uidSnap = await getDoc(userDocRef);
-        if (uidSnap.exists()) {
-          uidDocData = uidSnap.data();
-          docsToMerge.push(uidDocData);
-        }
+        if (uidSnap.exists()) docsToMerge.push(uidSnap.data());
       } catch (err: any) {
         const classified = classifySyncError(err);
         logSyncErrorToConsole('Fetch UID doc', classified);
       }
 
       // 2. Fetch by email doc ID if different
-      let emailDocData: any = null;
       if (cleanUserEmail && cleanUserEmail !== currentUser.uid.toLowerCase()) {
         try {
           const emailSnap = await getDoc(doc(db, 'users', cleanUserEmail));
-          if (emailSnap.exists()) {
-            emailDocData = emailSnap.data();
-            docsToMerge.push(emailDocData);
-          }
+          if (emailSnap.exists()) docsToMerge.push(emailSnap.data());
         } catch (err: any) {
           const classified = classifySyncError(err);
           logSyncErrorToConsole('Fetch Email doc', classified);
@@ -1126,14 +973,36 @@ export default function App() {
       }
 
       if (hasFoundAnyDoc) {
-        // Merge cloud progress with local progress safely using timestamps
-        let unifiedProgress: Record<string, UserProgress> = {};
-        setProgress(prev => {
-          unifiedProgress = mergeProgressRecords(mergedCloudProgress, prev);
-          safeSetLocalStorage(LOCAL_STORAGE_PROGRESS_KEY, JSON.stringify(unifiedProgress));
-          saveProgressToIndexedDB(unifiedProgress);
-          return unifiedProgress;
-        });
+        // Retrieve local sources: React in-memory state, localStorage, and persistent IndexedDB
+        let localDiskProgress: Record<string, UserProgress> = {};
+        try {
+          const rawDisk = safeGetLocalStorage(LOCAL_STORAGE_PROGRESS_KEY);
+          if (rawDisk) localDiskProgress = JSON.parse(rawDisk);
+        } catch (_) {}
+
+        let localIdbProgress: Record<string, UserProgress> = {};
+        try {
+          const rawIdb = await getProgressFromIndexedDB();
+          if (rawIdb) localIdbProgress = rawIdb;
+        } catch (_) {}
+
+        // Cross-reference all local sources against cloud document timestamps
+        const { unifiedLocal, orphanedWords, mergedUnified } = crossReferenceOrphanedWords(
+          [progress, localDiskProgress, localIdbProgress],
+          mergedCloudProgress
+        );
+
+        if (orphanedWords.length > 0) {
+          console.log(
+            `[Sync Reconciliation] Identified and merged ${orphanedWords.length} orphaned/local items into cloud payload:`,
+            orphanedWords.map(o => `${o.wordId} (${o.reason})`)
+          );
+        }
+
+        // Commit unified dataset to React state, LocalStorage, and IndexedDB
+        setProgress(mergedUnified);
+        safeSetLocalStorage(LOCAL_STORAGE_PROGRESS_KEY, JSON.stringify(mergedUnified));
+        saveProgressToIndexedDB(mergedUnified);
 
         if (mergedFoldersList.length > 0) {
           setFolders(mergedFoldersList);
@@ -1222,10 +1091,10 @@ export default function App() {
         setQuizScore(maxScore);
         setQuizTaken(maxTaken);
 
-        // Reconcile and push unified progress back to cloud (both UID doc and Email doc)
+        // Reconcile and push complete unified progress back to cloud (Supabase + Firestore)
         try {
           const syncPayload = {
-            progress: unifiedProgress,
+            progress: mergedUnified,
             folders: mergedFoldersList.length > 0 ? mergedFoldersList : folders,
             goal: mergedGoalObj,
             synonymProgress: mergedSynonym,
@@ -1241,34 +1110,35 @@ export default function App() {
             email: currentUser.email,
             updatedAt: new Date().toISOString()
           };
-          const reconciledFields = pickSyncFields(syncPayload);
-          const reconciledContent = canonicalJson(reconciledFields);
-          // Write back ONLY when the reconciled content differs from what the
-          // cloud already stores (avoids write storms & echo loops).
-          if (!uidDocData || !deepContentEqual(pickSyncFields(uidDocData), reconciledFields)) {
-            await setDoc(userDocRef, syncPayload, { merge: true });
-          }
-          if (cleanUserEmail && cleanUserEmail !== currentUser.uid.toLowerCase()) {
-            if (!emailDocData || !deepContentEqual(pickSyncFields(emailDocData), reconciledFields)) {
-              await setDoc(doc(db, 'users', cleanUserEmail), syncPayload, { merge: true });
-            }
-          }
-          lastPushedContentRef.current = reconciledContent;
-          lastPushedTimestamp.current = syncPayload.updatedAt;
+          await setDoc(userDocRef, syncPayload, { merge: true });
         } catch (setErr) {
           console.warn("Failed to sync unified user progress to cloud:", setErr);
         }
 
+        setSyncStatus('synced');
         setHasLoadedFromCloud(true);
-        if (!silent) {
-          setSyncStatus('synced');
-          recordCloudSyncAt();
-          const loadedCount = Object.keys(mergedCloudProgress || {}).length;
-          addSyncLog('cloud_fetch', `Synced ${loadedCount} progress item${loadedCount === 1 ? '' : 's'} from Cloud`, 'success', loadedCount);
-        }
+        const loadedCount = Object.keys(mergedUnified || {}).length;
+        addSyncLog('cloud_fetch', `Synced ${loadedCount} items with Cloud (including ${orphanedWords.length} reconciled orphaned words)`, 'success', loadedCount);
       } else {
-        // New user signup: create clean user record with auto-synced purchases if any
-        const cleanProgress = {};
+        // Initial setup for empty cloud record: preserve any offline/guest study records
+        let localDiskProgress: Record<string, UserProgress> = {};
+        try {
+          const rawDisk = safeGetLocalStorage(LOCAL_STORAGE_PROGRESS_KEY);
+          if (rawDisk) localDiskProgress = JSON.parse(rawDisk);
+        } catch (_) {}
+
+        let localIdbProgress: Record<string, UserProgress> = {};
+        try {
+          const rawIdb = await getProgressFromIndexedDB();
+          if (rawIdb) localIdbProgress = rawIdb;
+        } catch (_) {}
+
+        const { unifiedLocal } = crossReferenceOrphanedWords(
+          [progress, localDiskProgress, localIdbProgress],
+          {}
+        );
+
+        const initialProgress = Object.keys(unifiedLocal).length > 0 ? unifiedLocal : {};
         const cleanFolders = [
           { id: '1', name: 'Important Words (High Priority)', color: '#ef4444' },
           { id: '2', name: 'Hard Synonyms', color: '#f59e0b' }
@@ -1332,7 +1202,9 @@ export default function App() {
           ? activeCourseId
           : (cleanEnrolled.find(id => id !== 'gre') || 'gre');
 
-        setProgress(cleanProgress);
+        setProgress(initialProgress);
+        safeSetLocalStorage(LOCAL_STORAGE_PROGRESS_KEY, JSON.stringify(initialProgress));
+        saveProgressToIndexedDB(initialProgress);
         setFolders(cleanFolders);
         setGoal(cleanGoal);
         setSynonymProgress({});
@@ -1344,8 +1216,8 @@ export default function App() {
         setQuizScore(0);
         setQuizTaken(0);
 
-        const cleanUserPayload = {
-          progress: cleanProgress,
+        await setDoc(userDocRef, {
+          progress: initialProgress,
           folders: cleanFolders,
           goal: cleanGoal,
           synonymProgress: {},
@@ -1361,33 +1233,17 @@ export default function App() {
           email: currentUser.email,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
-        };
-        await setDoc(userDocRef, cleanUserPayload);
-        if (cleanUserEmail && cleanUserEmail !== currentUser.uid.toLowerCase()) {
-          await setDoc(doc(db, 'users', cleanUserEmail), cleanUserPayload).catch((e: any) => {
-            const classified = classifySyncError(e);
-            logSyncErrorToConsole('New-user email doc mirror', classified);
-          });
-        }
-        lastPushedContentRef.current = canonicalJson(pickSyncFields(cleanUserPayload));
-        lastPushedTimestamp.current = cleanUserPayload.updatedAt;
+        });
+        setSyncStatus('synced');
         setHasLoadedFromCloud(true);
         setLastSyncError(null);
-        if (!silent) {
-          setSyncStatus('synced');
-          recordCloudSyncAt();
-        }
       }
     } catch (err: any) {
       const classified = classifySyncError(err);
-      logSyncErrorToConsole(`fetchUserDataFromCloud${opts?.source ? ` (${opts.source})` : ''} Handshake`, classified);
-      if (silent) {
-        // Background watchdog failures are logged but do not disturb the UI.
-      } else {
-        setLastSyncError(classified);
-        setSyncStatus('error');
-        addSyncLog('cloud_fetch', `[${classified.category}] ${classified.title}: ${classified.description}`, 'error', 0);
-      }
+      logSyncErrorToConsole('fetchUserDataFromCloud Main Handshake', classified);
+      setLastSyncError(classified);
+      setSyncStatus('error');
+      addSyncLog('cloud_fetch', `[${classified.category}] ${classified.title}: ${classified.description}`, 'error', 0);
     } finally {
       setTimeout(() => {
         isSyncingFromCloud.current = false;
@@ -1456,259 +1312,289 @@ export default function App() {
     };
   }, []);
 
-  // Real-time cloud snapshot listener — applies EVERY remote change made on
-  // another device (UID doc + shared email doc), merging per-word by timestamp.
-  // It uses canonical content comparison instead of brittle "first word only"
-  // signatures, so updates to ANY word/setting are never dropped.
+  // Real-time Firestore snapshot listener with granular delta updates
   useEffect(() => {
     if (!user) return;
-    const cleanEmail = (user.email || '').trim().toLowerCase();
 
     const handleCloudSnapshot = (docSnap: any) => {
       // 1. Guard against uncommitted local write echo loops
       if (docSnap.metadata && docSnap.metadata.hasPendingWrites) {
         return;
       }
-      if (!docSnap.exists()) return;
-      // Full fetch/merge is already running — it will bring in the same data.
-      if (isSyncingFromCloud.current) return;
+
+      if (!docSnap.exists() || isSyncingToCloud.current || isSyncingFromCloud.current) {
+        return;
+      }
 
       const cloudData = docSnap.data();
       if (!cloudData) return;
-      const incomingFields = pickSyncFields(cloudData);
-      if (Object.keys(incomingFields).length === 0) return;
 
-      // 2. Ignore the echo of our own last write (same content, no changes to apply)
-      if (lastPushedContentRef.current) {
-        try {
-          const pushed = JSON.parse(lastPushedContentRef.current);
-          if (deepContentEqual(incomingFields, pushed)) return;
-        } catch (e) {}
+      // 2. Guard against incoming data that is older than or equal to our last local push
+      if (cloudData.updatedAt && lastPushedTimestamp.current) {
+        const incomingTime = new Date(cloudData.updatedAt).getTime();
+        const lastPushTime = new Date(lastPushedTimestamp.current).getTime();
+        if (!isNaN(incomingTime) && !isNaN(lastPushTime) && incomingTime <= lastPushTime) {
+          return;
+        }
       }
 
-      // 3. Merge each synced field into local state ONLY when content genuinely differs
-      let changed = false;
+      // Skip if this exact cloud timestamp was already processed
+      if (cloudData.updatedAt && lastProcessedCloudTimestamp.current === cloudData.updatedAt) {
+        return;
+      }
+      if (cloudData.updatedAt) {
+        lastProcessedCloudTimestamp.current = cloudData.updatedAt;
+      }
 
-      const applyRecordMap = (
-        fieldKey: string,
-        setter: React.Dispatch<React.SetStateAction<any>>,
-        persistKey?: string
+      // 3. Granular Field Diffing: Only trigger state setters & disk I/O for fields that genuinely changed
+      if (cloudData.progress && typeof cloudData.progress === 'object') {
+        const keys = Object.keys(cloudData.progress);
+        const sig = `${cloudData.updatedAt || ''}_${keys.length}_${keys.slice(0, 5).join(',')}`;
+        if (sig !== lastSyncedProgressSignature.current) {
+          lastSyncedProgressSignature.current = sig;
+          setProgress(prev => {
+            const merged = mergeProgressRecords(prev, cloudData.progress);
+            safeSetLocalStorage(LOCAL_STORAGE_PROGRESS_KEY, JSON.stringify(merged));
+            saveProgressToIndexedDB(merged);
+            return merged;
+          });
+        }
+      }
+
+      if (cloudData.goal && typeof cloudData.goal === 'object') {
+        const goalSig = `${cloudData.goal.targetWords || 0}_${cloudData.goal.dailyGoal || 0}_${cloudData.goal.targetDate || ''}`;
+        if (goalSig !== lastSyncedGoalSignature.current) {
+          lastSyncedGoalSignature.current = goalSig;
+          setGoal(prev => mergeStudyGoal(prev, cloudData.goal));
+        }
+      }
+
+      // Granular game progress diffing
+      const checkAndApplyGameProgress = (
+        fieldKey: 'synonymProgress' | 'blankProgress' | 'oooProgress' | 'analogyProgress',
+        setter: React.Dispatch<React.SetStateAction<any>>
       ) => {
-        if (!incomingFields[fieldKey] || typeof incomingFields[fieldKey] !== 'object') return;
-        setter((prev: any) => {
-          const merged = mergeProgressRecords(prev || {}, incomingFields[fieldKey]);
-          if (canonicalJson(prev || {}) === canonicalJson(merged)) return prev;
-          changed = true;
-          if (persistKey) safeSetLocalStorage(persistKey, JSON.stringify(merged));
-          if (fieldKey === 'progress') saveProgressToIndexedDB(merged);
-          return merged;
-        });
+        if (cloudData[fieldKey] && typeof cloudData[fieldKey] === 'object') {
+          const keys = Object.keys(cloudData[fieldKey]);
+          const sig = `${keys.length}_${keys.slice(0, 3).join(',')}`;
+          if (lastSyncedGameSignatures.current[fieldKey] !== sig) {
+            lastSyncedGameSignatures.current[fieldKey] = sig;
+            setter((prev: any) => mergeGameProgressRecords(prev, cloudData[fieldKey]));
+          }
+        }
       };
 
-      // Flashcard word progress (per-word LWW merge)
-      applyRecordMap('progress', setProgress, LOCAL_STORAGE_PROGRESS_KEY);
-      // Game/flashcard-position records (same record shape, timestamp LWW)
-      applyRecordMap('synonymProgress', setSynonymProgress);
-      applyRecordMap('blankProgress', setBlankProgress);
-      applyRecordMap('oooProgress', setOooProgress);
-      applyRecordMap('analogyProgress', setAnalogyProgress);
-      applyRecordMap('flashcardPositions', setFlashcardPositions, 'vocab_memorizer_flashcard_positions');
+      checkAndApplyGameProgress('synonymProgress', setSynonymProgress);
+      checkAndApplyGameProgress('blankProgress', setBlankProgress);
+      checkAndApplyGameProgress('oooProgress', setOooProgress);
+      checkAndApplyGameProgress('analogyProgress', setAnalogyProgress);
 
-      if (incomingFields.goal && typeof incomingFields.goal === 'object') {
-        setGoal(prev => {
-          const merged = mergeStudyGoal(prev, incomingFields.goal);
-          if (canonicalJson(prev || {}) === canonicalJson(merged)) return prev;
-          changed = true;
-          return merged;
-        });
-      }
-
-      if (Array.isArray(incomingFields.folders) && incomingFields.folders.length > 0) {
-        setFolders(prev => {
-          const byId = new Map<string, CustomFolder>();
-          (prev || []).forEach(f => byId.set(f.id, f));
-          let didChange = false;
-          (incomingFields.folders as CustomFolder[]).forEach(f => {
-            if (f && f.id && !byId.has(f.id)) {
-              byId.set(f.id, f);
-              didChange = true;
-            }
+      if (cloudData.flashcardPositions && typeof cloudData.flashcardPositions === 'object') {
+        const keys = Object.keys(cloudData.flashcardPositions);
+        const sig = `${keys.length}_${keys.slice(0, 3).join(',')}`;
+        if (lastSyncedGameSignatures.current['flashcardPositions'] !== sig) {
+          lastSyncedGameSignatures.current['flashcardPositions'] = sig;
+          setFlashcardPositions(prev => {
+            const next = mergeGameProgressRecords(prev, cloudData.flashcardPositions);
+            safeSetLocalStorage('vocab_memorizer_flashcard_positions', JSON.stringify(next));
+            return next;
           });
-          if (!didChange) return prev;
-          changed = true;
-          return Array.from(byId.values());
-        });
+        }
       }
 
-      if (incomingFields.settings && typeof incomingFields.settings === 'object') {
-        setSettings(prev => {
-          const merged = {
-            ...prev,
-            ...incomingFields.settings,
-            practiceItemsOrder: Array.isArray(incomingFields.settings.practiceItemsOrder) ? incomingFields.settings.practiceItemsOrder : prev.practiceItemsOrder,
-            studyToolsItemsOrder: Array.isArray(incomingFields.settings.studyToolsItemsOrder) ? incomingFields.settings.studyToolsItemsOrder : prev.studyToolsItemsOrder,
-            landingDisplayCourses: Array.isArray(incomingFields.settings.landingDisplayCourses) ? incomingFields.settings.landingDisplayCourses : prev.landingDisplayCourses
-          };
-          if (canonicalJson(prev || {}) === canonicalJson(merged)) return prev;
-          changed = true;
-          return merged;
-        });
+      if (Array.isArray(cloudData.enrolledCourseIds) && cloudData.enrolledCourseIds.length > 0) {
+        const enrolledSig = cloudData.enrolledCourseIds.slice().sort().join(',');
+        if (enrolledSig !== lastSyncedEnrolledIdsSignature.current) {
+          lastSyncedEnrolledIdsSignature.current = enrolledSig;
+          setEnrolledCourseIds(prev => Array.from(new Set([...prev, ...cloudData.enrolledCourseIds])));
+        }
       }
 
-      if (Array.isArray(incomingFields.enrolledCourseIds) && incomingFields.enrolledCourseIds.length > 0) {
-        setEnrolledCourseIds(prev => {
-          const next = Array.from(new Set([
-            ...(prev || []),
-            ...(incomingFields.enrolledCourseIds as string[]).map(id => typeof id === 'string' ? id.trim().toLowerCase() : '')
-          ])).filter(Boolean);
-          if (canonicalJson(prev || []) === canonicalJson(next)) return prev;
-          changed = true;
-          return next;
-        });
-      }
-
-      if (typeof incomingFields.activeCourseId === 'string' && incomingFields.activeCourseId.trim()) {
-        setActiveCourseId(prev => {
-          const incoming = incomingFields.activeCourseId.trim().toLowerCase();
-          // Never let a plain "gre" default overwrite a real chosen course
-          if ((incoming === 'gre') && prev && prev.trim().toLowerCase() !== 'gre') return prev;
-          if ((prev || '').trim().toLowerCase() === incoming) return prev;
-          changed = true;
-          return incoming;
-        });
-      }
-
-      if (changed) {
-        setSyncStatus('synced');
-        recordCloudSyncAt();
-      }
+      setSyncStatus('synced');
     };
 
-    const unsubscribers: Array<() => void> = [];
-    // Authoritative UID doc (same device/account across sign-ins of the same provider)
+    // 4. Granular Subscription: Subscribe only to authoritative UID doc and lightweight sub-collection signal
+    const userDocRef = doc(db, 'users', user.uid);
+    const unsubscribeSnapshot = onSnapshot(userDocRef, handleCloudSnapshot, (snapErr) => {
+      console.warn("Realtime user UID snapshot notice:", snapErr);
+    });
+
+    // Optional lightweight sub-collection meta listener for multi-tab sync
+    let unsubscribeMetaSnapshot = () => {};
     try {
-      unsubscribers.push(
-        onSnapshot(doc(db, 'users', user.uid), handleCloudSnapshot, (snapErr) => {
-          console.warn("Realtime user UID snapshot notice:", snapErr);
-        })
-      );
-    } catch (err) {
-      console.warn("Error subscribing to user UID doc:", err);
-    }
-    // Shared email doc — makes sync instant even when phone & PC signed in via
-    // different providers (Google vs email/password) with different UIDs.
-    if (cleanEmail && cleanEmail.toLowerCase() !== user.uid.toLowerCase()) {
-      try {
-        unsubscribers.push(
-          onSnapshot(doc(db, 'users', cleanEmail), handleCloudSnapshot, (snapErr) => {
-            console.warn("Realtime email-doc snapshot notice:", snapErr);
-          })
-        );
-      } catch (err) {
-        console.warn("Error subscribing to email doc:", err);
-      }
-    }
+      const metaDocRef = doc(db, 'users', user.uid, 'meta', 'sync_state');
+      unsubscribeMetaSnapshot = onSnapshot(metaDocRef, (metaSnap) => {
+        if (metaSnap.exists() && !isSyncingToCloud.current) {
+          const metaData = metaSnap.data();
+          if (metaData?.updatedAt && lastPushedTimestamp.current) {
+            const incomingMeta = new Date(metaData.updatedAt).getTime();
+            const lastPush = new Date(lastPushedTimestamp.current).getTime();
+            if (incomingMeta > lastPush) {
+              setSyncStatus('synced');
+            }
+          }
+        }
+      }, () => {});
+    } catch (_) {}
 
     return () => {
-      unsubscribers.forEach(u => { try { u(); } catch (e) {} });
+      unsubscribeSnapshot();
+      unsubscribeMetaSnapshot();
     };
   }, [user]);
 
-  // Keep fresh references to the latest closures so stable one-time listeners
-  // (visibility/interval) never read stale state.
-  const latestUserRef = useRef<DbUser | null>(user);
-  latestUserRef.current = user;
-  const latestFetchRef = useRef<(u: DbUser, opts?: { silent?: boolean; source?: string }) => Promise<void>>(async () => {});
-  latestFetchRef.current = fetchUserDataFromCloud;
-  const latestWriteRef = useRef<(k: 'auto' | 'manual' | 'flush') => Promise<'written' | 'noop' | 'error'>>(async () => 'noop' as const);
-  latestWriteRef.current = performCloudWrite;
-  const latestLoadedRef = useRef(hasLoadedFromCloud);
-  latestLoadedRef.current = hasLoadedFromCloud;
-  const latestOnlineRef = useRef(isOnline);
-  latestOnlineRef.current = isOnline;
-
-  // Sync to Cloud whenever state changes and user is logged in (rapid 350ms debounce).
-  // performCloudWrite() reads→merges→writes atomically, so the newest rating is
-  // always in the cloud within well under a second of tapping a card.
+  // Sync to Cloud whenever state changes and user is logged in (rapid 350ms debounce)
   useEffect(() => {
     if (!user || !hasLoadedFromCloud) {
-      setSyncStatus(prev => (user ? prev : 'idle'));
+      setSyncStatus('idle');
       return;
     }
-    if (settings.autoCloudBackup === false) {
-      // Auto-backup disabled by the user in Settings — manual "Backup Now" still works.
+
+    if (isSyncingFromCloud.current) {
       return;
     }
-    if (isSyncingFromCloud.current) return;
+
+    const performSync = async () => {
+      setSyncStatus('syncing');
+      isSyncingToCloud.current = true;
+      try {
+        const payload = {
+          progress,
+          folders,
+          goal,
+          synonymProgress,
+          blankProgress,
+          oooProgress,
+          analogyProgress,
+          flashcardPositions,
+          settings,
+          enrolledCourseIds,
+          activeCourseId,
+          quizScore,
+          quizTaken,
+          email: user.email,
+          updatedAt: new Date().toISOString()
+        };
+        lastPushedTimestamp.current = payload.updatedAt;
+        await setDoc(doc(db, 'users', user.uid), payload, { merge: true });
+
+        setSyncStatus('synced');
+        setLastSyncError(null);
+        const itemCount = Object.keys(progress || {}).length;
+        addSyncLog('auto', `Saved ${itemCount} study item${itemCount === 1 ? '' : 's'} & preferences to Cloud`, 'success', itemCount);
+      } catch (err: any) {
+        const classified = classifySyncError(err);
+        logSyncErrorToConsole('Cloud Synchronization useEffect Handshake', classified);
+        setLastSyncError(classified);
+        setSyncStatus('error');
+        addSyncLog('auto', `[${classified.category}] ${classified.title}: ${classified.description}`, 'error', 0);
+      } finally {
+        setTimeout(() => {
+          isSyncingToCloud.current = false;
+        }, 300);
+      }
+    };
 
     const timer = setTimeout(() => {
-      latestWriteRef.current('auto');
+      performSync();
     }, 350);
 
     return () => clearTimeout(timer);
   }, [progress, folders, goal, synonymProgress, blankProgress, oooProgress, analogyProgress, flashcardPositions, settings, enrolledCourseIds, activeCourseId, quizScore, quizTaken, user, hasLoadedFromCloud]);
 
-  // Background watchdog: every 20 seconds while signed in & online, quietly
-  // pull any changes made on the other device and flush any local changes.
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const u = latestUserRef.current;
-      const loaded = latestLoadedRef.current;
-      const online = latestOnlineRef.current;
-      if (!u || !loaded || !online) return;
-      if (isSyncingToCloud.current || isSyncingFromCloud.current) return;
-      if (document.visibilityState === 'hidden') return; // let the tab sleep
-      latestFetchRef.current(u, { source: 'periodic', silent: true }).catch(() => {});
-    }, 20000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Flush sync on tab hide / lock / before unload + re-pull on focus so no
-  // update is ever lost and nothing is ever stale across devices.
+  // Flush sync on tab hide / lock / before unload to guarantee no lost updates
   useEffect(() => {
     const handleVisibilityChange = () => {
-      const u = latestUserRef.current;
-      if (!u) return;
-      if (document.visibilityState === 'visible') {
-        // Tab brought back into focus: re-check cloud for updates made on the other device!
-        if (!isSyncingToCloud.current && !isSyncingFromCloud.current) {
-          latestFetchRef.current(u).catch(() => {});
-        }
-      } else if (document.visibilityState === 'hidden' && latestLoadedRef.current) {
-        // Tab backgrounded or phone locked: immediately flush local changes to cloud!
-        if (!isSyncingToCloud.current && !isSyncingFromCloud.current) {
-          latestWriteRef.current('flush').catch(() => {});
-        }
+      if (document.visibilityState === 'visible' && user && !isSyncingToCloud.current) {
+        // Tab brought back into focus: re-check cloud for any updates made on another device!
+        fetchUserDataFromCloud(user);
+      } else if (document.visibilityState === 'hidden' && user && hasLoadedFromCloud) {
+        // Tab backgrounded or phone locked: immediately flush to Firestore!
+        const payload = {
+          progress,
+          folders,
+          goal,
+          synonymProgress,
+          blankProgress,
+          oooProgress,
+          analogyProgress,
+          flashcardPositions,
+          settings,
+          enrolledCourseIds,
+          activeCourseId,
+          quizScore,
+          quizTaken,
+          email: user.email,
+          updatedAt: new Date().toISOString()
+        };
+        setDoc(doc(db, 'users', user.uid), payload, { merge: true }).catch(err => {
+          const classified = classifySyncError(err);
+          logSyncErrorToConsole('Visibility Change Flush Sync', classified);
+        });
       }
     };
 
     const handleBeforeUnload = () => {
-      const u = latestUserRef.current;
-      if (u && latestLoadedRef.current && !isSyncingToCloud.current) {
-        latestWriteRef.current('flush').catch(() => {});
+      if (user && hasLoadedFromCloud) {
+        const payload = {
+          progress,
+          folders,
+          goal,
+          synonymProgress,
+          blankProgress,
+          oooProgress,
+          analogyProgress,
+          flashcardPositions,
+          settings,
+          enrolledCourseIds,
+          activeCourseId,
+          quizScore,
+          quizTaken,
+          email: user.email,
+          updatedAt: new Date().toISOString()
+        };
+        setDoc(doc(db, 'users', user.uid), payload, { merge: true }).catch(console.error);
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('pagehide', handleBeforeUnload);
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('pagehide', handleBeforeUnload);
     };
-  }, []);
+  }, [user, progress, folders, goal, synonymProgress, blankProgress, oooProgress, analogyProgress, flashcardPositions, settings, enrolledCourseIds, activeCourseId, quizScore, quizTaken, hasLoadedFromCloud]);
 
   const forceSyncToCloud = async () => {
     if (!user) return;
     setSyncStatus('syncing');
     try {
-      // 1. Fetch & reconcile cloud data with local data (2-way merge)
+      // 1. Fetch & reconcile cloud data with local data
       await fetchUserDataFromCloud(user);
-      // 2. Ensure every local change is flushed with an atomic read-merge-write
-      //    (no-op when the cloud already has identical content).
-      const result = await performCloudWrite('manual');
-      if (result === 'error') return;
+
+      // 2. Write unified merged data to cloud
+      const payload = {
+        progress,
+        folders,
+        goal,
+        synonymProgress,
+        blankProgress,
+        oooProgress,
+        analogyProgress,
+        flashcardPositions,
+        settings,
+        enrolledCourseIds,
+        activeCourseId,
+        quizScore,
+        quizTaken,
+        email: user.email,
+        updatedAt: new Date().toISOString()
+      };
+      isSyncingToCloud.current = true;
+      await setDoc(doc(db, 'users', user.uid), payload, { merge: true });
+
+      setSyncStatus('synced');
+      setLastSyncError(null);
       const itemsProcessed = Object.keys(progress || {}).length;
       addSyncLog('manual', `Manual cloud backup & 2-way sync completed (${itemsProcessed} item${itemsProcessed === 1 ? '' : 's'} verified)`, 'success', itemsProcessed);
     } catch (err: any) {
@@ -1717,6 +1603,10 @@ export default function App() {
       setLastSyncError(classified);
       setSyncStatus('error');
       addSyncLog('manual', `[${classified.category}] ${classified.title}: ${classified.description}`, 'error', 0);
+    } finally {
+      setTimeout(() => {
+        isSyncingToCloud.current = false;
+      }, 300);
     }
   };
 
@@ -1739,7 +1629,6 @@ export default function App() {
         localStorage.removeItem('vocab_memorizer_quiz_score');
         localStorage.removeItem('vocab_memorizer_quiz_taken');
         localStorage.removeItem('memorizer_sync_logs');
-        localStorage.removeItem('memorizer_last_cloud_sync_at');
 
         // Clear offline IndexedDB cache
         await clearIndexedDBCache();
@@ -1774,10 +1663,6 @@ export default function App() {
         setUser(null);
         setHasLoadedFromCloud(false);
         setSyncStatus('idle');
-        setLastCloudSyncAt(null);
-        setLastSyncError(null);
-        lastPushedContentRef.current = '';
-        lastPushedTimestamp.current = null;
       } catch (err) {
         console.error('Log out failed:', err);
       }
@@ -2831,8 +2716,6 @@ const getActiveCourse = (
               progress={progress}
               onUpdateProgress={setProgress}
               words={activeWords}
-              isOnline={isOnline}
-              lastCloudSyncAt={lastCloudSyncAt}
             />
           )}
 

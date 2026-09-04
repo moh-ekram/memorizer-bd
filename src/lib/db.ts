@@ -1,18 +1,3 @@
-/**
- * Unified database & auth facade — 100% Supabase-backed.
- *
- * The application used to talk to Firebase Firestore/Firebase Auth through
- * this module. It is now a thin re-export layer over the native Supabase
- * implementation:
- *   - `./supabaseDb`   → Firestore-shaped database interface translated to
- *                        native Supabase (PostgREST) calls.
- *   - `./supabaseAuth` → Firebase-Auth-shaped functions mapped onto
- *                        Supabase Auth (email/password + Google OAuth).
- *
- * All Firebase code was removed from the project; nothing imports
- * `firebase/*` or `./firebase` anymore.
- */
-
 import {
   doc,
   collection,
@@ -28,10 +13,8 @@ import {
   updateDoc,
   deleteDoc,
   onSnapshot,
-  incrementCourseClickCount,
-  saveBulkDocs,
-  deleteBulkDocs,
-  clearCollectionDocs
+  increment,
+  db
 } from './supabaseDb';
 
 import {
@@ -40,26 +23,22 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  signInWithGoogle,
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
-  signInWithGoogle,
   normalizeSupabaseUser
 } from './supabaseAuth';
-
 import type { AppUser } from './supabaseAuth';
+
 import { normalizeCourseId, matchesCourseId, clearQuestionsCache } from './courseUtils';
 
-// Compatible database object reference (opaque marker — the Supabase
-// implementations accept it for backward compatibility and ignore it).
-const db: any = { _isSupabase: true };
-const googleProvider = new GoogleAuthProvider();
+export const googleProvider = new GoogleAuthProvider();
 
 export {
+  // Database operations
   db,
-  auth,
-  googleProvider,
   doc,
   collection,
   query,
@@ -74,23 +53,83 @@ export {
   updateDoc,
   deleteDoc,
   onSnapshot,
+  increment,
+
+  // Authentication
+  auth,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  signInWithGoogle,
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
-  signInWithGoogle,
   normalizeSupabaseUser,
+
+  // Course & question utilities
   normalizeCourseId,
   matchesCourseId,
-  clearQuestionsCache,
-  incrementCourseClickCount,
-  saveBulkDocs,
-  deleteBulkDocs,
-  clearCollectionDocs
+  clearQuestionsCache
 };
 
 export type { AppUser };
+
+export async function incrementCourseClickCount(courseId: string): Promise<void> {
+  try {
+    const courseRef = doc(db, 'courses', courseId);
+    await updateDoc(courseRef, {
+      clickCount: increment(1)
+    });
+  } catch (e) {
+    console.warn('incrementCourseClickCount notice:', e);
+  }
+}
+
+export async function saveBulkDocs(
+  collectionName: string, 
+  items: any[], 
+  onProgress?: (current: number, total: number) => void
+): Promise<void> {
+  if (!items || items.length === 0) return;
+  const batchSize = 450;
+  for (let i = 0; i < items.length; i += batchSize) {
+    const chunk = items.slice(i, i + batchSize);
+    const batch = writeBatch(db);
+    for (const item of chunk) {
+      if (!item.id) continue;
+      const ref = doc(db, collectionName, String(item.id));
+      batch.set(ref, item, { merge: true });
+    }
+    await batch.commit();
+    if (onProgress) {
+      onProgress(Math.min(i + batchSize, items.length), items.length);
+    }
+  }
+}
+
+export async function deleteBulkDocs(collectionName: string, docIds: string[]): Promise<void> {
+  if (!docIds || docIds.length === 0) return;
+  const batchSize = 450;
+  for (let i = 0; i < docIds.length; i += batchSize) {
+    const chunk = docIds.slice(i, i + batchSize);
+    const batch = writeBatch(db);
+    for (const id of chunk) {
+      if (!id) continue;
+      const ref = doc(db, collectionName, String(id));
+      batch.delete(ref);
+    }
+    await batch.commit();
+  }
+}
+
+export async function clearCollectionDocs(collectionName: string): Promise<void> {
+  try {
+    const snap = await getDocs(collection(db, collectionName));
+    const ids = snap.docs.map(d => d.id);
+    await deleteBulkDocs(collectionName, ids);
+  } catch (e) {
+    console.warn(`clearCollectionDocs error on ${collectionName}:`, e);
+  }
+}

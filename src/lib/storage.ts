@@ -46,28 +46,45 @@ export function purgeIndexedDBCache(): void {
   }
 }
 
-// Immediately purge on module load
+// Only clean up non-essential temporary caches on module load, preserve IndexedDB and user study data
 if (typeof window !== 'undefined') {
   clearNonEssentialLocalStorageCache();
-  purgeIndexedDBCache();
 }
 
 /**
  * Safe local storage setter - ignores large heavy dataset keys
  */
 export function safeSetLocalStorage(key: string, value: string): boolean {
-  // Disallow caching heavy dataset keys
-  if (
-    key.startsWith('local_store_') ||
-    key.startsWith('questions_cache_') ||
-    key.startsWith('vocab_memorizer_cached_') ||
-    key.startsWith('local_question_bank') ||
-    key.startsWith('local_exams') ||
-    key.startsWith('cache_seats_') ||
-    key.length > 50000 || // Prevent large string dumps
-    (value && value.length > 50000)
-  ) {
-    return false;
+  // Allow essential user progress & core study state keys without artificial size throttling
+  const isEssentialUserStateKey = 
+    key === 'vocab_memorizer_progress_v2' || 
+    key === 'vocab_memorizer_folders' ||
+    key === 'vocab_memorizer_goals' ||
+    key === 'vocab_memorizer_settings' ||
+    key === 'vocab_memorizer_synonym_progress' ||
+    key === 'vocab_memorizer_blank_progress' ||
+    key === 'vocab_memorizer_ooo_progress' ||
+    key === 'vocab_memorizer_analogy_progress' ||
+    key === 'vocab_memorizer_flashcard_positions' ||
+    key === 'vocab_memorizer_enrolled_courses' ||
+    key === 'vocab_memorizer_active_course_id' ||
+    key === 'vocab_memorizer_quiz_score' ||
+    key === 'vocab_memorizer_quiz_taken';
+
+  // Disallow caching heavy dataset keys (e.g. bulk question banks or large server response dumps)
+  if (!isEssentialUserStateKey) {
+    if (
+      key.startsWith('local_store_') ||
+      key.startsWith('questions_cache_') ||
+      key.startsWith('vocab_memorizer_cached_') ||
+      key.startsWith('local_question_bank') ||
+      key.startsWith('local_exams') ||
+      key.startsWith('cache_seats_') ||
+      key.length > 50000 || // Prevent large string dumps
+      (value && value.length > 50000)
+    ) {
+      return false;
+    }
   }
 
   try {
@@ -75,7 +92,13 @@ export function safeSetLocalStorage(key: string, value: string): boolean {
     return true;
   } catch (err: any) {
     clearNonEssentialLocalStorageCache();
-    return false;
+    // Retry once after clearing transient non-essential caches
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 }
 

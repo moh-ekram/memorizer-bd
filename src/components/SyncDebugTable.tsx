@@ -28,7 +28,8 @@ import {
   Activity
 } from 'lucide-react';
 import { mergeProgressRecords } from '../utils/syncUtils';
-import { safeSetLocalStorage } from '../lib/storage';
+import { safeSetLocalStorage, safeGetLocalStorage } from '../lib/storage';
+import { getProgressFromIndexedDB, saveProgressToIndexedDB, crossReferenceOrphanedWords } from '../lib/offlineDb';
 
 interface SyncDebugTableProps {
   localProgress: Record<string, UserProgress>;
@@ -203,20 +204,37 @@ export default function SyncDebugTable({
     }
   };
 
-  // Smart Reconcile (Merge by Timestamp)
+  // Smart Reconcile (Merge by Timestamp across IndexedDB, Memory, LocalStorage, and Cloud)
   const handleSmartReconcile = async () => {
     if (!effectiveUid && !cleanEmail) return;
-    setActionMessage({ text: 'Reconciling Local & Cloud by timestamps...', type: 'info' });
+    setActionMessage({ text: 'Reconciling Local, IndexedDB & Cloud by timestamps...', type: 'info' });
     try {
-      const merged = mergeProgressRecords(localProgress, cloudProgress || {});
+      let localDiskProgress: Record<string, UserProgress> = {};
+      try {
+        const rawDisk = safeGetLocalStorage('vocab_memorizer_progress_v2');
+        if (rawDisk) localDiskProgress = JSON.parse(rawDisk);
+      } catch (_) {}
+
+      let localIdbProgress: Record<string, UserProgress> = {};
+      try {
+        const rawIdb = await getProgressFromIndexedDB();
+        if (rawIdb) localIdbProgress = rawIdb;
+      } catch (_) {}
+
+      const { unifiedLocal, orphanedWords, mergedUnified } = crossReferenceOrphanedWords(
+        [localProgress, localDiskProgress, localIdbProgress],
+        cloudProgress || {}
+      );
+
       if (onUpdateLocalProgress) {
-        onUpdateLocalProgress(merged);
+        onUpdateLocalProgress(mergedUnified);
       }
-      safeSetLocalStorage('vocab_memorizer_progress_v2', JSON.stringify(merged));
+      safeSetLocalStorage('vocab_memorizer_progress_v2', JSON.stringify(mergedUnified));
+      await saveProgressToIndexedDB(mergedUnified);
 
       const targetUid = effectiveUid || cleanEmail;
       const payload = {
-        progress: merged,
+        progress: mergedUnified,
         email: cleanEmail,
         updatedAt: new Date().toISOString(),
         reconciledAt: new Date().toISOString()
@@ -225,8 +243,10 @@ export default function SyncDebugTable({
       if (cleanEmail && cleanEmail !== targetUid) {
         await setDoc(doc(db, 'users', cleanEmail), payload, { merge: true });
       }
-      setCloudProgress(merged);
-      setActionMessage({ text: `Reconciled & synchronized ${Object.keys(merged).length} items across Local and Cloud!`, type: 'success' });
+      setCloudProgress(mergedUnified);
+      const orphanMsg = orphanedWords.length > 0 ? ` (reconciled ${orphanedWords.length} orphaned words)` : '';
+      setActionMessage({ text: `Reconciled & synchronized ${Object.keys(mergedUnified).length} items across IndexedDB and Cloud${orphanMsg}!`, type: 'success' });
+      if (onTriggerSync) onTriggerSync();
     } catch (e: any) {
       setActionMessage({ text: `Reconciliation failed: ${e.message}`, type: 'error' });
     }
@@ -245,7 +265,7 @@ export default function SyncDebugTable({
         await setDoc(doc(db, 'users', cleanEmail), { progress: updatedCloud, updatedAt: new Date().toISOString() }, { merge: true });
       }
       setCloudProgress(updatedCloud);
-      setActionMessage({ text: `Word "${wordId}" successfully pushed to Cloud!`, type: 'success' });
+      setActionMessage({ text: `Word "${(localItem as any)?.id || wordId}" successfully pushed to Cloud!`, type: 'success' });
       if (onTriggerSync) onTriggerSync();
     } catch (e: any) {
       setActionMessage({ text: `Failed to push word: ${e.message}`, type: 'error' });
@@ -261,7 +281,7 @@ export default function SyncDebugTable({
       onUpdateLocalProgress(updatedLocal);
     }
     safeSetLocalStorage('vocab_memorizer_progress_v2', JSON.stringify(updatedLocal));
-    setActionMessage({ text: `Word "${cloudItem.id || wordId}" pulled from Cloud to Local!`, type: 'success' });
+    setActionMessage({ text: `Word "${(cloudItem as any)?.id || wordId}" pulled from Cloud to Local!`, type: 'success' });
     if (onTriggerSync) onTriggerSync();
   };
 

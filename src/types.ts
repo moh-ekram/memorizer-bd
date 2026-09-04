@@ -16,6 +16,8 @@ export type WordStatus = 'know' | 'dont_know' | 'confusion' | 'unrated'; // 'kno
 export interface UserProgress {
   status: WordStatus;
   updatedAt: string;
+  id?: string; // Optional word ID for flat records in IndexedDB
+  lastReviewed?: string; // Optional timestamp of review
   notes?: string; // Custom notes/mnemonic memory aid
   bookmarks?: string[]; // Custom folder IDs
   reviewAt?: string; // ISO date string for spaced repetition review
