@@ -483,6 +483,7 @@ export async function getDocs(queryRef: CollectionRef | QueryRef | any): Promise
   docs: Array<{ id: string; exists: () => boolean; data: () => any }>;
   empty: boolean;
   size: number;
+  error?: any;
   forEach: (cb: (doc: any) => void) => void;
 }> {
   const col = queryRef?.collection || (typeof queryRef === 'string' ? queryRef : '');
@@ -527,7 +528,10 @@ export async function getDocs(queryRef: CollectionRef | QueryRef | any): Promise
       queryBuilder = queryBuilder.limit(limitCount);
     }
 
-    const { data, error } = await queryBuilder;
+    const timeoutPromise = new Promise<{ data: any; error: any }>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout fetching ${col} from Supabase (7s)`)), 7000)
+    );
+    const { data, error } = await Promise.race([queryBuilder, timeoutPromise]);
     if (error) throw error;
 
     const rows = data || [];
@@ -562,12 +566,13 @@ export async function getDocs(queryRef: CollectionRef | QueryRef | any): Promise
       size: docs.length,
       forEach: (cb: (doc: any) => void) => docs.forEach(cb)
     };
-  } catch (err) {
-    console.warn(`Supabase getDocs notice for ${col}:`, err);
+  } catch (err: any) {
+    console.warn(`Supabase getDocs notice for ${col}:`, err?.message || err);
     return {
       docs: [],
       empty: true,
       size: 0,
+      error: err,
       forEach: () => {}
     };
   }
@@ -737,39 +742,41 @@ export function onSnapshot(
   onError?: (error: any) => void
 ) {
   let isSubscribed = true;
+  let timerId: any = null;
+  let consecutiveErrors = 0;
 
-  // 1. Fetch initial snapshot immediately
-  if (refOrQuery?._isDocRef) {
-    getDoc(refOrQuery).then(snap => {
-      if (isSubscribed) callback(snap);
-    }).catch(err => {
-      if (isSubscribed && onError) onError(err);
-    });
-  } else {
-    getDocs(refOrQuery).then(snap => {
-      if (isSubscribed) callback(snap);
-    }).catch(err => {
-      if (isSubscribed && onError) onError(err);
-    });
-  }
-
-  // 2. Setup periodic polling for real-time consistency
-  const intervalId = setInterval(() => {
+  const poll = async () => {
     if (!isSubscribed) return;
-    if (refOrQuery?._isDocRef) {
-      getDoc(refOrQuery).then(snap => {
+
+    try {
+      if (refOrQuery?._isDocRef) {
+        const snap = await getDoc(refOrQuery);
         if (isSubscribed) callback(snap);
-      }).catch(() => {});
-    } else {
-      getDocs(refOrQuery).then(snap => {
+      } else {
+        const snap = await getDocs(refOrQuery);
+        if ((snap as any)?.error) {
+          throw (snap as any).error;
+        }
         if (isSubscribed) callback(snap);
-      }).catch(() => {});
+      }
+      consecutiveErrors = 0;
+    } catch (err) {
+      consecutiveErrors++;
+      if (isSubscribed && onError) onError(err);
     }
-  }, 3500);
+
+    if (!isSubscribed) return;
+    // Smart delay: 10s on success; backs off up to 30s on errors to prevent flooding and 401 storms
+    const delay = consecutiveErrors > 0 ? Math.min(30000, 10000 * consecutiveErrors) : 12000;
+    timerId = setTimeout(poll, delay);
+  };
+
+  // Immediate initial run
+  poll();
 
   return () => {
     isSubscribed = false;
-    clearInterval(intervalId);
+    if (timerId) clearTimeout(timerId);
   };
 }
 

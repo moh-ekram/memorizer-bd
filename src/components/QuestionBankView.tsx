@@ -31,6 +31,7 @@ import { db, doc, getDoc, setDoc, deleteDoc, writeBatch, collection, getDocs, sa
 import { QuestionBankItem, QuestionBankRule, Course, Exam, ExamQuestion } from '../types';
 import { downloadQuestionBankExcelTemplate, parseQuestionBankExcel, exportQuestionBankToExcel } from '../lib/gameExcelUtils';
 import { safeGetLocalStorage, safeSetLocalStorage, setLargeStorage, getLargeStorage } from '../lib/storage';
+import { vocabulary } from '../data/vocabulary';
 
 interface QuestionBankViewProps {
   courses: Course[];
@@ -285,19 +286,11 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
       ]);
 
       let results: PromiseSettledResult<any>[];
-      if (hasLocalCache) {
-        // In background sync when local data is already rendered, guard with 10s timeout
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Background fetch timeout')), 10000)
-        );
-        results = (await Promise.race([fetchPromise, timeoutPromise])) as PromiseSettledResult<any>[];
-      } else {
-        // When device has no local cache (like phone or new browser), allow full fetch with 25s timeout
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Initial fetch timeout')), 25000)
-        );
-        results = (await Promise.race([fetchPromise, timeoutPromise])) as PromiseSettledResult<any>[];
-      }
+      // Keep timeout fast (6s) so UI is responsive and never hangs
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Question bank fetch timeout (6s)')), 6000)
+      );
+      results = (await Promise.race([fetchPromise, timeoutPromise])) as PromiseSettledResult<any>[];
 
       const [
         qbResult,
@@ -462,9 +455,47 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
     }
 
     const finalList = Array.from(itemMap.values());
-    setQuestions(finalList);
-    setLargeStorage('local_question_bank', finalList);
+    if (finalList.length > 0) {
+      setQuestions(finalList);
+      setLargeStorage('local_question_bank', finalList).catch(() => {});
+    } else if (!hasLocalCache) {
+      setQuestions([]);
+    }
     setLoading(false);
+  };
+
+  // Load 20 Sample Questions from Vocabulary Dataset
+  const handleLoadSampleQuestions = async () => {
+    const sampleItems: QuestionBankItem[] = vocabulary.map((v, i) => {
+      const otherWords = vocabulary.filter(w => w.word !== v.word);
+      const wrongOpts = otherWords.slice(0, 3).map(w => w.meaning);
+      const allOpts = [v.meaning, ...wrongOpts].sort(() => 0.5 - Math.random());
+      const correctIdx = allOpts.indexOf(v.meaning);
+      const correctLetter = ['A', 'B', 'C', 'D'][correctIdx] || 'A';
+      return {
+        id: `sample_gre_${v.id || i + 1}`,
+        question: `What is the closest Bengali meaning of the GRE word "${v.word}"?`,
+        optionA: allOpts[0] || 'Option A',
+        optionB: allOpts[1] || 'Option B',
+        optionC: allOpts[2] || 'Option C',
+        optionD: allOpts[3] || 'Option D',
+        correctAnswer: correctLetter,
+        explanation: `Word: ${v.word} (${v.meaning}). Synonyms: ${v.synonyms || 'N/A'}. Derivatives: ${v.extraWord || 'N/A'} (${v.extraMeaning || ''}).`,
+        group1: 'GRE Vocabulary',
+        group2: 'Sample Questions',
+        group3: 'Default',
+        courseId: 'gre',
+        createdAt: new Date().toISOString()
+      };
+    });
+
+    const existingMap = new Map(questions.map(q => [q.id, q]));
+    sampleItems.forEach(q => existingMap.set(q.id, q));
+    const merged = Array.from(existingMap.values());
+    setQuestions(merged);
+    await setLargeStorage('local_question_bank', merged);
+    setUploadStatus(`✅ ${sampleItems.length}টি স্যাম্পল GRE প্রশ্ন সফলভাবে যুক্ত হয়েছে!`);
+    setTimeout(() => setUploadStatus(null), 4000);
   };
 
   // Sync All Questions & Scheduled Exams to Cloud
@@ -1539,16 +1570,30 @@ export function QuestionBankView({ courses, onExamPublished }: QuestionBankViewP
                     </tr>
                   ) : filteredQuestions.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="p-12 text-center text-slate-400 font-semibold space-y-3">
-                        <p className="text-slate-500">কোনো প্রশ্ন পাওয়া যায়নি। ফায়ারবেস ক্লাউড থেকে সরাসরি লোড করতে নিচের বাটনে চাপুন:</p>
-                        <div className="flex items-center justify-center gap-2 pt-1">
+                      <td colSpan={7} className="p-12 text-center text-slate-400 font-semibold space-y-4">
+                        <div className="max-w-md mx-auto space-y-2">
+                          <HelpCircle className="w-10 h-10 text-indigo-400 mx-auto opacity-70" />
+                          <p className="text-slate-700 font-bold text-base">কোনো প্রশ্ন পাওয়া যায়নি (০টি প্রশ্ন)</p>
+                          <p className="text-slate-500 text-xs leading-relaxed">
+                            আপনি সরাসরি ২০টি স্যাম্পল GRE প্রশ্ন লোড করতে পারেন, এক্সেল ফাইল আপলোড করতে পারেন, অথবা ক্লাউড ডাটাবেজ থেকে রিফ্রেশ করতে পারেন।
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+                          <button
+                            type="button"
+                            onClick={handleLoadSampleQuestions}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                          >
+                            <Sparkles className="w-4 h-4" />
+                            <span>স্যাম্পল GRE প্রশ্নাবলী যোগ করুন (২০টি)</span>
+                          </button>
                           <button
                             type="button"
                             onClick={() => fetchQuestions(true)}
-                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm mx-auto"
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
                           >
                             <RefreshCw className="w-4 h-4" />
-                            <span>ফায়ারবেস থেকে লোড করুন (Force Refresh from Cloud)</span>
+                            <span>ক্লাউড থেকে রিফ্রেশ (Cloud Sync)</span>
                           </button>
                         </div>
                       </td>

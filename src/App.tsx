@@ -13,7 +13,7 @@ import AnnouncementBanner from './components/AnnouncementBanner';
 import LandingHomePage from './components/LandingHomePage';
 import RevisionCenter from './components/RevisionCenter';
 import { SyncConflictModal, SyncConflictData } from './components/SyncConflictModal';
-import { safeSetLocalStorage, safeGetLocalStorage, clearNonEssentialLocalStorageCache } from './lib/storage';
+import { safeSetLocalStorage, safeGetLocalStorage, clearNonEssentialLocalStorageCache, getLargeStorage, setLargeStorage } from './lib/storage';
 import { mergeProgressRecords, mergeGameProgressRecords, mergeStudyGoal } from './utils/syncUtils';
 import { parseRoute, syncRouteUrl } from './lib/router';
 import SupabaseStatusBanner from './components/SupabaseStatusBanner';
@@ -294,7 +294,7 @@ export default function App() {
   });
 
   const [customCourses, setCustomCourses] = useState<Course[]>(() => {
-    const saved = localStorage.getItem('vocab_memorizer_cached_custom_courses');
+    const saved = localStorage.getItem('vocab_memorizer_cached_custom_courses') || localStorage.getItem('idb_backup_local_custom_courses');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -305,7 +305,7 @@ export default function App() {
     return [];
   });
   const [importedCourses, setImportedCourses] = useState<Course[]>(() => {
-    const saved = localStorage.getItem('vocab_memorizer_imported_courses');
+    const saved = localStorage.getItem('vocab_memorizer_imported_courses') || localStorage.getItem('idb_backup_local_imported_courses');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -615,40 +615,53 @@ export default function App() {
 
   // Load custom courses with immediate cloud fetch, real-time snapshot updates and offline caching
   useEffect(() => {
+    // 0. Hydrate from IndexedDB on startup if local state is empty
+    const hydrateLocalCourses = async () => {
+      try {
+        const idbCustom = await getLargeStorage<Course[]>('local_custom_courses', null);
+        if (idbCustom && Array.isArray(idbCustom) && idbCustom.length > 0) {
+          setCustomCourses(prev => prev.length === 0 ? idbCustom : prev);
+        }
+        const idbImported = await getLargeStorage<Course[]>('local_imported_courses', null);
+        if (idbImported && Array.isArray(idbImported) && idbImported.length > 0) {
+          setImportedCourses(prev => prev.length === 0 ? idbImported : prev);
+        }
+      } catch (_) {}
+    };
+    hydrateLocalCourses();
+
     // 1. Immediate fetch from Cloud
     const fetchCoursesImmediately = async () => {
       try {
         const qSnap = await getDocs(collection(db, 'courses'));
+        if ((qSnap as any)?.error) {
+          console.warn('Courses cloud fetch encountered an issue, preserving offline courses');
+          return;
+        }
+
         const loaded: Course[] = [];
         qSnap.forEach(docSnap => {
           loaded.push({ ...docSnap.data(), id: docSnap.id } as Course);
         });
-        setCustomCourses(loaded);
-        safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(loaded));
 
-        const loadedIds = new Set(loaded.map(c => c.id.trim().toLowerCase()));
+        // Only update if cloud returned actual courses; never wipe local courses if cloud is empty or unconfigured
+        if (loaded.length > 0) {
+          setCustomCourses(loaded);
+          safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(loaded));
+          setLargeStorage('local_custom_courses', loaded).catch(() => {});
 
-        setImportedCourses(prev => {
-          const validImported = prev.filter(imp => {
-            const impId = imp.id.trim().toLowerCase();
-            return impId === 'gre' || loadedIds.has(impId);
-          });
-          const next = validImported.map(imp => {
-            const match = loaded.find(c => c.id.trim().toLowerCase() === imp.id.trim().toLowerCase());
-            return match ? { ...imp, ...match } : imp;
-          });
-          safeSetLocalStorage('vocab_memorizer_imported_courses', JSON.stringify(next));
-          return next;
-        });
+          const loadedIds = new Set(loaded.map(c => c.id.trim().toLowerCase()));
 
-        setEnrolledCourseIds(prev => {
-          const next = prev.filter(id => {
-            const idLower = id.trim().toLowerCase();
-            return idLower === 'gre' || loadedIds.has(idLower);
+          setImportedCourses(prev => {
+            const next = prev.map(imp => {
+              const match = loaded.find(c => c.id.trim().toLowerCase() === imp.id.trim().toLowerCase());
+              return match ? { ...imp, ...match } : imp;
+            });
+            safeSetLocalStorage('vocab_memorizer_imported_courses', JSON.stringify(next));
+            setLargeStorage('local_imported_courses', next).catch(() => {});
+            return next;
           });
-          safeSetLocalStorage(LOCAL_STORAGE_ENROLLED_COURSES_KEY, JSON.stringify(next));
-          return next;
-        });
+        }
       } catch (err) {
         console.warn('Immediate courses fetch notice:', err);
       }
@@ -660,52 +673,28 @@ export default function App() {
     try {
       const coursesRef = collection(db, 'courses');
       unsubscribe = onSnapshot(coursesRef, (querySnapshot) => {
+        if ((querySnapshot as any)?.error) return;
+
         const loaded: Course[] = [];
         querySnapshot.forEach(docSnap => {
           loaded.push({ ...docSnap.data(), id: docSnap.id } as Course);
         });
-        setCustomCourses(loaded);
-        safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(loaded));
 
-        const loadedIds = new Set(loaded.map(c => c.id.trim().toLowerCase()));
+        if (loaded.length > 0) {
+          setCustomCourses(loaded);
+          safeSetLocalStorage('vocab_memorizer_cached_custom_courses', JSON.stringify(loaded));
+          setLargeStorage('local_custom_courses', loaded).catch(() => {});
 
-        // Sync importedCourses: prune deleted courses and update existing matching ones
-        setImportedCourses(prev => {
-          const validImported = prev.filter(imp => {
-            const impId = imp.id.trim().toLowerCase();
-            return impId === 'gre' || loadedIds.has(impId);
-          });
-          const next = validImported.map(imp => {
-            const match = loaded.find(c => c.id.trim().toLowerCase() === imp.id.trim().toLowerCase());
-            return match ? { ...imp, ...match } : imp;
-          });
-          safeSetLocalStorage('vocab_memorizer_imported_courses', JSON.stringify(next));
-          return next;
-        });
-
-        // Prune deleted courses from enrolledCourseIds
-        setEnrolledCourseIds(prev => {
-          const next = prev.filter(id => {
-            const idLower = id.trim().toLowerCase();
-            return idLower === 'gre' || loadedIds.has(idLower);
-          });
-          if (next.length !== prev.length) {
-            safeSetLocalStorage(LOCAL_STORAGE_ENROLLED_COURSES_KEY, JSON.stringify(next));
+          setImportedCourses(prev => {
+            const next = prev.map(imp => {
+              const match = loaded.find(c => c.id.trim().toLowerCase() === imp.id.trim().toLowerCase());
+              return match ? { ...imp, ...match } : imp;
+            });
+            safeSetLocalStorage('vocab_memorizer_imported_courses', JSON.stringify(next));
+            setLargeStorage('local_imported_courses', next).catch(() => {});
             return next;
-          }
-          return prev;
-        });
-
-        // If the active course was deleted, automatically fallback to 'gre' or first available course
-        setActiveCourseId(prev => {
-          const prevLower = prev?.trim().toLowerCase();
-          if (prevLower && prevLower !== 'gre' && !loadedIds.has(prevLower)) {
-            const fallback = loaded.length > 0 ? loaded[0].id : 'gre';
-            safeSetLocalStorage(LOCAL_STORAGE_ACTIVE_COURSE_KEY, fallback);
-            return fallback;
-          }
-          return prev;
-        });
+          });
+        }
       }, (error) => {
         console.warn("Error in real-time courses listener (Offline-first active):", error);
       });
