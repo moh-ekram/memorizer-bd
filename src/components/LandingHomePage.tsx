@@ -1,13 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { 
-  BookOpen, LogIn, UserPlus, Mail, Lock, AlertCircle, Sparkles
+  BookOpen, LogIn, UserPlus, Mail, Lock, AlertCircle, Sparkles, ArrowRight, ExternalLink, ShieldCheck
 } from 'lucide-react';
 import { 
   auth, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
-  signInWithGoogle
+  signInWithGoogle,
+  isRememberMeEnabled,
+  setRememberMeEnabled,
+  getSavedEmail,
+  getCachedUser,
+  continueWithBrowserSession
 } from '../lib/db';
 import { Course, AppSettings } from '../types';
 
@@ -20,10 +25,14 @@ interface LandingHomePageProps {
 
 export default function LandingHomePage({ onAuthSuccess, settings }: LandingHomePageProps) {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => getSavedEmail());
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(() => isRememberMeEnabled());
+  const [popupFallbackUrl, setPopupFallbackUrl] = useState<string | null>(null);
+
+  const cachedUser = useMemo(() => getCachedUser(), []);
 
   const appTitle = 'Vocabulary Master';
 
@@ -33,6 +42,7 @@ export default function LandingHomePage({ onAuthSuccess, settings }: LandingHome
     setLoading(true);
 
     try {
+      setRememberMeEnabled(rememberMe);
       if (authMode === 'register') {
         if (password.length < 6) {
           throw new Error('পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে।');
@@ -73,8 +83,10 @@ export default function LandingHomePage({ onAuthSuccess, settings }: LandingHome
 
   const handleGoogleSignIn = async () => {
     setError('');
+    setPopupFallbackUrl(null);
     setLoading(true);
     try {
+      setRememberMeEnabled(rememberMe);
       const userRes = await signInWithGoogle();
       if (userRes) {
         onAuthSuccess();
@@ -82,10 +94,13 @@ export default function LandingHomePage({ onAuthSuccess, settings }: LandingHome
     } catch (err: any) {
       console.error('Google Sign-In Error:', err);
       let errMsg = 'গুগল সাইন-ইন সম্পন্ন করা যায়নি। পুনরায় চেষ্টা করুন।';
-      if (err.code === 'auth/popup-closed-by-user') {
+      if (err.oauthUrl) {
+        setPopupFallbackUrl(err.oauthUrl);
+        errMsg = 'ব্রাউজারে পপ-আপ ব্লক করা আছে। নিচের বাটনে ক্লিক করে সরাসরি নতুন উইন্ডোতে গুগল লগইন সম্পন্ন করুন।';
+      } else if (err.code === 'auth/popup-closed-by-user') {
         errMsg = 'গুগল সাইন-ইন উইন্ডো বন্ধ করা হয়েছে। পুনরায় চেষ্টা করুন।';
       } else if (err.code === 'auth/popup-blocked') {
-        errMsg = 'ব্রাউজারে পপ-আপ ব্লক করা আছে। অনুগ্রহ করে পপ-আপ অ্যালাউ করুন।';
+        errMsg = 'ব্রাউজারে পপ-আপ ব্লক করা আছে। অনুগ্রহ করে এড্রেস বার থেকে পপ-আপ অন করুন।';
       } else if (err.message) {
         errMsg = err.message;
       }
@@ -118,6 +133,39 @@ export default function LandingHomePage({ onAuthSuccess, settings }: LandingHome
               : 'নতুন অ্যাকাউন্ট তৈরি করে পড়া শুরু করুন'}
           </p>
         </div>
+
+        {/* Remembered / Saved Account Quick Access */}
+        {cachedUser && (
+          <div className="mb-5 p-3.5 bg-indigo-50/70 border border-indigo-200/80 rounded-2xl">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 block">
+                  এই ব্রাউজারে সংরক্ষিত সেশন
+                </span>
+                <span className="text-xs font-bold text-slate-900 truncate block">
+                  {cachedUser.displayName || cachedUser.email || 'Saved Learner'}
+                </span>
+                {cachedUser.email && (
+                  <span className="text-[11px] text-slate-500 truncate block">
+                    {cachedUser.email}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                id="btn-quick-continue"
+                onClick={() => {
+                  continueWithBrowserSession();
+                  onAuthSuccess();
+                }}
+                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1.5 shrink-0"
+              >
+                <span>চালিয়ে যান</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Auth Mode Toggle */}
         <div className="bg-slate-100 p-1 rounded-2xl flex items-center mb-5 border border-slate-200/70">
@@ -160,6 +208,24 @@ export default function LandingHomePage({ onAuthSuccess, settings }: LandingHome
           <div className="p-3.5 bg-rose-50 border border-rose-200/90 rounded-2xl flex items-start gap-2.5 text-rose-700 text-xs font-semibold mb-4 animate-in fade-in">
             <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
             <span>{error}</span>
+          </div>
+        )}
+
+        {/* Popup Blocked Direct Fallback Button */}
+        {popupFallbackUrl && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-2xl">
+            <p className="text-xs font-semibold text-amber-800 mb-2">
+              ব্রাউজারের পপ-আপ ব্লক এড়াতে নিচের বাটনে ক্লিক করে সরাসরি নতুন উইন্ডোতে গুগল লগইন করুন:
+            </p>
+            <a
+              href={popupFallbackUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition shadow-xs"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>নতুন উইন্ডোতে গুগল সাইন-ইন খুলুন</span>
+            </a>
           </div>
         )}
 
@@ -240,6 +306,25 @@ export default function LandingHomePage({ onAuthSuccess, settings }: LandingHome
             </div>
           </div>
 
+          {/* Remember Me Checkbox */}
+          <div className="flex items-center justify-between pt-1">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                id="checkbox-remember-me"
+                checked={rememberMe}
+                onChange={(e) => {
+                  setRememberMe(e.target.checked);
+                  setRememberMeEnabled(e.target.checked);
+                }}
+                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+              />
+              <span className="text-xs font-medium text-slate-600">
+                এই ব্রাউজারে লগইন মনে রাখুন (Remember Me)
+              </span>
+            </label>
+          </div>
+
           <button
             type="submit"
             id="landing-btn-submit"
@@ -262,9 +347,25 @@ export default function LandingHomePage({ onAuthSuccess, settings }: LandingHome
           </button>
         </form>
 
+        {/* Offline / Direct Device Access */}
+        <div className="mt-4 pt-3 border-t border-slate-100 flex flex-col items-center text-center">
+          <button
+            type="button"
+            id="btn-continue-offline"
+            onClick={() => {
+              continueWithBrowserSession();
+              onAuthSuccess();
+            }}
+            className="text-xs font-semibold text-slate-500 hover:text-indigo-600 transition cursor-pointer flex items-center gap-1.5"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
+            <span>লগইন ছাড়াই এই ব্রাউজারে পড়ুন (Offline Mode)</span>
+          </button>
+        </div>
+
         {/* Footer Note */}
-        <div className="mt-6 pt-4 border-t border-slate-100 text-center text-[11px] text-slate-400">
-          <span>আপনার সকল স্টাডি প্রগ্রেস স্বয়ংক্রিয়ভাবে ক্লাউডে সংরক্ষিত থাকবে।</span>
+        <div className="mt-4 text-center text-[11px] text-slate-400">
+          <span>আপনার সকল স্টাডি প্রগ্রেস স্বয়ংক্রিয়ভাবে ব্রাউজার ও ক্লাউডে সংরক্ষিত থাকবে।</span>
         </div>
       </motion.div>
     </div>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { AppSettings, WordStatus, SyncLogEntry, Course, DEFAULT_KEYBOARD_SHORTCUTS, VocabularyWord, UserProgress } from '../types';
 import SyncDebugTable from './SyncDebugTable';
 import { 
@@ -130,12 +130,53 @@ export default function AppSettingsView({
     }
   };
 
+  const [localLogs, setLocalLogs] = useState<SyncLogEntry[]>(() => {
+    try {
+      const saved = localStorage.getItem('memorizer_sync_logs');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    const handleSyncLogUpdate = (e?: any) => {
+      try {
+        const saved = localStorage.getItem('memorizer_sync_logs');
+        if (saved) {
+          setLocalLogs(JSON.parse(saved));
+        } else if (e?.detail) {
+          setLocalLogs(e.detail);
+        }
+      } catch (_) {}
+    };
+
+    window.addEventListener('storage', handleSyncLogUpdate);
+    window.addEventListener('memorizer_sync_log_updated', handleSyncLogUpdate);
+    return () => {
+      window.removeEventListener('storage', handleSyncLogUpdate);
+      window.removeEventListener('memorizer_sync_log_updated', handleSyncLogUpdate);
+    };
+  }, []);
+
+  const allSyncLogs = useMemo(() => {
+    if (syncLogs && syncLogs.length > 0) return syncLogs;
+    return localLogs;
+  }, [syncLogs, localLogs]);
+
   const displayActivityLogs: SyncLogEntry[] = useMemo(() => {
-    // Only REAL sync events are shown — never fabricated "success" placeholders.
-    const actual = (syncLogs || []);
-    if (syncLogFilter === 'all') return actual.slice(0, 10);
-    return actual.filter(l => l.type === syncLogFilter).slice(0, 10);
-  }, [syncLogs, syncLogFilter]);
+    const actual = allSyncLogs || [];
+    if (syncLogFilter === 'all') return actual.slice(0, 15);
+    return actual.filter(l => l.type === syncLogFilter).slice(0, 15);
+  }, [allSyncLogs, syncLogFilter]);
+
+  const handleClearLogs = () => {
+    try {
+      localStorage.removeItem('memorizer_sync_logs');
+      setLocalLogs([]);
+      window.dispatchEvent(new CustomEvent('memorizer_sync_log_updated', { detail: [] }));
+    } catch (_) {}
+  };
 
   const handleToggleTag = (tag: WordStatus) => {
     let newTags = [...settings.defaultFlashcardTags];
@@ -525,6 +566,120 @@ export default function AppSettingsView({
                   );
                 })}
               </div>
+            </div>
+
+            {/* Activity & Sync Logs Panel */}
+            <div id="activity-sync-logs-card" className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-4 shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0 text-indigo-600">
+                    <Activity className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-slate-900">Activity & Sync Logs</h3>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                        {allSyncLogs.length} events
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 font-medium">Automatic cloud backups and device sync records.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-auto">
+                  {allSyncLogs.length > 0 && (
+                    <button
+                      type="button"
+                      id="btn-clear-sync-logs"
+                      onClick={handleClearLogs}
+                      className="px-2.5 py-1 text-[11px] font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-200/80 transition cursor-pointer flex items-center gap-1"
+                      title="Clear activity log history"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Clear Logs</span>
+                    </button>
+                  )}
+                  {onForceSync && (
+                    <button
+                      type="button"
+                      id="btn-force-sync-header"
+                      onClick={onForceSync}
+                      disabled={syncStatus === 'syncing'}
+                      className="px-2.5 py-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100/70 rounded-lg border border-indigo-200/80 transition cursor-pointer flex items-center gap-1 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+                      <span>Sync Now</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Filter Tabs */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                {[
+                  { key: 'all', label: 'All Events' },
+                  { key: 'auto', label: 'Auto Sync' },
+                  { key: 'manual', label: 'Manual' },
+                  { key: 'offline_queue', label: 'Offline' },
+                  { key: 'cloud_fetch', label: 'Fetch' }
+                ].map((f) => (
+                  <button
+                    key={f.key}
+                    type="button"
+                    onClick={() => setSyncLogFilter(f.key as any)}
+                    className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition cursor-pointer ${
+                      syncLogFilter === f.key
+                        ? 'bg-indigo-600 text-white shadow-2xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200/70 border border-slate-200/60'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Logs List */}
+              {displayActivityLogs.length > 0 ? (
+                <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden bg-slate-50/40 max-h-72 overflow-y-auto">
+                  {displayActivityLogs.map((log) => (
+                    <div key={log.id} className="p-3 flex items-start justify-between gap-3 text-xs hover:bg-white transition">
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <div className="mt-0.5 shrink-0">
+                          {log.status === 'success' ? (
+                            <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-800 text-[11px] break-words">
+                            {log.message}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400 font-medium">
+                            <span className="font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-200/60 text-slate-600 font-bold">
+                              {log.type.replace('_', ' ')}
+                            </span>
+                            {log.itemCount !== undefined && (
+                              <span>• {log.itemCount} items</span>
+                            )}
+                            <span title={formatExactDate(log.timestamp)}>
+                              • {formatLogTime(log.timestamp)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-6 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                  <Clock className="w-6 h-6 text-slate-300 mx-auto mb-1.5" />
+                  <p className="text-xs font-bold text-slate-600">No sync logs recorded yet</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    As your study sessions and flashcards sync with your cloud account, activity logs will appear here.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Danger Zone */}

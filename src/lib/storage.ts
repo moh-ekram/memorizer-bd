@@ -11,7 +11,6 @@ export function clearNonEssentialLocalStorageCache(): void {
       const k = localStorage.key(i);
       if (!k) continue;
       if (
-        k.includes('sync_logs') ||
         k.includes('temp_debug_') ||
         k.startsWith('temp_preview_')
       ) {

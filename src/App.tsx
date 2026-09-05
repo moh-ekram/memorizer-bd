@@ -519,8 +519,11 @@ export default function App() {
       itemCount
     };
     setSyncLogs(prev => {
-      const updated = [newEntry, ...prev].slice(0, 15);
+      const updated = [newEntry, ...prev].slice(0, 25);
       safeSetLocalStorage('memorizer_sync_logs', JSON.stringify(updated));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('memorizer_sync_log_updated', { detail: updated }));
+      }
       return updated;
     });
   };
@@ -1305,13 +1308,17 @@ export default function App() {
           addSyncLog('cloud_fetch', `[${classified.category}] ${classified.title}: ${classified.description}`, 'error', 0);
         });
       } else {
-        try {
-          localStorage.removeItem('vocab_memorizer_cached_user');
-          await saveMetaValue('uid', null);
-        } catch (e) {}
-        isSyncingFromCloud.current = false;
-        setHasLoadedFromCloud(false);
-        setSyncStatus('idle');
+        const isRemembered = localStorage.getItem('vocab_memorizer_remember_me') !== 'false';
+        const cached = localStorage.getItem('vocab_memorizer_cached_user');
+        if (!isRemembered || !cached) {
+          try {
+            localStorage.removeItem('vocab_memorizer_cached_user');
+            await saveMetaValue('uid', null);
+          } catch (e) {}
+          isSyncingFromCloud.current = false;
+          setHasLoadedFromCloud(false);
+          setSyncStatus('idle');
+        }
       }
     });
 

@@ -140,57 +140,199 @@ export function normalizeSupabaseUser(user: any): AppUser | null {
 }
 
 /**
- * Supabase Google OAuth Sign-In with automatic popup management and return-to-window behavior
+ * Browser Remembrance & Persistent Session Management
  */
-export async function signInWithGoogle(options?: { redirectTo?: string }): Promise<AppUser | null> {
-  const redirectTo = options?.redirectTo || window.location.origin;
-  const isIframe = typeof window !== 'undefined' && window.self !== window.top;
+export const REMEMBER_ME_STORAGE_KEY = 'vocab_memorizer_remember_me';
+export const CACHED_USER_STORAGE_KEY = 'vocab_memorizer_cached_user';
+export const SAVED_EMAIL_STORAGE_KEY = 'vocab_memorizer_saved_email';
+
+export function isRememberMeEnabled(): boolean {
+  if (typeof window === 'undefined') return true;
+  return localStorage.getItem(REMEMBER_ME_STORAGE_KEY) !== 'false';
+}
+
+export function setRememberMeEnabled(enabled: boolean): void {
+  if (typeof window === 'undefined') return;
+  safeSetLocalStorage(REMEMBER_ME_STORAGE_KEY, enabled ? 'true' : 'false');
+}
+
+export function getSavedEmail(): string {
+  if (typeof window === 'undefined') return '';
+  return localStorage.getItem(SAVED_EMAIL_STORAGE_KEY) || '';
+}
+
+export function saveCachedUser(user: AppUser | null, remember: boolean = true): void {
+  if (typeof window === 'undefined') return;
+  if (!user) {
+    localStorage.removeItem(CACHED_USER_STORAGE_KEY);
+    return;
+  }
+  setRememberMeEnabled(remember);
+  safeSetLocalStorage(CACHED_USER_STORAGE_KEY, JSON.stringify({
+    uid: user.uid,
+    id: user.uid,
+    email: user.email,
+    displayName: user.displayName,
+    photoURL: user.photoURL
+  }));
+  if (user.email) {
+    safeSetLocalStorage(SAVED_EMAIL_STORAGE_KEY, user.email);
+  }
+}
+
+export function getCachedUser(): AppUser | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(CACHED_USER_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return null;
+}
+
+/**
+ * Quick Browser Remembrance Login - lets learner instantly continue on this browser
+ */
+export function continueWithBrowserSession(customName?: string): AppUser {
+  const existing = getCachedUser();
+  if (existing) {
+    currentAuthUser = existing;
+    return existing;
+  }
   
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo,
-      skipBrowserRedirect: true,
-      queryParams: {
-        access_type: 'offline',
-        prompt: 'select_account'
-      }
+  const guestUser: AppUser = {
+    uid: 'local_' + Math.random().toString(36).substring(2, 10),
+    id: 'local_' + Math.random().toString(36).substring(2, 10),
+    email: 'learner.local@vocabmaster.app',
+    displayName: customName || 'Learner (This Browser)',
+    photoURL: null,
+    user_metadata: { is_local_remembered: true },
+    app_metadata: { provider: 'browser_storage' },
+    providerData: [{ providerId: 'browser_storage' }]
+  };
+  saveCachedUser(guestUser, true);
+  currentAuthUser = guestUser;
+  return guestUser;
+}
+
+/**
+ * Supabase Google OAuth Sign-In with automatic popup management,
+ * synchronous gesture pre-opening (to defeat browser popup blockers),
+ * and direct window fallback.
+ */
+export async function signInWithGoogle(options?: { redirectTo?: string; promptDirectRedirect?: boolean }): Promise<AppUser | null> {
+  const isIframe = typeof window !== 'undefined' && window.self !== window.top;
+  const redirectTo = options?.redirectTo || (typeof window !== 'undefined' ? window.location.origin : '');
+  
+  // PRE-OPEN POPUP SYNCHRONOUSLY IN DIRECT USER GESTURE FRAME
+  // Crucial: browsers block window.open called after an await. Pre-opening preserves user activation!
+  let popup: Window | null = null;
+  const width = 500;
+  const height = 650;
+  const left = typeof window !== 'undefined' ? Math.max(0, (window.screen.width - width) / 2) : 0;
+  const top = typeof window !== 'undefined' ? Math.max(0, (window.screen.height - height) / 2) : 0;
+
+  try {
+    popup = window.open(
+      'about:blank',
+      'supabase_oauth_popup',
+      `width=${width},height=${height},top=${top},left=${left},status=no,resizable=yes,scrollbars=yes`
+    );
+    if (popup) {
+      try {
+        popup.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <title>Google Sign-In Connecting...</title>
+              <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f8fafc; color: #334155; }
+                .box { text-align: center; padding: 24px; }
+                .spinner { width: 36px; height: 36px; border: 3px solid #e2e8f0; border-top-color: #4f46e5; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+                @keyframes spin { to { transform: rotate(360deg); } }
+                p { font-size: 14px; font-weight: 600; }
+              </style>
+            </head>
+            <body>
+              <div class="box">
+                <div class="spinner"></div>
+                <p>Connecting to Google Sign-In...</p>
+              </div>
+            </body>
+          </html>
+        `);
+      } catch (_) {}
     }
-  });
+  } catch (err) {
+    console.warn('Pre-open popup warning:', err);
+  }
+
+  let data: any = null;
+  let error: any = null;
+
+  try {
+    const res = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo,
+        skipBrowserRedirect: true,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'select_account'
+        }
+      }
+    });
+    data = res.data;
+    error = res.error;
+  } catch (e) {
+    if (popup && !popup.closed) {
+      try { popup.close(); } catch (_) {}
+    }
+    throw e;
+  }
 
   if (error) {
+    if (popup && !popup.closed) {
+      try { popup.close(); } catch (_) {}
+    }
     console.error('Supabase Google Sign-In Error:', error);
     throw error;
   }
 
   if (!data?.url) {
+    if (popup && !popup.closed) {
+      try { popup.close(); } catch (_) {}
+    }
     throw new Error('গুগল লগইন লিঙ্ক তৈরি করা সম্ভব হয়নি।');
   }
 
-  const width = 500;
-  const height = 650;
-  const left = window.screen.width / 2 - width / 2;
-  const top = window.screen.height / 2 - height / 2;
-
-  let popup: Window | null = null;
-  try {
-    popup = window.open(
-      data.url,
-      'supabase_oauth_popup',
-      `width=${width},height=${height},top=${top},left=${left},status=no,resizable=yes,scrollbars=yes`
-    );
-  } catch (err) {
-    console.warn('window.open error:', err);
-  }
-
-  if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+  // If popup was successfully opened, navigate it to the Google OAuth authorization URL
+  if (popup && !popup.closed) {
+    try {
+      popup.location.href = data.url;
+    } catch (e) {
+      console.warn('Popup location href assignment warning:', e);
+      try {
+        popup.close();
+      } catch (_) {}
+      popup = window.open(data.url, 'supabase_oauth_popup');
+    }
+  } else {
+    // If popup was blocked or could not be opened
     if (!isIframe) {
       window.location.href = data.url;
       return null;
+    } else {
+      // In iframe/preview: try open in new window or throw error containing the direct URL
+      const directWin = window.open(data.url, '_blank');
+      if (!directWin) {
+        const blockedErr: any = new Error('ব্রাউজারে পপ-আপ ব্লক করা আছে। নিচের বাটনে ক্লিক করে সরাসরি গুগল লগইন সম্পন্ন করুন।');
+        blockedErr.code = 'auth/popup-blocked';
+        blockedErr.oauthUrl = data.url;
+        throw blockedErr;
+      }
     }
-    const blockedErr: any = new Error('ব্রাউজারে পপ-আপ ব্লক করা আছে। দয়া করে এড্রেস বার থেকে পপ-আপ অ্যালাউ করে পুনরায় চেষ্টা করুন।');
-    blockedErr.code = 'auth/popup-blocked';
-    throw blockedErr;
   }
 
   return new Promise<AppUser | null>((resolve) => {
@@ -220,6 +362,7 @@ export async function signInWithGoogle(options?: { redirectTo?: string }): Promi
       const norm = normalizeSupabaseUser(rawUser);
       if (norm) {
         currentAuthUser = norm;
+        saveCachedUser(norm, true);
       }
       resolve(norm);
     };
@@ -361,13 +504,15 @@ export async function signOut(authObj?: any) {
     console.warn('Supabase SignOut Notice:', error);
   }
   try {
-    localStorage.removeItem('vocab_memorizer_cached_user');
+    localStorage.removeItem(CACHED_USER_STORAGE_KEY);
+    localStorage.removeItem(REMEMBER_ME_STORAGE_KEY);
+    currentAuthUser = null;
   } catch (e) {}
   return true;
 }
 
 /**
- * Supabase Auth State Listener
+ * Supabase Auth State Listener with persistent browser remembrance
  */
 export function onAuthStateChanged(
   authObj: any, 
@@ -382,12 +527,29 @@ export function onAuthStateChanged(
     }
     if (isSubscribed) {
       const normalized = normalizeSupabaseUser(session?.user);
-      callback(normalized);
+      if (normalized) {
+        saveCachedUser(normalized, true);
+        callback(normalized);
+      } else {
+        const cached = getCachedUser();
+        if (cached && isRememberMeEnabled()) {
+          currentAuthUser = cached;
+          callback(cached);
+        } else {
+          callback(null);
+        }
+      }
     }
   }).catch((err) => {
     console.warn('Error checking initial Supabase session:', err);
     if (isSubscribed) {
-      callback(null);
+      const cached = getCachedUser();
+      if (cached && isRememberMeEnabled()) {
+        currentAuthUser = cached;
+        callback(cached);
+      } else {
+        callback(null);
+      }
     }
   });
 
@@ -397,15 +559,27 @@ export function onAuthStateChanged(
     const normalized = normalizeSupabaseUser(session?.user);
     
     if (normalized) {
-      safeSetLocalStorage('vocab_memorizer_cached_user', JSON.stringify({
-        uid: normalized.uid,
-        email: normalized.email,
-        displayName: normalized.displayName,
-        photoURL: normalized.photoURL
-      }));
+      saveCachedUser(normalized, true);
+      currentAuthUser = normalized;
+      callback(normalized);
+    } else if (event === 'SIGNED_OUT') {
+      // User explicitly clicked sign out
+      try {
+        localStorage.removeItem(CACHED_USER_STORAGE_KEY);
+        localStorage.removeItem(REMEMBER_ME_STORAGE_KEY);
+      } catch (_) {}
+      currentAuthUser = null;
+      callback(null);
+    } else {
+      // Offline, token refreshing, or network delay: preserve remembered user session
+      const cached = getCachedUser();
+      if (cached && isRememberMeEnabled()) {
+        currentAuthUser = cached;
+        callback(cached);
+      } else {
+        callback(null);
+      }
     }
-
-    callback(normalized);
   });
 
   return () => {

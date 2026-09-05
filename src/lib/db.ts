@@ -28,7 +28,16 @@ import {
   signInWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
-  normalizeSupabaseUser
+  normalizeSupabaseUser,
+  isRememberMeEnabled,
+  setRememberMeEnabled,
+  getSavedEmail,
+  saveCachedUser,
+  getCachedUser,
+  continueWithBrowserSession,
+  REMEMBER_ME_STORAGE_KEY,
+  CACHED_USER_STORAGE_KEY,
+  SAVED_EMAIL_STORAGE_KEY
 } from './supabaseAuth';
 import type { AppUser } from './supabaseAuth';
 
@@ -67,6 +76,15 @@ export {
   getRedirectResult,
   GoogleAuthProvider,
   normalizeSupabaseUser,
+  isRememberMeEnabled,
+  setRememberMeEnabled,
+  getSavedEmail,
+  saveCachedUser,
+  getCachedUser,
+  continueWithBrowserSession,
+  REMEMBER_ME_STORAGE_KEY,
+  CACHED_USER_STORAGE_KEY,
+  SAVED_EMAIL_STORAGE_KEY,
 
   // Course & question utilities
   normalizeCourseId,
