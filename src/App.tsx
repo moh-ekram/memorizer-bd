@@ -870,41 +870,61 @@ export default function App() {
       const docsToMerge: any[] = [];
       const userDocRef = doc(db, 'users', currentUser.uid);
 
-      // 1. Fetch by UID
-      try {
-        const uidSnap = await getDoc(userDocRef);
-        if (uidSnap.exists()) docsToMerge.push(uidSnap.data());
-      } catch (err: any) {
-        const classified = classifySyncError(err);
-        logSyncErrorToConsole('Fetch UID doc', classified);
-      }
+      // These three lookups exist to catch a user's data regardless of
+      // which id/email combination it happens to be stored under (see the
+      // duplicate-row note in supabaseDb.ts's setDoc). They used to run one
+      // at a time with `await` — three-plus sequential network round trips
+      // on EVERY login, each easily 150-400ms+ on a normal connection and
+      // worse on mobile, adding up to several real seconds of "signed in
+      // but nothing loads yet" before the merged data was ready. None of
+      // them depend on each other's result, so they can just run
+      // concurrently instead — same correctness (docsToMerge only cares
+      // what ends up in it, not the order), roughly 3x less wall-clock time.
+      const lookups: Promise<void>[] = [
+        // 1. Fetch by UID
+        (async () => {
+          try {
+            const uidSnap = await getDoc(userDocRef);
+            if (uidSnap.exists()) docsToMerge.push(uidSnap.data());
+          } catch (err: any) {
+            const classified = classifySyncError(err);
+            logSyncErrorToConsole('Fetch UID doc', classified);
+          }
+        })(),
+      ];
 
       // 2. Fetch by email doc ID if different
       if (cleanUserEmail && cleanUserEmail !== currentUser.uid.toLowerCase()) {
-        try {
-          const emailSnap = await getDoc(doc(db, 'users', cleanUserEmail));
-          if (emailSnap.exists()) docsToMerge.push(emailSnap.data());
-        } catch (err: any) {
-          const classified = classifySyncError(err);
-          logSyncErrorToConsole('Fetch Email doc', classified);
-        }
+        lookups.push((async () => {
+          try {
+            const emailSnap = await getDoc(doc(db, 'users', cleanUserEmail));
+            if (emailSnap.exists()) docsToMerge.push(emailSnap.data());
+          } catch (err: any) {
+            const classified = classifySyncError(err);
+            logSyncErrorToConsole('Fetch Email doc', classified);
+          }
+        })());
       }
 
       // 3. Query users collection by email
       if (cleanUserEmail) {
-        try {
-          const uQuery = query(collection(db, 'users'), where('email', '==', cleanUserEmail));
-          const uSnap = await getDocs(uQuery);
-          uSnap.docs.forEach(d => {
-            if (d.id !== currentUser.uid && d.id !== cleanUserEmail) {
-              docsToMerge.push(d.data());
-            }
-          });
-        } catch (err: any) {
-          const classified = classifySyncError(err);
-          logSyncErrorToConsole('Query users by email', classified);
-        }
+        lookups.push((async () => {
+          try {
+            const uQuery = query(collection(db, 'users'), where('email', '==', cleanUserEmail));
+            const uSnap = await getDocs(uQuery);
+            uSnap.docs.forEach(d => {
+              if (d.id !== currentUser.uid && d.id !== cleanUserEmail) {
+                docsToMerge.push(d.data());
+              }
+            });
+          } catch (err: any) {
+            const classified = classifySyncError(err);
+            logSyncErrorToConsole('Query users by email', classified);
+          }
+        })());
       }
+
+      await Promise.all(lookups);
 
       let mergedCloudProgress: Record<string, UserProgress> = {};
       let mergedSynonym: Record<string, any> = {};
