@@ -2268,16 +2268,6 @@ const getActiveCourse = (
                 </span>
               </div>
 
-              {/* Ping Database Button */}
-              <button
-                onClick={handlePingSupabase}
-                disabled={isPingingSupabase}
-                className="hidden lg:flex items-center gap-1 text-[10px] text-emerald-300 hover:text-white font-extrabold cursor-pointer hover:underline bg-emerald-950/50 border border-emerald-500/30 px-2 py-0.5 rounded-md transition"
-                title="Test Supabase Handshake"
-              >
-                {isPingingSupabase ? 'Pinging...' : 'Ping DB'}
-              </button>
-
               {/* Force Sync button */}
               <button
                 onClick={forceSyncToCloud}
@@ -2462,16 +2452,6 @@ const getActiveCourse = (
         onTouchEnd={handleTouchEnd}
       >
         <div className={activeTab === 'admin' ? "w-full" : "max-w-7xl mx-auto"}>
-          {/* Real-time Handshake / Sync Diagnostic Alert when active sync error occurs */}
-          {lastSyncError && activeTab !== 'admin' && (
-            <div className="mb-6 animate-in fade-in slide-in-from-top-2 duration-200">
-              <SupabaseStatusBanner 
-                lastSyncError={lastSyncError} 
-                onClearSyncError={() => setLastSyncError(null)}
-                showDetailsDefault={true}
-              />
-            </div>
-          )}
           {['profile', 'dashboard', 'my_courses', 'flashcard'].includes(activeTab) && (
             <div className="space-y-6">
               {/* My Profile Sub-Navigation Pills */}
